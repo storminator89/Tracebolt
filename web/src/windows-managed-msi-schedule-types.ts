@@ -17,9 +17,15 @@ function utcInput(value:string):number{
  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))return NaN;
  const n=Date.parse(value+':00Z');return Number.isFinite(n)&&new Date(n).toISOString().slice(0,16)===value?n/1000:NaN;
 }
-export function managedScheduleWindow(start:string,end:string,view:ManagedView,now:number):{startAt:number;endAt:number}|null{
+export type ManagedScheduleWindow={startAt:number;endAt:number};
+/** Parse a deliberately entered UTC window without inferring the browser's time zone. */
+export function managedScheduleUTCWindow(start:string,end:string,now:number):ManagedScheduleWindow|null{
  const startAt=utcInput(start),endAt=utcInput(end);
- return view.reusable&&view.schedulingAvailable===true&&!view.schedule&&view.state==='ready'&&view.readiness!==null&&view.expiresAt>now&&Number.isFinite(now)&&startAt>now&&startAt-now<=86400&&startAt>=view.expiresAt&&endAt-startAt>=60&&endAt-startAt<=600&&endAt<=(view.grantExpiresAt??0)&&endAt<=(view.leafExpiresAt??0)?{startAt,endAt}:null;
+ return Number.isFinite(now)&&startAt>now&&startAt-now<=86400&&endAt-startAt>=60&&endAt-startAt<=600?{startAt,endAt}:null;
+}
+export function managedScheduleWindow(start:string,end:string,view:ManagedView,now:number):ManagedScheduleWindow|null{
+ const window=managedScheduleUTCWindow(start,end,now);
+ return window&&view.reusable&&view.schedulingAvailable===true&&!view.schedule&&view.state==='ready'&&view.readiness!==null&&view.expiresAt>now&&window.startAt>=view.expiresAt&&window.endAt<=(view.grantExpiresAt??0)&&window.endAt<=(view.leafExpiresAt??0)?window:null;
 }
 // Field order is the versioned manager request digest contract. No local date-zone conversion.
 export function managedScheduleRequest(view:ManagedView,window:{startAt:number;endAt:number}):ManagedScheduleRequest{return {artifactId:view.artifactId!,artifactRetiredCount:view.artifactRetiredCount!,bindingDigest:view.bindingDigest!,transferId:view.transferId,jobSequence:view.jobSequence!,readinessDigest:view.readinessDigest,startAt:window.startAt,endAt:window.endAt,packageReviewAccepted:true,termsAccepted:true,serviceRiskAccepted:true,synchronousActionsAccepted:true,scheduleAccepted:true}}

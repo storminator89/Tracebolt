@@ -62,10 +62,11 @@ try{
   }
   const scheduled=await captureWindowsScheduledMSIFixtures({browser,expect,output});
   assert.equal(scheduled.browserExecuted,true);assert.equal(scheduled.nativeAcceptance,false);assert.equal(scheduled.captures.length,scheduledMSIScenes.length*4);
-  assert.equal(scheduled.sourceDigest,manifest.sourceDigest);assert.equal(scheduled.disclosure,scheduledMSIDisclosure);assert.equal(new Set(scheduled.captures.map(c=>c.file)).size,scheduledMSIScenes.length*4);
+  assert.equal(scheduled.sourceDigest,manifest.sourceDigest);assert.equal(scheduled.disclosure,scheduledMSIDisclosure);for(const file of ['web/scripts/capture-windows-scheduled-msi-fixtures.mjs','web/scripts/run-windows-fleet-msi-ci.mjs'])assert(scheduled.sourceInputs.some(input=>input.file===file));assert.equal(new Set(scheduled.captures.map(c=>c.file)).size,scheduledMSIScenes.length*4);
   for(const locale of ['en','de'])for(const width of [1440,390])for(const scene of scheduledMSIScenes){
    const file=`synthetic-windows-scheduled-msi-${scene}-${width}-${locale}.png`,row=scheduled.captures.find(c=>c.file===file);
    assert(row&&row.locale===locale&&row.width===width&&row.height===(width===390?844:1100)&&row.synthetic===true&&row.sourceDigest===scheduled.sourceDigest&&row.disclosure===scheduledMSIDisclosure);
+   assert.deepEqual(row.assertions,{fleet:scene.startsWith('fleet-'),confirmationUnchecked:scene==='fleet-shared-window-unchecked'||scene==='approval-unchecked',sharedWindowExact:scene==='fleet-shared-window-unchecked',mixedSavedOutcome:scene==='fleet-mixed-scheduled-unsent',previewReads:scene==='fleet-shared-window-unchecked'?1:0,actualMutationRequests:0});
    const bytes=await fs.readFile(path.join(output,file));assert(bytes.length>8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));
    row.sha256=createHash('sha256').update(bytes).digest('hex');row.sourceSha=sourceSha;row.publicSafe=true;row.fullPage=false;
   }
@@ -90,7 +91,7 @@ try{
 }catch{console.log('FAIL: synthetic fleet MSI browser gate; raw diagnostics withheld.');}
 finally{
  clearTimeout(timer);try{if(browser)await browser.close();}catch{passed=false}
- await fs.writeFile(path.join(output,'windows-scheduled-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?scheduledMSIScenes.length*4:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:scheduledMSIDisclosure},null,2)+'\n');
+ await fs.writeFile(path.join(output,'windows-scheduled-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?scheduledMSIScenes.length*4:0,syntheticPreviewReads:passed?4:0,actualMutationRequests:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:scheduledMSIDisclosure},null,2)+'\n');
  await fs.writeFile(path.join(output,'windows-fleet-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?16:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:windowsFleetMSIDisclosure},null,2)+'\n');
  await fs.writeFile(path.join(output,'windows-saved-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?windowsSavedMSICaptureMatrix.length:0,syntheticPreviewReads:passed?windowsSavedMSICaptureMatrix.filter(row=>row.scene.endsWith('-unchecked')).length:0,requestsToRealAPI:0,actualMutationRequests:0,nativeAcceptance:false,disclosure:windowsSavedMSIDisclosure},null,2)+'\n');
  await fs.writeFile(path.join(output,'windows-reusable-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?16:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:reusableMSIDisclosure},null,2)+'\n');

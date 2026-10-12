@@ -67,7 +67,11 @@ export async function compileWindowsFleetMSIAssets() {
   }]));
   assert(assets.has('/app.js') && assets.has('/app.css'), 'Production JS and CSS must compile');
   const sourceFiles = Object.keys(result.metafile.inputs)
-    .map(name => path.resolve(root, name)).filter(name => name.startsWith(path.join(web, 'src') + path.sep)).sort();
+    .map(name => path.resolve(root, name)).filter(name => name.startsWith(path.join(web, 'src') + path.sep))
+    .concat(['capture-windows-fleet-msi-fixtures.mjs', 'capture-windows-reusable-msi-fixtures.mjs',
+      'capture-windows-scheduled-msi-fixtures.mjs', 'capture-windows-software-catalogue-fixtures.mjs',
+      'capture-windows-msi-catalogue-fixtures.mjs', 'run-windows-fleet-msi-ci.mjs',
+      'run-windows-msi-catalogue-ci.mjs'].map(name => path.join(web, 'scripts', name))).sort();
   assert(sourceFiles.some(name => name.endsWith('/windows-fleet-managed-msi.tsx')), 'Production App must include the fleet MSI component');
   const sourceInputs = await Promise.all(sourceFiles.map(async name => ({
     file: path.relative(root, name).split(path.sep).join('/'),

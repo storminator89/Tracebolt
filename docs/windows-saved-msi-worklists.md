@@ -25,6 +25,9 @@ Each deliberate stage previews and enumerates its own eligible individual reques
   action and bounded maintenance review for each listed imported assignment.
 - Approve pins each listed assignment's exact fresh readiness digest and deadline
   and authorizes one installation there. It never approves a later-ready device.
+- Schedule, on separately enabled fresh scheduled grants, previews one common UTC
+  window and records each exact prospective approval through the existing per-device
+  schedule API. See [fleet scheduling](windows-scheduled-managed-msi.md#saved-fleet-scheduling-for-one-selected-package).
 - Review package cleanup pins each listed settled result and authorizes removal
   of only that endpoint's app-owned package copy through the existing retirement
   permit. Its fresh unchecked acknowledgement is separate from installation and
@@ -66,7 +69,7 @@ resume or close a batch automatically. An unconfirmed POST is reconciled with GE
 not retried. Close the remaining open batch deliberately before a new confirmation.
 
 The journal and existing MSI job mutate atomically. There is no separate execution
-ledger, worker, scheduler or package cache. Each row distinguishes not dispatched,
+ledger, worker, scheduler or package cache. Each row distinguishes not dispatched, scheduled intent saved,
 permit issued, claimed/unconfirmed, result recorded and payload retired. Native
 result and registration truth remain separate: 0 requires verified registration;
 3010 is restart-required; 1618 and known failures are consumed non-success outcomes;

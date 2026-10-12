@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "4a8bb121662ca07ebb23d989dfd5391f93944494a54906bf7483ac64061fc0f1",
+  "goSourceSha256": "023430d4a9c5c403cd8cd32034b52611f63df62d6c9c12e67aaa1f1f62ed461f",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -948,6 +948,7 @@
       "TestFleetIdentitiesV2ResponseCapIncludesNewline",
       "TestFleetIdentitiesWindowsFinalOutputAuthoritySessionAndCancellation",
       "TestFleetIdentitiesWindowsHTTPProjectionAndVectors",
+      "TestFleetScheduledMSIStrictOptionalBatchAndPreviewRoute",
       "TestGuidedCapabilitiesDescribeShippedScopeWithoutInstallationClaim",
       "TestHealthMonitorPersistsWithoutUIAndPreservesHistoryOnSourceFailure",
       "TestHealthOperatorAuthenticationCSRFAndDeviceAuthority",
@@ -1754,6 +1755,8 @@
       "TestFleetIdentitiesKeepsLinuxV1Projection",
       "TestFleetIdentitiesWindowsOriginalSectionsRetryAndRevocation",
       "TestFleetIdentitiesWindowsReadAdmissionCancellationAndPostCommitExpiry",
+      "TestFleetScheduledMSIStoreAtomicIntentJournalAndRestart",
+      "TestFleetScheduledMSIStoreRejectsWindowBeyondOriginalLeaf",
       "TestHealthReadsOriginalAcceptedAgeAndExplicitServices",
       "TestHealthRejectsClockBeforeCurrentIdentityAuthority",
       "TestIndependentIssuerAndRevocationRace",
@@ -4532,6 +4535,9 @@
       "TestCatalogueProtectedSpoolsKeepIndependentIncompleteCustody",
       "TestCatalogueSetupWrappersAndOriginalConsentBytes",
       "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
+      "TestFleetScheduledMSIExactIndependentIntentsAndStop",
+      "TestFleetScheduledMSIMixedEligibilityAndExactReview",
+      "TestFleetScheduledMSIPerDeviceRevocationBeforeDispatch",
       "TestManagedFleetOneUploadIndependentTransfersAndCustody",
       "TestManagedFleetSetupUsesFreshPathsAndExactRegistry",
       "TestManagedMSIWorklistCompactionKeepsUnresolvedAndRejectsOldReferences",
