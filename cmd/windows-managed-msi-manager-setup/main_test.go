@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"testing"
 )
 
@@ -20,6 +21,14 @@ func TestScheduledMSIManagerSetupRequiresFreshFleetReusableSelection(t *testing.
 		var out bytes.Buffer
 		if e := run(args, &out); e == nil || out.Len() != 0 {
 			t.Fatal("scheduled setup escaped required selection", args)
+		}
+	}
+}
+
+func TestCatalogueRequiresFreshExplicitFlags(t *testing.T) {
+	for _, args := range [][]string{{"prepare", "--package-catalogue"}, {"prepare", "--package-catalogue", "--fleet"}, {"finalize", "--package-catalogue", "--fleet", "--reusable-jobs", "--apply", "--approve-plan", "review", "--ack-managed-msi-delivery-install"}, {"prepare", "--ack-package-catalogue"}} {
+		if e := run(args, io.Discard); e == nil {
+			t.Fatal("catalogue consent omitted", args)
 		}
 	}
 }

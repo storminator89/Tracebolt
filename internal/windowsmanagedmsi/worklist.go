@@ -221,11 +221,12 @@ func (w Worklist) Validate() error {
 	return nil
 }
 func (j WorklistJournal) Validate() error {
-	if j.Version != WorklistVersion || !enrollmentcrypto.ValidID(j.ManagerID, "manager_") || !ValidDigest(j.KeyID) || j.Revision == 0 || j.Revision > MaxWorklistRevision || !ValidTime(j.ClockFloor) || j.Worklists == nil || len(j.Worklists) > MaxWorklists {
+	if (j.Version != WorklistVersion && j.Version != CatalogueWorklistVersion) || !enrollmentcrypto.ValidID(j.ManagerID, "manager_") || !ValidDigest(j.KeyID) || j.Revision == 0 || j.Revision > MaxWorklistRevision || !ValidTime(j.ClockFloor) || j.Worklists == nil || len(j.Worklists) > MaxWorklists {
 		return ErrIntegrity
 	}
 	ids := map[string]bool{}
 	active := 0
+	activeOccurrences := map[uint64]bool{}
 	for _, w := range j.Worklists {
 		if w.Validate() != nil || ids[w.ID] || w.CreatedAt > j.ClockFloor || w.ArchivedAt > j.ClockFloor {
 			return ErrIntegrity
@@ -243,6 +244,12 @@ func (j WorklistJournal) Validate() error {
 		}
 		if w.ArchivedAt == 0 {
 			active++
+			if j.Version == CatalogueWorklistVersion {
+				if w.ArtifactRetiredCount == 0 || activeOccurrences[w.ArtifactRetiredCount] {
+					return ErrIntegrity
+				}
+				activeOccurrences[w.ArtifactRetiredCount] = true
+			}
 		}
 		for _, t := range w.Targets {
 			if t.Binding.ManagerID != j.ManagerID || t.Binding.KeyID != j.KeyID {
@@ -250,7 +257,7 @@ func (j WorklistJournal) Validate() error {
 			}
 		}
 	}
-	if active > 1 || len(j.Worklists)-active > MaxWorklists-1 {
+	if j.Version == WorklistVersion && (active > 1 || len(j.Worklists)-active > MaxWorklists-1) || j.Version == CatalogueWorklistVersion && active > MaxCatalogueEntries {
 		return ErrIntegrity
 	}
 	raw, _ := json.Marshal(j)

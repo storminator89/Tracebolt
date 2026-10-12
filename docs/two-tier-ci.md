@@ -16,6 +16,15 @@ Missing history, deleted/renamed/unrecognized files, dependencies, workflow or
 security-contract changes broaden to all Linux non-race source packages. Shared
 UI and unmapped UI-affecting changes broaden to all existing browser entry points
 and UI interactions. This fallback does **not** invoke the race workflow.
+The exact generated `tests/security/go_failure_allowlist.json` is the sole
+security-directory exception: only an ordinary modification with unchanged Git
+mode 100644, a regular no-follow checkout file, and byte-for-byte equality to a
+fresh canonical derivation of every current Go source byte and test root qualifies.
+Invalid, missing, deleted, type/mode-changed or forged data keeps broad selection;
+the existing runtime allowlist guard still applies. Actual Go edits still select
+their dependency closure, and reporter/generator/selector or shared-file changes
+still broaden normally.
+
 Ordinary recognized API/UI changes select their dependent packages and existing
 browser flows. Vite's actual dependency graph selects related UI tests. New
 unknown features broaden until an explicit reviewed flow mapping exists.

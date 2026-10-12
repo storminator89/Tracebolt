@@ -373,3 +373,11 @@ See `docs/proactive-service-log-ai.md` for bounds and the native fixture boundar
   recall already delivered permits. Keep durable actor terminalization, native
   local authority/fence checks and separate explicit retirement. No rearm,
   reschedule, retry, new service, host grant or native acceptance follows.
+
+- Fresh multi-package manager custody requires `docs/windows-multi-package-msi-catalogue.md`.
+  Keep four retained entries within the shared 128 MiB reserved-byte budget, fixed
+  protected slot paths, immutable custody occurrence and atomic per-entry assignment
+  evidence. Old singleton profiles stay strict; endpoint grants/wire/execution are
+  unchanged. Unresolved A cannot retire, but does not grant or block unrelated B.
+  Shared storage integrity failures still fail closed. No migrations, runtime
+  grants, deferred queue or native acceptance follow from these source fixtures.

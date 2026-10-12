@@ -172,6 +172,8 @@ jobs:
             artifacts/review/windows-saved-msi-manifest.json
             artifacts/review/windows-saved-msi-results.json
             artifacts/review/windows-software-catalogue-manifest.json
+            artifacts/review/windows-msi-catalogue-results.json
+            artifacts/review/windows-msi-catalogue-manifest.json
             artifacts/review/windows-mutation-coexistence-results.json
             artifacts/review/windows-mutation-coexistence-manifest.json
             artifacts/review/enrollment-browser-results.json

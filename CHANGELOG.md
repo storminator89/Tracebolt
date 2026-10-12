@@ -6,6 +6,11 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+Fresh manager-only [multi-package MSI catalogue](docs/windows-multi-package-msi-catalogue.md):
+four retained payloads within one 128 MiB reservation budget, exact custody/device
+selection, scoped retirement and bounded per-entry worklists. Existing endpoint
+grants and signed wire formats remain unchanged; source verification only.
+
 Windows development adds complete service/machine-software browsing, richer
 network/update/security/session/hardware/storage context and fresh fifteen-scope Read
 admin setup. Selected event messages, cached update inspection, health policies

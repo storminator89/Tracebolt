@@ -1,5 +1,9 @@
 # Fresh reusable central MSI jobs
 
+The separate fresh manager-only [multi-package catalogue](windows-multi-package-msi-catalogue.md)
+adds four retained payloads within the same aggregate budget. The earlier profiles
+and contracts described below remain unchanged unless that fresh option is selected.
+
 Source candidate only. No native Windows setup, installer call, credential, ACL,
 SCM or host grant was performed by the source fixtures. Exact-package approval
 and separately authorized native acceptance remain required.

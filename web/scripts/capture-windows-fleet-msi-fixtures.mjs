@@ -289,6 +289,7 @@ export function createWindowsFleetMSIRoute({ fixture, compiled, state }) {
     });
     if (url.pathname === '/api/fleet/identities') return reply({ schemaVersion: 'tracebolt.fleet-identities.v2', serverNow: fixture.now, items: [] });
     if (url.pathname === '/api/fleet/groups') return reply({ schemaVersion: 'tracebolt.fleet-groups.v1', serverNow: fixture.now, groups: [], devices: fixture.devices.map(({ id, name, platform }) => ({ id, name, platform })) });
+    if (url.pathname === '/api/windows-managed-msi/catalogue') return reply({ version: 'tracebolt.windows-managed-msi-catalogue.v1', enabled: false, serverNow: fixture.seconds, revision: '0', maxEntries: 4, maxRetainedPayloadBytes: 134217728, reservedBytes: 0, entries: [] });
     if (url.pathname === '/api/windows-managed-msi/artifact') return reply(fixture.readArtifact());
     if (url.pathname === '/api/windows-managed-msi/worklists') return reply(fixture.readWorklists ? fixture.readWorklists() : { version: 'tracebolt.windows-managed-msi-worklists.v1', serverNow: fixture.seconds, enabled: false, worklists: [] });
     if (fixture.savedWorklist && url.pathname === `/api/windows-managed-msi/worklists/${fixture.savedWorklist.id}`) return reply(fixture.readWorklist());
@@ -323,6 +324,9 @@ export async function checkWindowsFleetMSIFixtures() {
     return response;
   }
   const base = windowsFleetMSIOrigin;
+  const catalogue = await request(`${base}/api/windows-managed-msi/catalogue`);
+  assert.equal(catalogue.status, 200);
+  assert.deepEqual(JSON.parse(catalogue.body), { version: 'tracebolt.windows-managed-msi-catalogue.v1', enabled: false, serverNow: fixture.seconds, revision: '0', maxEntries: 4, maxRetainedPayloadBytes: 134217728, reservedBytes: 0, entries: [] });
   assert.equal((await request(`${base}/api/windows-managed-msi/artifact`)).status, 200);
   for (const device of fixture.devices) assert.equal((await request(`${base}/api/devices/${device.id}/windows-managed-msi`)).status, 200);
   assert.equal((await request(`${base}/api/devices/${fixture.devices[1].id}/windows-managed-msi/approve`, 'POST', '{}')).aborted, 'blockedbyclient');

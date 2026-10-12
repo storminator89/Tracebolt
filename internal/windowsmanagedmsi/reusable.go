@@ -129,7 +129,7 @@ func (r Record) validateReusableRecord() error {
 		}
 		return nil
 	}
-	if (r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion) || (r.Version == ScheduledRecordVersion) != r.Grant.Scheduled() || r.Jobs.Validate() != nil {
+	if (r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion && !r.Catalogue()) || (r.Version == ScheduledRecordVersion || r.Version == ScheduledCatalogueManagerRecordVersion) != r.Grant.Scheduled() || r.Jobs.Validate() != nil {
 		return ErrIntegrity
 	}
 	if r.Artifact == nil {
@@ -208,7 +208,7 @@ func prepareJobTransition(before, after Record) (Record, error) {
 		return before, nil
 	}
 	next, e := NextManagerJob(before)
-	if e != nil || !sameJSON(next.Jobs, after.Jobs) || after.TransferID == "" || after.TransferID == before.TransferID || after.ArtifactRetiredCount <= before.ArtifactRetiredCount {
+	if e != nil || !sameJSON(next.Jobs, after.Jobs) || after.TransferID == "" || after.TransferID == before.TransferID || (!before.Catalogue() && after.ArtifactRetiredCount <= before.ArtifactRetiredCount || before.Catalogue() && after.ArtifactRetiredCount == before.ArtifactRetiredCount) {
 		return before, ErrConsumed
 	}
 	return next, nil

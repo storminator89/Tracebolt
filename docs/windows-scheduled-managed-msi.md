@@ -1,5 +1,9 @@
 # Fresh scheduled central MSI installation
 
+The separate fresh manager-only [multi-package catalogue](windows-multi-package-msi-catalogue.md)
+adds four retained payloads within the same aggregate budget. The earlier profiles
+and contracts described below remain unchanged unless that fresh option is selected.
+
 Source candidate only. Source fixtures and cross-builds do not authorize host
 setup, credentials, keys, ACLs, SCM changes, MSI execution, Windows native
 acceptance or release. The existing [managed MSI native gate](windows-managed-msi-native-acceptance.md)

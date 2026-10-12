@@ -321,14 +321,18 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 		if r.RetirementStarted || r.Retired || r.Artifact == nil || r.Artifact.CompletedAt == 0 || msi.ArtifactIdentity(*r.Artifact) != artifactID {
 			return msi.ErrConflict
 		}
+		if r.Catalogue() && r.Assignment(m.binding) != nil {
+			return msi.ErrConsumed
+		}
 		shared = r.Artifact
 	}
 	_, e := m.transaction(ctx, actor, "deliver", func(r *msi.Record, c msi.Current, n int64) error {
 		if shared != nil {
 			if r.Grant.Reusable() && r.TransferID != "" {
-				// One assigned job per shared custody occurrence. A retired row
-				// becomes selectable only after explicit shared retirement/upload.
-				if sharedRetiredCount <= r.ArtifactRetiredCount {
+				// One assigned job per custody occurrence. Singleton replacement
+				// requires a newer floor; catalogue selection uses its own exact
+				// retained assignment ledger, never numeric occurrence ordering.
+				if !r.Catalogue() && sharedRetiredCount <= r.ArtifactRetiredCount || r.Catalogue() && sharedRetiredCount == r.ArtifactRetiredCount {
 					return msi.ErrConsumed
 				}
 				next, e := msi.NextManagerJob(*r)
@@ -533,6 +537,7 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 	var p msi.Permit
 	var actor string
 	var custody []string
+	var occurrence uint64
 	check := func() error {
 		_, e := m.transaction(ctx, "", "", func(r *msi.Record, c msi.Current, n int64) error {
 			var e error
@@ -542,6 +547,7 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 			}
 			actor = p.ActorID
 			custody = artifactCustody(*r.Artifact)
+			occurrence = r.ArtifactRetiredCount
 			if !m.allowed(actor, "deliver") {
 				return msi.ErrAuthority
 			}
@@ -564,7 +570,21 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 	if e := check(); e != nil {
 		return msi.Chunk{}, e
 	}
-	data, e := m.spool.ReadChunk(ctx, p.Package, q.Index, check, custody...)
+	spool := m.spool
+	if m.Catalogue() {
+		a, e := m.artifact.read(msi.WithCatalogueOccurrence(ctx, occurrence))
+		if e != nil {
+			return msi.Chunk{}, e
+		}
+		if a.RetirementStarted || a.Retired {
+			return msi.Chunk{}, msi.ErrConsumed
+		}
+		spool, e = m.artifact.spoolFor(a)
+		if e != nil {
+			return msi.Chunk{}, e
+		}
+	}
+	data, e := spool.ReadChunk(ctx, p.Package, q.Index, check, custody...)
 	if e != nil {
 		return msi.Chunk{}, e
 	}
@@ -686,6 +706,18 @@ type View struct {
 func (m *Manager) View(ctx context.Context) (View, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.Catalogue() {
+		if _, ok := msi.CatalogueOccurrence(ctx); !ok {
+			saved, e := m.store.ReadRegisteredWindowsManagedMSI(msi.WithFinalCheck(ctx, m.configurationCheck), m.binding, m.key.Public().(ed25519.PublicKey))
+			if e != nil {
+				return View{}, e
+			}
+			if saved.Artifact == nil {
+				return View{}, msi.ErrUnavailable
+			}
+			ctx = msi.WithCatalogueOccurrence(ctx, saved.ArtifactRetiredCount)
+		}
+	}
 	var shared *msi.Artifact
 	var sharedRecord msi.ArtifactRecord
 	if m.artifact != nil {
@@ -706,6 +738,9 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 				return err
 			}
 			if !current {
+				if sharedRecord.Catalogue() && sharedRecord.Assignment(m.binding) != nil {
+					return msi.ErrConsumed
+				}
 				next, err := msi.NextManagerJob(*r)
 				if err != nil {
 					return err

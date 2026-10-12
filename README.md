@@ -171,3 +171,8 @@ adds bounded central upload and background delivery before separately approved
 installation on one explicitly set-up Windows x64 endpoint. Native acceptance is
 pending; this first deployment mode excludes other Tracebolt mutators while
 observation remains available.
+
+Fresh manager-only [multi-package MSI catalogue](docs/windows-multi-package-msi-catalogue.md)
+source supports four retained reviewed packages within the existing aggregate 128 MiB
+budget, exact package/device choice and independent saved worklists. Explicit fresh
+setup is required; this does not grant endpoint actions or establish native acceptance.

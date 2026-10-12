@@ -83,7 +83,7 @@ func (r Record) Validate() error {
 	if r.validateMutationReport() != nil || r.validateSchedule() != nil {
 		return ErrIntegrity
 	}
-	if r.validateReusableRecord() != nil || (r.Version != RecordVersion && r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
+	if r.validateReusableRecord() != nil || (r.Version != RecordVersion && r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion && !r.Catalogue()) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
 		return ErrIntegrity
 	}
 	if r.Artifact == nil {
@@ -179,7 +179,7 @@ func Transition(before, after Record) error {
 	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}
-	if before.Grant.Reusable() && after.ArtifactRetiredCount < before.ArtifactRetiredCount {
+	if before.Grant.Reusable() && !before.Catalogue() && after.ArtifactRetiredCount < before.ArtifactRetiredCount {
 		return ErrConsumed
 	}
 	var err error

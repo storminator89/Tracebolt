@@ -522,6 +522,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsMSIWorklistAPI(w, r)
 		return
 	}
+	if _, ok := windowsManagedMSICatalogueRoute(r); ok {
+		h.windowsManagedMSICatalogueAPI(w, r)
+		return
+	}
 	if _, ok := windowsManagedMSIArtifactRoute(r); ok {
 		h.windowsManagedMSIArtifactAPI(w, r)
 		return

@@ -681,7 +681,9 @@ func currentSetupGUIController(ctx context.Context, b currentgate.Binding) (r cu
 		r.Checks["deletePendingObserved"] = true
 		// The exact held handle was successfully queried as Stopped, and GUI
 		// deletion is pending. Only now may observation acquire sender/grant
-		// locks. Use the fixture's actual accepted sequence, never frame count.
+		// locks. The GUI still owns its installer journal; this stopped capture
+		// defers that one store to the mandatory full read after GUI completion
+		// and observed SCM absence. Use the actual accepted sequence, not count.
 		if retained.captureStopped(ctx, f.Evidence().LastSequence, openRetained, retentionStage) != nil {
 			return r
 		}

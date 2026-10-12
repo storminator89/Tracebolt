@@ -50,7 +50,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
 		return
 	}
-	if r.URL.RawQuery != "" || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 {
+	if r.URL.RawPath != "" || len(r.TransferEncoding) != 0 || len(r.Trailer) != 0 {
 		managedMSIError(w, msi.ErrInvalid)
 		return
 	}
@@ -66,6 +66,9 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 	}
 	if manager == nil || h.insecureHTTPTest || manager.Binding().DeviceID != device {
 		managedMSIError(w, msi.ErrUnavailable)
+		return
+	}
+	if !pinWindowsMSICatalogueGET(w, &r, manager.Catalogue(), op) {
 		return
 	}
 	cap := operatorauth.Capability("")

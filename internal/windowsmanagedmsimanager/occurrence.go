@@ -33,7 +33,7 @@ func WithArtifactRetiredCount(ctx context.Context, value string) (context.Contex
 	if err != nil {
 		return ctx, err
 	}
-	return context.WithValue(ctx, artifactOccurrenceKey{}, n), nil
+	return msi.WithCatalogueOccurrence(context.WithValue(ctx, artifactOccurrenceKey{}, n), n), nil
 }
 
 // Initial-empty and first-retired custody both have retiredCount zero. Reserve
@@ -54,7 +54,7 @@ func WithJobOccurrence(ctx context.Context, value, transfer, sequence string) (c
 	if err != nil || seqErr != nil || seq == 0 || !msi.ValidTransferID(transfer) {
 		return ctx, msi.ErrInvalid
 	}
-	ctx = context.WithValue(ctx, artifactOccurrenceKey{}, n)
+	ctx = msi.WithCatalogueOccurrence(context.WithValue(ctx, artifactOccurrenceKey{}, n), n)
 	return context.WithValue(ctx, jobOccurrenceKey{}, jobOccurrence{n, transfer, seq}), nil
 }
 func checkArtifactOccurrence(ctx context.Context, r msi.ArtifactRecord) error {
@@ -67,7 +67,7 @@ func checkArtifactOccurrence(ctx context.Context, r msi.ArtifactRecord) error {
 			return msi.ErrConflict
 		}
 	}
-	if n, ok := ctx.Value(artifactOccurrenceKey{}).(uint64); ok && (r.Version != msi.ReusableArtifactRecordVersion || r.RetiredCount != n) {
+	if n, ok := ctx.Value(artifactOccurrenceKey{}).(uint64); ok && (!r.Reusable() || r.RetiredCount != n) {
 		return msi.ErrConflict
 	}
 	return nil

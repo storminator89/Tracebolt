@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "31f4f838d1e9466895b3f86d012c136300475d2a306bbb25a799bb5fb3b572f8",
+  "goSourceSha256": "516b247a70065b03582bbcc40c944476035579392d8a97e1d0299b71c3d080c7",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -217,6 +217,7 @@
       "TestShortWriteFails"
     ],
     "localrmm/cmd/windows-managed-msi-manager-setup": [
+      "TestCatalogueRequiresFreshExplicitFlags",
       "TestManagedManagerSetupRequiresSeparateExactApplyApproval",
       "TestScheduledMSIManagerSetupRequiresFreshFleetReusableSelection"
     ],
@@ -262,6 +263,10 @@
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
       "TestCoordinatedMutationSetupRequiresEveryDistinctApproval",
       "TestCurrentPackagedSetupGUINative",
+      "TestCurrentRetentionControllerKeepsQuiescenceAbsenceAndProofOrder",
+      "TestCurrentRetentionDoesNotReopenGUIJournalDuringDeletionPending",
+      "TestCurrentRetentionFinalInstallerAuthorityCannotBeReplacedByBaseline",
+      "TestCurrentRetentionFinalStoppedBytesAndOriginalSequenceRemainRequired",
       "TestCurrentSetupCanonicalSenderRequiresAllUsedMarkersAndOriginalFloor",
       "TestCurrentSetupControllerUsesProvisionalSnapshotAndFinalStore",
       "TestCurrentSetupGrantSpecsExactOrderedTwentyAndHistoryProof",
@@ -1013,6 +1018,7 @@
       "TestLinuxCVEVerticalSliceUsesCompleteSourceVersions",
       "TestManagedFleetArtifactRoutesAreFixed",
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
+      "TestManagedMSICatalogueGETPinsAndFixedRoutes",
       "TestManagedMSIOccurrenceRequestPinsRequireCanonicalStrings",
       "TestManagedMSIOperatorRoutesClosed",
       "TestManagedMSIScheduleExactBody",
@@ -1787,6 +1793,12 @@
       "TestLegacyCompleteIdentityRetainsNativePackageAuthority",
       "TestManagedFleetArtifactIndependentOfRevokedOrExpiredTarget",
       "TestManagedFleetRejectsAliasedBindingsAndSingletonAdoption",
+      "TestManagedMSICatalogueActiveWorklistsPinRetiredSlots",
+      "TestManagedMSICatalogueDoesNotPromoteLegacy",
+      "TestManagedMSICatalogueEntryAndByteLimitsAreIndependent",
+      "TestManagedMSICatalogueFreshQuotaAndRestart",
+      "TestManagedMSICatalogueIndependentDevicesAndOlderUnusedEntry",
+      "TestManagedMSICatalogueScopedRetirementAndReplay",
       "TestManagedMSIRejectsPreparedKeyReuse",
       "TestManagedMSISchedulePolicyCannotInventFutureFloor",
       "TestManagedMSISchedulePolicyLegacyBytesRemainUnchanged",
@@ -4516,6 +4528,9 @@
     ],
     "localrmm/internal/windowsmanagedmsimanager": [
       "TestBackgroundPeerCompletionRequiresExactProtectedFiles",
+      "TestCatalogueIndependentDeliveryAndOlderUnusedOccurrence",
+      "TestCatalogueProtectedSpoolsKeepIndependentIncompleteCustody",
+      "TestCatalogueSetupWrappersAndOriginalConsentBytes",
       "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
       "TestManagedFleetOneUploadIndependentTransfersAndCustody",
       "TestManagedFleetSetupUsesFreshPathsAndExactRegistry",
