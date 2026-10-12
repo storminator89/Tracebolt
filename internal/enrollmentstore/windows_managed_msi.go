@@ -155,7 +155,7 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return windowsmanagedmsi.ErrAuthority
 		}
-		if c := t.credentials[snap.InvitationID]; c.WindowsActionSetup != nil || c.WindowsUpdateJobSetup != nil || c.WindowsSoftwareJobSetup != nil {
+		if c := t.credentials[snap.InvitationID]; c.WindowsActionSetup != nil || c.WindowsSoftwareJobSetup != nil || c.WindowsUpdateJobSetup != nil && !coordinatedWindowsMutationPair(consent, c.WindowsUpdateJobSetup.Consent) {
 			return windowsmanagedmsi.ErrConflict
 		}
 		marker := &windowsManagedMSISetupMarker{Version: "tracebolt.windows-managed-msi-setup.v1", Grant: consent, InitializedAt: now}

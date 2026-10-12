@@ -242,7 +242,7 @@ func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, ar
 		return value{}, err
 	}
 	if name == "Install" && flags == method {
-		if err := job.CheckInstallStart(ctx, time.Now()); err != nil {
+		if err := job.CheckNativeInstallStart(ctx, time.Now()); err != nil {
 			return value{}, err
 		}
 	}

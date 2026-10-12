@@ -54,6 +54,9 @@ type request struct {
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--coordinated-mutations-provision" {
+		return runCoordinatedMutationProvision(ctx, args[1:], out, stderr, nativeCoordinatedMutationProvision)
+	}
 	if len(args) > 0 && args[0] == "--managed-msi-export" {
 		return runManagedMSIExport(ctx, args[1:], out, stderr)
 	}

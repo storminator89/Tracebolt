@@ -13,3 +13,7 @@ func openManagedMSINative(context.Context, ManagedMSIReceipt) (managedMSIPin, er
 func NewManagedMSIPayload() managed.Payload          { return nil }
 func CheckManagedMSIExclusive(context.Context) error { return managed.ErrUnavailable }
 func CheckManagedMSIAbsent(context.Context) error    { return managed.ErrUnavailable }
+
+func CheckCoordinatedMutationExclusive(context.Context) error { return managed.ErrUnavailable }
+
+func CheckManagedMSIParticipantAbsent(context.Context) error { return managed.ErrUnavailable }

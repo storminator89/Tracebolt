@@ -17,12 +17,14 @@ import (
 
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/lanclient"
+	fence "localrmm/internal/windowsmutationfence"
 	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsupdateipc"
 	job "localrmm/internal/windowsupdatejob"
 )
 
+const CoordinatedVersion = "tracebolt.windows-selected-update-provision.v2"
 const Version = "tracebolt.windows-selected-update-provision.v1"
 const ScheduleDisclosure = job.ScheduleDisclosure
 const KeyVersion = "tracebolt.windows-update-executor-key.v1"
@@ -33,6 +35,7 @@ var ErrExisting = errors.New("selected update setup or relay already exists; no 
 var ErrChanged = errors.New("selected update setup review or current identity changed")
 
 type Plan struct {
+	MutationPlanDigest     string                               `json:"mutationPlanDigest,omitempty"`
 	Version                string                               `json:"version"`
 	Offer                  job.SetupOffer                       `json:"offer"`
 	Artifact               windowspackage.Manifest              `json:"artifact"`
@@ -74,7 +77,7 @@ func (p Plan) Validate() error {
 	if _, e := windowspackage.ParseManifest(raw); e != nil {
 		return ErrSetup
 	}
-	if p.Version != Version || o.Validate() != nil || p.Artifact.Architecture != runtime.GOARCH || !r.Complete || r.Version != 1 || r.InstallationID == "" || r.ServiceSID == "" || i.ManagerID != o.ManagerID || i.DeviceID != o.DeviceID || i.IncarnationDigest != o.IncarnationDigest || i.ManagerOrigin != o.ManagerOrigin || !actionpermit.ValidDigest(i.ConfigDigest) || !actionpermit.ValidDigest(i.LeafDigest) || !actionpermit.ValidDigest(i.LeafPublicKeyDigest) || i.LeafPublicKeyDigest == actionpermit.Digest(o.ManagerPublicKey) || i.SenderBinding == "" || i.LeafNotBefore <= 0 || i.LeafNotAfter <= i.LeafNotBefore || p.Executable != r.Layout.ProgramFiles+`\Tracebolt\tracebolt-windows-update-executor.exe` || !strings.HasSuffix(r.Layout.StateRoot, `\windows-agent`) || p.StateRoot != strings.TrimSuffix(r.Layout.StateRoot, `\windows-agent`)+`\windows-update-executor` || p.RelayRoot != r.Layout.StateRoot+"-update-job-relay" || p.InstallDisclosure != job.Disclosure || p.RelayDisclosure != lanclient.WindowsUpdateRelayDisclosure || p.ProcessQueryDisclosure != ProcessQueryDisclosure {
+	if !(p.Version == Version && p.MutationPlanDigest == "" || p.Version == CoordinatedVersion && actionpermit.ValidDigest(p.MutationPlanDigest) && p.ScheduleScope == "") || o.Validate() != nil || p.Artifact.Architecture != runtime.GOARCH || !r.Complete || r.Version != 1 || r.InstallationID == "" || r.ServiceSID == "" || i.ManagerID != o.ManagerID || i.DeviceID != o.DeviceID || i.IncarnationDigest != o.IncarnationDigest || i.ManagerOrigin != o.ManagerOrigin || !actionpermit.ValidDigest(i.ConfigDigest) || !actionpermit.ValidDigest(i.LeafDigest) || !actionpermit.ValidDigest(i.LeafPublicKeyDigest) || i.LeafPublicKeyDigest == actionpermit.Digest(o.ManagerPublicKey) || i.SenderBinding == "" || i.LeafNotBefore <= 0 || i.LeafNotAfter <= i.LeafNotBefore || p.Executable != r.Layout.ProgramFiles+`\Tracebolt\tracebolt-windows-update-executor.exe` || !strings.HasSuffix(r.Layout.StateRoot, `\windows-agent`) || p.StateRoot != strings.TrimSuffix(r.Layout.StateRoot, `\windows-agent`)+`\windows-update-executor` || p.RelayRoot != r.Layout.StateRoot+"-update-job-relay" || p.InstallDisclosure != job.Disclosure || p.RelayDisclosure != lanclient.WindowsUpdateRelayDisclosure || p.ProcessQueryDisclosure != ProcessQueryDisclosure {
 		return ErrSetup
 	}
 	return nil
@@ -133,13 +136,23 @@ func generateMaterial() (ed25519.PrivateKey, string, string, error) {
 func Apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks) (job.SetupRegistration, error) {
 	return apply(ctx, p, payload, a, h, generateMaterial, time.Now)
 }
-func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, generate func() (ed25519.PrivateKey, string, string, error), now func() time.Time) (registration job.SetupRegistration, err error) {
+func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, generate func() (ed25519.PrivateKey, string, string, error), now func() time.Time, coordinated ...CoordinatedMaterial) (registration job.SetupRegistration, err error) {
 	raw, _ := json.Marshal(p)
 	var immutable Plan
 	if decode(raw, &immutable) != nil {
 		return registration, ErrSetup
 	}
 	p = immutable
+	var material *CoordinatedMaterial
+	if len(coordinated) > 1 {
+		return registration, ErrSetup
+	}
+	if len(coordinated) == 1 {
+		material = &coordinated[0]
+	}
+	if p.MutationPlanDigest != "" && (material == nil || material.Roster.Validate() != nil || material.Roster.Plan.PlanDigest != p.MutationPlanDigest) || p.MutationPlanDigest == "" && material != nil {
+		return registration, ErrSetup
+	}
 	payload = bytes.Clone(payload)
 	if ctx == nil || p.Validate() != nil || p.Artifact.Validate(payload) != nil || a.Digest != p.Digest() || !a.Install || !a.Relay || !a.ProcessQuery || a.Schedule != (p.ScheduleScope != "") || h.Check == nil || h.Fresh == nil || h.CreateStore == nil || h.CreateImage == nil || h.VerifyImage == nil || h.CreateRelay == nil || h.VerifyRelay == nil || generate == nil || now == nil {
 		return registration, ErrSetup
@@ -184,7 +197,7 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 	if s.Write("provision.json", raw) != nil {
 		return registration, ErrSetup
 	}
-	progress := Progress{Version: Version, PlanDigest: p.Digest(), Completed: []string{}}
+	progress := Progress{Version: p.Version, PlanDigest: p.Digest(), Completed: []string{}}
 	save := func() error {
 		b, _ := json.Marshal(progress)
 		if s.Write("progress.json", b) != nil || s.Verify() != nil {
@@ -217,6 +230,11 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 			}
 			b := job.Binding{ManagerID: p.Offer.ManagerID, DeviceID: p.Offer.DeviceID, IncarnationDigest: p.Offer.IncarnationDigest, ExecutorID: executor, ExecutorKeyID: actionpermit.Digest(pub), GrantID: grant, KeyID: actionpermit.Digest(p.Offer.ManagerPublicKey)}
 			consent := job.Consent{Version: job.ConsentVersion, Scope: job.Scope, Binding: b, Enabled: true, Acknowledged: true, ExpiresAt: p.Offer.ExpiresAt}
+			if material != nil {
+				consent.Version = job.CoordinatedConsentVersion
+				consent.MutationPlanDigest = p.MutationPlanDigest
+				consent.PeerBindingDigest = material.Roster.MSI.BindingDigest
+			}
 			if p.ScheduleScope != "" {
 				consent.Version = job.ScheduledConsentVersion
 				consent.ScheduleScope = p.ScheduleScope
@@ -227,6 +245,13 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 				return registration, ErrSetup
 			}
 			config = windowsupdateipc.Config{Version: windowsupdateipc.ConfigVersion, Consent: consent, ManagerPublicKey: bytes.Clone(p.Offer.ManagerPublicKey), ExecutorPublicKey: bytes.Clone(pub), Executable: p.Executable, ExecutableDigest: "sha256:" + p.Artifact.SHA256, ObserverReceipt: p.Observer, ObserverProcessQueryAcknowledged: true}
+			if material != nil {
+				config.Version = windowsupdateipc.CoordinatedConfigVersion
+				config.Mutation = &material.Roster
+				if !job.ValidMutationRoster(config.Mutation, consent) {
+					return registration, ErrSetup
+				}
+			}
 			peer, e := config.Peer()
 			if e != nil {
 				return registration, ErrSetup
@@ -245,7 +270,13 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 			}
 			progress.Image = &image
 		case "executor-state":
-			record, e := job.NewExecutorRecord(config.Consent, config.ManagerPublicKey, config.ExecutorPublicKey, now().UTC().Unix())
+			var record job.ExecutorRecord
+			var e error
+			if material == nil {
+				record, e = job.NewExecutorRecord(config.Consent, config.ManagerPublicKey, config.ExecutorPublicKey, now().UTC().Unix())
+			} else {
+				record, e = job.NewCoordinatedExecutorRecord(config.Consent, config.ManagerPublicKey, config.ExecutorPublicKey, now().UTC().Unix(), material.Roster)
+			}
 			if e != nil {
 				return registration, ErrSetup
 			}
@@ -330,11 +361,11 @@ func VerifyInstalled(s Store, c windowsupdateipc.Config) error {
 	}
 	raw, e = s.Read("progress.json")
 	var progress Progress
-	if e != nil || decode(raw, &progress) != nil || progress.Version != Version || progress.PlanDigest != p.Digest() || !progress.Complete || progress.Attempted != "" || progress.Image == nil || progress.Image.Validate() != nil || progress.Image.Path != p.Executable || progress.Image.SHA256 != "sha256:"+p.Artifact.SHA256 || !sameJSON(progress.Completed, stages) || c.Executable != p.Executable || c.ExecutableDigest != progress.Image.SHA256 || c.ObserverReceipt != p.Observer || !c.ObserverProcessQueryAcknowledged {
+	if e != nil || decode(raw, &progress) != nil || progress.Version != p.Version || progress.PlanDigest != p.Digest() || !progress.Complete || progress.Attempted != "" || progress.Image == nil || progress.Image.Validate() != nil || progress.Image.Path != p.Executable || progress.Image.SHA256 != "sha256:"+p.Artifact.SHA256 || !sameJSON(progress.Completed, stages) || c.Executable != p.Executable || c.ExecutableDigest != progress.Image.SHA256 || c.ObserverReceipt != p.Observer || !c.ObserverProcessQueryAcknowledged {
 		return ErrSetup
 	}
 	r := job.SetupRegistration{Version: job.SetupRegistrationVersion, Offer: p.Offer, Consent: c.Consent, ExecutorPublicKey: c.ExecutorPublicKey}
-	if r.Validate() != nil || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
+	if r.Validate() != nil || c.Consent.MutationPlanDigest != p.MutationPlanDigest || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
 		return ErrSetup
 	}
 	return s.Verify()
@@ -371,4 +402,29 @@ func Registration(s Store) (job.SetupRegistration, error) {
 	}
 	r := job.SetupRegistration{Version: job.SetupRegistrationVersion, Offer: p.Offer, Consent: c.Consent, ExecutorPublicKey: bytes.Clone(c.ExecutorPublicKey)}
 	return r, r.Validate()
+}
+
+// CoordinatedMaterial is generated only after the shared permanent setup intent.
+// It is consumed by the fresh coordinator, never a migration/adoption route.
+type CoordinatedMaterial struct {
+	Roster              fence.Roster
+	Key                 ed25519.PrivateKey
+	ExecutorID, GrantID string
+}
+
+func NewCoordinatedPlan(p Plan, digest string) (Plan, error) {
+	if p.Validate() != nil || p.Version != Version || p.ScheduleScope != "" || !actionpermit.ValidDigest(digest) {
+		return Plan{}, ErrSetup
+	}
+	p.Version = CoordinatedVersion
+	p.MutationPlanDigest = digest
+	return p, p.Validate()
+}
+func ApplyCoordinated(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, m CoordinatedMaterial) (job.SetupRegistration, error) {
+	if p.Version != CoordinatedVersion || len(m.Key) != ed25519.PrivateKeySize {
+		return job.SetupRegistration{}, ErrSetup
+	}
+	return apply(ctx, p, payload, a, h, func() (ed25519.PrivateKey, string, string, error) {
+		return bytes.Clone(m.Key), m.ExecutorID, m.GrantID, nil
+	}, time.Now, m)
 }

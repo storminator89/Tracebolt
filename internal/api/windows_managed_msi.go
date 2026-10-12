@@ -25,7 +25,7 @@ func windowsManagedMSIRoute(r *http.Request) (string, string, bool) {
 	if len(p) == 6 {
 		op = p[5]
 		switch op {
-		case "reserve", "upload", "complete", "deliver", "review", "approve":
+		case "reserve", "upload", "complete", "deliver", "review", "review-coordinated", "approve":
 		default:
 			return "", "", false
 		}
@@ -68,7 +68,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 	cap := operatorauth.Capability("")
 	if op != "" {
 		cap = operatorauth.WindowsManagedMSIDeliver
-		if op == "review" || op == "approve" {
+		if op == "review" || op == "review-coordinated" || op == "approve" {
 			cap = operatorauth.WindowsManagedMSIInstall
 		}
 	}
@@ -128,16 +128,21 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 			return
 		}
 		e = manager.Deliver(r.Context(), actor, in.TransferID, in.Acknowledged)
-	case "review":
+	case "review", "review-coordinated":
 		var in struct {
-			PackageReviewAccepted   bool `json:"packageReviewAccepted"`
-			TermsAccepted           bool `json:"termsAccepted"`
-			MaintenanceAcknowledged bool `json:"maintenanceAcknowledged"`
+			PackageReviewAccepted     bool `json:"packageReviewAccepted"`
+			SynchronousReviewAccepted bool `json:"synchronousReviewAccepted,omitempty"`
+			TermsAccepted             bool `json:"termsAccepted"`
+			MaintenanceAcknowledged   bool `json:"maintenanceAcknowledged"`
 		}
-		if !readObject(w, r, 512, []string{"packageReviewAccepted", "termsAccepted", "maintenanceAcknowledged"}, &in) {
+		fields := []string{"packageReviewAccepted", "termsAccepted", "maintenanceAcknowledged"}
+		if op == "review-coordinated" {
+			fields = append(fields, "synchronousReviewAccepted")
+		}
+		if !readObject(w, r, 512, fields, &in) {
 			return
 		}
-		e = manager.Review(r.Context(), actor, in.PackageReviewAccepted, in.TermsAccepted, in.MaintenanceAcknowledged)
+		e = manager.Review(r.Context(), actor, in.PackageReviewAccepted, in.TermsAccepted, in.MaintenanceAcknowledged, in.SynchronousReviewAccepted)
 	case "approve":
 		var in struct {
 			ReadinessDigest string `json:"readinessDigest"`

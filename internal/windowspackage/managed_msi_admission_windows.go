@@ -17,7 +17,7 @@ func CheckManagedMSIExclusive(ctx context.Context) error {
 		return e
 	}
 	defer p.Close()
-	for _, name := range []string{"windows-update-executor", "windows-software-executor", "windows-agent-update-job-relay", "windows-agent-software-job-relay", "windows-agent-action-relay"} {
+	for _, name := range []string{"windows-update-executor", "windows-software-executor", "windows-agent-update-job-relay", "windows-agent-software-job-relay", "windows-agent-action-relay", "windows-mutation-fence"} {
 		if e = absentManagedChild(p.parent.handle, name); e != nil {
 			return e
 		}
@@ -37,7 +37,7 @@ func CheckManagedMSIAbsent(ctx context.Context) error {
 		return e
 	}
 	defer p.Close()
-	for _, name := range []string{"windows-managed-msi-service", "windows-managed-msi-package", "windows-agent-managed-msi-relay"} {
+	for _, name := range []string{"windows-managed-msi-service", "windows-managed-msi-package", "windows-agent-managed-msi-relay", "windows-mutation-fence"} {
 		if e = absentManagedChild(p.parent.handle, name); e != nil {
 			return e
 		}
@@ -54,4 +54,43 @@ func absentManagedChild(parent windows.Handle, name string) error {
 		return failure("absence-unverified")
 	}
 	return nil
+}
+
+// CheckCoordinatedMutationExclusive rejects all nonparticipants. The caller must
+// separately verify its exact active immutable MSI/WUA roster; this is no grant.
+func CheckCoordinatedMutationExclusive(ctx context.Context) error {
+	p, e := openManagedMSIParents(ctx)
+	if e != nil {
+		return e
+	}
+	defer p.Close()
+	for _, name := range []string{"windows-software-executor", "windows-agent-software-job-relay", "windows-agent-action-relay"} {
+		if e = absentManagedChild(p.parent.handle, name); e != nil {
+			return e
+		}
+	}
+	root := p.state.directories[p.state.layout.ProgramData]
+	if root == nil {
+		return failure("path-binding")
+	}
+	if e = absentManagedChild(root.handle, "Tracebolt-action-broker"); e != nil {
+		return e
+	}
+	return p.state.checkBindings(ctx)
+}
+
+// CheckManagedMSIParticipantAbsent is used only after the fresh coordinator has
+// verified its staged shared roster. It never adopts an existing MSI participant.
+func CheckManagedMSIParticipantAbsent(ctx context.Context) error {
+	p, e := openManagedMSIParents(ctx)
+	if e != nil {
+		return e
+	}
+	defer p.Close()
+	for _, name := range []string{"windows-managed-msi-service", "windows-managed-msi-package", "windows-agent-managed-msi-relay"} {
+		if e = absentManagedChild(p.parent.handle, name); e != nil {
+			return e
+		}
+	}
+	return p.state.checkBindings(ctx)
 }

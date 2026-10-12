@@ -10,8 +10,9 @@ this document. See [manager setup](windows-managed-msi-manager.md) and the
 This first slice excludes co-enabled Tracebolt WUA, prepared-MSI and service-control
 mutators on that endpoint. Observation remains available. Reciprocal create-only
 setup guards and final runtime checks enforce that limitation. It is partial
-management, not full software/update coexistence. A narrow durable shared Windows
-mutation fence is the next increment; the Linux fence is not reused. External
+management, not full software/update coexistence. A separate [fresh coordinated source profile](windows-coordinated-mutations.md)
+now pairs managed MSI and foreground cached WUA under a durable shared Windows
+mutation fence. The Linux fence is not reused. External
 administrators and other installation tools remain outside these guards.
 
 ## Authority and package review

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"localrmm/internal/actionpermit"
+	fence "localrmm/internal/windowsmutationfence"
 )
 
 // ExecutorAdapter belongs to a dedicated elevated executor. It must not be
@@ -52,13 +53,15 @@ func (InactiveExecutor) PrepareExact(context.Context, Selection) (PreparedUpdate
 }
 
 type Attempt struct {
-	Envelope     []byte  `json:"envelope"`
-	ClaimedAt    int64   `json:"claimedAt"`
-	Attempted    bool    `json:"attempted"`
-	Result       *Result `json:"result"`
-	ResultReport []byte  `json:"resultReport"`
+	MutationCompletion *fence.Receipt `json:"mutationCompletion,omitempty"`
+	Envelope           []byte         `json:"envelope"`
+	ClaimedAt          int64          `json:"claimedAt"`
+	Attempted          bool           `json:"attempted"`
+	Result             *Result        `json:"result"`
+	ResultReport       []byte         `json:"resultReport"`
 }
 type ExecutorRecord struct {
+	Mutation          *fence.Roster     `json:"mutation,omitempty"`
 	Version           string            `json:"version"`
 	Consent           Consent           `json:"consent"`
 	PublicKey         []byte            `json:"publicKey"`
@@ -75,7 +78,7 @@ func NewExecutorRecord(c Consent, key, executorKey ed25519.PublicKey, now int64)
 	return r, r.Validate()
 }
 func (r ExecutorRecord) Validate() error {
-	if _, e := NewRecordWithExecutor(r.Consent, r.PublicKey, r.ExecutorPublicKey, r.ClockFloor); e != nil || r.Version != Version || r.Attempts == nil || len(r.Attempts) > MaxJobs {
+	if _, e := NewRecordWithExecutor(r.Consent, r.PublicKey, r.ExecutorPublicKey, r.ClockFloor); e != nil || !(r.Version == Version && r.Mutation == nil && r.Consent.MutationPlanDigest == "" || r.Version == CoordinatedExecutorVersion && ValidMutationRoster(r.Mutation, r.Consent)) || r.Attempts == nil || len(r.Attempts) > MaxJobs {
 		return ErrIntegrity
 	}
 	if e := r.validateReadiness(); e != nil {
@@ -91,6 +94,9 @@ func (r ExecutorRecord) Validate() error {
 		seq = p.Sequence
 		ids[p.Preview.ID] = true
 		if a.Result != nil && (a.Result.Validate() != nil || a.Result.JobID != p.Preview.ID || a.Result.EnvelopeDigest != actionpermit.Digest(a.Envelope) || a.Result.Attempted != a.Attempted || a.Result.CompletedAt < a.ClaimedAt || a.Result.CompletedAt > r.ClockFloor) {
+			return ErrIntegrity
+		}
+		if e := r.validateMutationCompletion(a, p); e != nil {
 			return ErrIntegrity
 		}
 		if e := r.validateResultReport(a, p); e != nil {
@@ -114,6 +120,7 @@ func EncodeExecutorRecord(r ExecutorRecord) ([]byte, error) {
 }
 
 type Executor struct {
+	mutation  *fence.Session
 	mu        sync.Mutex
 	store     Storage
 	authority Authority
@@ -131,6 +138,15 @@ type Executor struct {
 // dedicated executor private key must be internally consistent and match the
 // exact public pin. It is never generated, saved or inferred from another domain.
 func OpenExecutor(store Storage, authority Authority, adapter ExecutorAdapter, key ed25519.PrivateKey, now func() time.Time) (*Executor, error) {
+	return openExecutor(store, authority, adapter, key, now, nil)
+}
+func OpenCoordinatedExecutor(store Storage, authority Authority, adapter ExecutorAdapter, key ed25519.PrivateKey, now func() time.Time, mutation *fence.Session) (*Executor, error) {
+	if mutation == nil {
+		return nil, ErrAuthority
+	}
+	return openExecutor(store, authority, adapter, key, now, mutation)
+}
+func openExecutor(store Storage, authority Authority, adapter ExecutorAdapter, key ed25519.PrivateKey, now func() time.Time, mutation *fence.Session) (*Executor, error) {
 	if store == nil || authority == nil || adapter == nil || now == nil || len(key) != ed25519.PrivateKeySize || !bytes.Equal(key, ed25519.NewKeyFromSeed(key[:ed25519.SeedSize])) {
 		return nil, ErrInvalid
 	}
@@ -139,10 +155,20 @@ func OpenExecutor(store Storage, authority Authority, adapter ExecutorAdapter, k
 	if e != nil || canonical(raw, &r, MaxBytes) != nil || r.Validate() != nil || !bytes.Equal(key.Public().(ed25519.PublicKey), r.ExecutorPublicKey) {
 		return nil, ErrIntegrity
 	}
-	x := &Executor{store: store, authority: authority, adapter: adapter, now: now, record: r, raw: bytes.Clone(raw), key: bytes.Clone(key)}
+	if r.Mutation == nil && mutation != nil || r.Mutation != nil && (mutation == nil || !mutation.Matches(*r.Mutation, fence.CachedWUA)) {
+		return nil, ErrAuthority
+	}
+	x := &Executor{mutation: mutation, store: store, authority: authority, adapter: adapter, now: now, record: r, raw: bytes.Clone(raw), key: bytes.Clone(key)}
 	if e = x.check(); e != nil {
 		clear(x.key)
 		return nil, e
+	}
+	for _, a := range r.Attempts {
+		if a.MutationCompletion != nil {
+			if e = x.mutation.Recover(context.Background(), *a.MutationCompletion, x.verifyMutationCompletion); e != nil {
+				return nil, e
+			}
+		}
 	}
 	return x, nil
 }
@@ -334,6 +360,8 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 	}
 
 	a := &x.record.Attempts[len(x.record.Attempts)-1]
+	var capability *fence.Capability
+	nativeSettled := false
 	finish := func(outcome string, native NativeResult) (Result, error) {
 		r := Result{JobID: p.Preview.ID, EnvelopeDigest: actionpermit.Digest(raw), Attempted: a.Attempted, Outcome: outcome, OperationResult: native.OperationResult, HResult: native.HResult, RebootRequired: native.RebootRequired, CompletedAt: x.now().UTC().Unix()}
 		if r.Validate() != nil {
@@ -348,12 +376,29 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 		}
 		a.Result = &r
 		a.ResultReport = report
+		if x.mutation != nil && nativeSettled && outcome != "uncertain" && outcome != "not_attempted" {
+			receipt, err := capability.Completion(actionpermit.Digest(report), "completed", r.CompletedAt)
+			if err != nil {
+				x.failed = true
+				return Result{}, ErrUncertain
+			}
+			a.MutationCompletion = &receipt
+		}
 		if e := x.save(); e != nil {
 			return Result{}, e
+		}
+		if a.MutationCompletion != nil {
+			_ = x.mutation.Complete(context.Background(), capability, *a.MutationCompletion, x.verifyMutationCompletion)
 		}
 		return r, nil
 	}
 	noAttempt := func() (Result, error) { return finish("not_attempted", NativeResult{RebootRequired: Unknown}) }
+	if x.mutation != nil {
+		capability, e = x.mutation.Reserve(ctx, mutationOwner(p, raw))
+		if e != nil {
+			return noAttempt()
+		}
+	}
 	var prepared PreparedUpdate
 	var readiness Readiness
 	var sourceAt int64
@@ -415,6 +460,14 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 		if e := ctx.Err(); e != nil {
 			return e
 		}
+		if x.mutation != nil {
+			if e := x.mutation.Dispatch(ctx, capability); e != nil {
+				return e
+			}
+			if e := x.current(c, p); e != nil {
+				return e
+			}
+		}
 		startCtx = withInstallStartFence(ctx, x.record.ClockFloor, p.Preview.ExpiresAt, x.record.Consent.ExpiresAt, c.LeafNotAfter)
 		startCtx = withInstallStartCurrent(startCtx, x.now, func(start context.Context) (installStartBounds, error) {
 			if !x.mu.TryLock() {
@@ -425,16 +478,25 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 				return installStartBounds{}, ErrAuthority
 			}
 			var admitted Current
-			err := x.authority.WithCurrent(start, x.record.Consent.Binding, func(fresh Current) error {
-				if err := x.check(); err != nil {
-					return err
-				}
-				if err := x.current(fresh, p); err != nil {
-					return err
-				}
-				admitted = fresh
-				return start.Err()
-			})
+			checkCurrent := func() error {
+				err := x.authority.WithCurrent(start, x.record.Consent.Binding, func(fresh Current) error {
+					if err := x.check(); err != nil {
+						return err
+					}
+					if err := x.current(fresh, p); err != nil {
+						return err
+					}
+					admitted = fresh
+					return start.Err()
+				})
+				return err
+			}
+			var err error
+			if x.mutation != nil && nativeInstallStart(start) {
+				err = x.mutation.CheckStart(start, capability, checkCurrent)
+			} else {
+				err = checkCurrent()
+			}
 			if err != nil {
 				return installStartBounds{}, err
 			}
@@ -463,6 +525,7 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 	if !a.Attempted {
 		return noAttempt()
 	}
+	nativeSettled = e == nil && closeErr == nil
 	if e != nil || closeErr != nil || !fact(result.RebootRequired) || result.OperationResult > 5 {
 		return finish("uncertain", NativeResult{RebootRequired: Unknown})
 	}

@@ -11,7 +11,9 @@ import (
 	"time"
 )
 
-type Installer struct{}
+type Installer struct{ coordinated bool }
+
+func NewCoordinatedInstaller() managed.Installer { return Installer{coordinated: true} }
 
 func NewInstaller() managed.Installer { return Installer{} }
 func receipt(raw json.RawMessage, s managed.Selection) (windowspackage.ManagedMSIReceipt, error) {
@@ -21,7 +23,10 @@ func receipt(raw json.RawMessage, s managed.Selection) (windowspackage.ManagedMS
 	}
 	return r, nil
 }
-func (Installer) Inspect(ctx context.Context, raw json.RawMessage, s managed.Selection, until int64) (managed.Readiness, error) {
+func (i Installer) Inspect(ctx context.Context, raw json.RawMessage, s managed.Selection, until int64) (managed.Readiness, error) {
+	if i.coordinated {
+		ctx = windowspackage.RequireSynchronousMSI(ctx)
+	}
 	r, e := receipt(raw, s)
 	if e != nil {
 		return managed.Readiness{}, e
@@ -36,8 +41,11 @@ func (Installer) Inspect(ctx context.Context, raw json.RawMessage, s managed.Sel
 	}
 	return inspectPrepared(ctx, p)
 }
-func (Installer) Install(ctx context.Context, raw json.RawMessage, ready managed.Readiness) (managed.NativeResult, error) {
+func (i Installer) Install(ctx context.Context, raw json.RawMessage, ready managed.Readiness) (managed.NativeResult, error) {
 	unknown := managed.NativeResult{RegistrationVerified: managed.Unknown}
+	if i.coordinated {
+		ctx = windowspackage.RequireSynchronousMSI(ctx)
+	}
 	r, e := receipt(raw, ready.Selection)
 	if e != nil {
 		return unknown, e

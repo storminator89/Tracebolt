@@ -175,7 +175,7 @@ func (s *Store) setupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return windowsupdatejob.ErrAuthority
 		}
-		if t.credentials[snap.InvitationID].WindowsManagedMSISetup != nil {
+		if other := t.credentials[snap.InvitationID].WindowsManagedMSISetup; other != nil && !coordinatedWindowsMutationPair(other.Grant, consent) {
 			return windowsupdatejob.ErrConflict
 		}
 		marker := &windowsUpdateJobSetupMarker{Version: "tracebolt.windows-selected-update-setup.v1", Consent: consent, InitializedAt: now}
@@ -377,6 +377,9 @@ func (s *Store) windowsUpdateJobCurrent(t *transaction, id string, binding windo
 // or erasing/replacing a consumed signed record. Unsigned readiness slots remain
 // replaceable; signed history, original ages, envelopes and results do not.
 func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64) error {
+	if windowsupdatejob.CheckMutationTransition(before, after) != nil {
+		return windowsupdatejob.ErrIntegrity
+	}
 	if err := windowsupdatejob.CheckScheduleTransition(before, after); err != nil {
 		return err
 	}

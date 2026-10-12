@@ -224,6 +224,7 @@ type EvidenceStatus struct {
 	ReportExpiresAt int64     `json:"reportExpiresAt"`
 }
 type ExecutorStatus struct {
+	MutationReport           []byte           `json:"mutationReport,omitempty"`
 	ObservedAt               int64            `json:"observedAt"`
 	ReadinessSequence        uint64           `json:"readinessSequence,string"`
 	InstallSequence          uint64           `json:"installSequence,string"`
@@ -274,6 +275,36 @@ func (x *Executor) Status(ctx context.Context) (ExecutorStatus, error) {
 			out.Attempts = append(out.Attempts, s)
 			if a.Result == nil || a.Result.Outcome == "uncertain" || a.Result.Outcome == "failed" {
 				out.InterventionRequired = true
+			}
+		}
+		if x.mutation != nil {
+			var id, digest string
+			var deadline int64
+			if len(x.record.Attempts) > 0 {
+				a := x.record.Attempts[len(x.record.Attempts)-1]
+				p, _ := Verify(a.Envelope, x.record.PublicKey)
+				id = p.Preview.ID
+				digest = actionpermit.Digest(a.Envelope)
+				deadline = p.Preview.ExpiresAt
+			} else if a := x.record.LatestReadiness; a != nil {
+				c, _ := VerifyChallenge(a.Challenge, x.record.PublicKey)
+				id = c.JobID
+				digest = actionpermit.Digest(a.Challenge)
+				deadline = c.Deadline
+			}
+			if id != "" {
+				snapshot, err := x.mutation.Status(ctx)
+				if err != nil {
+					return err
+				}
+				at, err := x.clock()
+				if err != nil {
+					return err
+				}
+				out.MutationReport, err = SignStatement(Statement{Version: RelayVersion, Kind: "mutation", Binding: x.record.Consent.Binding, JobID: id, ReferenceDigest: digest, Deadline: deadline, IssuedAt: at, ExpiresAt: min(at+60, x.record.Consent.ExpiresAt), Mutation: &snapshot}, x.key)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil

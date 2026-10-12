@@ -10,6 +10,7 @@ import (
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/keyvalidation"
+	fence "localrmm/internal/windowsmutationfence"
 )
 
 const RelayVersion = "tracebolt.windows-selected-update-relay.v1"
@@ -67,23 +68,31 @@ func VerifyChallenge(raw []byte, key ed25519.PublicKey) (Challenge, error) {
 // install permit, and Deadline is that original request's finite deadline.
 // Result messages may arrive after dispatch expiry; they never renew authority.
 type Statement struct {
-	Version         string     `json:"version"`
-	Kind            string     `json:"kind"`
-	Binding         Binding    `json:"binding"`
-	JobID           string     `json:"jobId"`
-	ReferenceDigest string     `json:"referenceDigest"`
-	Deadline        int64      `json:"deadline"`
-	IssuedAt        int64      `json:"issuedAt"`
-	ExpiresAt       int64      `json:"expiresAt"`
-	Readiness       *Readiness `json:"readiness"`
-	Result          *Result    `json:"result"`
+	Mutation        *fence.Status `json:"mutation,omitempty"`
+	Version         string        `json:"version"`
+	Kind            string        `json:"kind"`
+	Binding         Binding       `json:"binding"`
+	JobID           string        `json:"jobId"`
+	ReferenceDigest string        `json:"referenceDigest"`
+	Deadline        int64         `json:"deadline"`
+	IssuedAt        int64         `json:"issuedAt"`
+	ExpiresAt       int64         `json:"expiresAt"`
+	Readiness       *Readiness    `json:"readiness"`
+	Result          *Result       `json:"result"`
 }
 
 func (s Statement) Validate() error {
 	if s.Version != RelayVersion || !ValidBinding(s.Binding) || !enrollmentcrypto.ValidID(s.JobID, "update_") || !actionpermit.ValidDigest(s.ReferenceDigest) || !validTime(s.Deadline) || !validTime(s.IssuedAt) || !validTime(s.ExpiresAt) || s.ExpiresAt <= s.IssuedAt || s.ExpiresAt-s.IssuedAt > 300 {
 		return ErrInvalid
 	}
+	if s.Kind != "mutation" && s.Mutation != nil {
+		return ErrInvalid
+	}
 	switch s.Kind {
+	case "mutation":
+		if s.Mutation == nil || s.Mutation.Validate() != nil || s.Readiness != nil || s.Result != nil {
+			return ErrInvalid
+		}
 	case "readiness":
 		if s.Readiness == nil || s.Result != nil || s.Readiness.Validate() != nil || s.Readiness.CapturedAt != s.IssuedAt || s.ExpiresAt > s.Deadline || s.ExpiresAt-s.IssuedAt > 60 {
 			return ErrInvalid
@@ -218,6 +227,27 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 			j := &m.record.Jobs[i]
 			if j.ID != s.JobID {
 				continue
+			}
+			if s.Kind == "mutation" {
+				if m.record.Consent.MutationPlanDigest == "" || s.IssuedAt > n || n >= s.ExpiresAt || s.ExpiresAt > m.record.Consent.ExpiresAt {
+					return ErrExpired
+				}
+				challenge, err := VerifyChallenge(j.Challenge, m.record.PublicKey)
+				if err != nil {
+					return err
+				}
+				if !(s.ReferenceDigest == actionpermit.Digest(j.Challenge) && s.Deadline == challenge.Deadline || len(j.Envelope) > 0 && s.ReferenceDigest == actionpermit.Digest(j.Envelope) && j.Preview != nil && s.Deadline == j.Preview.ExpiresAt) {
+					return ErrConflict
+				}
+				old := m.record.MutationReport
+				m.record.MutationReport = bytes.Clone(raw)
+				before := m.record
+				before.MutationReport = old
+				if CheckMutationTransition(before, m.record) != nil {
+					m.record.MutationReport = old
+					return ErrConflict
+				}
+				return m.save(n)
 			}
 			if s.Kind == "result" {
 				if bytes.Equal(j.ResultReport, raw) && j.Result != nil {
