@@ -1,11 +1,15 @@
 # Current21 Windows Server 2025 x64 preview: installation boundaries
 
-This is the guide for a **future unsigned Windows Server 2025 x64 current21 Read
-admin preview, three-case packaged GUI subset**. Current publication is disabled:
-its accepted source-tree pin is unset. No successful current native run, available
-current release or installation approval is established by this document.
-Historical five-scope releases have their own attached guides and evidence; their
-hashes and four-case HTTP/TLS results cannot validate this current profile.
+This guide prepares an **unsigned Windows Server 2025 x64 current21 Read admin
+preview, three-case packaged GUI subset**. Source
+`62435ef7e605df0b102e030bf1d68cb255829a90`, tree
+`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763`, passed all three cases and aggregation
+in first-attempt [native run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
+This document does not announce an available current release or approve another
+installation. Publication requires successful full Validate of that exact source,
+a separately reviewed later publisher revision and explicit publication approval.
+Historical five-scope releases retain their own attached guides and evidence;
+their hashes and four-case HTTP/TLS results cannot validate this current profile.
 
 ## Verify the exact release before running anything
 
@@ -101,8 +105,9 @@ provide navigation; the exact release-source revision is authoritative. Consent
 v14/receipt12 and all original twenty extension grant digests must agree. Scope,
 service/startup, persistent identity, independent trust comparison and same-key
 automatic renewal acknowledgements start unchecked and reset after Back.
-The gate verifies renewal enrollment/initial credential generation only, never
-renewal cutover. Software and event-history observation entries remain `not_run`;
+The native result verifies renewal enrollment/initial credential generation only,
+never renewal cutover or a native restart. Software-history and event-history
+observation entries remain `not_run`;
 provider denied/unknown/unsupported outcomes do not prove completeness. Server
 Security Center is unsupported.
 

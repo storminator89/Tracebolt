@@ -682,11 +682,13 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
-      - name: Synthetic Windows action and prepared MSI browser gate (32 existing plus 8 MSI captures)
+      - name: Synthetic Windows actions, selected updates and exact retirement browser gate
         if: ${{ !cancelled() }}
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
-        run: node tests/e2e-review/windows-service-actions-runner.mjs
+        run: |
+          node tests/e2e-review/windows-service-actions-runner.mjs
+          node tests/e2e-review/windows-update-retirement-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic central MSI separate-stage browser gate (16 captures)
         if: ${{ !cancelled() }}
         env:

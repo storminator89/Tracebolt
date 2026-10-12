@@ -474,3 +474,11 @@ v5 profile instead uses the separately activated background service under
 [scheduled background updates](windows-scheduled-background-updates.md). Manual
 background v4 remains manual-only. Each profile keeps its original setup, local
 consent, expiry, cancellation/revocation, uncertainty and native acceptance gates.
+
+## Separate fresh reusable background profile
+
+The [fresh reusable cached-update profile](windows-reusable-cached-update-jobs.md)
+adds explicit successful-result-bound retirement with bounded history and durable
+retired sequence floors under new v6 consent and a v4 shared fence. Only fresh
+paired background setup can select it. The earlier contracts, lifetime limits,
+byte shapes and uncertainty rules in this document remain unchanged.

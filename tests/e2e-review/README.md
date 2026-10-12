@@ -413,3 +413,17 @@ scene requests are intercepted. The single synthetic scheduling POST changes
 only the in-memory fixture; no real API mutation, grant, native installation or
 release is established. Inert source checks do not produce screenshots or prove
 browser layout; successful hosted captures still require pixel review.
+
+## Completed reusable Windows update review
+
+The existing Windows service-actions runner also captures one compact completed-job
+review in English and German at 1440×1000 and 390×844 (four images). It uses the
+compiled UI with entirely intercepted synthetic metadata and checks unchecked
+exact acknowledgement, duplicate-click suppression, one retirement POST, GET-only
+reload, original success/restart evidence and no automatic next job.
+
+`windows-update-retirement-browser.mjs` owns the scene/viewport contract and the
+`--check-evidence <source-sha>` validator used by both PR checks and full Validate.
+The validator requires the four source-bound image files and all reconciliation
+assertions. Source-only fixture tests do not establish a hosted-browser pass,
+durable manager behavior, endpoint owner release or native WUA acceptance.

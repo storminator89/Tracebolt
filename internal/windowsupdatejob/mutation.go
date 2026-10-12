@@ -16,7 +16,7 @@ func MutationParticipant(c Consent) fence.Participant {
 	return fence.Participant{Domain: fence.CachedWUA, BindingDigest: actionpermit.Digest(b), GrantDigest: actionpermit.Digest(raw), ManagerKeyDigest: c.Binding.KeyID, ExecutorKeyDigest: c.Binding.ExecutorKeyID}
 }
 func ValidMutationRoster(r *fence.Roster, c Consent) bool {
-	if r == nil || r.Validate() != nil || (c.Version != CoordinatedConsentVersion && !c.Background()) || c.Background() != (r.Version == fence.BackgroundRosterVersion) || c.Validate() != nil {
+	if r == nil || r.Validate() != nil || (c.Version != CoordinatedConsentVersion && !c.Background()) || c.Background() != r.BackgroundWUA() || c.Reusable() != r.ReusableWUA() || c.Validate() != nil {
 		return false
 	}
 	b := c.Binding
@@ -25,6 +25,10 @@ func ValidMutationRoster(r *fence.Roster, c Consent) bool {
 func NewCoordinatedExecutorRecord(c Consent, manager, executor ed25519.PublicKey, at int64, roster fence.Roster) (ExecutorRecord, error) {
 	r := ExecutorRecord{Version: Version, Consent: c, PublicKey: append([]byte(nil), manager...), ExecutorPublicKey: append([]byte(nil), executor...), ClockFloor: at, Attempts: []Attempt{}}
 	r.Version = CoordinatedExecutorVersion
+	if c.Reusable() {
+		r.Version = ReusableExecutorVersion
+		r.Reusable = newReusableExecutorState()
+	}
 	r.Mutation = &roster
 	return r, r.Validate()
 }
@@ -37,7 +41,7 @@ func (r ExecutorRecord) validateMutationCompletion(a Attempt, p Permit) error {
 	if c == nil {
 		return nil
 	}
-	if r.Mutation == nil || c.Validate() != nil || c.FenceID != r.Mutation.FenceID || c.RosterDigest != r.Mutation.Digest() || c.Owner != mutationOwner(p, a.Envelope) || a.Result == nil || !a.Attempted || a.Result.Outcome == "uncertain" || a.Result.Outcome == "not_attempted" || c.ResultDigest != actionpermit.Digest(a.ResultReport) || c.CompletedAt != a.Result.CompletedAt {
+	if r.Mutation == nil || c.Validate() != nil || c.FenceID != r.Mutation.FenceID || c.RosterDigest != r.Mutation.Digest() || c.Owner != mutationOwner(p, a.Envelope) || a.Result == nil || !a.Attempted || a.Result.Outcome == "uncertain" || a.Result.Outcome == "not_attempted" || (r.Consent.Reusable() && a.Result.Outcome == "succeeded") != (c.Outcome == "succeeded") || c.ResultDigest != actionpermit.Digest(a.ResultReport) || c.CompletedAt != a.Result.CompletedAt {
 		return ErrIntegrity
 	}
 	return nil

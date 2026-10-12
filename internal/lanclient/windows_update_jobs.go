@@ -25,13 +25,19 @@ const windowsUpdateRelayReportsPerPass = 4
 // Each method must verify the fixed live peer and honor its bounded context.
 // CheckPeer binds that proof to the exact local grant. Submit forwards original
 // permit bytes once; no adapter, private key, broker opcode or elevated handle
-// belongs here. Only Status and immutable Outbox may recover lost replies.
+// belongs here. Status and immutable Outbox recover lost execution replies; the
+// optional metadata-only retirement seam accepts exact reviewed replay.
 type windowsUpdateExecutorClient interface {
 	CheckPeer(context.Context, windowsupdatejob.Binding) error
 	Readiness(context.Context, []byte) ([]byte, error)
 	Submit(context.Context, []byte) error
 	Status(context.Context) (windowsupdatejob.ExecutorStatus, error)
 	Outbox(context.Context, string, string, string) ([]byte, error)
+}
+
+// Retirement is an optional metadata-only extension to the legacy client seam.
+type windowsUpdateRetirementClient interface {
+	Retire(context.Context, []byte) ([]byte, error)
 }
 type unavailableWindowsUpdateExecutorClient struct{}
 
@@ -60,7 +66,7 @@ type windowsUpdateJobSender struct {
 	current     func(Material) bool
 	now         func() time.Time
 	exchange    func(context.Context, string, []byte) ([]byte, int, error)
-	delivered   map[string]string // Bounded by latest readiness plus MaxJobs; optimization only.
+	delivered   map[string]string // Bounded by current advertised evidence; optimization only.
 	cursor      int
 }
 
@@ -141,7 +147,7 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 	if result := s.reconcile(ctx, g, status); result != "" {
 		return result
 	}
-	if status.InterventionRequired {
+	if status.InterventionRequired && !status.RetirementPending {
 		return "needs_intervention"
 	}
 	if !s.recheck(ctx, g) {
@@ -159,10 +165,24 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 		return "denied"
 	}
 	if pending == nil {
+		if status.InterventionRequired {
+			return "needs_intervention"
+		}
 		return "idle"
 	}
-	if !enrollmentcrypto.ValidID(pending.JobID, "update_") || (pending.Kind != "readiness" && pending.Kind != "install") || pending.Deadline <= s.now().Unix() || pending.Deadline > g.ExpiresAt {
+	if !enrollmentcrypto.ValidID(pending.JobID, "update_") || (pending.Kind != "readiness" && pending.Kind != "install" && pending.Kind != "retire") || pending.Deadline <= s.now().Unix() || pending.Deadline > g.ExpiresAt {
 		return "denied"
+	}
+	if status.InterventionRequired && pending.Kind != "retire" {
+		return "needs_intervention"
+	}
+	if pending.Kind == "retire" {
+		if !status.Reusable {
+			return "denied"
+		}
+		if _, ok := s.executor.(windowsUpdateRetirementClient); !ok {
+			return "unavailable"
+		}
 	}
 	if pending.Kind == "install" && status.InstallCapacityRemaining == 0 {
 		return "capacity_exhausted"
@@ -178,12 +198,15 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 	path := "readiness-claim"
 	if pending.Kind == "install" {
 		path = "install-claim"
+	} else if pending.Kind == "retire" {
+		path = "retire-claim"
 	}
 	claimContext, stopClaim := context.WithDeadline(ctx, time.Unix(pending.Deadline, 0))
 	raw, code, e = s.exchange(claimContext, windowsUpdateJobsRelayPrefix+path, body)
 	stopClaim()
-	// Any claim error/response loss is terminal for this delivery. Never cache a
-	// permit for resubmit, re-claim here, or turn status into another installation.
+	// A claim error ends this pass. Readiness/install claims never replay; only
+	// the separate retirement route may redeliver its exact saved metadata permit
+	// on a later poll. No permit is cached for another installation.
 	if e != nil || code != http.StatusOK {
 		return "outcome_unknown"
 	}
@@ -194,6 +217,11 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 	if pending.Kind == "readiness" {
 		challenge, err := windowsupdatejob.VerifyChallenge(raw, g.ManagerPublicKey)
 		if err != nil || challenge.Binding != g.Binding || challenge.JobID != pending.JobID || challenge.Deadline != pending.Deadline || s.now().Unix() < challenge.IssuedAt || s.now().Unix() >= challenge.Deadline {
+			return "denied"
+		}
+	} else if pending.Kind == "retire" {
+		permit, err := windowsupdatejob.VerifyRetirement(raw, g.ManagerPublicKey)
+		if err != nil || permit.Binding != g.Binding || permit.JobID != pending.JobID || permit.ExpiresAt != pending.Deadline || s.now().Unix() < permit.IssuedAt || s.now().Unix() >= permit.ExpiresAt {
 			return "denied"
 		}
 	} else {
@@ -211,6 +239,9 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 		// Returned bytes are not authority to re-sign or repeat readiness. Use only
 		// the durable outbox below, including after a lost readiness response.
 		_, e = s.executor.Readiness(ctx, raw)
+	} else if pending.Kind == "retire" {
+		kind = "retired"
+		_, e = s.executor.(windowsUpdateRetirementClient).Retire(ctx, raw)
 	} else {
 		e = s.executor.Submit(ctx, raw)
 	}
@@ -234,11 +265,17 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 }
 
 func validWindowsUpdateRelayStatus(s windowsupdatejob.ExecutorStatus, now time.Time) bool {
-	if s.ObservedAt <= 0 || s.ObservedAt > now.Unix() || now.Unix()-s.ObservedAt > 60 || s.Attempts == nil || len(s.Attempts) > windowsupdatejob.MaxJobs || s.InstallCapacityRemaining != windowsupdatejob.MaxJobs-len(s.Attempts) {
+	if s.ObservedAt <= 0 || s.ObservedAt > now.Unix() || now.Unix()-s.ObservedAt > 60 || s.Attempts == nil || len(s.Attempts) > windowsupdatejob.MaxJobs || (!s.Reusable && (s.InstallCapacityRemaining != windowsupdatejob.MaxJobs-len(s.Attempts) || len(s.Retirements) > 0 || s.RetirementPending) || s.Reusable && (len(s.Attempts) > 1 || s.InstallCapacityRemaining != 1-len(s.Attempts) || len(s.Retirements) > 1 || s.RetirementPending && !s.InterventionRequired)) {
 		return false
 	}
 	seen := map[string]bool{}
 	entries := append([]windowsupdatejob.EvidenceStatus{}, s.Attempts...)
+	for _, retired := range s.Retirements {
+		if retired.Kind != "retired" {
+			return false
+		}
+		entries = append(entries, retired)
+	}
 	if s.Readiness != nil {
 		if s.Readiness.Kind != "readiness" {
 			return false
@@ -266,7 +303,8 @@ func validWindowsUpdateRelayStatus(s windowsupdatejob.ExecutorStatus, now time.T
 	return true
 }
 func (s *windowsUpdateJobSender) reconcile(ctx context.Context, g WindowsUpdateRelayGrant, status windowsupdatejob.ExecutorStatus) string {
-	entries := append([]windowsupdatejob.EvidenceStatus{}, status.Attempts...)
+	entries := append([]windowsupdatejob.EvidenceStatus{}, status.Retirements...)
+	entries = append(entries, status.Attempts...)
 	if status.Readiness != nil {
 		entries = append(entries, *status.Readiness)
 	}
@@ -302,6 +340,9 @@ func (s *windowsUpdateJobSender) reconcile(ctx context.Context, g WindowsUpdateR
 	return ""
 }
 func (s *windowsUpdateJobSender) report(ctx context.Context, g WindowsUpdateRelayGrant, kind, id, reference string, deadline int64, raw []byte) bool {
+	if kind == "retired" {
+		return s.reportRetirement(ctx, g, id, reference, raw)
+	}
 	statement, e := windowsupdatejob.VerifyStatement(raw, g.ExecutorPublicKey)
 	if e != nil || statement.Binding != g.Binding || statement.Kind != kind || statement.JobID != id || statement.ReferenceDigest != reference || statement.Deadline != deadline || s.now().Unix() < statement.IssuedAt || s.now().Unix() >= statement.ExpiresAt || !s.recheck(ctx, g) {
 		return false
@@ -323,6 +364,26 @@ func (s *windowsUpdateJobSender) report(ctx context.Context, g WindowsUpdateRela
 	s.delivered[kind+id] = reference
 	return true
 }
+func (s *windowsUpdateJobSender) reportRetirement(ctx context.Context, g WindowsUpdateRelayGrant, id, reference string, raw []byte) bool {
+	r, e := windowsupdatejob.VerifyRetirementReport(raw, g.ExecutorPublicKey)
+	if e != nil || r.Binding != g.Binding || r.JobID != id || r.ReferenceDigest != reference || !s.recheck(ctx, g) {
+		return false
+	}
+	if n := s.now().Unix(); n < r.IssuedAt || n >= r.ExpiresAt {
+		return false
+	}
+	reportCtx, cancel := context.WithDeadline(ctx, time.Unix(min(r.ExpiresAt, g.ExpiresAt), 0))
+	defer cancel()
+	response, code, e := s.exchange(reportCtx, windowsUpdateJobsRelayPrefix+"report", raw)
+	if !s.recheck(ctx, g) || e != nil || code != http.StatusOK || !bytes.Equal(response, []byte("{}")) {
+		return false
+	}
+	if s.delivered == nil {
+		s.delivered = map[string]string{}
+	}
+	s.delivered["retired"+id] = reference
+	return true
+}
 func (s *windowsUpdateJobSender) request(ctx context.Context, path string, body []byte) ([]byte, int, error) {
 	// Run/report completed their final grant/material/deadline check at this
 	// send seam. Do not add a blocking material reload between that check and
@@ -334,7 +395,7 @@ func (s *windowsUpdateJobSender) request(ctx context.Context, path string, body 
 	switch path {
 	case windowsUpdateJobsRelayPrefix + "poll":
 		limit = 2
-	case windowsUpdateJobsRelayPrefix + "readiness-claim", windowsUpdateJobsRelayPrefix + "install-claim":
+	case windowsUpdateJobsRelayPrefix + "readiness-claim", windowsUpdateJobsRelayPrefix + "install-claim", windowsUpdateJobsRelayPrefix + "retire-claim":
 		limit = 128
 	case windowsUpdateJobsRelayPrefix + "report":
 		limit = windowsupdatejob.MaxRelayBytes

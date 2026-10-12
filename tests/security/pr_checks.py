@@ -77,6 +77,8 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
+    'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
     'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi'},
     'web/scripts/capture-windows-msi-catalogue-fixtures.mjs': {'windows-fleet-msi'},
     'web/scripts/capture-windows-reusable-msi-fixtures.mjs': {'windows-fleet-msi'},
@@ -349,6 +351,8 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-windows-msi-catalogue-fixtures.mjs', '--check'], stage='ui-msi-catalogue-contract')
     run(['npm', 'run', 'test:environments'], ROOT / 'web', stage='ui-environment-contract')
@@ -543,6 +547,9 @@ def browser_checks(plan):
             # Three bounded changed flows accompany the existing MSI selection;
             # no new broad-flow mapping or older screenshot expansion.
             run(['node', 'web/scripts/run-windows-msi-catalogue-ci.mjs'], stage='browser-msi-catalogue', env=env)
+        if flow == 'windows-service-actions':
+            run(['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', plan['sha']],
+                stage='browser-update-retirement-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

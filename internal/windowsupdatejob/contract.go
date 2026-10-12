@@ -68,6 +68,10 @@ func ValidBinding(b Binding) bool {
 	return enrollmentcrypto.ValidID(b.ManagerID, "manager_") && enrollmentcrypto.ValidID(b.DeviceID, "agent_") && actionpermit.ValidDigest(b.IncarnationDigest) && enrollmentcrypto.ValidID(b.ExecutorID, "executor_") && actionpermit.ValidDigest(b.ExecutorKeyID) && b.ExecutorKeyID != b.KeyID && enrollmentcrypto.ValidID(b.GrantID, "grant_") && actionpermit.ValidDigest(b.KeyID)
 }
 
+const ReusableConsentVersion = "tracebolt.windows-selected-update-consent.v6"
+const ReusablePermitVersion = "tracebolt.windows-selected-update-job.v3"
+const ReusableDisclosure = "Allow repeated independently approved cached Windows update jobs within the original fixed grant expiry. Review each successful completed job before retiring its exact released-owner evidence. Failed, canceled, expired, missing or uncertain outcomes remain blocked and are not silently freed. Retirement never installs, cancels, rolls back, renews consent or resets replay floors."
+
 const ScheduledBackgroundConsentVersion = "tracebolt.windows-selected-update-consent.v5"
 
 const BackgroundConsentVersion = "tracebolt.windows-selected-update-consent.v4"
@@ -75,6 +79,7 @@ const BackgroundConsentVersion = "tracebolt.windows-selected-update-consent.v4"
 const CoordinatedConsentVersion = "tracebolt.windows-selected-update-consent.v3"
 
 type Consent struct {
+	ReusableAcknowledged   bool    `json:"reusableAcknowledged,omitempty"`
 	BackgroundAcknowledged bool    `json:"backgroundAcknowledged,omitempty"`
 	MutationPlanDigest     string  `json:"mutationPlanDigest,omitempty"`
 	PeerBindingDigest      string  `json:"peerBindingDigest,omitempty"`
@@ -88,12 +93,14 @@ type Consent struct {
 	ScheduleAcknowledged   bool    `json:"scheduleAcknowledged,omitempty"`
 }
 
+func (c Consent) Reusable() bool { return c.Version == ReusableConsentVersion }
+
 func (c Consent) Background() bool {
-	return c.Version == BackgroundConsentVersion || c.Version == ScheduledBackgroundConsentVersion
+	return c.Version == BackgroundConsentVersion || c.Version == ScheduledBackgroundConsentVersion || c.Reusable()
 }
 
 func (c Consent) Validate() error {
-	if c.Background() != c.BackgroundAcknowledged || !(c.Version == ConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || (c.Version == CoordinatedConsentVersion || c.Version == BackgroundConsentVersion) && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledBackgroundConsentVersion && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged) || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
+	if c.Reusable() != c.ReusableAcknowledged || c.Background() != c.BackgroundAcknowledged || !(c.Version == ConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || (c.Version == CoordinatedConsentVersion || c.Version == BackgroundConsentVersion) && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledBackgroundConsentVersion && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || c.Reusable() && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && ((c.ScheduleScope == "" && !c.ScheduleAcknowledged) || (c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged))) || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
 		return ErrInvalid
 	}
 	return nil
@@ -225,7 +232,7 @@ func (p Permit) Validate() error {
 	if p.Schedule != nil {
 		return p.validateScheduled()
 	}
-	if p.Version != Version || p.PermitIssuedAt != 0 || p.Preview.Validate() != nil || p.Preview.Readiness.Reason() != "ready" || p.Sequence == 0 || p.ApprovedAt < p.Preview.CreatedAt || p.ApprovedAt >= p.Preview.ExpiresAt {
+	if (p.Version != Version && p.Version != ReusablePermitVersion) || p.PermitIssuedAt != 0 || p.Preview.Validate() != nil || p.Preview.Readiness.Reason() != "ready" || p.Sequence == 0 || p.ApprovedAt < p.Preview.CreatedAt || p.ApprovedAt >= p.Preview.ExpiresAt {
 		return ErrInvalid
 	}
 	return nil
@@ -238,6 +245,9 @@ type envelope struct {
 
 func signingMessage(p Permit) []byte {
 	raw, _ := json.Marshal(p)
+	if p.Version == ReusablePermitVersion {
+		return append([]byte("Tracebolt reusable cached WUA install v3\x00"), raw...)
+	}
 	if p.Version == ScheduledPermitVersion {
 		return append([]byte("Tracebolt scheduled cached WUA install v2\x00"), raw...)
 	}

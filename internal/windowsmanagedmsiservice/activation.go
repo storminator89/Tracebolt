@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	managed "localrmm/internal/windowsmanagedmsi"
 	"localrmm/internal/windowsmanagedmsiipc"
-	fence "localrmm/internal/windowsmutationfence"
 	job "localrmm/internal/windowsupdatejob"
 )
 
@@ -18,7 +17,7 @@ type BackgroundRegistrationProof struct {
 }
 
 func (p BackgroundRegistrationProof) Validate(c windowsmanagedmsiipc.Config) error {
-	if c.Validate() != nil || c.Mutation == nil || c.Mutation.Version != fence.BackgroundRosterVersion || p.Registration.Version != job.BackgroundRegistrationVersion || p.Registration.Validate() != nil || !job.ValidMutationRoster(c.Mutation, p.Registration.Consent) || p.Manager.Verify(p.Registration) != nil {
+	if c.Validate() != nil || c.Mutation == nil || !c.Mutation.BackgroundWUA() || p.Registration.Version != job.BackgroundRegistrationVersion || p.Registration.Validate() != nil || !job.ValidMutationRoster(c.Mutation, p.Registration.Consent) || p.Manager.Verify(p.Registration) != nil {
 		return managed.ErrAuthority
 	}
 	return nil
@@ -38,7 +37,7 @@ func (a Activation) Validate(c windowsmanagedmsiipc.Config) error {
 	if c.Validate() != nil || !a.Acknowledged || a.ConfigDigest != managed.Digest(raw) {
 		return managed.ErrAuthority
 	}
-	background := c.Mutation != nil && c.Mutation.Version == fence.BackgroundRosterVersion
+	background := c.Mutation != nil && c.Mutation.BackgroundWUA()
 	if !background {
 		if a.Version != managed.Version || a.Background != nil {
 			return managed.ErrAuthority

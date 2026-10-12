@@ -119,3 +119,10 @@ With separate approval on a disposable Windows x64 non-domain-controller:
    window extension or elapsed-time unlock may result.
 
 Synthetic fixtures and cross-builds establish source behavior only.
+
+## Separate reusable background option
+
+Fresh [reusable cached-update jobs](windows-reusable-cached-update-jobs.md) can
+independently select this scheduling scope under new v6 consent and a v4 fence.
+Reusable consent alone never enables scheduling. The v5 profile and its original
+32 lifetime approvals described here are unchanged; no existing state migrates.

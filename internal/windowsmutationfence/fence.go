@@ -23,20 +23,24 @@ import (
 )
 
 const (
-	BackgroundVersion           = "tracebolt.windows-mutation-fence.v3"
-	BackgroundPlanVersion       = "tracebolt.windows-mutation-plan.v3"
-	BackgroundRosterVersion     = "tracebolt.windows-mutation-roster.v3"
-	BackgroundActivationVersion = "tracebolt.windows-mutation-activation.v3"
-	Version                     = "tracebolt.windows-mutation-fence.v1"
-	ReusableVersion             = "tracebolt.windows-mutation-fence.v2"
-	ReusablePlanVersion         = "tracebolt.windows-mutation-plan.v2"
-	ReusableRosterVersion       = "tracebolt.windows-mutation-roster.v2"
-	ReusableActivationVersion   = "tracebolt.windows-mutation-activation.v2"
-	ManagedMSI                  = "managed_msi"
-	CachedWUA                   = "cached_wua"
-	MaxOwners                   = 33 // The existing one MSI and 32 WUA lifetime allowances.
-	MaxBytes                    = 128 << 10
-	stateFile                   = "fence.json"
+	ReusableWUAVersion           = "tracebolt.windows-mutation-fence.v4"
+	ReusableWUAPlanVersion       = "tracebolt.windows-mutation-plan.v4"
+	ReusableWUARosterVersion     = "tracebolt.windows-mutation-roster.v4"
+	ReusableWUAActivationVersion = "tracebolt.windows-mutation-activation.v4"
+	BackgroundVersion            = "tracebolt.windows-mutation-fence.v3"
+	BackgroundPlanVersion        = "tracebolt.windows-mutation-plan.v3"
+	BackgroundRosterVersion      = "tracebolt.windows-mutation-roster.v3"
+	BackgroundActivationVersion  = "tracebolt.windows-mutation-activation.v3"
+	Version                      = "tracebolt.windows-mutation-fence.v1"
+	ReusableVersion              = "tracebolt.windows-mutation-fence.v2"
+	ReusablePlanVersion          = "tracebolt.windows-mutation-plan.v2"
+	ReusableRosterVersion        = "tracebolt.windows-mutation-roster.v2"
+	ReusableActivationVersion    = "tracebolt.windows-mutation-activation.v2"
+	ManagedMSI                   = "managed_msi"
+	CachedWUA                    = "cached_wua"
+	MaxOwners                    = 33 // Bounded retained owners; legacy lifetime allowances remain unchanged.
+	MaxBytes                     = 128 << 10
+	stateFile                    = "fence.json"
 )
 
 var (
@@ -179,16 +183,19 @@ type entry struct {
 	ReceiptDigest  string `json:"receiptDigest"`
 }
 type record struct {
-	RetiredMSISequence uint64      `json:"retiredMSISequence,string,omitempty"`
-	RetiredMSIDigest   string      `json:"retiredMSIDigest,omitempty"`
-	Version            string      `json:"version"`
-	Plan               Plan        `json:"plan"`
-	FenceID            string      `json:"fenceId"`
-	Roster             *Roster     `json:"roster"`
-	Activation         *Activation `json:"activation"`
-	Revision           uint64      `json:"revision,string"`
-	ClockFloor         int64       `json:"clockFloor"`
-	Entries            []entry     `json:"entries"`
+	RetiredWUASequence      uint64      `json:"retiredWUASequence,string,omitempty"`
+	RetiredWUADigest        string      `json:"retiredWUADigest,omitempty"`
+	RetiredWUAReceiptDigest string      `json:"retiredWUAReceiptDigest,omitempty"`
+	RetiredMSISequence      uint64      `json:"retiredMSISequence,string,omitempty"`
+	RetiredMSIDigest        string      `json:"retiredMSIDigest,omitempty"`
+	Version                 string      `json:"version"`
+	Plan                    Plan        `json:"plan"`
+	FenceID                 string      `json:"fenceId"`
+	Roster                  *Roster     `json:"roster"`
+	Activation              *Activation `json:"activation"`
+	Revision                uint64      `json:"revision,string"`
+	ClockFloor              int64       `json:"clockFloor"`
+	Entries                 []entry     `json:"entries"`
 }
 
 // Status contains only compact, non-secret blocking/recovery facts. An error
@@ -251,7 +258,7 @@ func (*Session) String() string                  { return "<Windows mutation fen
 func validTime(n int64) bool    { return n > 0 && n <= 253402300799 }
 func domainValid(d string) bool { return d == ManagedMSI || d == CachedWUA }
 func (p Plan) Validate() error {
-	if p.Version != "" && p.Version != ReusablePlanVersion && p.Version != BackgroundPlanVersion {
+	if p.Version != "" && p.Version != ReusablePlanVersion && p.Version != BackgroundPlanVersion && p.Version != ReusableWUAPlanVersion {
 		return ErrInvalid
 	}
 	if !enrollmentcrypto.ValidID(p.Identity.ManagerID, "manager_") || !enrollmentcrypto.ValidID(p.Identity.DeviceID, "agent_") || !actionpermit.ValidDigest(p.Identity.IncarnationDigest) {
@@ -268,7 +275,7 @@ func (p Participant) valid(domain string) bool {
 	return p.Domain == domain && actionpermit.ValidDigest(p.BindingDigest) && actionpermit.ValidDigest(p.GrantDigest) && actionpermit.ValidDigest(p.ManagerKeyDigest) && actionpermit.ValidDigest(p.ExecutorKeyDigest) && p.ManagerKeyDigest != p.ExecutorKeyDigest
 }
 func (r Roster) Validate() error {
-	if !((r.Version == "" && r.Plan.Version == "") || (r.Version == ReusableRosterVersion && r.Plan.Version == ReusablePlanVersion) || (r.Version == BackgroundRosterVersion && r.Plan.Version == BackgroundPlanVersion)) {
+	if !((r.Version == "" && r.Plan.Version == "") || (r.Version == ReusableRosterVersion && r.Plan.Version == ReusablePlanVersion) || (r.Version == BackgroundRosterVersion && r.Plan.Version == BackgroundPlanVersion) || (r.Version == ReusableWUARosterVersion && r.Plan.Version == ReusableWUAPlanVersion)) {
 		return ErrInvalid
 	}
 	if r.Plan.Validate() != nil || !actionpermit.ValidDigest(r.FenceID) || !r.MSI.valid(ManagedMSI) || !r.WUA.valid(CachedWUA) || r.MSI.BindingDigest == r.WUA.BindingDigest || r.MSI.GrantDigest == r.WUA.GrantDigest {
@@ -291,7 +298,7 @@ func (r Roster) Digest() string {
 	return digest(r)
 }
 func (a Activation) Validate() error {
-	if a.Version != "" && a.Version != ReusableActivationVersion && a.Version != BackgroundActivationVersion {
+	if a.Version != "" && a.Version != ReusableActivationVersion && a.Version != BackgroundActivationVersion && a.Version != ReusableWUAActivationVersion {
 		return ErrInvalid
 	}
 	for _, d := range []string{a.MSIReceiptDigest, a.MSIConfigDigest, a.WUAReceiptDigest, a.WUAConfigDigest} {
@@ -319,8 +326,11 @@ func (o Owner) Validate() error {
 	}
 	return nil
 }
+func validReceiptOutcome(version, domain, outcome string) bool {
+	return outcome == "completed" || version == ReusableWUAVersion && domain == CachedWUA && outcome == "succeeded"
+}
 func (r Receipt) Validate() error {
-	if (r.Version != Version && r.Version != ReusableVersion && r.Version != BackgroundVersion) || !actionpermit.ValidDigest(r.FenceID) || !actionpermit.ValidDigest(r.RosterDigest) || r.Owner.Validate() != nil || r.Reservation == 0 || !actionpermit.ValidDigest(r.ResultDigest) || r.Outcome != "completed" || !validTime(r.CompletedAt) || !r.NativeReturned || !r.CleanupComplete || len(r.proof) != 64 {
+	if (r.Version != Version && r.Version != ReusableVersion && r.Version != BackgroundVersion && r.Version != ReusableWUAVersion) || !actionpermit.ValidDigest(r.FenceID) || !actionpermit.ValidDigest(r.RosterDigest) || r.Owner.Validate() != nil || r.Reservation == 0 || !actionpermit.ValidDigest(r.ResultDigest) || !validReceiptOutcome(r.Version, r.Owner.Domain, r.Outcome) || !validTime(r.CompletedAt) || !r.NativeReturned || !r.CleanupComplete || len(r.proof) != 64 {
 		return ErrInvalid
 	}
 	b, e := hex.DecodeString(r.proof)
@@ -331,7 +341,10 @@ func (r Receipt) Validate() error {
 }
 
 func validate(r record) error {
-	if (r.Version != Version && r.Version != ReusableVersion && r.Version != BackgroundVersion) || r.Version != planStateVersion(r.Plan.Version) || r.Version == Version && (r.RetiredMSISequence != 0 || r.RetiredMSIDigest != "") || (r.RetiredMSISequence == 0) != (r.RetiredMSIDigest == "") || r.RetiredMSIDigest != "" && !actionpermit.ValidDigest(r.RetiredMSIDigest) || r.Plan.Validate() != nil || !actionpermit.ValidDigest(r.FenceID) || r.Revision == 0 || !validTime(r.ClockFloor) || r.Entries == nil || len(r.Entries) > MaxOwners {
+	if r.RetiredWUASequence != 0 && r.Activation == nil || r.Version != ReusableWUAVersion && (r.RetiredWUASequence != 0 || r.RetiredWUADigest != "" || r.RetiredWUAReceiptDigest != "") || (r.RetiredWUASequence == 0) != (r.RetiredWUADigest == "") || (r.RetiredWUASequence == 0) != (r.RetiredWUAReceiptDigest == "") || r.RetiredWUADigest != "" && !actionpermit.ValidDigest(r.RetiredWUADigest) || r.RetiredWUAReceiptDigest != "" && !actionpermit.ValidDigest(r.RetiredWUAReceiptDigest) {
+		return ErrIntegrity
+	}
+	if (r.Version != Version && r.Version != ReusableVersion && r.Version != BackgroundVersion && r.Version != ReusableWUAVersion) || r.Version != planStateVersion(r.Plan.Version) || r.Version == Version && (r.RetiredMSISequence != 0 || r.RetiredMSIDigest != "") || (r.RetiredMSISequence == 0) != (r.RetiredMSIDigest == "") || r.RetiredMSIDigest != "" && !actionpermit.ValidDigest(r.RetiredMSIDigest) || r.Plan.Validate() != nil || !actionpermit.ValidDigest(r.FenceID) || r.Revision == 0 || !validTime(r.ClockFloor) || r.Entries == nil || len(r.Entries) > MaxOwners {
 		return ErrIntegrity
 	}
 	if r.Roster == nil {
@@ -344,7 +357,7 @@ func validate(r record) error {
 	if r.Activation != nil && (r.Activation.Validate() != nil || activationStateVersion(r.Activation.Version) != r.Version) || r.Activation == nil && len(r.Entries) != 0 {
 		return ErrIntegrity
 	}
-	floors := map[string]uint64{ManagedMSI: r.RetiredMSISequence}
+	floors := map[string]uint64{ManagedMSI: r.RetiredMSISequence, CachedWUA: r.RetiredWUASequence}
 	counts := map[string]int{}
 	ids := map[string]bool{}
 	permits := map[string]bool{}
@@ -628,7 +641,7 @@ func (s *Session) Reserve(ctx context.Context, o Owner) (*Capability, error) {
 		if len(r.Entries) > 0 && r.Entries[len(r.Entries)-1].Phase != "released" {
 			return false, ErrBusy
 		}
-		if o.Domain == ManagedMSI && o.Sequence <= r.RetiredMSISequence {
+		if o.Domain == ManagedMSI && o.Sequence <= r.RetiredMSISequence || o.Domain == CachedWUA && o.Sequence <= r.RetiredWUASequence {
 			return false, ErrConsumed
 		}
 		count := 0
@@ -758,7 +771,9 @@ func (s *Session) CheckStart(ctx context.Context, c *Capability, finalAuthority 
 // Completion is called only after synchronous native return and successful
 // owner cleanup have been established, and before saving this receipt together
 // with the domain result. Uncertain native work, timeout, or cleanup failure must
-// not call it. Outcome is deliberately only "completed", not a success claim.
+// not call it. Legacy/MSI receipts use "completed" without a success claim.
+// Fresh v4 WUA may use "succeeded" only after exact successful domain result
+// validation; that narrower outcome is required for explicit retirement.
 func (c *Capability) Completion(resultDigest, outcome string, completedAt int64) (Receipt, error) {
 	if c == nil || c.session == nil {
 		return Receipt{}, ErrInvalid
@@ -766,7 +781,7 @@ func (c *Capability) Completion(resultDigest, outcome string, completedAt int64)
 	s := c.session
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed.Load() || s.capability != c || !c.start.started.Load() || !actionpermit.ValidDigest(resultDigest) || outcome != "completed" || !validTime(completedAt) || completedAt < c.start.at.Load() {
+	if s.closed.Load() || s.capability != c || !c.start.started.Load() || !actionpermit.ValidDigest(resultDigest) || !validReceiptOutcome(planStateVersion(s.roster.Plan.Version), c.owner.Domain, outcome) || !validTime(completedAt) || completedAt < c.start.at.Load() {
 		return Receipt{}, ErrInvalid
 	}
 	r := Receipt{Version: Version, FenceID: s.roster.FenceID, RosterDigest: s.roster.Digest(), Owner: c.owner, Reservation: c.reservation, ResultDigest: resultDigest, Outcome: outcome, CompletedAt: completedAt, NativeReturned: true, CleanupComplete: true, proof: c.proof}
@@ -1052,9 +1067,57 @@ func (s *Session) RetireMSI(ctx context.Context, r Receipt, verify VerifyReceipt
 	})
 }
 
-func (r Roster) ReusableMSI() bool {
-	return r.Version == ReusableRosterVersion || r.Version == BackgroundRosterVersion
+// RetireWUA compacts only the exact released cached-WUA owner after explicit
+// result-bound retirement. In addition to VerifyReceipt's saved-evidence checks,
+// its verifier must prove the domain result was successful and settled. Failed,
+// partial, uncertain or pre-native outcomes must not retire. This preserves a
+// permanent monotonic replay floor and exact-owner digest chain without extending
+// the original consent, reconstructing authority or pruning another owner.
+func (s *Session) RetireWUA(ctx context.Context, r Receipt, verify VerifyReceipt) error {
+	if s == nil || ctx == nil || !s.roster.ReusableWUA() || s.domain != CachedWUA || r.Version != planStateVersion(s.roster.Plan.Version) || r.Validate() != nil || r.Outcome != "succeeded" || r.Owner.Domain != CachedWUA || r.FenceID != s.roster.FenceID || r.RosterDigest != s.roster.Digest() || verify == nil {
+		return ErrInvalid
+	}
+	if e := verify(r); e != nil {
+		return e
+	}
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.transaction(ctx, func(state *record, _ int64) (bool, error) {
+		if len(state.Entries) > 0 && state.Entries[len(state.Entries)-1].Phase != "released" {
+			return false, ErrBusy
+		}
+		if r.Owner.Sequence == state.RetiredWUASequence && digest(r) == state.RetiredWUAReceiptDigest {
+			return false, nil
+		}
+		if r.Owner.Sequence <= state.RetiredWUASequence {
+			return false, ErrConsumed
+		}
+		for i, v := range state.Entries {
+			if v.Owner != r.Owner || v.Reservation != r.Reservation {
+				continue
+			}
+			if v.Phase != "released" || v.ReceiptDigest != digest(r) || v.CompletedAt != r.CompletedAt || v.ProofDigest != actionpermit.Digest([]byte(r.proof)) {
+				return false, ErrUncertain
+			}
+			state.RetiredWUASequence = r.Owner.Sequence
+			state.RetiredWUAReceiptDigest = digest(r)
+			state.RetiredWUADigest = actionpermit.Digest([]byte("Tracebolt retired Windows WUA owner v4\x00" + state.RetiredWUADigest + "\x00" + digest(v)))
+			state.Entries = append(state.Entries[:i], state.Entries[i+1:]...)
+			return true, nil
+		}
+		return false, ErrIntegrity
+	})
 }
+
+func (r Roster) ReusableMSI() bool {
+	return r.Version == ReusableRosterVersion || r.BackgroundWUA()
+}
+func (r Roster) ReusableWUA() bool   { return r.Version == ReusableWUARosterVersion }
+func (r Roster) BackgroundWUA() bool { return r.Version == BackgroundRosterVersion || r.ReusableWUA() }
+
 func planStateVersion(v string) string {
 	switch v {
 	case "":
@@ -1063,6 +1126,8 @@ func planStateVersion(v string) string {
 		return ReusableVersion
 	case BackgroundPlanVersion:
 		return BackgroundVersion
+	case ReusableWUAPlanVersion:
+		return ReusableWUAVersion
 	}
 	return "invalid"
 }
@@ -1074,6 +1139,8 @@ func activationStateVersion(v string) string {
 		return ReusableVersion
 	case BackgroundActivationVersion:
 		return BackgroundVersion
+	case ReusableWUAActivationVersion:
+		return ReusableWUAVersion
 	}
 	return "invalid"
 }

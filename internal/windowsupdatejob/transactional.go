@@ -67,6 +67,12 @@ func (m *Manager) enrollmentTransaction(ctx context.Context, fn func(Current, in
 		}
 		for _, j := range m.record.Jobs {
 			prior := priorJobs[j.ID]
+			if len(j.RetirePermit) > 0 && (len(prior.RetirePermit) == 0 || j.RetireClaimedAt != prior.RetireClaimedAt || RetirementClaimRequested(ctx, j.ID)) {
+				p, e := VerifyRetirement(j.RetirePermit, m.record.PublicKey)
+				if e != nil || m.operatorAllowed == nil || !m.operatorAllowed(p.ActorID) {
+					return ErrAuthority
+				}
+			}
 			if j.Schedule != nil && (prior.Schedule == nil || j.Schedule.TriggeredAt != prior.Schedule.TriggeredAt || len(j.Envelope) > 0 && len(prior.Envelope) == 0 || j.ReadinessClaimedAt != prior.ReadinessClaimedAt || j.ClaimedAt != prior.ClaimedAt) && !m.scheduleAuthorized(&j) {
 				return ErrAuthority
 			}

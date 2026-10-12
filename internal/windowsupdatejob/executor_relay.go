@@ -21,7 +21,7 @@ type ReadinessAttempt struct {
 func (r ExecutorRecord) validateReadiness() error {
 	a := r.LatestReadiness
 	if a == nil {
-		if r.ReadinessSequence != 0 {
+		if r.ReadinessSequence != 0 && (r.Reusable == nil || r.Reusable.RetiredFloor == 0) {
 			return ErrIntegrity
 		}
 		return nil
@@ -102,7 +102,7 @@ func (x *Executor) Readiness(ctx context.Context, raw []byte) ([]byte, error) {
 	if _, e := x.observeTime(); e != nil {
 		return nil, e
 	}
-	if x.accepted != nil || x.running {
+	if x.accepted != nil || x.running || x.record.Reusable != nil && (len(x.record.Reusable.Pending) > 0 || len(x.record.Attempts) > 0) {
 		return nil, ErrConflict
 	}
 	for _, a := range x.record.Attempts {
@@ -224,6 +224,9 @@ type EvidenceStatus struct {
 	ReportExpiresAt int64     `json:"reportExpiresAt"`
 }
 type ExecutorStatus struct {
+	RetirementPending        bool             `json:"retirementPending,omitempty"`
+	Reusable                 bool             `json:"reusable,omitempty"`
+	Retirements              []EvidenceStatus `json:"retirements,omitempty"`
 	MutationReport           []byte           `json:"mutationReport,omitempty"`
 	ObservedAt               int64            `json:"observedAt"`
 	ReadinessSequence        uint64           `json:"readinessSequence,string"`
@@ -258,6 +261,13 @@ func (x *Executor) Status(ctx context.Context) (ExecutorStatus, error) {
 	var out ExecutorStatus
 	e := x.readCurrent(ctx, func(n int64) error {
 		out = ExecutorStatus{ObservedAt: n, ReadinessSequence: x.record.ReadinessSequence, InstallSequence: x.record.Sequence, InstallCapacityRemaining: MaxJobs - len(x.record.Attempts), Attempts: []EvidenceStatus{}}
+		if x.record.Reusable != nil {
+			out.Reusable = true
+			out.InstallCapacityRemaining = 1 - len(x.record.Attempts)
+			out.RetirementPending = len(x.record.Reusable.Pending) > 0
+			out.InterventionRequired = out.RetirementPending
+			out.Retirements = x.retirementStatus(n)
+		}
 		if a := x.record.LatestReadiness; a != nil {
 			c, _ := VerifyChallenge(a.Challenge, x.record.PublicKey)
 			s := &EvidenceStatus{Kind: "readiness", JobID: c.JobID, ReferenceDigest: actionpermit.Digest(a.Challenge), Selection: c.Selection, Sequence: c.Sequence, Deadline: c.Deadline, ClaimedAt: a.ClaimedAt}
@@ -349,12 +359,17 @@ func (x *Executor) Outbox(ctx context.Context, kind, jobID, referenceDigest stri
 		return nil, ErrConflict
 	}
 	defer x.mu.Unlock()
-	if (kind != "readiness" && kind != "result") || !enrollmentcrypto.ValidID(jobID, "update_") || !actionpermit.ValidDigest(referenceDigest) {
+	if (kind != "readiness" && kind != "result" && kind != "retired") || !enrollmentcrypto.ValidID(jobID, "update_") || !actionpermit.ValidDigest(referenceDigest) {
 		return nil, ErrInvalid
 	}
 	var out []byte
 	e := x.readCurrent(ctx, func(n int64) error {
 		var raw []byte
+		if kind == "retired" {
+			var err error
+			out, err = x.retiredOutbox(n, jobID, referenceDigest)
+			return err
+		}
 		if kind == "readiness" {
 			if a := x.record.LatestReadiness; a != nil {
 				c, _ := VerifyChallenge(a.Challenge, x.record.PublicKey)

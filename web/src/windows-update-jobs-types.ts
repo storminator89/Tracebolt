@@ -4,13 +4,15 @@ export type UpdateReadiness = { selection: UpdateSelection; capturedAt: number; 
 export type UpdatePreview = { id: string; actorId: string; binding: { managerId: string; deviceId: string; incarnationDigest: string; executorId: string; executorKeyId: string; grantId: string; keyId: string }; readiness: UpdateReadiness; createdAt: number; expiresAt: number; digest: string };
 export type UpdateResult = { jobId: string; envelopeDigest: string; attempted: boolean; outcome: 'not_attempted'|'succeeded'|'failed'|'uncertain'; operationResult: number; hresult: number; rebootRequired: 'yes'|'no'|'unknown'; completedAt: number };
 export type UpdateSchedule = { version: 'tracebolt.windows-selected-update-schedule.v1'; digest: string; approvedAt: number; startAt: number; endAt: number; permitIssuedAt: number; revoked: boolean };
-export type UpdateJobView = {backgroundExecutor?:true;backgroundScheduling?:true;executorAvailability?:'verified_recent'|'unknown';executorObservedAt?:number;coordinated?:true;mutation?:MutationStatus;mutationCapturedAt?:number; version: string; deviceId: string; serverNow: number; available: boolean; reason: string; schedulingAvailable?: boolean; schedulingRevoked?: boolean; job: { id: string; selection: UpdateSelection; state: string; reason: string; preview: UpdatePreview|null; result: UpdateResult|null; schedule?: UpdateSchedule }|null };
+export type UpdateRetirement = { state: 'available'|'pending'|'retired'|'blocked'; requestedAt?: number; claimedAt?: number; retiredAt?: number };
+export type UpdateJobView = {reusableJobs?:true;grantExpiresAt?:number;retiredFloor?:string;backgroundExecutor?:true;backgroundScheduling?:true;executorAvailability?:'verified_recent'|'unknown';executorObservedAt?:number;coordinated?:true;mutation?:MutationStatus;mutationCapturedAt?:number; version: string; deviceId: string; serverNow: number; available: boolean; reason: string; schedulingAvailable?: boolean; schedulingRevoked?: boolean; job: { id: string; selection: UpdateSelection; state: string; reason: string; preview: UpdatePreview|null; result: UpdateResult|null; schedule?: UpdateSchedule; occurrence?: string; resultDigest?: string; retirement?: UpdateRetirement }|null };
 const object=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
 const exact=(v:unknown,keys:string[]):v is Record<string,unknown>=>object(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 const optional=(v:unknown,keys:string[],allowed:string[]):v is Record<string,unknown>=>object(v)&&keys.every(k=>Object.hasOwn(v,k))&&Object.keys(v).every(k=>keys.includes(k)||allowed.includes(k));
 const integer=(v:unknown,min=1,max=253402300799):v is number=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
 export const updateID=(v:unknown,prefix:string):v is string=>typeof v==='string'&&new RegExp(`^${prefix}[0-9a-f]{32}$`).test(v);
 const digest=(v:unknown):v is string=>typeof v==='string'&&/^sha256:[0-9a-f]{64}$/.test(v);
+const sequence=(v:unknown):v is string=>typeof v==='string'&&/^[1-9][0-9]{0,19}$/.test(v)&&BigInt(v)<=18446744073709551615n;
 const fact=(v:unknown)=>v==='yes'||v==='no'||v==='unknown';
 export const validUpdateSelection=(v:unknown):v is UpdateSelection=>exact(v,['updateId','revision'])&&typeof v.updateId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v.updateId)&&v.updateId!=='00000000-0000-0000-0000-000000000000'&&integer(v.revision,0,2147483647);
 export const sameUpdate=(a:UpdateSelection,b:UpdateSelection)=>a.updateId===b.updateId&&a.revision===b.revision;
@@ -40,31 +42,61 @@ function validBackgroundExecutor(v:Record<string,unknown>,now:number):boolean {
  return v.executorAvailability==='verified_recent'&&integer(v.executorObservedAt)&&v.executorObservedAt<=now&&now-v.executorObservedAt<60&&v.executorObservedAt===v.mutationCapturedAt&&object(v.mutation)&&v.mutation.active===true;
 }
 const reasons=['ready','readiness_pending','readiness_unavailable','readiness_unknown','offline_unverified','selection_ineligible','not_downloaded','license_not_accepted','bundle_unsupported','interaction_or_source_required','installer_busy','restart_required_before'];
-export function validUpdateJobView(v:unknown,device:string,actor:string):v is UpdateJobView{
- if(!optional(v,['version','deviceId','serverNow','available','reason','job'],['schedulingAvailable','schedulingRevoked','coordinated','mutation','mutationCapturedAt','backgroundExecutor','backgroundScheduling','executorAvailability','executorObservedAt'])||v.version!=='tracebolt.windows-selected-update-job.v1'||v.deviceId!==device||!integer(v.serverNow)||typeof v.available!=='boolean'||!['ready','job_pending_or_intervention','capacity_exhausted','executor_not_configured','operator_capability_required','tls_required'].includes(String(v.reason))||v.available&&v.reason!=='ready')return false;
- if(!validMutationView(v,v.serverNow as number)||!validBackgroundExecutor(v,v.serverNow as number))return false;
+// These fields are evidence from the separately consented reusable profile.
+// Generic shared-owner idle status never creates retirement eligibility.
+function validReusable(v:Record<string,unknown>):boolean {
+ if(!Object.hasOwn(v,'reusableJobs'))return !Object.hasOwn(v,'grantExpiresAt')&&!Object.hasOwn(v,'retiredFloor');
+ return v.reusableJobs===true&&integer(v.grantExpiresAt)&&(!Object.hasOwn(v,'retiredFloor')||sequence(v.retiredFloor));
+}
+function validRetirement(j:Record<string,unknown>,v:Record<string,unknown>,summary:boolean):boolean {
+ const fields=['occurrence','resultDigest','retirement'];
+ if(v.reusableJobs!==true)return fields.every(k=>!Object.hasOwn(j,k));
+ const hasOccurrence=Object.hasOwn(j,'occurrence'),floor=BigInt(String(v.retiredFloor??'0'));
+ if(hasOccurrence&&!sequence(j.occurrence)||!hasOccurrence&&(['approved','claimed','complete'].includes(String(j.state))||Object.hasOwn(j,'schedule')))return false;
+ if(Object.hasOwn(j,'resultDigest')&&(summary||!digest(j.resultDigest)||j.result===null))return false;
+ if(!summary&&hasOccurrence&&v.available===true&&(!object(j.retirement)||j.retirement.state!=='retired'))return false;
+ if(!hasOccurrence)return !Object.hasOwn(j,'retirement')&&!Object.hasOwn(j,'resultDigest');
+ if(!Object.hasOwn(j,'retirement'))return BigInt(String(j.occurrence))===floor+1n;
+ const r=j.retirement;
+ if(!optional(r,['state'],['requestedAt','claimedAt','retiredAt'])||!['available','pending','retired','blocked'].includes(String(r.state)))return false;
+ for(const field of ['requestedAt','claimedAt','retiredAt'])if(Object.hasOwn(r,field)&&(!integer(r[field])||Number(r[field])>Number(v.serverNow)))return false;
+ if(r.state==='retired'){
+  if(BigInt(String(j.occurrence))>floor||!integer(r.retiredAt))return false;
+ }else if(BigInt(String(j.occurrence))!==floor+1n||Object.hasOwn(r,'retiredAt'))return false;
+ if(r.state==='available')return !Object.hasOwn(r,'requestedAt')&&!Object.hasOwn(r,'claimedAt')&&j.state==='complete'&&object(j.result)&&j.result.outcome==='succeeded'&&(summary||digest(j.resultDigest));
+ if(r.state==='blocked')return (!Object.hasOwn(r,'requestedAt')||object(j.result)&&Number(r.requestedAt)>=Number(j.result.completedAt))&&(!Object.hasOwn(r,'claimedAt')||integer(r.requestedAt)&&Number(r.claimedAt)>=r.requestedAt);
+ if(j.state!=='complete'||!object(j.result)||j.result.outcome!=='succeeded'||!summary&&!digest(j.resultDigest))return false;
+ if(r.state==='pending'&&!integer(r.requestedAt))return false;
+ if(Object.hasOwn(r,'requestedAt')&&Number(r.requestedAt)<Number(j.result.completedAt)||Object.hasOwn(r,'claimedAt')&&(!integer(r.requestedAt)||Number(r.claimedAt)<r.requestedAt))return false;
+ return r.state!=='retired'||Number(r.retiredAt)>=Math.max(Number(j.result.completedAt),Number(r.requestedAt??0),Number(r.claimedAt??0));
+}
+export function validUpdateJobView(v:unknown,device:string,actor:string):v is UpdateJobView{return validView(v,device,actor,false);}
+function validView(v:unknown,device:string,actor:string,summary:boolean):v is UpdateJobView{
+ if(!optional(v,['version','deviceId','serverNow','available','reason','job'],['schedulingAvailable','schedulingRevoked','coordinated','mutation','mutationCapturedAt','backgroundExecutor','backgroundScheduling','executorAvailability','executorObservedAt','reusableJobs','grantExpiresAt','retiredFloor'])||v.version!=='tracebolt.windows-selected-update-job.v1'||v.deviceId!==device||!integer(v.serverNow)||typeof v.available!=='boolean'||!['ready','job_pending_or_intervention','capacity_exhausted','executor_not_configured','operator_capability_required','tls_required'].includes(String(v.reason))||v.available&&v.reason!=='ready')return false;
+ if(!validReusable(v)||!validMutationView(v,v.serverNow as number)||!validBackgroundExecutor(v,v.serverNow as number))return false;
  if(Object.hasOwn(v,'schedulingAvailable')&&typeof v.schedulingAvailable!=='boolean'||Object.hasOwn(v,'schedulingRevoked')&&typeof v.schedulingRevoked!=='boolean'||v.schedulingRevoked===true&&v.schedulingAvailable===true)return false;
  if(v.job===null)return true;
- const j=v.job;if(v.backgroundExecutor===true&&v.backgroundScheduling!==true&&object(j)&&Object.hasOwn(j,'schedule'))return false;if(!optional(j,['id','selection','state','reason','preview','result'],['schedule'])||!updateID(j.id,'update_')||!validUpdateSelection(j.selection)||!['requested','blocked','preview','approved','claimed','complete','expired','scheduled','schedule_canceled','schedule_blocked','schedule_expired'].includes(String(j.state))||![...reasons,...scheduleReasons].includes(String(j.reason)))return false;
+ const j=v.job;if(v.backgroundExecutor===true&&v.backgroundScheduling!==true&&object(j)&&Object.hasOwn(j,'schedule'))return false;if(!optional(j,['id','selection','state','reason','preview','result'],['schedule','occurrence','resultDigest','retirement'])||!updateID(j.id,'update_')||!validUpdateSelection(j.selection)||!['requested','blocked','preview','approved','claimed','complete','expired','scheduled','schedule_canceled','schedule_blocked','schedule_expired'].includes(String(j.state))||![...reasons,...scheduleReasons].includes(String(j.reason)))return false;
  if(Object.hasOwn(j,'schedule')&&(!validUpdateSchedule(j.schedule,v.serverNow)||j.preview!==null||j.state==='preview')||!Object.hasOwn(j,'schedule')&&(String(j.state).startsWith('schedule')||scheduleReasons.includes(String(j.reason))))return false;
  if(j.schedule){const schedule=j.schedule as UpdateSchedule;if(['blocked','expired','preview'].includes(String(j.state))||['scheduled','requested'].includes(String(j.state))&&schedule.permitIssuedAt!==0||['approved','claimed','complete'].includes(String(j.state))&&schedule.permitIssuedAt===0||j.state==='schedule_canceled'&&j.reason!=='schedule_canceled'||schedule.revoked&&(j.state!=='schedule_blocked'||j.reason!=='schedule_authority_revoked'))return false;}
  if(j.preview!==null&&(j.state!=='preview'||!validPreview(j.preview,device,actor,j.id,j.selection,v.serverNow)))return false;
  if(j.result!==null&&(j.state!=='complete'||!validResult(j.result,j.id,v.serverNow)))return false;
- return j.state!=='complete'||j.result!==null;
+ return (j.state!=='complete'||j.result!==null)&&validRetirement(j,v,summary);
 }
 
 /** Saved summaries contain evidence only. They never carry a preview or permit. */
-export type UpdateJobSummary = Omit<NonNullable<UpdateJobView['job']>, 'preview'> & { requestedAt: number; approvedAt: number; claimedAt: number };
-export type UpdateJobHistory = { version: 'tracebolt.windows-selected-update-history.v1'; deviceId: string; serverNow: number; available: boolean; reason: string; remainingCapacity: number; jobs: UpdateJobSummary[] };
+export type UpdateJobSummary = Omit<NonNullable<UpdateJobView['job']>, 'preview'|'resultDigest'> & { requestedAt: number; approvedAt: number; claimedAt: number };
+export type UpdateJobHistory = { reusableJobs?:true; grantExpiresAt?:number; retiredFloor?:string; version: 'tracebolt.windows-selected-update-history.v1'; deviceId: string; serverNow: number; available: boolean; reason: string; remainingCapacity: number; jobs: UpdateJobSummary[] };
 export function validUpdateJobHistory(v: unknown, device: string, actor: string): v is UpdateJobHistory {
- if (!exact(v, ['version','deviceId','serverNow','available','reason','remainingCapacity','jobs']) || v.version !== 'tracebolt.windows-selected-update-history.v1' || !integer(v.remainingCapacity,0,32) || !Array.isArray(v.jobs) || v.jobs.length > 33) return false;
- const base = {version:'tracebolt.windows-selected-update-job.v1',deviceId:v.deviceId,serverNow:v.serverNow,available:v.available,reason:v.reason,job:null};
+ if (!optional(v, ['version','deviceId','serverNow','available','reason','remainingCapacity','jobs'],['reusableJobs','grantExpiresAt','retiredFloor']) || v.version !== 'tracebolt.windows-selected-update-history.v1' || !validReusable(v) || !integer(v.remainingCapacity,0,v.reusableJobs===true?1:32) || !Array.isArray(v.jobs) || v.jobs.length > (v.reusableJobs===true?9:33)) return false;
+ const base = {version:'tracebolt.windows-selected-update-job.v1',deviceId:v.deviceId,serverNow:v.serverNow,available:v.available,reason:v.reason,job:null,...(v.reusableJobs===true?{reusableJobs:true,grantExpiresAt:v.grantExpiresAt,...(Object.hasOwn(v,'retiredFloor')?{retiredFloor:v.retiredFloor}:{})}:{})};
  if (!validUpdateJobView(base,device,actor)) return false;
- const ids = new Set<string>();
+ const ids = new Set<string>(),occurrences = new Set<string>();let retired=0,current=0;
  return v.jobs.every(j => {
-  if (!optional(j,['id','selection','state','reason','result','requestedAt','approvedAt','claimedAt'],['schedule']) || !integer(j.requestedAt) || !integer(j.approvedAt,0) || !integer(j.claimedAt,0) || j.requestedAt > base.serverNow || j.approvedAt > base.serverNow || j.claimedAt > base.serverNow || !Object.hasOwn(j,'schedule') && j.approvedAt !== 0 && j.approvedAt < j.requestedAt || j.claimedAt !== 0 && (j.approvedAt === 0 || j.claimedAt < j.approvedAt)) return false;
-  const job = {id:j.id,selection:j.selection,state:j.state,reason:j.reason,result:j.result,preview:null,...(Object.hasOwn(j,'schedule')?{schedule:j.schedule}:{})};
-  if (!validUpdateJobView({...base,job},device,actor) || ids.has(job.id as string)) return false;
+  if (!optional(j,['id','selection','state','reason','result','requestedAt','approvedAt','claimedAt'],['schedule','occurrence','retirement']) || !integer(j.requestedAt) || !integer(j.approvedAt,0) || !integer(j.claimedAt,0) || j.requestedAt > base.serverNow || j.approvedAt > base.serverNow || j.claimedAt > base.serverNow || !Object.hasOwn(j,'schedule') && !(v.reusableJobs===true&&object(j.retirement)&&j.retirement.state==='retired') && j.approvedAt !== 0 && j.approvedAt < j.requestedAt || j.claimedAt !== 0 && (j.approvedAt === 0 || j.claimedAt < j.approvedAt)) return false;
+  const job = {id:j.id,selection:j.selection,state:j.state,reason:j.reason,result:j.result,preview:null,...Object.fromEntries(['schedule','occurrence','retirement'].filter(k=>Object.hasOwn(j,k)).map(k=>[k,j[k]]))};
+  if (!validView({...base,job},device,actor,true) || ids.has(job.id as string)) return false;
+  if(v.reusableJobs===true){if(object(j.retirement)&&j.retirement.state==='retired')retired++;else current++;if(retired>8||current>1||typeof j.occurrence==='string'&&occurrences.has(j.occurrence))return false;if(typeof j.occurrence==='string')occurrences.add(j.occurrence);}
   if(Object.hasOwn(j,'schedule')&&(!validUpdateSchedule(j.schedule,base.serverNow as number)||j.approvedAt!==(j.schedule.permitIssuedAt===0?0:j.schedule.approvedAt)||j.claimedAt!==0&&j.claimedAt<j.schedule.permitIssuedAt))return false;
   ids.add(job.id as string); return true;
  });

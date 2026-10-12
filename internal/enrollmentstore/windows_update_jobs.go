@@ -383,6 +383,9 @@ func (s *Store) windowsUpdateJobCurrent(t *transaction, id string, binding windo
 // or erasing/replacing a consumed signed record. Unsigned readiness slots remain
 // replaceable; signed history, original ages, envelopes and results do not.
 func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64) error {
+	if windowsupdatejob.CheckReusableTransition(before, after) != nil {
+		return windowsupdatejob.ErrIntegrity
+	}
 	if windowsupdatejob.CheckMutationTransition(before, after) != nil {
 		return windowsupdatejob.ErrIntegrity
 	}
@@ -429,6 +432,8 @@ func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64
 			if old.State == "claimed" && next.State == "complete" {
 				a.Result, a.ResultReport = b.Result, b.ResultReport
 			}
+			windowsupdatejob.ClearRetirementFields(&a)
+			windowsupdatejob.ClearRetirementFields(&b)
 			x, _ := json.Marshal(a)
 			y, _ := json.Marshal(b)
 			if !bytes.Equal(x, y) {
@@ -436,7 +441,7 @@ func windowsUpdateJobTransition(before, after windowsupdatejob.Record, now int64
 			}
 			break
 		}
-		if !found {
+		if !found && !windowsupdatejob.CanCompactRetiredJob(before, after, old) {
 			return windowsupdatejob.ErrConflict
 		}
 	}
@@ -450,6 +455,18 @@ func windowsUpdateJobFinalDeadline(before, after windowsupdatejob.Record, curren
 	}
 	for _, j := range after.Jobs {
 		prior, exists := old[j.ID]
+		if len(j.RetirePermit) > 0 && (len(prior.RetirePermit) == 0 || j.RetireClaimedAt != prior.RetireClaimedAt) {
+			p, e := windowsupdatejob.VerifyRetirement(j.RetirePermit, after.PublicKey)
+			if e != nil || fresh >= p.ExpiresAt || p.ExpiresAt > current.LeafNotAfter || p.ExpiresAt > after.Consent.ExpiresAt {
+				return windowsupdatejob.ErrExpired
+			}
+		}
+		if len(j.RetireReport) > 0 && !bytes.Equal(j.RetireReport, prior.RetireReport) {
+			a, e := windowsupdatejob.VerifyRetirementReport(j.RetireReport, after.ExecutorPublicKey)
+			if e != nil || fresh >= a.ExpiresAt {
+				return windowsupdatejob.ErrExpired
+			}
+		}
 		if j.Schedule != nil && prior.Schedule == nil {
 			a := j.Schedule.Approval
 			if fresh >= a.Baseline.ExpiresAt || a.EndAt > current.LeafNotAfter || a.EndAt > after.Consent.ExpiresAt {
@@ -574,6 +591,9 @@ func (s *Store) WindowsUpdateJobTransaction(ctx context.Context, binding windows
 					operationErr = windowsupdatejob.ErrAuthority
 				} else {
 					operationErr = windowsUpdateJobFinalDeadline(original, r, final, fresh.Unix())
+					if operationErr == nil {
+						operationErr = windowsupdatejob.CheckRetirementClaimFinal(ctx, r, final, fresh.Unix())
+					}
 				}
 			}
 			if operationErr == nil {
@@ -594,6 +614,9 @@ func (s *Store) WindowsUpdateJobTransaction(ctx context.Context, binding windows
 							operationErr = windowsupdatejob.ErrAuthority
 						} else {
 							operationErr = windowsUpdateJobFinalDeadline(original, r, final, last.Unix())
+							if operationErr == nil {
+								operationErr = windowsupdatejob.CheckRetirementClaimFinal(ctx, r, final, last.Unix())
+							}
 						}
 					}
 				}

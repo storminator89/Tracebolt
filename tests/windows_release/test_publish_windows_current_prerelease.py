@@ -1,7 +1,7 @@
 """Current-profile synthetic fixtures only: no native execution or network writes.
 
 Reuse the existing finite API/ZIP fixture. Synthetic pin and PE inspection are
-injected only in tests; production current accepted tree remains UNSET.
+injected only in tests; production uses the reviewed native-subset tree.
 """
 import copy
 import importlib.util
@@ -64,8 +64,10 @@ class CurrentPublisherTests(unittest.TestCase):
         with self.assertRaises((p.Rejected, gate.shared.Rejected, gate.provenance.Rejected)):
             call(*args, **kwargs)
 
+    def test_reviewed_native_source_tree_is_pinned(self):
+        self.assertEqual(adapter.ACCEPTED_SOURCE_TREE, "b66e8a8eaa8cfdb0a5b7108254c930ae244b6763")
+
     def test_unset_pin_rejects_prepare_plan_publish_before_api_or_writes(self):
-        self.assertIsNone(adapter.ACCEPTED_SOURCE_TREE)
         plan, files = self.prepare()
         for call, args in ((p.prepare, (self.api, self.request)),
                            (p.validate_plan, (plan, self.request)),
@@ -233,7 +235,7 @@ class CurrentPublisherTests(unittest.TestCase):
             self.reject(client.provenance_transport, "https://api.github.com" + f.P + "/actions/workflows/windows-setup-acceptance.yml", headers, 1024)
             self.assertEqual(request.call_count, 1)
 
-    def test_current_workflow_stays_manual_and_disabled_pin_has_no_override(self):
+    def test_current_workflow_stays_manual_and_reviewed_pin_has_no_override(self):
         source = (ROOT / p.PUBLISH_WORKFLOW).read_text()
         self.assertIn("three-case current21", source)
         self.assertEqual(source.count("default: false"), 1)

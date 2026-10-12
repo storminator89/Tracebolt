@@ -154,6 +154,9 @@ class SelectionTests(unittest.TestCase):
             'windows-software-catalogue.tsx': ['windows-fleet-msi'],
             'journal-ai.tsx': ['lan'], 'journal-browse.tsx': ['lan'],
             'windows-update-jobs.tsx': ['windows-mutation-coexistence', 'windows-service-actions'],
+            'windows-update-retirement.tsx': ['windows-mutation-coexistence', 'windows-service-actions'],
+            'windows-update-retirement-resource.ts': ['windows-mutation-coexistence', 'windows-service-actions'],
+            'windows-update-retirement.test.tsx': ['windows-mutation-coexistence', 'windows-service-actions'],
             'package-updates.tsx': ['conditional', 'lan'],
             'service-actions.tsx': ['service-action', 'service-action-v2'],
             'windows-managed-msi.tsx': ['windows-fleet-msi', 'windows-managed-msi', 'windows-mutation-coexistence'],
@@ -173,8 +176,10 @@ class SelectionTests(unittest.TestCase):
             'run-windows-msi-catalogue-ci.mjs',
             'windows-msi-catalogue-scenes.json',
         }
-        self.assertEqual(set(p.DOMAIN_SCRIPTS), {'web/scripts/' + name for name in expected})
+        self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items() if flows == {'windows-fleet-msi'}}, {'web/scripts/' + name for name in expected})
         for path, flows in p.DOMAIN_SCRIPTS.items():
+            if flows != {'windows-fleet-msi'}:
+                continue
             self.assertEqual(flows, {'windows-fleet-msi'})
             self.assertTrue((ROOT / path).is_file())
             for status in ['A', 'M']:
@@ -192,6 +197,41 @@ class SelectionTests(unittest.TestCase):
                     ])
                     report.assert_called_once_with('windows-fleet-msi', SHA)
 
+    def test_exact_retirement_fixture_selects_its_existing_update_owner(self):
+        expected = {'tests/e2e-review/windows-update-retirement-browser.mjs',
+                    'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'}
+        self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items()
+                          if flows == {'windows-service-actions'}}, expected)
+        for path in expected:
+            self.assertTrue((ROOT / path).is_file())
+            for status in ['A', 'M']:
+                plan = self.select((status, path))
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['flows'], ['windows-service-actions'])
+                with patch.object(p, 'run') as run:
+                    p.web_checks(plan)
+                self.assertIn(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'],
+                              [call.args[0] for call in run.call_args_list])
+        # A new caller must be reviewed before narrowing this exact dependency.
+        consumers = set()
+        for directory in ['web/scripts', 'web/src', 'tests/e2e-review']:
+            for source in (ROOT / directory).rglob('*'):
+                if source.suffix in {'.js', '.mjs', '.ts', '.tsx', '.mts'} and 'windows-update-retirement-browser.mjs' in source.read_text():
+                    consumers.add(source.relative_to(ROOT).as_posix())
+        self.assertEqual(consumers, {'tests/e2e-review/windows-service-actions-runner.mjs',
+                                     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'})
+
+    def test_retirement_browser_report_uses_the_canonical_source_validator(self):
+        plan = self.select(('M', 'tests/e2e-review/windows-update-retirement-browser.mjs'))
+        with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+            p.browser_checks(plan)
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'],
+            ['node', 'tests/e2e-review/windows-service-actions-runner.mjs'],
+            ['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', SHA],
+        ])
+        report.assert_called_once_with('windows-service-actions', SHA)
+
     def test_owned_script_selection_unions_with_go_dependencies_and_other_flows(self):
         edits = [('M', 'internal/api/windows_maintenance.go'), ('M', 'web/src/windows-maintenance.test.tsx')]
         expected = self.select(*edits)
@@ -199,7 +239,7 @@ class SelectionTests(unittest.TestCase):
         plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
         self.assertEqual(plan['packages'], expected['packages'])
         self.assertEqual(plan['web'], expected['web'])
-        self.assertEqual(plan['flows'], ['windows-fleet-msi', 'windows-maintenance'])
+        self.assertEqual(plan['flows'], ['windows-fleet-msi', 'windows-maintenance', 'windows-service-actions'])
         self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
         self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
                                       generated_allowlist_verified=True))
@@ -266,7 +306,7 @@ class SelectionTests(unittest.TestCase):
         # become a cross-domain helper while retaining only its old flow mapping.
         # This bounded literal-reference contract supplements the reviewed map;
         # it is not a JavaScript dependency resolver or a prefix-based exemption.
-        names = {Path(path).name for path in p.DOMAIN_SCRIPTS}
+        names = {Path(path).name for path, flows in p.DOMAIN_SCRIPTS.items() if flows == {'windows-fleet-msi'}}
         for directory in ['web/scripts', 'web/src', 'tests/e2e-review']:
             for source in (ROOT / directory).rglob('*'):
                 if source.suffix not in {'.js', '.cjs', '.mjs', '.ts', '.tsx', '.mts', '.cts'}:

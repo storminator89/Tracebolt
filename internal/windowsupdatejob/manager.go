@@ -94,6 +94,10 @@ func (r Result) Validate() error {
 }
 
 type Job struct {
+	Occurrence         uint64           `json:"occurrence,string,omitempty"`
+	RetirePermit       []byte           `json:"retirePermit,omitempty"`
+	RetireClaimedAt    int64            `json:"retireClaimedAt,omitempty"`
+	RetireReport       []byte           `json:"retireReport,omitempty"`
 	Challenge          []byte           `json:"challenge"`
 	ReadinessClaimedAt int64            `json:"readinessClaimedAt"`
 	ReadinessReport    []byte           `json:"readinessReport"`
@@ -112,24 +116,32 @@ type Job struct {
 	Schedule           *ScheduledIntent `json:"schedule,omitempty"`
 }
 type Record struct {
-	MutationReport      []byte  `json:"mutationReport,omitempty"`
-	Version             string  `json:"version"`
-	Consent             Consent `json:"consent"`
-	PublicKey           []byte  `json:"publicKey"`
-	ExecutorPublicKey   []byte  `json:"executorPublicKey"`
-	ClockFloor          int64   `json:"clockFloor"`
-	Sequence            uint64  `json:"sequence,string"`
-	ReadinessSequence   uint64  `json:"readinessSequence,string"`
-	Jobs                []Job   `json:"jobs"`
-	ScheduleGeneration  uint64  `json:"scheduleGeneration,string,omitempty"`
-	ScheduleRevokedAt   int64   `json:"scheduleRevokedAt,omitempty"`
-	SchedulePolicyFloor int64   `json:"schedulePolicyFloor,omitempty"`
+	RetiredBaseFloor    uint64       `json:"retiredBaseFloor,string,omitempty"`
+	RetiredBaseChain    string       `json:"retiredBaseChain,omitempty"`
+	RetiredFloor        uint64       `json:"retiredFloor,string,omitempty"`
+	RetiredChain        string       `json:"retiredChain,omitempty"`
+	Recent              []RetiredJob `json:"recent,omitempty"`
+	MutationReport      []byte       `json:"mutationReport,omitempty"`
+	Version             string       `json:"version"`
+	Consent             Consent      `json:"consent"`
+	PublicKey           []byte       `json:"publicKey"`
+	ExecutorPublicKey   []byte       `json:"executorPublicKey"`
+	ClockFloor          int64        `json:"clockFloor"`
+	Sequence            uint64       `json:"sequence,string"`
+	ReadinessSequence   uint64       `json:"readinessSequence,string"`
+	Jobs                []Job        `json:"jobs"`
+	ScheduleGeneration  uint64       `json:"scheduleGeneration,string,omitempty"`
+	ScheduleRevokedAt   int64        `json:"scheduleRevokedAt,omitempty"`
+	SchedulePolicyFloor int64        `json:"schedulePolicyFloor,omitempty"`
 }
 
 // NewRecord only prepares bytes for a future separately authorized create-only
 // provisioner. It writes nothing and is never called by Open, API or recovery.
 func NewRecordWithExecutor(c Consent, key, executorKey ed25519.PublicKey, now int64) (Record, error) {
 	r := Record{Version: Version, Consent: c, PublicKey: bytes.Clone(key), ExecutorPublicKey: bytes.Clone(executorKey), ClockFloor: now, Jobs: []Job{}}
+	if c.Reusable() {
+		r.Version = ReusableRecordVersion
+	}
 	if c.ScheduleAcknowledged {
 		r.ScheduleGeneration = 1
 	}
@@ -139,7 +151,10 @@ func (r Record) Validate() error {
 	if r.validateMutationReport() != nil {
 		return ErrIntegrity
 	}
-	if r.Version != Version || r.Consent.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || actionpermit.Digest(r.ExecutorPublicKey) != r.Consent.Binding.ExecutorKeyID || actionpermit.Digest(r.PublicKey) != r.Consent.Binding.KeyID || !validTime(r.ClockFloor) || r.Jobs == nil || len(r.Jobs) > MaxJobs+1 {
+	if (r.Consent.Reusable() && r.Version != ReusableRecordVersion || !r.Consent.Reusable() && r.Version != Version) || r.Consent.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || actionpermit.Digest(r.ExecutorPublicKey) != r.Consent.Binding.ExecutorKeyID || actionpermit.Digest(r.PublicKey) != r.Consent.Binding.KeyID || !validTime(r.ClockFloor) || r.Jobs == nil || len(r.Jobs) > MaxJobs+1 {
+		return ErrIntegrity
+	}
+	if r.validateReusable() != nil {
 		return ErrIntegrity
 	}
 	if r.validateScheduleAuthority() != nil {
@@ -227,7 +242,7 @@ func (r Record) Validate() error {
 			return ErrIntegrity
 		}
 	}
-	if seq != r.Sequence || seq > MaxJobs || readinessSeq != r.ReadinessSequence || reservedOperations(r) > MaxJobs {
+	if (!r.Consent.Reusable() && (seq != r.Sequence || seq > MaxJobs || reservedOperations(r) > MaxJobs)) || readinessSeq != r.ReadinessSequence {
 		return ErrIntegrity
 	}
 	return nil
@@ -391,11 +406,17 @@ func (m *Manager) transaction(ctx context.Context, fn func(Current, int64) error
 	return e
 }
 func (m *Manager) blocked(n int64, except string) bool {
-	if reservedOperations(m.record) >= MaxJobs {
+	if !m.record.Consent.Reusable() && reservedOperations(m.record) >= MaxJobs {
 		return true
 	}
 	for _, j := range m.record.Jobs {
 		if j.ID == except {
+			continue
+		}
+		if m.record.Consent.Reusable() && j.Occurrence != 0 {
+			if len(j.RetireReport) == 0 {
+				return true
+			}
 			continue
 		}
 		if j.Schedule != nil && scheduleActive(j, n) {
@@ -432,6 +453,11 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 				return ErrConflict
 			}
 		}
+		for _, old := range m.record.Recent {
+			if old.JobID == id {
+				return ErrConsumed
+			}
+		}
 		if m.blocked(n, "") || m.record.ReadinessSequence == ^uint64(0) {
 			return ErrConflict
 		}
@@ -439,7 +465,7 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		// are never pruned. A discarded unsigned preview can no longer approve.
 		kept := make([]Job, 0, len(m.record.Jobs)+1)
 		for _, old := range m.record.Jobs {
-			if len(old.Envelope) > 0 || old.Schedule != nil {
+			if (len(old.Envelope) > 0 || old.Schedule != nil) && len(old.RetireReport) == 0 {
 				kept = append(kept, old)
 			}
 		}
@@ -521,6 +547,10 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 			}
 			m.record.Sequence++
 			p := Permit{Version: Version, Preview: *j.Preview, Sequence: m.record.Sequence, ApprovedAt: n}
+			if m.record.Consent.Reusable() {
+				j.Occurrence = m.record.Sequence
+				p.Version = ReusablePermitVersion
+			}
 			raw, e := Sign(p, m.key)
 			if e != nil {
 				return e
@@ -610,6 +640,9 @@ func (m *Manager) Submit(ctx context.Context, r Result) error {
 }
 
 type View struct {
+	ReusableJobs         bool          `json:"reusableJobs,omitempty"`
+	GrantExpiresAt       int64         `json:"grantExpiresAt,omitempty"`
+	RetiredFloor         uint64        `json:"retiredFloor,string,omitempty"`
 	BackgroundScheduling bool          `json:"backgroundScheduling,omitempty"`
 	BackgroundExecutor   bool          `json:"backgroundExecutor,omitempty"`
 	ExecutorAvailability string        `json:"executorAvailability,omitempty"`
@@ -627,13 +660,16 @@ type View struct {
 	SchedulingRevoked    bool          `json:"schedulingRevoked,omitempty"`
 }
 type PublicJob struct {
-	ID        string        `json:"id"`
-	Selection Selection     `json:"selection"`
-	State     string        `json:"state"`
-	Reason    string        `json:"reason"`
-	Preview   *Preview      `json:"preview"`
-	Result    *Result       `json:"result"`
-	Schedule  *ScheduleView `json:"schedule,omitempty"`
+	Occurrence   uint64          `json:"occurrence,string,omitempty"`
+	ResultDigest string          `json:"resultDigest,omitempty"`
+	Retirement   *RetirementView `json:"retirement,omitempty"`
+	ID           string          `json:"id"`
+	Selection    Selection       `json:"selection"`
+	State        string          `json:"state"`
+	Reason       string          `json:"reason"`
+	Preview      *Preview        `json:"preview"`
+	Result       *Result         `json:"result"`
+	Schedule     *ScheduleView   `json:"schedule,omitempty"`
 }
 
 func (m *Manager) View(ctx context.Context, device, actor string, ids ...string) (View, error) {
@@ -645,9 +681,14 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 	}
 	e := m.transaction(ctx, func(_ Current, n int64) error {
 		v.ServerNow = n
+		if m.record.Consent.Reusable() {
+			v.ReusableJobs = true
+			v.GrantExpiresAt = m.record.Consent.ExpiresAt
+			v.RetiredFloor = m.record.RetiredFloor
+		}
 		v.Coordinated = m.record.Consent.MutationPlanDigest != ""
 		if m.record.Consent.Background() {
-			v.BackgroundScheduling = m.record.Consent.Version == ScheduledBackgroundConsentVersion
+			v.BackgroundScheduling = m.record.Consent.ScheduleAcknowledged
 			v.BackgroundExecutor = true
 			v.ExecutorAvailability = "unknown"
 		}
@@ -666,7 +707,7 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 		v.Reason = "ready"
 		if !v.Available {
 			v.Reason = "job_pending_or_intervention"
-			if reservedOperations(m.record) >= MaxJobs {
+			if !m.record.Consent.Reusable() && reservedOperations(m.record) >= MaxJobs {
 				v.Reason = "capacity_exhausted"
 			}
 		}
@@ -685,6 +726,13 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 					}
 				}
 				if !found {
+					for _, old := range m.record.Recent {
+						if old.JobID == ids[0] {
+							p := retiredPublicJob(old)
+							v.Job = &p
+							return nil
+						}
+					}
 					return ErrConflict
 				}
 			}

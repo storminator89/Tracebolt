@@ -40,3 +40,13 @@ One owner is shared across both domains. All 32 WUA plus one MSI owners remain
 retained, with independent monotonic sequences and no pruning or reset. There is
 no lease TTL, reboot unlock, automatic owner death inference, generic mutator
 registration, remote unlock, or administrative recovery override.
+
+Fresh v4 reusable cached-WUA setup is a separate explicit exception to legacy
+lifetime retention. Only successful settled WUA receives the narrow `succeeded`
+receipt outcome, and only an exact released receipt may retire while the shared
+fence is idle. `RetireWUA` compacts that owner alone, retaining its monotonic floor,
+chained evidence and latest exact receipt digest for idempotent crash recovery.
+Failed/partial/uncertain results and old rosters cannot retire. Existing reusable
+MSI keeps its independent retirement floor and chain; neither operation grants a
+new native attempt, resets state or extends consent. See
+[reusable cached update jobs](../../docs/windows-reusable-cached-update-jobs.md).

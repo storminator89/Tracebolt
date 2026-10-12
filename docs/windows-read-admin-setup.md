@@ -1,13 +1,17 @@
-# Windows Read admin setup: source candidate
+# Windows Read admin setup
 
 Current target: a fresh clean development installation. There are no existing
 user installations; a published preview is not evidence of deployments. No
 migration or existing-binary upgrade plan is required for this increment.
 
-This is a source-only increment on the existing Windows inventory identity. It
-is not in the published Windows preview and has not passed native installation,
-LocalService provider-access, reboot or GUI acceptance. It does not
-change a download pin or authorize running an installer on any host.
+The fresh twenty-one-scope profile is available in unsigned x64
+[preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2).
+Follow its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+with matching reviewed manager/frontend source. Native acceptance covers only the
+Server 2025 packaged-Setup install/remove, hidden-input cancellation and interrupted
+transport subset. Complete provider access, real Linux-manager/shared-dashboard
+interoperability and native restart/reboot remain unproved; see [Windows status](windows-status.md).
+Publication does not authorize running an installer on any host.
 
 ## Fresh Read admin, seven readable groups
 
@@ -174,7 +178,7 @@ state to make it run again. Later individual disable/re-enable commands remain
 separate explicit operations. Failure outputs contain finite status/scope results;
 partial durable evidence stays for review even when its final write failed.
 
-**The old released executable cannot perform this path.** The current Windows
+**The historical preview.1 executable cannot perform this path.** The current Windows
 lifecycle has no verified binary-upgrade transaction. This increment therefore
 does not provide a released-preview-to-current upgrade or tell an operator to
 replace the receipt-bound image manually. Such a replacement can invalidate its

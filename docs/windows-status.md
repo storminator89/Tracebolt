@@ -1,9 +1,10 @@
 # Windows: current functionality and limits
 
-The current development source targets a fresh x64 Read admin installation.
-It is ahead of the published Windows preview and has not yet passed the current
-profile's native installation/provider acceptance. Current priorities combine
-remaining Admin data with useful fleet monitoring and management workflows.
+Unsigned [Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+is available for fresh x64 Read admin setup. Its native acceptance is limited to
+three hosted Server 2025 packaged-Setup cases; complete provider coverage and
+real Linux-manager/shared-dashboard interoperability remain unproved. The source
+also contains separate optional features with their own acceptance gates.
 
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
 
@@ -77,26 +78,38 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
 ![Cached Windows Update inspection with explicit coverage and freshness limits](screenshots/2026-10-10-windows-parity/windows-cached-updates.png)
 
 *Actual source-preview capture using invented data. [Capture details](screenshots/2026-10-10-windows-parity/README.md).
-This does not show native Windows collection or the published preview's features.*
+This does not establish native Windows collection or released-profile coverage.*
 
 ## Published preview
 
-The unsigned x64
-[v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
-contains the older **five-scope** setup: base inventory, Application/System event
-headers, volume metadata, process metrics and numeric network endpoints.
-It does not contain the current twenty-one-scope Read admin profile or later
-complete inventory, context, message-content and cached-update additions.
+Use [v0.1.0-windows-preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+and its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+for the exact binaries, checksums, matching manager/frontend source and approval
+requirements. Setup and service remain unsigned and retain their original
+`v0.0.0-setup-candidate` filenames and embedded version. Keep OS protections intact.
+The Linux rc.3 endpoint download is separate and does not supply a matching manager.
 
-Its accepted native subset covers fresh hosted **Windows Server 2025 x64** with a
-loopback fixture manager: installation, approval/reporting, cancellation and
-owned-service removal. This result does not transfer to later source or prove
-Windows 10/11, real Linux-manager/shared-browser interoperability or reboot.
-Exact artifact/source evidence is in the [published installation guide](windows-prerelease-install.md#selected-native-evidence).
+For older five-scope preview.1 bytes, use the
+[historical installation guide](windows-prerelease-historical/windows-prerelease-install.md).
 
-## Current hosted Setup acceptance source
+## Current hosted Setup acceptance
 
-A separately versioned [current21 TLS-only hosted gate](../tests/windows_native_acceptance/CURRENT_SETUP.md) now supplies three fresh Server2025 cases, receipt12/twenty-grant verification, finite provider outcomes and exact tested-byte aggregation. This is source infrastructure only; no current native pass or release eligibility is claimed. The historical four-case evidence and publisher pin remain unchanged. Windows11, real Linux-manager/browser, event-history requests and renewal cutover stay separately unproved.
+The [released source](https://github.com/storminator89/Tracebolt/tree/62435ef7e605df0b102e030bf1d68cb255829a90)
+passed [full Validate](https://github.com/storminator89/Tracebolt/actions/runs/38303779043)
+and the three TLS-only Server 2025 x64 packaged-Setup cases plus aggregation in
+[native run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
+The cases exercised install/service removal, hidden-input cancellation and
+pending-transport interruption with a loopback TLS fixture manager. Removal
+retains files, keys and state. The [successful publisher](https://github.com/storminator89/Tracebolt/actions/runs/38312547607)
+released those unchanged tested bytes as preview.2.
+
+This evidence is an **unsigned current21 packaged GUI subset**. Windows 11, a real
+Linux manager/shared dashboard, complete providers, event-history requests,
+renewal cutover, native restart, reboot, human invitation/UAC, ARM64 and optional
+MSI/WUA/service actions or selected-user software remain unproved. See the
+[current gate contract](../tests/windows_native_acceptance/CURRENT_SETUP.md).
+Exact package provenance and evidence are attached to the release; the
+[promotion contract](windows-prerelease-publication.md) remains the release procedure.
 
 ## Before installing or releasing
 
@@ -120,7 +133,7 @@ by themselves authorize host changes or establish native acceptance.
 [Selected-account HKCU/MSIX capture](windows-selected-user-software.md) adds a
 separate default-off receive scope and one-shot normal-user foreground helper,
 with private account/source filtering in Software. It is not included in the
-21-scope Setup consent, installed by Setup, shipped in the historical preview or
+21-scope Setup consent, installed by Setup, shipped in preview.2 or
 accepted by the current-profile native harness. Separate unsigned helper build
 artifacts and exact source instructions are documented; native acceptance and
 runtime provisioning remain separately gated.

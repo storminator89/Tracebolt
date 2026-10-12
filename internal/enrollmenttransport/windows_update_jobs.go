@@ -45,7 +45,7 @@ func windowsUpdateJobBodyLimit(path string) int64 {
 	switch path {
 	case windowsUpdateJobsPrefix + "poll":
 		return 2
-	case windowsUpdateJobsPrefix + "readiness-claim", windowsUpdateJobsPrefix + "install-claim":
+	case windowsUpdateJobsPrefix + "readiness-claim", windowsUpdateJobsPrefix + "install-claim", windowsUpdateJobsPrefix + "retire-claim":
 		return 128
 	case windowsUpdateJobsPrefix + "report":
 		return windowsupdatejob.MaxRelayBytes
@@ -168,7 +168,7 @@ func (h *Ingress) windowsUpdateJobRequest(w http.ResponseWriter, r *http.Request
 		if err == nil {
 			out, err = json.Marshal(pending)
 		}
-	case windowsUpdateJobsPrefix + "readiness-claim", windowsUpdateJobsPrefix + "install-claim":
+	case windowsUpdateJobsPrefix + "readiness-claim", windowsUpdateJobsPrefix + "install-claim", windowsUpdateJobsPrefix + "retire-claim":
 		id, ok := decodeWindowsUpdateJobClaim(raw)
 		if !ok {
 			failure(w, http.StatusBadRequest, "invalid_request")
@@ -176,6 +176,8 @@ func (h *Ingress) windowsUpdateJobRequest(w http.ResponseWriter, r *http.Request
 		}
 		if r.URL.Path == windowsUpdateJobsPrefix+"readiness-claim" {
 			out, err = manager.ClaimReadiness(r.Context(), id)
+		} else if r.URL.Path == windowsUpdateJobsPrefix+"retire-claim" {
+			out, err = manager.ClaimRetirement(r.Context(), id)
 		} else {
 			out, err = manager.Claim(r.Context(), id)
 		}

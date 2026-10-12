@@ -150,6 +150,16 @@ func (m *Manager) Pending(ctx context.Context) (*Pending, error) {
 			return e
 		}
 		for _, j := range m.record.Jobs {
+			if len(j.RetirePermit) > 0 && len(j.RetireReport) == 0 {
+				p, e := VerifyRetirement(j.RetirePermit, m.record.PublicKey)
+				if e != nil {
+					return e
+				}
+				if n < p.ExpiresAt {
+					out = &Pending{j.ID, "retire", p.ExpiresAt}
+					return nil
+				}
+			}
 			if j.State == "requested" && j.ReadinessClaimedAt == 0 {
 				c, e := VerifyChallenge(j.Challenge, m.record.PublicKey)
 				if e != nil {
@@ -213,6 +223,10 @@ func (m *Manager) ClaimReadiness(ctx context.Context, id string) ([]byte, error)
 // Report admits a pinned executor signature AND the surrounding enrollment
 // transaction's live leaf. Transport authentication alone is insufficient.
 func (m *Manager) Report(ctx context.Context, raw []byte) error {
+	var retirement retirementReportEnvelope
+	if canonical(raw, &retirement, MaxRelayBytes) == nil && retirement.Report.Version == RetirementVersion {
+		return m.reportRetirement(ctx, raw)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.transaction(ctx, func(c Current, n int64) error {

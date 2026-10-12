@@ -141,7 +141,7 @@ func TestWindowsUpdateJobsUnsetAndConfiguration(t *testing.T) {
 		t.Fatal("missing operator policy admitted", err)
 	}
 	x.h = h
-	for _, path := range []string{"poll", "readiness-claim", "install-claim", "report"} {
+	for _, path := range []string{"poll", "readiness-claim", "install-claim", "retire-claim", "report"} {
 		x.serve(t, x.request(t, path, []byte("{}")), 404)
 	}
 	sameDatabase, err := enrollmentstore.Open(x.f.path, x.f.config, x.f.issuer.IssuerDER())
@@ -380,7 +380,7 @@ func TestWindowsUpdateJobsForeignEnrolledObserver(t *testing.T) {
 	foreign := enrollWindowsUpdateJobObserver(t, x.f, 72)
 	original := x.f
 	x.f = foreign
-	for _, path := range []string{"poll", "readiness-claim", "install-claim", "report"} {
+	for _, path := range []string{"poll", "readiness-claim", "install-claim", "retire-claim", "report"} {
 		raw := []byte("{}")
 		if strings.HasSuffix(path, "-claim") {
 			raw = []byte(`{"jobId":"` + x.job + `"}`)
@@ -444,4 +444,16 @@ func TestWindowsUpdateJobsExpiredClaimWithholdsEnvelope(t *testing.T) {
 			t.Fatal("unsafe persistence failure response", w.Code)
 		}
 	}
+}
+
+func TestWindowsUpdateRetirementClaimFramingAndLegacyDenial(t *testing.T) {
+	x := newWindowsUpdateJobsFixture(t)
+	body := []byte(`{"jobId":"` + x.job + `"}`)
+	r := x.request(t, "retire-claim", body)
+	if windowsUpdateJobBodyLimit(r.URL.Path) != 128 || !validWindowsUpdateJobRequest(r, x.h.authority) {
+		t.Fatal("retirement route has wrong framing")
+	}
+	x.serve(t, r, http.StatusForbidden)
+	r = x.request(t, "retire-claim", []byte(`{"jobId":"`+x.job+`","install":true}`))
+	x.serve(t, r, http.StatusBadRequest)
 }

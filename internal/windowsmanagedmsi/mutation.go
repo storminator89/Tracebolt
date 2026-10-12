@@ -14,7 +14,7 @@ func MutationParticipant(g Grant) fence.Participant {
 	return fence.Participant{Domain: fence.ManagedMSI, BindingDigest: Digest(b), GrantDigest: Digest(raw), ManagerKeyDigest: g.Binding.KeyID, ExecutorKeyDigest: g.Binding.ExecutorKeyID}
 }
 func ValidMutationRoster(r *fence.Roster, g Grant) bool {
-	if r == nil || r.Validate() != nil || (g.Version != CoordinatedGrantVersion && !g.Reusable()) || g.Reusable() != r.ReusableMSI() || g.Scheduled() && r.Version != fence.BackgroundRosterVersion || g.Validate() != nil {
+	if r == nil || r.Validate() != nil || (g.Version != CoordinatedGrantVersion && !g.Reusable()) || g.Reusable() != r.ReusableMSI() || g.Scheduled() && !r.BackgroundWUA() || g.Validate() != nil {
 		return false
 	}
 	b := g.Binding

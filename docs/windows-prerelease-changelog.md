@@ -1,10 +1,14 @@
 # Current21 Windows Server 2025 x64 preview changelog
 
-Source-only preparation for an **unsigned Windows Server 2025 x64 current21 Read
-admin preview; three-case packaged GUI subset**. The current accepted-tree pin is
-unset, so verification/publication fails closed. This document announces no
-current native pass or downloadable release. Historical five-scope hashes,
-four-case results and HTTP acceptance cannot be reused for current21.
+Prepared promotion of an **unsigned Windows Server 2025 x64 current21 Read admin
+preview; three-case packaged GUI subset**. Source
+`62435ef7e605df0b102e030bf1d68cb255829a90`, tree
+`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763`, passed all three cases and aggregation
+in first-attempt [native run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
+This document announces no downloadable current release. Full Validate of that
+exact source, the reviewed later publisher revision and explicit publication
+approval remain mandatory. Historical five-scope hashes, four-case results and
+HTTP acceptance cannot be reused for current21.
 
 ## Current Setup profile
 
@@ -33,8 +37,8 @@ six retained artifacts: three original reports, the tested six-file input
 package, its unchanged accepted copy, and the finite aggregate.
 
 The strict `tracebolt.windows-current-setup-acceptance.v1` reports bind the same
-source/tree/run and Setup/service/driver/source-input hashes, separate machine
-hashes, OS build/revision and exact consent/grant/receipt proof. The install case
+source/tree/run and Setup/service/driver/source-input hashes, per-case machine
+correlation hashes, OS build/revision and exact consent/grant/receipt proof. The install case
 requires at least two accepted ordinary frames, v16 progress and four independent
 source-domain outcomes. Unsupported/denied/source-failed results remain visible;
 software-history and event-history observations remain `not_run`.
@@ -49,9 +53,10 @@ tested package hashes. These are job-provenance checks, not hardware attestation
 
 The separate manual `windows-current-prerelease.yml` calls the explicit current
 publisher adapter. The historical publisher/parser/workflow remain distinct.
-Only after a successful separately approved current native run is reviewed may a
-later source change pin its actual accepted tree. There is no runtime pin
-argument, schema fallback or acceptance of today's source by default.
+Its reviewed tree pin names the exact accepted source above, not the later
+publisher checkout. There is no runtime pin argument, schema fallback or
+acceptance of today's source by default. The publication workflow requires a
+successful full Validate run for the exact accepted source in both jobs.
 
 Publication defaults off and needs explicit approval. A canonical
 `tracebolt.windows-current-prerelease-plan.v1` freezes four job IDs, three runner
@@ -74,9 +79,9 @@ retry is allowed. Publication is prerelease/not-latest and verifies public bytes
 ## Explicit limits
 
 No Windows 11, real Linux-manager/browser interoperability, provider completeness,
-renewal cutover, OS reboot, human invitation/UAC, ARM64 or verified VM disposal is
-claimed. There is no optional MSI, WUA installation, service-control or user-helper
-native acceptance. Checking optional files/roots and public SCM registration are
+renewal cutover, native restart, OS reboot, human invitation/UAC, ARM64 or verified
+VM disposal is claimed. There is no optional MSI, WUA installation, service-control
+or user-helper native acceptance. Checking optional files/roots and public SCM registration are
 absent only checks absence; it never grants optional action authority.
 
 Unsigned binaries may trigger warnings or policy blocks. Do not bypass them.
