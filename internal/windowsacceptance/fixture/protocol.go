@@ -22,6 +22,7 @@ import (
 	"localrmm/internal/lanstore"
 	"localrmm/internal/signedhttp"
 	"localrmm/internal/windowsacceptance/profile"
+	"localrmm/internal/windowssetup"
 )
 
 const prefix = "/v2/enrollment/"
@@ -46,12 +47,20 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	if agent {
 		origin = s.bootstrap.AgentOrigin
 	}
+	telemetryRequest := agent && r.URL != nil && r.URL.Path == s.selection.TelemetryPath()
 	limit := enrollmentcrypto.MaxClaimBytes
 	if agent {
 		limit = lanstore.MaxFrameBytes
 	}
 	setupCapabilities := !agent && s.expanded && setupCapabilitiesRequest(r, origin, s.selection)
-	if !setupCapabilities && !validRequestSelected(r, origin, agent, s.selection) {
+	if s.current {
+		setupCapabilities = !agent && setupCapabilitiesRequestPath(r, origin, s.selection, windowssetup.ReadAdminCapabilitiesPathV10)
+	}
+	generationRequest := s.current && agent && validCurrentGenerationRequest(r, origin, s.selection)
+	if generationRequest {
+		limit = 64 << 10
+	}
+	if !setupCapabilities && !generationRequest && !validRequestSelected(r, origin, agent, s.selection) {
 		fail(w, 400)
 		return
 	}
@@ -65,14 +74,14 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	blocked := s.closed || s.ctx.Err() != nil || s.requests >= MaxRequests
 	if !blocked {
 		s.requests++
-		if agent {
+		if telemetryRequest {
 			s.telemetryProgress.Admitted++
 			s.telemetryProgress.InFlight++
 		}
 		if s.unavailable {
 			s.unavailableRequests++
 			blocked = true
-			if agent {
+			if telemetryRequest {
 				s.finishTelemetryLocked(telemetryUnavailable)
 			}
 		}
@@ -104,7 +113,7 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	}
 	defer clear(raw)
 	if err != nil || len(raw) > limit || int64(len(raw)) != r.ContentLength {
-		if agent {
+		if telemetryRequest {
 			s.finishTelemetry(telemetryBodyRejected)
 		}
 		fail(w, 400)
@@ -113,10 +122,14 @@ func (f *Fixture) serve(w http.ResponseWriter, r *http.Request, agent bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed || s.unavailable || s.ctx.Err() != nil || r.Context().Err() != nil {
-		if agent {
+		if telemetryRequest {
 			s.finishTelemetryLocked(telemetryUnavailable)
 		}
 		fail(w, 503)
+		return
+	}
+	if generationRequest {
+		s.currentGeneration(w, r, raw)
 		return
 	}
 	if agent {
@@ -285,6 +298,10 @@ func (s *state) challenge(w http.ResponseWriter, raw []byte) {
 		return
 	}
 	c := enrollmentcrypto.ChallengeContext{ManagerInstanceID: s.bootstrap.ManagerInstanceID, Profile: s.selection.Transport, Origin: s.bootstrap.EnrollmentOrigin, CollectionProfile: s.selection.CollectionProfile, InvitationID: s.bootstrap.InvitationID, ClaimID: in["claimId"], Challenge: base64.RawURLEncoding.EncodeToString(nonce[:]), ExpiresAt: now.Add(60 * time.Second).Unix()}
+	if s.current {
+		c.RenewalPolicy = enrollmentcrypto.RenewalPolicySameKey
+		c.AgentOrigin = s.bootstrap.AgentOrigin
+	}
 	s.challenges[c.Challenge] = challenge{context: c, purpose: purpose}
 	write(w, struct {
 		SchemaVersion string                            `json:"schemaVersion"`
@@ -303,6 +320,9 @@ func (s *state) proof(w http.ResponseWriter, r *http.Request, raw []byte) {
 	switch purpose {
 	case "claim":
 		fields = append(fields, "invitationSecret", "csr", "proof")
+		if s.current {
+			fields = append(fields, "renewalPolicy", "agentOrigin")
+		}
 	case "status", "credential":
 		fields = append(fields, "keyFingerprint", "purpose", "proof")
 	case "activation":
@@ -439,6 +459,17 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		fail(w, 503)
 		return telemetryUnavailable
 	}
+	if s.current {
+		fresh := s.now().UTC()
+		if fresh.Before(now) || !s.activeIdentity(v, fresh) || !s.verifyPeer(r, v, fresh) || r.Context().Err() != nil {
+			fail(w, 403)
+			return telemetryAuthorizationRejected
+		}
+		if _, err := lanstore.ValidateFrame(raw, fresh); err != nil {
+			fail(w, 409)
+			return telemetryFreshnessRejected
+		}
+	}
 	s.lastReceipt = lanstore.Receipt{SchemaVersion: "tracebolt.agent-receipt.v1", AgentID: v.Approval.DeviceID, Sequence: frame.Sequence, CollectedAt: frame.Observation.Observation.LastSeen, ReceivedAt: now}
 	s.lastDigest = hash
 	s.lastGenerated = frame.Observation.GeneratedAt
@@ -449,6 +480,9 @@ func (s *state) telemetry(w http.ResponseWriter, r *http.Request, raw []byte, si
 		s.inventory = profile.Observation{Frames: s.frames, CPU: metricQuality(d.CPU.Quality), Memory: metricQuality(d.Memory.Quality), Disk: metricQuality(d.Disk.Quality), Hostname: inventory.Hostname.Quality, Processes: inventory.Processes.Quality, Services: inventory.Services.Quality, Software: inventory.Software.Quality, Interfaces: inventory.Network.Quality}
 	}
 	s.observeExtensions(frame)
+	if s.current {
+		s.observeCurrent(frame, raw)
+	}
 	write(w, s.lastReceipt)
 	// No raw body, bundle, metric, label, or observation is retained in state.
 	return telemetryAccepted

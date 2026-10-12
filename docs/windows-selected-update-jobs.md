@@ -446,3 +446,15 @@ frozen worklist selection, restore a preview, or resend a write. Saved outcomes
 remain in the enrollment-owned per-device ledger across navigation/restart;
 client-side selection/intent references grant no authority. No lifetime-capacity
 reset, pruning, automatic retry, download, EULA acceptance or reboot is added.
+
+## Optional bounded scheduling extension
+
+Fresh create-only provisioning may separately opt into prospective approval for
+one exact cached revision and fixed UTC window. Manual v1 grants and their bytes
+remain unchanged; existing grants are never promoted. Both named install and
+schedule capabilities, a separate local scheduling acknowledgement and a separate
+operator prospective acknowledgement are required. Approval consumes a lifetime
+slot immediately. A fresh matching readiness report at an eligible observer poll
+is required before dispatch; there is no exact-time guarantee or persistent
+elevated service. See [scheduled update jobs](windows-scheduled-update-jobs.md)
+for setup flags, bounds, cancellation/revocation, uncertainty and native gates.

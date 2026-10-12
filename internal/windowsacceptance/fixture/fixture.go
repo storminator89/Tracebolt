@@ -63,6 +63,10 @@ type state struct {
 	inventory                    profile.Observation
 	telemetryProgress            TelemetryObservation
 	expanded                     bool
+	current                      bool
+	currentObservation           CurrentObservation
+	currentFloors                map[string]time.Time
+	currentGenerations           map[string]*currentGeneration
 	extensions                   profile.ExtensionObservation
 	lastEventsCollected          time.Time
 	lastVolumesCollected         time.Time
@@ -151,6 +155,10 @@ func StartExpanded(ctx context.Context, selection profile.Selection) (*Fixture, 
 	return startSelected(ctx, selection, true)
 }
 func startSelected(ctx context.Context, selection profile.Selection, expanded bool) (*Fixture, error) {
+	return startMode(ctx, selection, expanded, false)
+}
+
+func startMode(ctx context.Context, selection profile.Selection, expanded, current bool) (*Fixture, error) {
 	if ctx == nil || ctx.Err() != nil || selection.Validate() != nil {
 		return nil, ErrFixture
 	}
@@ -167,7 +175,7 @@ func startSelected(ctx context.Context, selection profile.Selection, expanded bo
 	if selection.HTTPTest() {
 		scheme = "http://"
 	}
-	f, err := newFixtureSelected(ctx, scheme+enrollment.Addr().String(), scheme+agent.Addr().String(), time.Now, selection)
+	f, err := newFixtureMode(ctx, scheme+enrollment.Addr().String(), scheme+agent.Addr().String(), time.Now, selection, current)
 	if err != nil {
 		_ = enrollment.Close()
 		_ = agent.Close()
@@ -219,14 +227,25 @@ func newFixture(ctx context.Context, enrollmentOrigin, agentOrigin string, now f
 }
 
 func newFixtureSelected(ctx context.Context, enrollmentOrigin, agentOrigin string, now func() time.Time, selection profile.Selection) (*Fixture, error) {
+	return newFixtureMode(ctx, enrollmentOrigin, agentOrigin, now, selection, false)
+}
+
+func newFixtureMode(ctx context.Context, enrollmentOrigin, agentOrigin string, now func() time.Time, selection profile.Selection, current bool) (*Fixture, error) {
+	if current && selection != profile.InventoryTLS() {
+		return nil, ErrFixture
+	}
 	if ctx == nil || ctx.Err() != nil || now == nil || selection.Validate() != nil || !validOrigin(enrollmentOrigin, selection) || !validOrigin(agentOrigin, selection) || enrollmentOrigin == agentOrigin {
 		return nil, ErrFixture
 	}
-	issuer, server, err := newDisposableAuthority(now())
+	issuer, server, err := newDisposableAuthorityMode(now(), current)
 	if err != nil {
 		return nil, ErrFixture
 	}
 	s := &state{now: now, selection: selection, inventory: profile.ZeroObservation(), extensions: profile.ZeroExtensionObservation(), issuer: issuer, server: server, challenges: make(map[string]challenge), slots: make(chan struct{}, 2), closeDone: make(chan struct{})}
+	s.current = current
+	s.currentObservation = ZeroCurrentObservation()
+	s.currentFloors = make(map[string]time.Time)
+	s.currentGenerations = make(map[string]*currentGeneration)
 	s.ctx, s.cancel = context.WithTimeout(ctx, MaxLifetime)
 	f := &Fixture{state: s}
 	ok := false
@@ -246,6 +265,10 @@ func newFixtureSelected(ctx context.Context, enrollmentOrigin, agentOrigin strin
 		serverCA = ""
 	}
 	s.bootstrap = enrollmentclient.Bootstrap{SchemaVersion: enrollmentclient.BootstrapVersion, ManagerInstanceID: manager, Profile: selection.Transport, EnrollmentOrigin: enrollmentOrigin, AgentOrigin: agentOrigin, CollectionProfile: selection.CollectionProfile, InvitationID: invitation, ServerCAPEM: serverCA, IssuerRootPEM: publicPEM(issuer.RootDER()), IssuerPEM: publicPEM(issuer.IssuerDER())}
+	if current {
+		s.bootstrap.SchemaVersion = enrollmentclient.RenewableBootstrapVersion
+		s.bootstrap.RenewalPolicy = enrollmentcrypto.RenewalPolicySameKey
+	}
 	s.issuerCert, err = x509.ParseCertificate(issuer.IssuerDER())
 	if err != nil {
 		return nil, ErrFixture
@@ -260,6 +283,10 @@ func newFixtureSelected(ctx context.Context, enrollmentOrigin, agentOrigin strin
 	}
 	binding := enrollmentstate.Binding{InstanceID: manager, Origin: enrollmentOrigin, Profile: selection.Transport, CollectionProfile: selection.CollectionProfile, IssuerFingerprint: issuer.Fingerprint()}
 	cfg := enrollmentstate.DefaultConfig(binding)
+	if current {
+		cfg.AutomaticRenewal = true
+		cfg.RenewalAgentOrigin = agentOrigin
+	}
 	cfg.RecordLimit = 1
 	cfg.InvitationLimit = 1
 	cfg.PendingLimit = 1
@@ -390,7 +417,11 @@ func (f *Fixture) Approve(expectedFingerprint, expectedComparison string) error 
 	if e != nil {
 		return ErrApproval
 	}
-	v, e = s.engine.BeginIssuance(s.ctx, enrollmentstate.IntentCommand{Control: control(v, intentRequest, now), IntentID: intentID, SerialHex: serial, TemplateVersion: enrollmentcrypto.TemplateVersion, NotBefore: now.Add(-30 * time.Second).Unix(), NotAfter: now.Add(time.Hour).Unix()})
+	notAfter := now.Add(time.Hour)
+	if s.current {
+		notAfter = now.Add(7*24*time.Hour - 30*time.Second)
+	}
+	v, e = s.engine.BeginIssuance(s.ctx, enrollmentstate.IntentCommand{Control: control(v, intentRequest, now), IntentID: intentID, SerialHex: serial, TemplateVersion: enrollmentcrypto.TemplateVersion, NotBefore: now.Add(-30 * time.Second).Unix(), NotAfter: notAfter.Unix()})
 	if e != nil {
 		return ErrFixture
 	}
@@ -436,6 +467,7 @@ func (f *Fixture) Close() error {
 	clear(s.secret)
 	s.secret = nil
 	s.challenges = nil
+	s.currentGenerations = nil
 	s.issuer = nil
 	// Drop signing authority. A TLS handshake may still hold a shared immutable
 	// key while its connection is closing, so do not overwrite that key in place.

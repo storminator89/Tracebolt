@@ -13,7 +13,7 @@ func TestSetupHandoffPreservesExactOriginalAuthority(t *testing.T) {
 	manager := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{31}, 32)).Public().(ed25519.PublicKey)
 	executor := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{32}, 32)).Public().(ed25519.PublicKey)
 	o := SetupOffer{SetupOfferVersion, "manager_" + strings.Repeat("1", 32), "agent_" + strings.Repeat("2", 32), actionpermit.Digest([]byte("anchor")), "https://manager.invalid", manager, 1800000300}
-	r := SetupRegistration{SetupRegistrationVersion, o, Consent{ConsentVersion, Scope, Binding{o.ManagerID, o.DeviceID, o.IncarnationDigest, "executor_" + strings.Repeat("3", 32), actionpermit.Digest(executor), "grant_" + strings.Repeat("4", 32), actionpermit.Digest(manager)}, true, true, o.ExpiresAt}, executor}
+	r := SetupRegistration{SetupRegistrationVersion, o, Consent{ConsentVersion, Scope, Binding{o.ManagerID, o.DeviceID, o.IncarnationDigest, "executor_" + strings.Repeat("3", 32), actionpermit.Digest(executor), "grant_" + strings.Repeat("4", 32), actionpermit.Digest(manager)}, true, true, o.ExpiresAt, "", false}, executor}
 	raw, _ := json.Marshal(r)
 	if r.Validate() != nil {
 		t.Fatal("valid fixture")

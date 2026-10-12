@@ -16,6 +16,7 @@ const (
 	RestartService          Capability = "restart_service"
 	WindowsServiceControl   Capability = "windows_service_control"
 	WindowsUpdateInstall    Capability = "windows_update_install"
+	WindowsUpdateSchedule   Capability = "windows_update_schedule"
 	ManageAlarms            Capability = "manage_alarms"
 	ManageApplicationChecks Capability = "manage_application_checks"
 	MaxOperators                       = 32
@@ -36,11 +37,11 @@ func (Operator) GoString() string { return "operatorauth.Operator{secrets:redact
 type principal struct {
 	id       string
 	username string
-	grants   uint8
+	grants   uint16
 	verifier verifier
 }
 
-func capabilityBit(c Capability) uint8 {
+func capabilityBit(c Capability) uint16 {
 	switch c {
 	case Read:
 		return 1
@@ -58,6 +59,8 @@ func capabilityBit(c Capability) uint8 {
 		return 64
 	case WindowsUpdateInstall:
 		return 128
+	case WindowsUpdateSchedule:
+		return 256
 	default:
 		return 0
 	}
@@ -100,7 +103,7 @@ func namedPrincipals(operators []Operator) (map[string]principal, error) {
 			return nil, ErrConfiguration
 		}
 		work = v
-		var grants uint8
+		var grants uint16
 		for _, c := range op.Capabilities {
 			bit := capabilityBit(c)
 			if bit == 0 || grants&bit != 0 {
@@ -129,8 +132,8 @@ func (s Session) Named() bool     { return s.actor.id != "" }
 // Capabilities returns a defensive display snapshot, not a mutation permit.
 // Call BeginCapability immediately before short privileged dispatch work.
 func (s Session) Capabilities() []Capability {
-	out := make([]Capability, 0, 8)
-	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall} {
+	out := make([]Capability, 0, 9)
+	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule} {
 		if s.actor.grants&capabilityBit(c) != 0 {
 			out = append(out, c)
 		}

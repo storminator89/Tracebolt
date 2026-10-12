@@ -9,6 +9,9 @@ import (
 )
 
 func (s *state) extensionShape(f lanstore.Frame) bool {
+	if s.current {
+		return s.currentShape(f)
+	}
 	n := 0
 	for _, present := range []bool{f.WindowsEvents != nil, f.WindowsVolumes != nil, f.WindowsProcessMetrics != nil, f.WindowsNetwork != nil} {
 		if present {
@@ -30,6 +33,9 @@ func (s *state) extensionShape(f lanstore.Frame) bool {
 // Independent original-capture floors mirror the production enrollment store.
 // The inventory must also advance beyond the previous network capture.
 func (s *state) extensionAdvance(f lanstore.Frame) bool {
+	if s.current {
+		return s.currentAdvance(f)
+	}
 	if f.WindowsInventory != nil && !s.lastNetworkCollected.IsZero() && !f.WindowsInventory.CollectedAt.After(s.lastNetworkCollected) {
 		return false
 	}

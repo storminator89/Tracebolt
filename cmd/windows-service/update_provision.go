@@ -19,6 +19,7 @@ type updateProvisionInput struct {
 	offer    job.SetupOffer
 	artifact windowspackage.Manifest
 	payload  []byte
+	schedule bool
 	apply    bool
 	approval windowsupdatesetup.Approval
 }
@@ -38,8 +39,10 @@ func runUpdateProvision(ctx context.Context, args []string, out, stderr io.Write
 	install := f.Bool("acknowledge-selected-updates", false, "")
 	relay := f.Bool("acknowledge-observer-relay", false, "")
 	query := f.Bool("acknowledge-observer-process-query", false, "")
-	if f.Parse(args) != nil || f.NArg() != 0 || *offerPath == "" || *imagePath == "" || *manifestPath == "" || ctx == nil || perform == nil || *apply != (*digest != "") || *install != *apply || *relay != *apply || *query != *apply {
-		fmt.Fprintln(stderr, "Use --selected-updates-provision --manager-offer <public offer> --executor-file <matching executor.exe> --artifact-manifest <public manifest>. Review is read-only. Apply additionally requires --apply --approve sha256:<review digest> --acknowledge-selected-updates --acknowledge-observer-relay --acknowledge-observer-process-query. TLS only; no automatic launch.")
+	schedule := f.Bool("allow-scheduled-updates", false, "")
+	scheduleAck := f.Bool("acknowledge-scheduled-updates", false, "")
+	if f.Parse(args) != nil || f.NArg() != 0 || *offerPath == "" || *imagePath == "" || *manifestPath == "" || ctx == nil || perform == nil || *apply != (*digest != "") || *install != *apply || *relay != *apply || *query != *apply || *scheduleAck != (*apply && *schedule) {
+		fmt.Fprintln(stderr, "Use --selected-updates-provision --manager-offer <public offer> --executor-file <matching executor.exe> --artifact-manifest <public manifest>. Review is read-only. Apply additionally requires --apply --approve sha256:<review digest> --acknowledge-selected-updates --acknowledge-observer-relay --acknowledge-observer-process-query. For fresh scheduling only, add --allow-scheduled-updates during both review and apply, and separately --acknowledge-scheduled-updates during apply. TLS only; no automatic launch.")
 		return 2
 	}
 	raw, e := readUpdateSetupInput(*offerPath, 16384)
@@ -65,7 +68,12 @@ func runUpdateProvision(ctx context.Context, args []string, out, stderr io.Write
 	if _, e = fmt.Fprintln(stderr, job.Disclosure+"\n"+lanclient.WindowsUpdateRelayDisclosure+"\n"+windowsupdatesetup.ProcessQueryDisclosure); e != nil {
 		return 1
 	}
-	result, e := perform(ctx, updateProvisionInput{offer, manifest, payload, *apply, windowsupdatesetup.Approval{Digest: *digest, Install: *install, Relay: *relay, ProcessQuery: *query}})
+	if *schedule {
+		if _, e = fmt.Fprintln(stderr, windowsupdatesetup.ScheduleDisclosure); e != nil {
+			return 1
+		}
+	}
+	result, e := perform(ctx, updateProvisionInput{offer: offer, artifact: manifest, payload: payload, apply: *apply, schedule: *schedule, approval: windowsupdatesetup.Approval{Digest: *digest, Install: *install, Relay: *relay, ProcessQuery: *query, Schedule: *scheduleAck}})
 	if e != nil {
 		fmt.Fprintln(stderr, "Selected update setup blocked: exact activated TLS identity, stopped owned observer, fresh state and explicit original approval are required. Preserve partial state; do not retry, adopt or reset it.")
 		return 1

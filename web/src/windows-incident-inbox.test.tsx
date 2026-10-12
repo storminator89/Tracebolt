@@ -43,7 +43,19 @@ describe('compact Windows incident inbox', () => {
         expect(screen.getByRole('link', { name: 'Desk One · Health details' })).toHaveAttribute('href', `#/devices/${windowsDeviceId}/health`);
         expect(reads()[0][2]).toBe(256 * 1024);
         expect(screen.getByText('Historical source capture')).toBeInTheDocument(); expect(screen.getByText('Historical manager receipt')).toBeInTheDocument(); expect(screen.getByText('Source status evaluated')).toBeInTheDocument();
+        const opened = document.querySelector('.windows-incident-meta > span time');
+        expect(opened).toHaveAttribute('datetime', rows[0].openedAt); expect(opened).toHaveAttribute('title', rows[0].openedAt); expect(opened).toHaveTextContent(/GMT/);
+        const evidence = document.querySelector('.windows-incident-meta details')!;
+        expect(evidence).not.toHaveAttribute('open'); fireEvent.click(evidence.querySelector('summary')!);
+        expect(screen.getByText(rows[0].openedAt)).toBeVisible(); expect(screen.getByText(windowsDeviceId)).toBeVisible();
         fireEvent.click(screen.getByRole('button', { name: /Windows incidents/ })); expect(screen.queryByRole('link', { name: /Desk One/ })).toBeNull();
+    });
+    it('compacts a production identity-valued device name without changing the Health link or acknowledgement key', async () => {
+        render(<WindowsIncidentInbox devices={[{ ...windowsCapacityDevice(), name: windowsDeviceId }]} sessionKey={windowsCapacitySession} admin/>); await open();
+        expect(screen.getByRole('link', { name: `Windows device · …${windowsDeviceId.slice(-8)} · Health details` })).toHaveAttribute('href', `#/devices/${windowsDeviceId}/health`);
+        expect(document.querySelector('.windows-incident-device')).not.toHaveTextContent(windowsDeviceId);
+        fireEvent.click(screen.getByRole('button', { name: /^Mark seen:/ })); await flush();
+        expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ key: rows[0].key });
     });
     it('gives named operators read-only access', async () => {
         render(<Harness admin={false}/>); await open(); expect(screen.getByText(/Your access is read-only/)).toBeVisible();
@@ -53,7 +65,7 @@ describe('compact Windows incident inbox', () => {
         render(<Harness/>); await open(); fireEvent.click(screen.getByRole('button', { name: /^Mark seen:/ })); await flush();
         expect(posts()).toHaveLength(1); expect(posts()[0][0]).toBe('/fleet/windows-incidents/acknowledge'); expect(posts()[0][2]).toBe(1024);
         expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ key: rows[0].key }); expect(posts()[0][1]!.headers).toEqual({ 'Content-Type': 'application/json', 'X-CSRF-Token': 'fixture-csrf' });
-        expect(rows[0].resolvedAt).toBeNull(); expect(screen.getByText(/Marked seen. The incident/)).toBeVisible(); expect(screen.queryByRole('button', { name: /^Mark seen:/ })).toBeNull(); expect(reads()).toHaveLength(2);
+        expect(rows[0].resolvedAt).toBeNull(); expect(screen.getByText(/Marked seen. Incident status unchanged/)).toBeVisible(); expect(screen.queryByRole('button', { name: /^Mark seen:/ })).toBeNull(); expect(reads()).toHaveLength(2);
     });
     it('uses only GET after an uncertain write, including refresh and collapse/reopen', async () => {
         render(<Harness/>); await open(); const normal = vi.mocked(request).getMockImplementation()!;
@@ -65,7 +77,7 @@ describe('compact Windows incident inbox', () => {
     it('aborts obsolete scope/filter reads and ignores delayed responses', async () => {
         render(<Harness/>); await open(); let finish!: (value: unknown) => void; const original = response('/fleet/windows-incidents?scope=active&ack=all&offset=0&limit=25');
         vi.mocked(request).mockReturnValueOnce(new Promise(resolve => { finish = resolve; })); fireEvent.click(screen.getByRole('button', { name: 'Refresh incidents' }));
-        const old = reads().at(-1)!; fireEvent.change(screen.getByRole('combobox', { name: 'Incident scope' }), { target: { value: 'resolved' } }); await flush(); expect(old[1]?.signal?.aborted).toBe(true);
+        const old = reads().at(-1)!; fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: 'resolved' } }); await flush(); expect(old[1]?.signal?.aborted).toBe(true);
         await act(async () => finish(original)); expect(screen.queryByRole('link', { name: /Desk One/ })).toBeNull(); expect(screen.getByText(/No retained incidents match/)).toBeVisible();
         fireEvent.change(screen.getByRole('combobox', { name: 'Acknowledgement' }), { target: { value: 'acknowledged' } }); await flush(); expect(reads().at(-1)![0]).toContain('scope=resolved&ack=acknowledged&offset=0');
     });
@@ -116,6 +128,6 @@ describe('compact Windows incident inbox', () => {
     });
     it('has German labels and distinguishes policy closure from recovery', async () => {
         setLocale('de', false); rows = [windowsIncidentItem({ resolvedAt: '2026-10-07T11:58:00Z', closedReason: 'policy-changed' })]; render(<Harness/>); fireEvent.click(screen.getByRole('button', { name: 'Windows-Vorfälle' })); await flush();
-        fireEvent.change(screen.getByRole('combobox', { name: 'Vorfallszeitraum' }), { target: { value: 'resolved' } }); await flush(); expect(screen.getByText('Geschlossen: Richtlinie geändert; keine Erholung belegt')).toBeVisible(); expect(screen.getByText(/Sie schließt keinen Vorfall/)).toBeVisible();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), { target: { value: 'resolved' } }); await flush(); expect(screen.getByText('Geschlossen: Richtlinie geändert; keine Erholung belegt')).toBeVisible(); expect(screen.getByText(/Vorfallsstatus unverändert/)).toBeVisible();
     });
 });

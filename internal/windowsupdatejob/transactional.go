@@ -60,10 +60,16 @@ func (m *Manager) enrollmentTransaction(ctx context.Context, fn func(Current, in
 			}
 		}
 		old := map[string]int64{}
+		priorJobs := map[string]Job{}
 		for _, j := range original.Jobs {
 			old[j.ID] = j.ClaimedAt
+			priorJobs[j.ID] = j
 		}
 		for _, j := range m.record.Jobs {
+			prior := priorJobs[j.ID]
+			if j.Schedule != nil && (prior.Schedule == nil || j.Schedule.TriggeredAt != prior.Schedule.TriggeredAt || len(j.Envelope) > 0 && len(prior.Envelope) == 0 || j.ReadinessClaimedAt != prior.ReadinessClaimedAt || j.ClaimedAt != prior.ClaimedAt) && !m.scheduleAuthorized(&j) {
+				return ErrAuthority
+			}
 			if j.ClaimedAt != 0 && old[j.ID] == 0 && (m.operatorAllowed == nil || !m.operatorAllowed(j.ActorID)) {
 				return ErrAuthority
 			}

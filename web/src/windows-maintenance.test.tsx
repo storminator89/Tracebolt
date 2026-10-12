@@ -51,29 +51,66 @@ afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(L
 describe('compact Windows maintenance metadata panel', () => {
     it('starts collapsed, reads once on demand and discloses metadata-only effects', async () => {
         render(<Harness/>); await flush(); expect(request).not.toHaveBeenCalled(); await open();
-        expect(reads()).toHaveLength(1); expect(reads()[0][2]).toBe(256 * 1024); expect(screen.getByText(/Checks and incidents continue; external alarms aren’t suppressed/)).toBeVisible();
+        expect(reads()).toHaveLength(1); expect(reads()[0][2]).toBe(256 * 1024); expect(screen.getByText(/Planning label only. Checks, incidents and alarms continue/)).toBeVisible();
         expect(screen.getByRole('combobox', { name: 'Exact Windows device' })).toHaveValue(''); expect(screen.queryByRole('button', { name: 'Start maintenance' })).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Windows maintenance' })); expect(screen.queryByRole('combobox')).toBeNull();
     });
-    it('requires an exact identity, scope and explicit intent before a frozen visible UTC-end review', async () => {
+    it('keeps full identifiers in exact details instead of repeating them in primary labels', async () => {
+        setWindow('disk', windowsMaintenanceWindow()); render(<Harness/>); await open();
+        expect(screen.getByRole('option', { name: 'Desk One' })).toHaveValue(view.targets[0].key);
+        const active = screen.getByRole('list', { name: 'Current maintenance labels' });
+        expect(active.querySelector('.windows-maintenance-label')).toHaveTextContent('Desk One');
+        expect(active.querySelector('.windows-maintenance-label')).not.toHaveTextContent(windowsDeviceId);
+        expect(within(active).getByText(windowsDeviceId)).not.toBeVisible();
+        fireEvent.click(within(active).getByText('Exact details'));
+        expect(within(active).getByText(windowsDeviceId)).toBeVisible();
+        expect(within(active).getByText(view.targets[3].windows[0].endsAt)).toBeVisible();
+        expect(posts()).toHaveLength(0);
+    });
+    it('compacts production names that are the raw agent identity', async () => {
+        setWindow('disk', windowsMaintenanceWindow());
+        render(<WindowsMaintenance devices={[{ ...devices[0], name: windowsDeviceId }]} sessionKey={windowsCapacitySession} admin/>); await open();
+        expect(screen.getByRole('option', { name: `Windows device · …${windowsDeviceId.slice(-8)}` })).toHaveValue(view.targets[0].key);
+        const active = screen.getByRole('list', { name: 'Current maintenance labels' });
+        expect(active.querySelector('.windows-maintenance-label')).not.toHaveTextContent(windowsDeviceId);
+        fireEvent.click(within(active).getByText('Exact details')); expect(within(active).getByText(windowsDeviceId)).toBeVisible();
+        select(); fireEvent.click(screen.getByRole('button', { name: 'Review early end' })); fireEvent.click(screen.getByRole('button', { name: 'End maintenance now' })); await flush();
+        expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ key: view.targets[3].key, revision: 1, windowId: 1 });
+    });
+    it('disambiguates duplicate names even when shortened identity suffixes collide', async () => {
+        const otherId = windowsDeviceId.slice(0, -9) + 'b' + windowsDeviceId.slice(-8);
+        view.targets.push(...view.targets.map((target, index) => ({ ...target, deviceId: otherId, key: (index + 100).toString(16).padStart(64, '0') })));
+        view.targets.sort((a, b) => a.deviceId.localeCompare(b.deviceId) || a.domain.localeCompare(b.domain));
+        render(<WindowsMaintenance devices={[...devices, { ...devices[0], id: otherId }]} sessionKey={windowsCapacitySession} admin/>); await open();
+        const options = screen.getAllByRole('option').filter(option => option.textContent?.startsWith('Desk One'));
+        expect(options).toHaveLength(2); expect(options[0].textContent).not.toBe(options[1].textContent);
+        expect(options.map(option => (option as HTMLOptionElement).value)).toEqual(view.targets.filter(target => target.domain === 'all').map(target => target.key));
+        expect(options[0].textContent!.length).toBeLessThan(('Desk One · ' + windowsDeviceId).length);
+        expect(posts()).toHaveLength(0);
+    });
+    it('requires identity, scope and intent before a frozen local-end review with exact UTC details', async () => {
         render(<Harness/>); await open(); select(); expect(screen.getByRole('button', { name: 'Review maintenance start' })).toBeDisabled();
         expect(screen.getByRole('combobox', { name: 'Operator intent' })).toHaveValue('');
         fireEvent.change(screen.getByRole('combobox', { name: 'Operator intent' }), { target: { value: 'investigation' } }); fireEvent.change(screen.getByRole('combobox', { name: 'Duration' }), { target: { value: '15' } }); fireEvent.click(screen.getByRole('button', { name: 'Review maintenance start' }));
-        const region = screen.getByRole('region', { name: 'Review exact maintenance change' }); expect(within(region).getByText(new RegExp(windowsDeviceId))).toBeVisible(); expect(within(region).getByText('2026-10-07T12:15:10Z')).toBeVisible(); expect(posts()).toHaveLength(0);
+        const region = screen.getByRole('region', { name: 'Review exact maintenance change' });
+        expect(within(region).getByText(new RegExp(windowsDeviceId))).not.toBeVisible();
+        expect(region.querySelector('.windows-local-time')).toHaveAttribute('datetime', '2026-10-07T12:15:10Z');
+        expect(region.querySelector('.windows-local-time')).toHaveTextContent(/GMT/);
+        fireEvent.click(within(region).getByText('Exact details')); expect(within(region).getByText(new RegExp(windowsDeviceId))).toBeVisible(); expect(within(region).getByText('2026-10-07T12:15:10Z')).toBeVisible(); expect(posts()).toHaveLength(0);
         await advance(1000); expect(within(region).getByText('2026-10-07T12:15:10Z')).toBeVisible(); fireEvent.click(screen.getByRole('button', { name: 'Cancel review' })); expect(screen.queryByRole('region', { name: 'Review exact maintenance change' })).toBeNull(); expect(posts()).toHaveLength(0);
     });
     it('starts exactly the reviewed key/revision/end/intent with CSRF, then reconciles by GET', async () => {
         render(<Harness/>); await open(); review(); fireEvent.click(screen.getByRole('button', { name: 'Start maintenance' })); fireEvent.click(screen.getByRole('button', { name: 'Review maintenance start' })); await flush();
         expect(posts()).toHaveLength(1); expect(posts()[0][0]).toBe('/fleet/windows-maintenance/start'); expect(posts()[0][2]).toBe(256 * 1024);
         expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ key: windowsMaintenanceTarget('disk').key, revision: 0, endsAt: '2026-10-07T12:30:10Z', intent: 'planned-work' });
-        expect(posts()[0][1]!.headers).toEqual({ 'Content-Type': 'application/json', 'X-CSRF-Token': 'fixture-csrf' }); expect(reads()).toHaveLength(2); expect(screen.getByText(/Maintenance started/)).toBeVisible();
+        expect(posts()[0][1]!.headers).toEqual({ 'Content-Type': 'application/json', 'X-CSRF-Token': 'fixture-csrf' }); expect(reads()).toHaveLength(2); expect(screen.getByText(/Maintenance window started/)).toBeVisible();
         expect(screen.getByRole('list', { name: 'Current maintenance labels' })).toHaveTextContent('Maintenance now · until'); expect(screen.getByRole('button', { name: 'Review early end' })).toBeVisible();
     });
     it('reviews and ends only the selected latest active window, preserving its scheduled end', async () => {
         setWindow('disk', windowsMaintenanceWindow()); const endsAt = view.targets[3].windows[0].endsAt; render(<Harness/>); await open(); select();
         fireEvent.click(screen.getByRole('button', { name: 'Review early end' })); expect(posts()).toHaveLength(0); fireEvent.click(screen.getByRole('button', { name: 'End maintenance now' })); await flush();
         expect(posts()).toHaveLength(1); expect(posts()[0][0]).toBe('/fleet/windows-maintenance/end'); expect(JSON.parse(posts()[0][1]!.body as string)).toEqual({ key: view.targets[3].key, revision: 1, windowId: 1 });
-        expect(view.targets[3].windows[0].endsAt).toBe(endsAt); fireEvent.click(screen.getByText(/^Latest maintenance windows ·/)); expect(screen.getByText('Ended early')).toBeVisible(); expect(screen.getByText(/No recovery is implied/)).toBeVisible();
+        expect(view.targets[3].windows[0].endsAt).toBe(endsAt); fireEvent.click(screen.getByText(/^Latest maintenance windows ·/)); expect(screen.getByText('Ended early')).toBeVisible(); expect(screen.getByText(/Ended or expired describes the planning window, not recovery/)).toBeVisible();
     });
     it('uses GET only after uncertainty and keeps the same revision blocked across refresh and collapse', async () => {
         const normal = vi.mocked(request).getMockImplementation()!; vi.mocked(request).mockImplementation(async (path, options, cap) => options?.method === 'POST' ? Promise.reject(new Error('lost response')) : normal(path, options, cap));
@@ -152,7 +189,7 @@ describe('compact Windows maintenance metadata panel', () => {
     });
     it('has German intent, UTC review and honest lifecycle labels', async () => {
         setLocale('de', false); render(<Harness/>); fireEvent.click(screen.getByRole('button', { name: 'Windows-Wartung' })); await flush(); fireEvent.change(screen.getByRole('combobox', { name: 'Exaktes Windows-Gerät' }), { target: { value: view.targets[0].key } });
-        fireEvent.change(screen.getByRole('combobox', { name: 'Absicht des Operators' }), { target: { value: 'planned-work' } }); fireEvent.click(screen.getByRole('button', { name: 'Wartungsstart prüfen' })); expect(screen.getByText(/Geplantes Ende \(UTC\)/)).toBeVisible(); fireEvent.click(screen.getByRole('button', { name: 'Wartung starten' })); await flush();
-        expect(screen.getByRole('list', { name: 'Aktuelle Wartungsmarkierungen' })).toHaveTextContent('Wartung jetzt · bis'); expect(screen.getByText(/Prüfungen und Vorfälle laufen weiter/)).toBeVisible();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Absicht des Operators' }), { target: { value: 'planned-work' } }); fireEvent.click(screen.getByRole('button', { name: 'Wartungsstart prüfen' })); expect(screen.getByText('Geplantes Ende')).toBeVisible(); fireEvent.click(screen.getByRole('button', { name: 'Wartung starten' })); await flush();
+        expect(screen.getByRole('list', { name: 'Aktuelle Wartungsmarkierungen' })).toHaveTextContent('Wartung jetzt · bis'); expect(screen.getByText(/Prüfungen, Vorfälle und Alarme laufen weiter/)).toBeVisible();
     });
 });

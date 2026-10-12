@@ -136,7 +136,10 @@ func (m *Manager) Pending(ctx context.Context) (*Pending, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out *Pending
-	e := m.transaction(ctx, func(_ Current, n int64) error {
+	e := m.transaction(ctx, func(c Current, n int64) error {
+		if e := m.triggerSchedule(c, n); e != nil {
+			return e
+		}
 		for _, j := range m.record.Jobs {
 			if j.State == "requested" && j.ReadinessClaimedAt == 0 {
 				c, e := VerifyChallenge(j.Challenge, m.record.PublicKey)
@@ -169,6 +172,9 @@ func (m *Manager) ClaimReadiness(ctx context.Context, id string) ([]byte, error)
 			j := &m.record.Jobs[i]
 			if j.ID != id {
 				continue
+			}
+			if j.Schedule != nil && !m.scheduleAuthorized(j) {
+				return ErrAuthority
 			}
 			if j.State != "requested" || j.ReadinessClaimedAt != 0 {
 				return ErrConsumed
@@ -241,7 +247,13 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 			if s.IssuedAt > n || n >= s.ExpiresAt || n >= challenge.Deadline {
 				return ErrExpired
 			}
+			if j.Schedule != nil && !m.scheduleAuthorized(j) {
+				return ErrAuthority
+			}
 			p := Preview{ID: j.ID, ActorID: j.ActorID, Binding: m.Binding(), Readiness: *s.Readiness, CreatedAt: n, ExpiresAt: min(s.ExpiresAt, c.LeafNotAfter, m.record.Consent.ExpiresAt)}
+			if j.Schedule != nil {
+				p.ExpiresAt = min(p.ExpiresAt, j.Schedule.Approval.EndAt)
+			}
 			p.Digest = previewDigest(p)
 			if p.Validate() != nil {
 				return ErrInvalid
@@ -252,6 +264,11 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 			j.Reason = p.Readiness.Reason()
 			if j.Reason == "ready" {
 				j.State = "preview"
+			}
+			if j.Schedule != nil {
+				if e := m.issueScheduled(j, n); e != nil {
+					return e
+				}
 			}
 			return m.save(n)
 		}
