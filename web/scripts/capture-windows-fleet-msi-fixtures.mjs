@@ -10,7 +10,9 @@
  * Do not use this recipe to bypass a denied browser or process launch.
  *
  * All HTTPS routes are fulfilled from compiled production assets or invented
- * read-only DTOs. Every non-GET and external request is blocked and counted.
+ * read-only DTOs. External requests and writes are blocked and counted. Only the
+ * exact saved-worklist preview POST described by its synthetic fixture is admitted;
+ * it reads invented data, is counted separately, and cannot confirm or dispatch.
  * The admitted-looking DTOs exercise UI guards only; they are not live devices,
  * grants, durable manager state, native acceptance, installation or release.
  */
@@ -38,7 +40,7 @@ async function contracts() {
     const { build } = require('esbuild');
     const result = await build({
       stdin: {
-        contents: "export { validManagedArtifact, validManagedView } from './windows-managed-msi-types'; export { windowsHealthDevice } from './windows-health-fixture';",
+        contents: "export { validManagedArtifact, validManagedView } from './windows-managed-msi-types'; export { windowsHealthDevice } from './windows-health-fixture'; export { validWorklistView, validWorklistsView, validWorklistPreview } from './windows-managed-msi-worklist-types';",
         resolveDir: path.join(web, 'src'), loader: 'ts',
       },
       bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent',
@@ -141,7 +143,7 @@ export async function createWindowsFleetMSIFixture(now = new Date(Math.floor(Dat
     readArtifact() { reads.artifact++; return clone(artifact); },
     readDevice(id) {
       const index = devices.findIndex(device => device.id === id);
-      if (index < 0) return null;
+      if (index < 0 || !views[index]) return null;
       reads.devices[id]++;
       return clone(views[index]);
     },
@@ -153,12 +155,115 @@ export async function createWindowsFleetMSIFixture(now = new Date(Math.floor(Dat
   };
 }
 
+export const windowsSavedMSIScenes = Object.freeze(['compact-summary', 'expanded-evidence', 'delivery-unchecked', 'review-unchecked', 'approval-unchecked']);
+export const windowsSavedMSIDisclosure = 'Synthetic saved reusable-v3 MSI worklists and compiled production UI. Preview POSTs read only fixed invented responses and are counted separately. All confirmation, batch, delivery, review, approval, retirement and other mutations are blocked. No real login, saved plan, device, grant, MSI bytes, installer, native acceptance or release.';
+const savedStage = scene => ({ 'delivery-unchecked': 'deliver', 'review-unchecked': 'review', 'approval-unchecked': 'approve' })[scene];
+
+/** Invented saved references, never a real durable manager journal or approval. */
+export async function createWindowsSavedMSIFixture(scene, now) {
+  assert(windowsSavedMSIScenes.includes(scene), 'Unknown saved MSI scene');
+  const fixture = await createWindowsFleetMSIFixture(now);
+  const { artifact, views, devices, seconds, session } = fixture;
+  const stage = savedStage(scene);
+  devices.push({ ...clone(devices[0]), id: `agent_${'d'.repeat(32)}`, name: 'SYNTHETIC · Munich unavailable target' });
+  fixture.reads.devices[devices[2].id] = 0;
+  const bindings = devices.map((device, index) => ({
+    managerId: `manager_${'1'.repeat(32)}`, deviceId: device.id,
+    incarnationDigest: digest(String(index + 5)), executorId: `executor_${String(index + 2).repeat(32)}`,
+    executorKeyId: digest('8'), keyId: digest('9'),
+    deliveryGrantId: `grant_${String(index + 3).repeat(32)}`, installGrantId: `grant_${String(index + 6).repeat(32)}`,
+  }));
+  const bindingDigests = bindings.map(binding => `sha256:${createHash('sha256').update(JSON.stringify(binding)).digest('hex')}`);
+  Object.assign(artifact, {
+    version: 'tracebolt.windows-managed-msi-artifact.v3', reusable: true,
+    publisherStatus: 'unverified', publisherEvidenceDigest: digest('a'), retiredCount: '0',
+    maxRetainedPayloadBytes: 128 * 1048576, canRetire: false, retirementBlocked: 'awaiting_device_retirement',
+    targets: devices.map((device, index) => ({ deviceId: device.id, bindingDigest: bindingDigests[index] })),
+  });
+  const identity = { package: artifact.package, nativeAcceptanceDigest: artifact.nativeAcceptanceDigest, publisherStatus: artifact.publisherStatus, publisherEvidenceDigest: artifact.publisherEvidenceDigest };
+  artifact.artifactId = `sha256:${createHash('sha256').update('Tracebolt reusable MSI artifact v3\0').update(JSON.stringify(identity)).digest('hex')}`;
+  for (const [index, view] of views.entries()) {
+    Object.assign(view, {
+      reusable: true, artifactRetiredCount: artifact.retiredCount, artifactId: artifact.artifactId,
+      bindingDigest: bindingDigests[index], coordinated: true, publisherStatus: artifact.publisherStatus,
+      publisherEvidenceDigest: artifact.publisherEvidenceDigest, jobSequence: stage === 'deliver' ? '0' : '1', retiredFloor: '0',
+      grantExpiresAt: seconds + 1800, canRetire: false, mutationCapturedAt: seconds,
+      mutation: { active: true, blocked: false, phase: 'idle', revision: '8', retained: 0 },
+      state: stage === 'deliver' ? 'uploaded' : stage === 'approve' ? 'ready' : 'imported',
+      transferId: stage === 'deliver' ? '' : `transfer_${(index ? '7' : 'b').repeat(32)}`,
+      readinessDigest: stage === 'approve' ? digest(index ? 'c' : 'b') : '',
+      expiresAt: stage === 'approve' ? seconds + 55 : 0,
+      readiness: stage === 'approve' ? {
+        selection: clone(artifact.package), capturedAt: seconds,
+        packageVerified: 'yes', machineAbsent: 'yes', installerBusy: 'no', nativeAcceptance: 'yes',
+        packageReviewAccepted: 'yes', maintenanceWindowEnd: seconds + 300,
+      } : null,
+      result: null, canReview: stage === 'review' || !stage,
+    });
+    if (!stage && index === 1) Object.assign(view, {
+      state: 'complete', canReview: false, resultDigest: digest('c'),
+      result: { returnCodeKnown: true, jobId: `software_${'7'.repeat(32)}`, envelopeDigest: digest('8'), attempted: true,
+        outcome: 'restart_required', returnCode: 3010, registrationVerified: 'unknown', completedAt: seconds - 20 },
+    });
+  }
+  const targets = devices.map((device, index) => ({
+    name: device.name, binding: bindings[index],
+    transferId: index === 2 ? `transfer_${'d'.repeat(32)}` : views[index].transferId,
+    jobSequence: index === 2 ? '1' : views[index].jobSequence,
+  }));
+  const worklist = {
+    id: `worklist_${'e'.repeat(32)}`, revision: 3, serverNow: seconds, name: 'SYNTHETIC · Desktop package 1.2.3',
+    createdBy: session.actorId, createdAt: seconds - 120, archivedAt: 0,
+    artifactId: artifact.artifactId, artifactRetiredCount: artifact.retiredCount,
+    package: clone(artifact.package), nativeAcceptanceDigest: artifact.nativeAcceptanceDigest,
+    publisherStatus: artifact.publisherStatus, publisherEvidenceDigest: artifact.publisherEvidenceDigest,
+    group: { id: `group_${'f'.repeat(32)}`, name: 'SYNTHETIC · Frozen pilot cohort', revision: 7 },
+    targets, batches: [], rows: targets.map((target, index) => index === 2
+      ? { deviceId: target.binding.deviceId, available: false, state: 'unavailable', historicalOutcome: 'succeeded' }
+      : { deviceId: target.binding.deviceId, available: true, state: stage === 'deliver' ? 'not_dispatched' : views[index].state, view: views[index] }),
+  };
+  fixture.savedWorklist = worklist;
+  fixture.reads.worklists = 0;
+  fixture.reads.worklist = 0;
+  fixture.readWorklists = () => { fixture.reads.worklists++; return { version: 'tracebolt.windows-managed-msi-worklists.v1', serverNow: seconds, enabled: true, worklists: [clone(worklist)] }; };
+  fixture.readWorklist = () => { fixture.reads.worklist++; return clone(worklist); };
+  if (stage) fixture.reviewedPreview = {
+    path: `/api/windows-managed-msi/worklists/${worklist.id}/preview`,
+    body: JSON.stringify({ revision: worklist.revision, kind: stage }),
+    response: {
+      worklistId: worklist.id, revision: worklist.revision, kind: stage,
+      items: views.map((view, index) => ({
+        deviceId: view.deviceId, operation: stage === 'review' ? 'review-coordinated' : stage,
+        artifactId: artifact.artifactId, artifactRetiredCount: artifact.retiredCount, bindingDigest: bindingDigests[index],
+        transferId: stage === 'deliver' ? `transfer_${(index ? '7' : 'b').repeat(32)}` : view.transferId,
+        jobSequence: stage === 'deliver' ? '' : view.jobSequence,
+        readinessDigest: stage === 'approve' ? view.readinessDigest : '',
+        expiresAt: stage === 'approve' ? view.expiresAt : seconds + 60,
+      })),
+      excluded: [{ deviceId: devices[2].id, reason: 'unavailable' }],
+    },
+  };
+  const validation = await contracts();
+  assert(validation.validManagedArtifact(artifact), `Saved artifact ${scene}`);
+  views.forEach(view => assert(validation.validManagedView(view, view.deviceId), `Saved device ${scene}`));
+  assert(validation.validWorklistView(worklist), `Saved worklist ${scene}`);
+  assert(validation.validWorklistsView({ version: 'tracebolt.windows-managed-msi-worklists.v1', serverNow: seconds, enabled: true, worklists: [worklist] }), `Saved worklist list ${scene}`);
+  if (stage) assert(validation.validWorklistPreview(fixture.reviewedPreview.response, worklist, stage), `Saved preview ${scene}`);
+  return fixture;
+}
+
 export function createWindowsFleetMSIRoute({ fixture, compiled, state }) {
   return async route => {
     const request = route.request(), url = new URL(request.url());
     const method = request.method(), raw = request.postData();
     const block = reason => { state.blocked.push(reason); return route.abort('blockedbyclient'); };
     if (url.origin !== windowsFleetMSIOrigin) { state.external.push('external'); return block('external-origin'); }
+    const preview = fixture.reviewedPreview;
+    if (method === 'POST' && preview && fixture.savedWorklist && preview.path === `/api/windows-managed-msi/worklists/${fixture.savedWorklist.id}/preview` && url.pathname === preview.path && !url.search && raw === preview.body) {
+      assert(Array.isArray(state.previews), 'Synthetic preview reads must be counted independently');
+      state.previews.push({ method, path: url.pathname, body: raw });
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(clone(preview.response)) });
+    }
     if (method !== 'GET' || raw !== null) { state.writes.push({ method, path: url.pathname }); return block('unexpected-write'); }
     if (url.search) return block('unexpected-query');
     const reply = value => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(value) });
@@ -166,12 +271,14 @@ export function createWindowsFleetMSIRoute({ fixture, compiled, state }) {
     if (url.pathname === '/api/session') return reply({ csrfToken: fixture.session.csrfToken });
     if (url.pathname === '/api/overview') return reply({
       product: 'Tracebolt', mode: 'lan', generatedAt: fixture.now,
-      stats: { totalDevices: 2, healthyDevices: 0, attentionDevices: 0, unknownDevices: 2, openCases: 0, criticalCases: 0 },
+      stats: { totalDevices: fixture.devices.length, healthyDevices: 0, attentionDevices: 0, unknownDevices: fixture.devices.length, openCases: 0, criticalCases: 0 },
       devices: fixture.devices, cases: [], activity: [],
     });
     if (url.pathname === '/api/fleet/identities') return reply({ schemaVersion: 'tracebolt.fleet-identities.v2', serverNow: fixture.now, items: [] });
     if (url.pathname === '/api/fleet/groups') return reply({ schemaVersion: 'tracebolt.fleet-groups.v1', serverNow: fixture.now, groups: [], devices: fixture.devices.map(({ id, name, platform }) => ({ id, name, platform })) });
     if (url.pathname === '/api/windows-managed-msi/artifact') return reply(fixture.readArtifact());
+    if (url.pathname === '/api/windows-managed-msi/worklists') return reply(fixture.readWorklists ? fixture.readWorklists() : { version: 'tracebolt.windows-managed-msi-worklists.v1', serverNow: fixture.seconds, enabled: false, worklists: [] });
+    if (fixture.savedWorklist && url.pathname === `/api/windows-managed-msi/worklists/${fixture.savedWorklist.id}`) return reply(fixture.readWorklist());
     const managed = /^\/api\/devices\/(agent_[a-f0-9]{32})\/windows-managed-msi$/.exec(url.pathname);
     if (managed) { const value = fixture.readDevice(managed[1]); return value ? reply(value) : block('unknown-target'); }
     if (url.pathname.startsWith('/api/')) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'synthetic_unavailable' } }) });
@@ -210,14 +317,92 @@ export async function checkWindowsFleetMSIFixtures() {
   assert.equal((await request(`${base}/api/devices/agent_${'d'.repeat(32)}/windows-managed-msi`)).aborted, 'blockedbyclient');
   assert.equal(state.writes.length, 1);
   assert.equal(state.external.length, 1);
+  const savedWorklists = await checkWindowsSavedMSIFixtures();
   const compiled = await compileWindowsFleetMSIAssets();
+  assert(compiled.sourceInputs.some(input => input.file === 'web/src/windows-managed-msi-worklists.tsx'), 'Source check must compile the production saved-worklist UI');
   return {
     mode: 'source-only', compiled: true, sourceDigest: compiled.sourceDigest,
     compiledBytes: compiled.compiledBytes, productionSourceInputs: compiled.sourceInputs.length,
-    dtoAndRouteChecks: 'passed', targetCount: fixture.devices.length,
+    dtoAndRouteChecks: 'passed', targetCount: fixture.devices.length, savedWorklists,
     proposedCases: windowsFleetMSICases, browserExecuted: false, screenshotsCaptured: 0,
     nativeAcceptance: false, disclosure: windowsFleetMSIDisclosure,
   };
+}
+
+/** Inert preview exception checks. This does not execute browser interactions. */
+export async function checkWindowsSavedMSIFixtures() {
+  const validation = await contracts();
+  let allowedPreviewReads = 0, rejectedMutationRequests = 0;
+  for (const scene of windowsSavedMSIScenes) {
+    const fixture = await createWindowsSavedMSIFixture(scene, '2026-10-12T10:00:00.000Z');
+    const worklist = fixture.savedWorklist, initialWorklist = clone(worklist);
+    const state = { blocked: [], external: [], writes: [], previews: [] };
+    const route = createWindowsFleetMSIRoute({ fixture, compiled: { assets: new Map() }, state });
+    async function request(suffix, method = 'GET', body = null) {
+      let response;
+      await route({ request: () => ({ url: () => `${windowsFleetMSIOrigin}${suffix}`, method: () => method, postData: () => body }),
+        fulfill: value => { response = value; }, abort: reason => { response = { aborted: reason }; } });
+      return response;
+    }
+    const base = `/api/windows-managed-msi/worklists/${worklist.id}`;
+    const listing = await request('/api/windows-managed-msi/worklists');
+    assert.equal(listing.status, 200);
+    assert(validation.validWorklistsView(JSON.parse(listing.body)));
+    const saved = await request(base);
+    assert.equal(saved.status, 200);
+    assert.deepEqual(JSON.parse(saved.body), worklist);
+    assert.equal(state.writes.length, 0);
+    assert.equal(state.previews.length, 0, 'GETs must not start a stage');
+    const substituted = clone(worklist);
+    substituted.rows[0].view.artifactRetiredCount = '1';
+    assert.equal(validation.validWorklistView(substituted), false, 'Same-content occurrence substitution must be rejected');
+    const stale = clone(worklist);
+    stale.rows[2].view = clone(worklist.rows[0].view);
+    assert.equal(validation.validWorklistView(stale), false, 'Unavailable rows must not regain a cached current view');
+    if (fixture.reviewedPreview) {
+      const expected = fixture.reviewedPreview;
+      const response = await request(expected.path, 'POST', expected.body);
+      assert.equal(response.status, 200);
+      assert.deepEqual(JSON.parse(response.body), expected.response);
+      assert.deepEqual(state.previews, [{ method: 'POST', path: expected.path, body: expected.body }]);
+      allowedPreviewReads++;
+      const wrongBodies = [
+        '{}', JSON.stringify({ revision: worklist.revision + 1, kind: savedStage(scene) }),
+        JSON.stringify({ revision: worklist.revision, kind: savedStage(scene), acknowledged: true }),
+        JSON.stringify({ revision: worklist.revision, kind: savedStage(scene) === 'deliver' ? 'approve' : 'deliver' }),
+        JSON.stringify({ kind: savedStage(scene), revision: worklist.revision }),
+      ];
+      for (const body of wrongBodies) {
+        assert.equal((await request(expected.path, 'POST', body)).aborted, 'blockedbyclient');
+        rejectedMutationRequests++;
+      }
+      for (const suffix of ['?unexpected=1', '/']) {
+        assert.equal((await request(expected.path + suffix, 'POST', expected.body)).aborted, 'blockedbyclient');
+        rejectedMutationRequests++;
+      }
+      const broader = clone(expected.response);
+      broader.items.push({ ...clone(broader.items[0]), deviceId: fixture.devices[2].id });
+      assert.equal(validation.validWorklistPreview(broader, worklist, savedStage(scene)), false, 'Preview cannot include an unavailable target');
+      const changed = clone(expected.response);
+      changed.items[0].bindingDigest = digest('0');
+      assert.equal(validation.validWorklistPreview(changed, worklist, savedStage(scene)), false, 'Preview must match exact current binding');
+    } else {
+      assert.equal((await request(`${base}/preview`, 'POST', JSON.stringify({ revision: worklist.revision, kind: 'deliver' }))).aborted, 'blockedbyclient');
+      rejectedMutationRequests++;
+    }
+    const writePaths = [
+      '/api/windows-managed-msi/worklists/save', `${base}/batches`, `${base}/archive`, `${base}/close`,
+      ...['deliver', 'review-coordinated', 'approve', 'retire'].map(operation => `/api/devices/${fixture.devices[0].id}/windows-managed-msi/${operation}`),
+    ];
+    const initialWrites = state.writes.length;
+    for (const suffix of writePaths) assert.equal((await request(suffix, 'POST', '{}')).aborted, 'blockedbyclient');
+    assert.equal(state.writes.length - initialWrites, writePaths.length);
+    rejectedMutationRequests += writePaths.length;
+    assert.equal(state.previews.length, fixture.reviewedPreview ? 1 : 0, 'Rejected writes cannot count as a preview');
+    assert.deepEqual(worklist, initialWorklist, 'Preview reads must leave saved records and acknowledgements unchanged');
+    assert.deepEqual(state.external, []);
+  }
+  return { scenes: windowsSavedMSIScenes, dtoAndRouteChecks: 'passed', allowedPreviewReads, rejectedMutationRequests, actualMutations: 0, browserExecuted: false, screenshotsCaptured: 0 };
 }
 
 export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, width, shot }) {
@@ -284,6 +469,170 @@ export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, w
   await worklist.getByRole('button', { name: `${de ? 'Gerät schließen' : 'Close device'}: ${fixture.devices[0].name}`, exact: true }).click();
   await expect(panel).toHaveCount(0);
   return { targetCount: 2, noAutomaticNextDevice: true, deliveryUnchecked: true, saved3010Registration: 'unknown', sharedStatusPreservesResult: true };
+}
+
+/** Hosted-browser exercise of saved metadata and initially unchecked stage reviews. */
+export async function exerciseWindowsSavedMSI({ page, expect, fixture, scene, locale, width, state, shot }) {
+  const de = locale === 'de', stage = savedStage(scene), worklist = fixture.savedWorklist;
+  const labels = {
+    fleet: de ? 'Windows-MSI-Arbeitsliste' : 'Windows MSI worklist',
+    saved: de ? 'Gespeicherte MSI-Arbeitslisten' : 'Saved MSI worklists',
+    read: de ? 'Arbeitslisten lesen' : 'Read worklists',
+    evidence: de ? 'Gespeicherte Verweise' : 'Saved references',
+    deliver: de ? 'An ausgewählte Geräte verteilen' : 'Deliver selected devices',
+    review: de ? 'Installationen prüfen' : 'Review installations',
+    approve: de ? 'Bereite Geräte genehmigen' : 'Approve ready devices',
+    confirm: de ? 'Exakte Anfragen bestätigen' : 'Confirm exact requests',
+    unavailable: de ? 'Aktuelle Nachweise nicht verfügbar' : 'Current evidence unavailable',
+    history: de ? 'Nur historisches Ergebnis: Installiert; exakte Registrierung geprüft' : 'Historical result only: Installed; exact registration verified',
+  };
+  async function openSaved() {
+    const fleet = page.getByRole('region', { name: labels.fleet, exact: true });
+    await fleet.getByRole('button', { name: labels.fleet, exact: true }).click();
+    const saved = fleet.getByRole('region', { name: labels.saved, exact: true });
+    await expect(saved).toContainText(worklist.name);
+    await expect(saved.getByRole('button', { name: labels.read, exact: true })).toBeEnabled();
+    return saved;
+  }
+  await page.goto(`${windowsFleetMSIOrigin}/#/devices`);
+  await expect(page.locator('html')).toHaveAttribute('lang', locale);
+  const saved = await openSaved();
+  const evidence = saved.locator('article > details').first();
+  await expect(evidence.locator('summary')).toHaveText(labels.evidence);
+  await expect(evidence).not.toHaveAttribute('open');
+  await expect(saved).toContainText(worklist.package.name);
+  await expect(saved).toContainText(worklist.package.version);
+  const unavailableRow = saved.getByRole('row').filter({ hasText: fixture.devices[2].name });
+  await expect(unavailableRow).toContainText(labels.unavailable);
+  await expect(unavailableRow).toContainText(labels.history);
+  await expect(unavailableRow.getByRole('button')).toBeDisabled();
+  await expect(saved.locator('[role="row"]')).toHaveCount(4);
+  expect(state.previews).toEqual([]);
+  expect(state.writes).toEqual([]);
+  let focus = saved, block = 'start';
+  if (scene === 'expanded-evidence') {
+    await evidence.locator('summary').click();
+    await expect(evidence).toHaveAttribute('open', '');
+    for (const text of [worklist.artifactId, worklist.package.sha256, worklist.package.termsReviewDigest,
+      worklist.nativeAcceptanceDigest, worklist.publisherEvidenceDigest, worklist.group.name, worklist.group.id]) {
+      await expect(evidence).toContainText(text);
+    }
+    focus = evidence;
+  } else if (stage) {
+    await saved.getByRole('button', { name: labels[stage], exact: true }).click();
+    const confirmation = saved.getByRole('region', { name: labels[stage], exact: true });
+    await expect(confirmation).toBeVisible();
+    const packageReferences = confirmation.locator(':scope > details');
+    await expect(packageReferences).toHaveCount(1);
+    await expect(packageReferences.locator('summary')).toHaveText(de ? 'Paketverweise' : 'Package references');
+    await expect(packageReferences).not.toHaveAttribute('open');
+    await expect(packageReferences.locator('.managed-msi-confirm-evidence')).not.toBeVisible();
+    // Retained evidence stays inspectable in the DOM while this compact
+    // confirmation keeps its exact targets and unchecked consent visible.
+    for (const reference of [worklist.package.sha256, worklist.package.productCode, worklist.package.packageCode,
+      worklist.nativeAcceptanceDigest, worklist.publisherEvidenceDigest, worklist.package.termsReviewDigest, worklist.package.reviewReference]) {
+      await expect(packageReferences).toContainText(reference);
+    }
+    await expect(confirmation.getByRole('checkbox')).toHaveCount(1);
+    await expect(confirmation.getByRole('checkbox')).not.toBeChecked();
+    await expect(confirmation.getByRole('button', { name: labels.confirm, exact: true })).toBeDisabled();
+    const acknowledgement = stage === 'deliver'
+      ? de ? 'Ich genehmige diese exakten Verteilungsanfragen.' : 'I approve these exact delivery requests.'
+      : stage === 'approve'
+        ? de ? 'Ich genehmige eine Installation genau dieses Pakets auf jedem aufgeführten Gerät.' : 'I approve one installation of this exact package on each listed device.'
+        : de ? /^Ich habe genau dieses Paket und seine nativen\/Herausgebernachweise geprüft/ : /^I reviewed this exact package and its native\/publisher evidence/;
+    await expect(confirmation.getByRole('checkbox', { name: acknowledgement })).not.toBeChecked();
+    const included = confirmation.locator('ol > li');
+    await expect(included).toHaveCount(2);
+    for (const [index, request] of fixture.reviewedPreview.response.items.entries()) {
+      await expect(included.nth(index).locator('strong')).toHaveText(fixture.devices[index].name);
+      await expect(included.nth(index).locator('strong')).toBeVisible();
+      await expect(included.nth(index)).toContainText(request.deviceId);
+      await expect(included.nth(index)).toContainText(request.bindingDigest);
+      await expect(included.nth(index)).toContainText(request.transferId);
+      if (stage === 'approve') await expect(included.nth(index)).toContainText(request.readinessDigest);
+      await expect(included.nth(index)).toContainText(new Date(request.expiresAt * 1000).toISOString());
+    }
+    await expect(included.filter({ hasText: fixture.devices[2].id })).toHaveCount(0);
+    await expect(confirmation).toContainText(de ? 'Von dieser Bestätigung ausgeschlossen' : 'Excluded from this confirmation');
+    await expect(confirmation).toContainText(fixture.devices[2].id);
+    if (stage === 'review') {
+      await expect(confirmation.locator('p').filter({ hasText: 'LocalSystem' })).toBeVisible();
+      await expect(confirmation.locator('p').filter({ hasText: de ? 'Synchrone Aktionen müssen geprüft werden.' : 'Synchronous actions must be reviewed.' })).toBeVisible();
+    }
+    expect(state.previews).toEqual([{ method: 'POST', path: fixture.reviewedPreview.path, body: fixture.reviewedPreview.body }]);
+    focus = confirmation;
+    // References stay collapsed. End alignment keeps the unchecked consent,
+    // exact target list, exclusion and disabled control in the mobile shot.
+    block = 'end';
+  } else {
+    const counts = saved.locator('.managed-msi-counts');
+    await expect(counts).toContainText(de ? 'Ausstehend: 1' : 'Pending: 1');
+    await expect(counts).toContainText(de ? 'Erfasste Ergebnisse: 1' : 'Recorded results: 1');
+    await expect(counts).toContainText(de ? 'Prüfen: 2' : 'Attention: 2');
+    await expect(saved).toContainText(de ? '3010: Neustart erforderlich' : '3010: Restart required');
+  }
+  await page.evaluate(() => document.fonts.ready);
+  await focus.evaluate((element, position) => element.scrollIntoView({ block: position, behavior: 'instant' }), block);
+  expect(await saved.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await shot(page, `synthetic-windows-saved-msi-${scene}-${width}-${locale}`);
+  expect(state.writes).toEqual([]);
+  const previewReads = state.previews.length;
+  const listReads = fixture.reads.worklists;
+  // Reload discards the unconfirmed preview. Reopening restores the same saved
+  // occurrence and frozen cohort, without POSTs or browser-stored authority.
+  await page.reload();
+  const reopened = await openSaved();
+  expect(fixture.reads.worklists).toBeGreaterThan(listReads);
+  await expect(reopened).toContainText(worklist.name);
+  await expect(reopened.locator('.managed-msi-batch-confirmation')).toHaveCount(0);
+  await expect(reopened.locator('article > details').first()).not.toHaveAttribute('open');
+  await expect(reopened.getByRole('row').filter({ hasText: fixture.devices[2].name })).toContainText(labels.unavailable);
+  expect(state.previews.length).toBe(previewReads);
+  expect(state.writes).toEqual([]);
+  expect(Object.values(fixture.reads.devices)).toEqual([0, 0, 0]);
+  return { targetCount: 3, availableTargetCount: 2, historicalOutcomeIsNotCurrent: true,
+    confirmationUnchecked: !!stage, reopenedWithGETOnly: true, previewReads, actualMutationRequests: 0 };
+}
+
+/** Extra saved-worklist captures; the original 16 fleet captures stay unchanged. */
+export async function captureWindowsSavedMSIFixtures({ browser, expect, output }) {
+  assert(browser && typeof browser.newContext === 'function' && typeof expect === 'function');
+  assert(typeof output === 'string' && output.length > 0);
+  const compiled = await compileWindowsFleetMSIAssets(), captures = [];
+  assert(compiled.sourceInputs.some(input => input.file === 'web/src/windows-managed-msi-worklists.tsx'), 'Saved captures must use the actual production worklist UI');
+  await mkdir(output, { recursive: true });
+  for (const scene of windowsSavedMSIScenes) for (const testCase of windowsFleetMSICases) {
+    const { locale, width, height } = testCase;
+    const fixture = await createWindowsSavedMSIFixture(scene);
+    const state = { blocked: [], external: [], writes: [], previews: [], pageErrors: [] };
+    const context = await browser.newContext({ viewport: { width, height }, locale: locale === 'de' ? 'de-DE' : 'en-US', deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block' });
+    try {
+      await context.route('**/*', createWindowsFleetMSIRoute({ fixture, compiled, state }));
+      await context.addInitScript(value => localStorage.setItem('tracebolt.locale', value), locale);
+      const page = await context.newPage();
+      page.on('pageerror', error => state.pageErrors.push(error.message));
+      const pendingCaptures = [];
+      const result = await exerciseWindowsSavedMSI({ page, expect, fixture, scene, state, ...testCase, shot: async (target, name) => {
+        const file = `${name}.png`;
+        await target.screenshot({ path: path.join(output, file), animations: 'disabled', fullPage: false });
+        pendingCaptures.push({ file, scene, ...testCase, synthetic: true, sourceDigest: compiled.sourceDigest, disclosure: windowsSavedMSIDisclosure });
+      } });
+      expect(state.blocked).toEqual([]);
+      expect(state.external).toEqual([]);
+      expect(state.writes).toEqual([]);
+      expect(state.pageErrors).toEqual([]);
+      expect(state.previews.length).toBe(savedStage(scene) ? 1 : 0);
+      captures.push(...pendingCaptures.map(capture => ({ ...capture, assertions: result })));
+    } finally {
+      await context.close();
+    }
+  }
+  const manifest = { browserExecuted: true, nativeAcceptance: false, capturedAt: new Date().toISOString(), sourceDigest: compiled.sourceDigest,
+    sourceInputs: compiled.sourceInputs, disclosure: windowsSavedMSIDisclosure, captures };
+  await writeFile(path.join(output, 'windows-saved-msi-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  return manifest;
 }
 
 /** The caller owns an already-authorized browser. This helper never launches one. */

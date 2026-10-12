@@ -521,6 +521,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = s.loadWindowsUpdateJobRecords(ctx, t); err != nil {
 		return nil, err
 	}
+	if err = s.loadWindowsMSIWorklists(ctx, t); err != nil {
+		return nil, err
+	}
 	if err = s.loadWindowsManagedMSIRecords(ctx, t); err != nil {
 		return nil, err
 	}
@@ -758,6 +761,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 	if err = s.loadWindowsUpdateJobRecords(ctx, t); err != nil {
 		return err
 	}
+	if err = s.loadWindowsMSIWorklists(ctx, t); err != nil {
+		return err
+	}
 	if err = s.loadWindowsManagedMSIRecords(ctx, t); err != nil {
 		return err
 	}
@@ -853,6 +859,14 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	}
 	if fleetMSI {
 		expected["enrollment_windows_msi_fleet_artifact"] = inventoryledger.SchemaObject{Type: "table", Name: "enrollment_windows_msi_fleet_artifact", SQL: windowsManagedMSIFleetArtifactSchema}
+	}
+	worklists, worklistErr := windowsMSIWorklistsPresent(ctx, conn)
+	if worklistErr != nil || worklists && !fleetMSI {
+		return ErrStorage
+	}
+	if worklists {
+		obj := windowsMSIWorklistsObject()
+		expected[obj.Name] = obj
 	}
 	retainedEnabled, retainedErr := windowsContextRetentionPresent(ctx, conn)
 	if retainedErr != nil {

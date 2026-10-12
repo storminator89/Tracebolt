@@ -22,9 +22,10 @@ const windowsManagedMSIMetaSchema = `CREATE TABLE enrollment_windows_managed_msi
 const windowsManagedMSIRecordsSchema = `CREATE TABLE enrollment_windows_managed_msi_records(invitation_id TEXT PRIMARY KEY NOT NULL REFERENCES enrollment_credentials(invitation_id),body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=262144),setup_fence TEXT NOT NULL CHECK(length(setup_fence)=71),rejected_clock_floor INTEGER NOT NULL CHECK(rejected_clock_floor>=0 AND rejected_clock_floor<=253402300799)) STRICT`
 
 type windowsManagedMSISetupMarker struct {
-	Version       string                  `json:"version"`
-	Grant         windowsmanagedmsi.Grant `json:"grant"`
-	InitializedAt time.Time               `json:"initializedAt"`
+	WorklistsVersion string                  `json:"worklistsVersion,omitempty"`
+	Version          string                  `json:"version"`
+	Grant            windowsmanagedmsi.Grant `json:"grant"`
+	InitializedAt    time.Time               `json:"initializedAt"`
 }
 
 func (m windowsManagedMSISetupMarker) digest() string {
@@ -37,7 +38,7 @@ func validWindowsManagedMSISetupMarker(s enrollmentstate.Snapshot, m *windowsMan
 		return true
 	}
 	c, b := m.Grant, m.Grant.Binding
-	return s.Binding.Profile == "tls" && s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && s.Platform == "windows" && s.Activation.At != 0 && (m.Version == "tracebolt.windows-managed-msi-setup.v1" || m.Version == windowsManagedMSIFleetSetupVersion) && c.Validate() == nil && c.DeliveryEnabled && c.DeliveryAcknowledged && c.ServiceRiskAcknowledged && b.ManagerID == s.Binding.InstanceID && b.DeviceID == s.Approval.DeviceID && b.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash && validStoreTime(m.InitializedAt) && m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() < recordAuthorityExpiry(s, authorityExpiry...) && m.InitializedAt.Unix() < c.ExpiresAt && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
+	return (m.WorklistsVersion == "" || m.WorklistsVersion == windowsmanagedmsi.WorklistVersion && m.Version == windowsManagedMSIFleetSetupVersion && c.Version == windowsmanagedmsi.ReusableGrantVersion) && s.Binding.Profile == "tls" && s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && s.Platform == "windows" && s.Activation.At != 0 && (m.Version == "tracebolt.windows-managed-msi-setup.v1" || m.Version == windowsManagedMSIFleetSetupVersion) && c.Validate() == nil && c.DeliveryEnabled && c.DeliveryAcknowledged && c.ServiceRiskAcknowledged && b.ManagerID == s.Binding.InstanceID && b.DeviceID == s.Approval.DeviceID && b.IncarnationDigest == "sha256:"+s.Issuance.CertificateHash && validStoreTime(m.InitializedAt) && m.InitializedAt.Unix() >= s.Activation.At && m.InitializedAt.Unix() < recordAuthorityExpiry(s, authorityExpiry...) && m.InitializedAt.Unix() < c.ExpiresAt && (s.Termination.At == 0 || m.InitializedAt.Unix() <= s.Termination.At)
 }
 
 func windowsManagedMSISchemaObjects() []inventoryledger.SchemaObject {
@@ -177,6 +178,17 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 			version = windowsManagedMSIFleetSetupVersion
 		}
 		marker := &windowsManagedMSISetupMarker{Version: version, Grant: consent, InitializedAt: now}
+		if fleet && consent.Version == windowsmanagedmsi.ReusableGrantVersion {
+			marker.WorklistsVersion = windowsmanagedmsi.WorklistVersion
+			if additional {
+				for _, c := range t.credentials {
+					if old := c.WindowsManagedMSISetup; old != nil {
+						marker.WorklistsVersion = old.WorklistsVersion
+						break
+					}
+				}
+			}
+		}
 		if !validWindowsManagedMSISetupMarker(snap, marker, t.currentCredentialNotAfter(snap)) {
 			return windowsmanagedmsi.ErrAuthority
 		}
@@ -206,6 +218,16 @@ func (s *Store) setupWindowsManagedMSICreateOnly(ctx context.Context, key, execu
 			}
 		}
 		if fleet && !additional {
+			if marker.WorklistsVersion != "" {
+				if _, err = t.conn.ExecContext(ctx, windowsMSIWorklistsSchema); err != nil {
+					return ErrStorage
+				}
+				j := windowsmanagedmsi.WorklistJournal{Version: windowsmanagedmsi.WorklistVersion, ManagerID: consent.Binding.ManagerID, KeyID: consent.Binding.KeyID, Revision: 1, ClockFloor: now.Unix(), Worklists: []windowsmanagedmsi.Worklist{}}
+				body, _ := json.Marshal(j)
+				if _, err = t.conn.ExecContext(ctx, `INSERT INTO enrollment_windows_msi_worklists VALUES(1,?)`, body); err != nil {
+					return ErrStorage
+				}
+			}
 			if _, err = t.conn.ExecContext(ctx, windowsManagedMSIFleetArtifactSchema); err != nil {
 				return ErrStorage
 			}
@@ -432,6 +454,7 @@ func (s *Store) WindowsManagedMSITransaction(ctx context.Context, binding window
 		return out, now, windowsmanagedmsi.ErrInvalid
 	}
 	var operationErr error
+	dispatch, batched := windowsmanagedmsi.WorklistDispatchFrom(ctx)
 	writeStarted := false
 	err := s.transact(ctx, func(t *transaction) error {
 		if err := s.checkWindowsManagedMSIKey(ctx, t, key); err != nil {
@@ -460,12 +483,32 @@ func (s *Store) WindowsManagedMSITransaction(ctx context.Context, binding window
 		if err != nil {
 			return err
 		}
+		var journal windowsmanagedmsi.WorklistJournal
+		batchAdmitted := false
+		if batched {
+			journal, err = readWindowsMSIWorklists(ctx, t.conn)
+			if err != nil {
+				return err
+			}
+			if initial.Unix() < journal.ClockFloor {
+				operationErr = windowsmanagedmsi.ErrExpired
+			} else {
+				_, _, _, operationErr = journal.Dispatch(dispatch, binding, initial.Unix())
+				batchAdmitted = operationErr == nil
+			}
+		}
 		floor := max(original.ClockFloor, rejected)
+		if batched {
+			floor = max(floor, journal.ClockFloor)
+		}
 		current, authorityErr := s.windowsManagedMSICurrent(t, snap.InvitationID, binding, original.Grant, initial)
 		if initial.Before(now) || initial.Unix() < floor {
 			operationErr = windowsmanagedmsi.ErrExpired
-		} else {
+		} else if operationErr == nil {
 			operationErr = authorityErr
+		}
+		if errors.Is(authorityErr, ErrStorage) {
+			return authorityErr
 		}
 		if errors.Is(operationErr, ErrStorage) {
 			return operationErr
@@ -526,6 +569,31 @@ func (s *Store) WindowsManagedMSITransaction(ctx context.Context, binding window
 							operationErr = windowsManagedMSIFinalDeadline(original, r, final, last.Unix())
 						}
 					}
+				}
+			}
+			if batched {
+				// Rejection still retains the observed trusted time. An expired
+				// batch cannot become dispatchable again after clock rollback.
+				if batchAdmitted {
+					if _, _, _, err := journal.Dispatch(dispatch, binding, fresh.Unix()); err != nil {
+						operationErr = err
+						batchAdmitted = false
+					}
+				}
+				if batchAdmitted && fresh.Unix() == observed {
+					if err := journal.FinishDispatch(dispatch, original, r, fresh.Unix(), operationErr != nil); err != nil {
+						return err
+					}
+				} else if observed > journal.ClockFloor {
+					if journal.Revision >= windowsmanagedmsi.MaxWorklistRevision {
+						return windowsmanagedmsi.ErrConsumed
+					}
+					journal.Revision++
+				}
+				journal.ClockFloor = max(journal.ClockFloor, observed)
+				writeStarted = true
+				if err := writeWindowsMSIWorklists(ctx, t, journal); err != nil {
+					return err
 				}
 			}
 			if operationErr != nil {

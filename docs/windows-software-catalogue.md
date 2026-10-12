@@ -56,7 +56,7 @@ and permissions are not promoted to reusable jobs.
 
 No review, file, acknowledgement or permission is stored in browser persistence.
 Reopening reads the existing server artifact and recent reviews. To reconstruct a
-lost browser worklist, manually select currently configured devices, freeze the
+lost legacy/manual browser worklist, manually select currently configured devices, freeze the
 selection and open each device to read its existing saved state. The manager's
 transfer/job evidence is authoritative; no delivery, approval or installation is
 replayed. Former browser checkbox choices and group revision snapshots are not
@@ -84,3 +84,7 @@ bytes, each in EN/DE at 1440px and 390px. Existing fleet/reusable captures remai
 No new JSON fixture asset is imported, so Docker COPY/ignore fixtures are unchanged.
 Native MSI, protected NTFS custody, SCM and exact-package acceptance remain the
 separately authorized [native gate](windows-managed-msi-native-acceptance.md).
+
+Configured reusable-v3 [saved worklists](windows-saved-msi-worklists.md) reopen
+the exact target/occurrence references using reads only. Recent-package selection
+never resumes a saved batch or replaces its frozen payload occurrence.

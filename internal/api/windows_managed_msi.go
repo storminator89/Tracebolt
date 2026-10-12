@@ -131,11 +131,12 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		e = manager.CompleteUpload(r.Context(), actor)
 	case "deliver":
 		var in struct {
-			ArtifactRetiredCount string `json:"artifactRetiredCount,omitempty"`
-			ArtifactID           string `json:"artifactId,omitempty"`
-			BindingDigest        string `json:"bindingDigest,omitempty"`
-			TransferID           string `json:"transferId"`
-			Acknowledged         bool   `json:"acknowledged"`
+			Batch                *msi.WorklistDispatchReference `json:"batch,omitempty"`
+			ArtifactRetiredCount string                         `json:"artifactRetiredCount,omitempty"`
+			ArtifactID           string                         `json:"artifactId,omitempty"`
+			BindingDigest        string                         `json:"bindingDigest,omitempty"`
+			TransferID           string                         `json:"transferId"`
+			Acknowledged         bool                           `json:"acknowledged"`
 		}
 		fields := []string{"transferId", "acknowledged"}
 		if manager.Fleet() {
@@ -144,7 +145,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		if manager.Reusable() {
 			fields = append(fields, "artifactRetiredCount")
 		}
-		if !readObject(w, r, 768, fields, &in) {
+		if !readManagedMSIBatchObject(w, r, manager.Reusable(), fields, &in) {
 			return
 		}
 		if manager.Reusable() {
@@ -155,22 +156,28 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 			}
 			r = r.WithContext(ctx)
 		}
+		ctx, err := h.managedMSIBatchContext(r, in.Batch, msi.WorklistRequest{DeviceID: device, Operation: op, ArtifactID: in.ArtifactID, ArtifactRetiredCount: in.ArtifactRetiredCount, BindingDigest: in.BindingDigest, TransferID: in.TransferID}, msi.WorklistAcknowledgements{Acknowledged: in.Acknowledged})
+		if err != nil {
+			managedMSIError(w, err)
+			return
+		}
 		if manager.Fleet() {
-			e = manager.DeliverArtifact(r.Context(), actor, in.TransferID, in.Acknowledged, in.ArtifactID, in.BindingDigest)
+			e = manager.DeliverArtifact(ctx, actor, in.TransferID, in.Acknowledged, in.ArtifactID, in.BindingDigest)
 		} else {
-			e = manager.Deliver(r.Context(), actor, in.TransferID, in.Acknowledged)
+			e = manager.Deliver(ctx, actor, in.TransferID, in.Acknowledged)
 		}
 	case "review", "review-coordinated":
 		var in struct {
-			ArtifactRetiredCount      string `json:"artifactRetiredCount,omitempty"`
-			TransferID                string `json:"transferId,omitempty"`
-			JobSequence               string `json:"jobSequence,omitempty"`
-			ArtifactID                string `json:"artifactId,omitempty"`
-			BindingDigest             string `json:"bindingDigest,omitempty"`
-			PackageReviewAccepted     bool   `json:"packageReviewAccepted"`
-			SynchronousReviewAccepted bool   `json:"synchronousReviewAccepted,omitempty"`
-			TermsAccepted             bool   `json:"termsAccepted"`
-			MaintenanceAcknowledged   bool   `json:"maintenanceAcknowledged"`
+			Batch                     *msi.WorklistDispatchReference `json:"batch,omitempty"`
+			ArtifactRetiredCount      string                         `json:"artifactRetiredCount,omitempty"`
+			TransferID                string                         `json:"transferId,omitempty"`
+			JobSequence               string                         `json:"jobSequence,omitempty"`
+			ArtifactID                string                         `json:"artifactId,omitempty"`
+			BindingDigest             string                         `json:"bindingDigest,omitempty"`
+			PackageReviewAccepted     bool                           `json:"packageReviewAccepted"`
+			SynchronousReviewAccepted bool                           `json:"synchronousReviewAccepted,omitempty"`
+			TermsAccepted             bool                           `json:"termsAccepted"`
+			MaintenanceAcknowledged   bool                           `json:"maintenanceAcknowledged"`
 		}
 		fields := []string{"packageReviewAccepted", "termsAccepted", "maintenanceAcknowledged"}
 		if manager.Fleet() {
@@ -182,7 +189,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		if manager.Reusable() {
 			fields = append(fields, "artifactRetiredCount", "transferId", "jobSequence")
 		}
-		if !readObject(w, r, 768, fields, &in) {
+		if !readManagedMSIBatchObject(w, r, manager.Reusable(), fields, &in) {
 			return
 		}
 		if manager.Reusable() {
@@ -199,7 +206,12 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 				return
 			}
 		}
-		e = manager.Review(r.Context(), actor, in.PackageReviewAccepted, in.TermsAccepted, in.MaintenanceAcknowledged, in.SynchronousReviewAccepted)
+		ctx, err := h.managedMSIBatchContext(r, in.Batch, msi.WorklistRequest{DeviceID: device, Operation: op, ArtifactID: in.ArtifactID, ArtifactRetiredCount: in.ArtifactRetiredCount, BindingDigest: in.BindingDigest, TransferID: in.TransferID, JobSequence: in.JobSequence}, msi.WorklistAcknowledgements{PackageReviewAccepted: in.PackageReviewAccepted, TermsAccepted: in.TermsAccepted, MaintenanceAcknowledged: in.MaintenanceAcknowledged, SynchronousReviewAccepted: in.SynchronousReviewAccepted})
+		if err != nil {
+			managedMSIError(w, err)
+			return
+		}
+		e = manager.Review(ctx, actor, in.PackageReviewAccepted, in.TermsAccepted, in.MaintenanceAcknowledged, in.SynchronousReviewAccepted)
 	case "retire":
 		var in struct {
 			ArtifactRetiredCount string `json:"artifactRetiredCount,omitempty"`
@@ -232,13 +244,14 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		e = manager.Retire(r.Context(), actor, in.ResultDigest, in.Acknowledged)
 	case "approve":
 		var in struct {
-			ArtifactRetiredCount string `json:"artifactRetiredCount,omitempty"`
-			TransferID           string `json:"transferId,omitempty"`
-			JobSequence          string `json:"jobSequence,omitempty"`
-			ArtifactID           string `json:"artifactId,omitempty"`
-			BindingDigest        string `json:"bindingDigest,omitempty"`
-			ReadinessDigest      string `json:"readinessDigest"`
-			Acknowledged         bool   `json:"acknowledged"`
+			Batch                *msi.WorklistDispatchReference `json:"batch,omitempty"`
+			ArtifactRetiredCount string                         `json:"artifactRetiredCount,omitempty"`
+			TransferID           string                         `json:"transferId,omitempty"`
+			JobSequence          string                         `json:"jobSequence,omitempty"`
+			ArtifactID           string                         `json:"artifactId,omitempty"`
+			BindingDigest        string                         `json:"bindingDigest,omitempty"`
+			ReadinessDigest      string                         `json:"readinessDigest"`
+			Acknowledged         bool                           `json:"acknowledged"`
 		}
 		fields := []string{"readinessDigest", "acknowledged"}
 		if manager.Fleet() {
@@ -247,7 +260,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 		if manager.Reusable() {
 			fields = append(fields, "artifactRetiredCount", "transferId", "jobSequence")
 		}
-		if !readObject(w, r, 768, fields, &in) {
+		if !readManagedMSIBatchObject(w, r, manager.Reusable(), fields, &in) {
 			return
 		}
 		if manager.Reusable() {
@@ -264,7 +277,12 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 				return
 			}
 		}
-		e = manager.Approve(r.Context(), actor, in.ReadinessDigest, in.Acknowledged)
+		ctx, err := h.managedMSIBatchContext(r, in.Batch, msi.WorklistRequest{DeviceID: device, Operation: op, ArtifactID: in.ArtifactID, ArtifactRetiredCount: in.ArtifactRetiredCount, BindingDigest: in.BindingDigest, TransferID: in.TransferID, JobSequence: in.JobSequence, ReadinessDigest: in.ReadinessDigest}, msi.WorklistAcknowledgements{Acknowledged: in.Acknowledged})
+		if err != nil {
+			managedMSIError(w, err)
+			return
+		}
+		e = manager.Approve(ctx, actor, in.ReadinessDigest, in.Acknowledged)
 	}
 	if e != nil {
 		managedMSIError(w, e)

@@ -30,6 +30,7 @@ var Checks = map[string][]string{
 
 func init() {
 	Stages = append(Stages, HiddenInputFailureStages...)
+	Stages = append(Stages, setupgate.InitialChooserFailureStages...)
 	Stages = append(Stages, setupgate.RemovalFailureStages...)
 	Stages = append(Stages, setupgate.ChooserClickFailureStages...)
 	Stages = append(Stages, setupgate.RetentionFailureStages...)
@@ -152,7 +153,7 @@ func (r Report) Validate() error {
 	if setupgate.Contains(setupgate.RetentionFailureStages, r.Stage) && (r.Status != "failed" || !NormalCase(r.Case)) {
 		return ErrGuard
 	}
-	if setupgate.Contains(setupgate.ChooserClickFailureStages, r.Stage) && r.Status != "failed" {
+	if (setupgate.Contains(setupgate.ChooserClickFailureStages, r.Stage) || setupgate.Contains(setupgate.InitialChooserFailureStages, r.Stage)) && r.Status != "failed" {
 		return ErrGuard
 	}
 	if setupgate.Contains(setupgate.RemovalFailureStages, r.Stage) || !HiddenInputFailureReason(r.Reason) && !Contains([]string{"none", "authorization", "desktop_unavailable", "operation_failed", "deadline", "inspection_required"}, r.Reason) {

@@ -125,3 +125,20 @@ protected inert spool, store, API and UI checks are reported with exact source
 artifacts. Source tests/cross-builds do not establish real MSI/NTFS/SCM acceptance.
 Use the exact-source CI Checks and attached capture artifacts for hosted viewport
 evidence; a source-fixture `--check` alone captures no browser pixels.
+
+
+## Saved selection and deliberate batches
+
+Configured reusable-v3 registries can expose the manager-owned
+[saved worklist contract](windows-saved-msi-worklists.md).
+It retains the exact artifact occurrence, target bindings, group snapshot and
+compact stage audit. One unchecked stage confirmation enumerates separate exact
+per-device requests; it does not authorize a later stage, scheduler, canary release,
+new target or native retry. Reopening performs GETs only. Stop closes unsent
+requests with the latest revision and never claims to cancel already issued work.
+
+Historical outcome/result rendering does not restore current device authority.
+Per-device result-bound retirement and shared payload retirement remain explicit,
+unchanged operations. Neither save, stop, completion nor archive clears unresolved
+assignments or permits another payload. This manager/UI addition creates no new
+endpoint grant, privilege, setup service or native execution operation.
