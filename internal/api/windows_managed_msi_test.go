@@ -8,7 +8,7 @@ import (
 
 func TestManagedMSIOperatorRoutesClosed(t *testing.T) {
 	device := "agent_" + strings.Repeat("1", 32)
-	for _, suffix := range []string{"", "/reserve", "/upload", "/complete", "/deliver", "/review", "/approve"} {
+	for _, suffix := range []string{"", "/reserve", "/upload", "/complete", "/deliver", "/review", "/approve", "/review-coordinated", "/retire"} {
 		r := httptest.NewRequest("POST", "https://manager.test/api/devices/"+device+"/windows-managed-msi"+suffix, nil)
 		got, op, ok := windowsManagedMSIRoute(r)
 		if !ok || got != device || op != strings.TrimPrefix(suffix, "/") {

@@ -133,6 +133,7 @@ for a separately permitted existing browser. Source-only checking starts no brow
 or server and captures no screenshots. Browser execution was not attempted because
 this environment's browser/server launch is denied. Ordinary Validate CI now
 invokes the hosted-only driver and requires 16 exact-source
-EN/DE desktop/mobile PNGs. That hosted job has not yet run for this source. Actual
-rendered viewport QA and the separately approved [Windows native gate](windows-managed-msi-native-acceptance.md)
+EN/DE desktop/mobile PNGs. Use the exact-source commit’s Checks and its retained
+artifact manifest/screenshots to establish hosted browser evidence; a different
+source run is not evidence for this candidate. The separately approved [Windows native gate](windows-managed-msi-native-acceptance.md)
 remain outstanding. No source fixture is host or exact-package native acceptance.

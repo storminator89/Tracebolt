@@ -624,6 +624,7 @@ jobs:
           node --test tests/e2e-review/windows-managed-msi-fixtures.test.mjs
           node --test tests/e2e-review/windows-mutation-coexistence-fixtures.test.mjs
           node web/scripts/capture-windows-fleet-msi-fixtures.mjs --check
+          node web/scripts/capture-windows-reusable-msi-fixtures.mjs --check
       - name: Production build
         run: npm run build
 
@@ -995,6 +996,8 @@ jobs:
             artifacts/review/windows-managed-msi-manifest.json
             artifacts/review/windows-fleet-msi-results.json
             artifacts/review/windows-fleet-msi-manifest.json
+            artifacts/review/windows-reusable-msi-results.json
+            artifacts/review/windows-reusable-msi-manifest.json
             artifacts/review/windows-mutation-coexistence-results.json
             artifacts/review/windows-mutation-coexistence-manifest.json
             artifacts/review/enrollment-browser-results.json

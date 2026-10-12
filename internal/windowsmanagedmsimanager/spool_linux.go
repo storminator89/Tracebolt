@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding"
 	"encoding/hex"
+	"fmt"
 	"golang.org/x/sys/unix"
 	"io"
 	msi "localrmm/internal/windowsmanagedmsi"
@@ -58,7 +59,7 @@ type uploadCache struct {
 	hashState []byte
 }
 
-func (s *Spool) appendChunk(ctx context.Context, a msi.Artifact, data []byte, final func() error) (string, error) {
+func (s *Spool) appendChunk(ctx context.Context, a msi.Artifact, data []byte, final func() error, custody ...func(string) error) (string, error) {
 	path := filepath.Join(s.directory, artifactName)
 	fds, parents, e := protectedParent(path)
 	if e != nil {
@@ -66,9 +67,11 @@ func (s *Spool) appendChunk(ctx context.Context, a msi.Artifact, data []byte, fi
 	}
 	defer closeParents(fds)
 	dir := fds[len(fds)-1]
+	created := false
 	fd, e := unix.Openat(dir, artifactName, unix.O_RDWR|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if e == unix.ENOENT && a.Offset == 0 {
 		fd, e = unix.Openat(dir, artifactName, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0600)
+		created = e == nil
 		if e == nil && unix.Fsync(dir) != nil {
 			unix.Close(fd)
 			return "", ErrSpool
@@ -82,6 +85,19 @@ func (s *Spool) appendChunk(ctx context.Context, a msi.Artifact, data []byte, fi
 	var before, after, named unix.Stat_t
 	if unix.Fstat(fd, &before) != nil || before.Size < a.Offset || before.Size > a.Offset+int64(len(data)) || before.Size > a.Package.Size || !validArtifact(before, before.Size) {
 		return "", ErrSpool
+	}
+	if a.PublisherStatus != "" {
+		identity := spoolCustodyDigest(before)
+		if a.CustodyDigest == "" {
+			if !created || before.Size != 0 || len(custody) != 1 {
+				return "", ErrSpool
+			}
+			if e := custody[0](identity); e != nil {
+				return "", e
+			}
+		} else if a.CustodyDigest != identity {
+			return "", ErrSpool
+		}
 	}
 	h := sha256.New()
 	if cached := s.uploadCache; cached != nil && cached.offset == a.Offset && cached.prefix == a.PrefixDigest && sameArtifact(cached.stat, before) {
@@ -133,7 +149,7 @@ func (s *Spool) appendChunk(ctx context.Context, a msi.Artifact, data []byte, fi
 func validArtifact(st unix.Stat_t, size int64) bool {
 	return st.Mode&unix.S_IFMT == unix.S_IFREG && st.Mode&07777 == 0600 && st.Uid == uint32(os.Geteuid()) && st.Gid == uint32(os.Getegid()) && st.Nlink == 1 && st.Size == size
 }
-func (s *Spool) readChunk(ctx context.Context, sel windowssoftwarejob.Selection, index uint32) ([]byte, error) {
+func (s *Spool) readChunk(ctx context.Context, sel windowssoftwarejob.Selection, index uint32, custody ...string) ([]byte, error) {
 	path := filepath.Join(s.directory, artifactName)
 	fds, parents, e := protectedParent(path)
 	if e != nil {
@@ -147,7 +163,7 @@ func (s *Spool) readChunk(ctx context.Context, sel windowssoftwarejob.Selection,
 	f := os.NewFile(uintptr(fd), "managed-msi-artifact")
 	defer f.Close()
 	var before, after, named unix.Stat_t
-	if unix.Fstat(fd, &before) != nil || !validArtifact(before, sel.Size) {
+	if unix.Fstat(fd, &before) != nil || !validArtifact(before, sel.Size) || len(custody) == 1 && custody[0] != spoolCustodyDigest(before) {
 		return nil, ErrSpool
 	}
 	// On first open (including restart), hash the exact complete file once and
@@ -214,4 +230,48 @@ func (s *Spool) validateRecord(hasIntent, complete bool, size int64) error {
 		return ErrSpool
 	}
 	return nil
+}
+
+// Hash and pin the sole app-created 0600 spool inode; unlink only relative to
+// its protected pinned parent. No external pathname or recursive delete exists.
+func (s *Spool) retire(ctx context.Context, a msi.Artifact, final func() error) error {
+	if _, e := s.readChunk(ctx, a.Package, 0); e != nil {
+		return e
+	}
+	path := filepath.Join(s.directory, artifactName)
+	fds, parents, e := protectedParent(path)
+	if e != nil {
+		return ErrSpool
+	}
+	defer closeParents(fds)
+	dir := fds[len(fds)-1]
+	fd, e := unix.Openat(dir, artifactName, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if e != nil {
+		return ErrSpool
+	}
+	defer unix.Close(fd)
+	var st, named unix.Stat_t
+	if unix.Fstat(fd, &st) != nil || s.cache == nil || !sameArtifact(st, s.cache.stat) || !validArtifact(st, a.Package.Size) || a.CustodyDigest != spoolCustodyDigest(st) {
+		return ErrSpool
+	}
+	if unix.Fstatat(dir, artifactName, &named, unix.AT_SYMLINK_NOFOLLOW) != nil || !sameArtifact(st, named) || !parentsUnchanged(path, fds, parents) {
+		return ErrSpool
+	}
+	if e = final(); e != nil {
+		return e
+	}
+	if e = ctx.Err(); e != nil {
+		return e
+	}
+	if unix.Unlinkat(dir, artifactName, 0) != nil || unix.Fsync(dir) != nil {
+		return ErrSpool
+	}
+	if unix.Fstatat(dir, artifactName, &named, unix.AT_SYMLINK_NOFOLLOW) != unix.ENOENT || !parentsUnchanged(path, fds, parents) {
+		return ErrSpool
+	}
+	return final()
+}
+
+func spoolCustodyDigest(st unix.Stat_t) string {
+	return byteDigest([]byte(fmt.Sprintf("Tracebolt manager MSI custody v3\x00%d:%d:%d:%d:%d", st.Dev, st.Ino, st.Uid, st.Gid, st.Mode)))
 }

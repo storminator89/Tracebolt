@@ -448,3 +448,50 @@ func TestManagedFinalizationFailureReportIsDurableAndExact(t *testing.T) {
 		t.Fatal("terminal bytes refreshed", e)
 	}
 }
+
+func TestManagedReusableConsentAndSignatureDomainsStaySeparate(t *testing.T) {
+	f := fixture(t)
+	legacy, _ := json.Marshal(f.g)
+	if bytes.Contains(legacy, []byte("reusable")) {
+		t.Fatal("legacy grant bytes expanded")
+	}
+	g := f.g
+	g.Version = ReusableGrantVersion
+	g.MutationPlanDigest = Digest([]byte("plan"))
+	g.PeerBindingDigest = Digest([]byte("peer"))
+	if g.Validate() == nil {
+		t.Fatal("reusable without explicit consent")
+	}
+	g.ReusableAcknowledged = true
+	if g.Validate() != nil {
+		t.Fatal("fresh reusable grant")
+	}
+	p := f.p
+	p.Version = ReusableVersion
+	p.JobSequence = 1
+	p.PublisherStatus = "verified"
+	p.PublisherEvidenceDigest = Digest([]byte("evidence"))
+	if _, e := SignPermit(p, f.manager); e == nil {
+		t.Fatal("invented publisher verification")
+	}
+	p.PublisherStatus = "unverified"
+	raw, e := SignPermit(p, f.manager)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var signed signedPermit
+	if json.Unmarshal(raw, &signed) != nil {
+		t.Fatal("decode")
+	}
+	signed.Permit.Version = Version
+	signed.Permit.JobSequence = 0
+	signed.Permit.PublisherStatus = ""
+	signed.Permit.PublisherEvidenceDigest = ""
+	downgraded, _ := json.Marshal(signed)
+	if _, e := VerifyPermit(downgraded, f.manager.Public().(ed25519.PublicKey)); e == nil {
+		t.Fatal("cross-domain signature")
+	}
+	if e = f.x.Accept(context.Background(), raw); e == nil {
+		t.Fatal("v3 permit on old endpoint")
+	}
+}

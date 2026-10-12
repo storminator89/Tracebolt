@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"localrmm/internal/enrollmentcrypto"
 	msi "localrmm/internal/windowsmanagedmsi"
+	"sort"
 	"sync"
 	"time"
 )
@@ -30,7 +32,12 @@ func newArtifactManager(ctx context.Context, store msi.ArtifactStore, key ed2551
 		return nil, e
 	}
 	a := r.Artifact
-	if a == nil {
+	if r.RetirementStarted && !r.Retired {
+		return nil, msi.ErrUncertain
+	}
+	if r.Retired {
+		e = spool.validateRecord(false, false, 0)
+	} else if a == nil {
 		e = spool.validateRecord(false, false, 0)
 	} else {
 		e = spool.validateRecord(true, a.CompletedAt != 0, a.Package.Size)
@@ -78,16 +85,32 @@ func (m *ArtifactManager) read(ctx context.Context) (msi.ArtifactRecord, error) 
 }
 func (m *ArtifactManager) ReserveUpload(ctx context.Context, actor string, selection msi.Selection, native string) error {
 
+	return m.reserveUpload(ctx, actor, selection, native, "", "")
+}
+func (m *ArtifactManager) ReserveReusableUpload(ctx context.Context, actor string, selection msi.Selection, native, status, evidence string) error {
+	if !msi.ValidPublisherEvidence(status, evidence) {
+		return msi.ErrInvalid
+	}
+	return m.reserveUpload(ctx, actor, selection, native, status, evidence)
+}
+func (m *ArtifactManager) reserveUpload(ctx context.Context, actor string, selection msi.Selection, native, status, evidence string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !msi.ValidSelection(selection) || !msi.ValidDigest(native) {
 		return msi.ErrInvalid
 	}
 	_, e := m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, n int64) error {
-		if r.Artifact != nil {
-			return msi.ErrConsumed
+		if (r.Version == msi.ReusableArtifactRecordVersion) != (status != "") {
+			return msi.ErrAuthority
 		}
-		r.Artifact = &msi.Artifact{Package: selection, NativeAcceptanceDigest: native, IntentAt: n, PrefixDigest: msi.Digest(nil)}
+		if r.Artifact != nil {
+			next, e := msi.NextArtifact(*r)
+			if e != nil {
+				return e
+			}
+			*r = next
+		}
+		r.Artifact = &msi.Artifact{PublisherStatus: status, PublisherEvidenceDigest: evidence, Package: selection, NativeAcceptanceDigest: native, IntentAt: n, PrefixDigest: msi.Digest(nil)}
 		return nil
 	})
 	return e
@@ -103,7 +126,7 @@ func (m *ArtifactManager) Upload(ctx context.Context, actor string, q UploadChun
 	var duplicate bool
 	r, e := m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {
 		a := r.Artifact
-		if a == nil || a.CompletedAt != 0 || a.Package.SHA256 != q.PackageDigest {
+		if r.RetirementStarted || r.Retired || a == nil || a.CompletedAt != 0 || a.Package.SHA256 != q.PackageDigest {
 			return msi.ErrConsumed
 		}
 		offset := int64(q.Index) * msi.MaxChunkBytes
@@ -135,7 +158,23 @@ func (m *ArtifactManager) Upload(ctx context.Context, actor string, q UploadChun
 		})
 		return e
 	}
-	prefix, e := m.spool.Append(ctx, exact, q.Data, check)
+	var custody []func(string) error
+	if exact.PublisherStatus != "" {
+		custody = []func(string) error{func(identity string) error {
+			_, e := m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {
+				if r.Artifact == nil || *r.Artifact != exact || r.Artifact.CustodyDigest != "" {
+					return msi.ErrConflict
+				}
+				r.Artifact.CustodyDigest = identity
+				return nil
+			})
+			if e == nil {
+				exact.CustodyDigest = identity
+			}
+			return e
+		}}
+	}
+	prefix, e := m.spool.Append(ctx, exact, q.Data, check, custody...)
 	if e != nil {
 		return msi.ErrUncertain
 	}
@@ -160,7 +199,7 @@ func (m *ArtifactManager) CompleteUpload(ctx context.Context, actor string) erro
 	defer m.mu.Unlock()
 	r, e := m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {
 		a := r.Artifact
-		if a == nil || a.CompletedAt != 0 || a.Offset != a.Package.Size || a.PrefixDigest != a.Package.SHA256 || a.PendingDigest != "" {
+		if r.RetirementStarted || r.Retired || a == nil || a.CompletedAt != 0 || a.Offset != a.Package.Size || a.PrefixDigest != a.Package.SHA256 || a.PendingDigest != "" {
 			return msi.ErrConflict
 		}
 		return nil
@@ -178,7 +217,7 @@ func (m *ArtifactManager) CompleteUpload(ctx context.Context, actor string) erro
 		})
 		return e
 	}
-	if _, e = m.spool.ReadChunk(ctx, exact.Package, 0, check); e != nil {
+	if _, e = m.spool.ReadChunk(ctx, exact.Package, 0, check, artifactCustody(exact)...); e != nil {
 		return msi.ErrUncertain
 	}
 	_, e = m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, n int64) error {
@@ -189,4 +228,95 @@ func (m *ArtifactManager) CompleteUpload(ctx context.Context, actor string) erro
 		return nil
 	})
 	return e
+}
+
+// RetireArtifact never reaches endpoints. It removes the current app-owned
+// manager spool only after every assigned target durably acknowledged retirement.
+// Unassigned devices contribute no permission and receive no package.
+func (m *ArtifactManager) RetireArtifact(ctx context.Context, actor, artifactID string, ack bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !ack || !msi.ValidDigest(artifactID) {
+		return msi.ErrInvalid
+	}
+	store, ok := m.store.(msi.TransactionStore)
+	if !ok {
+		return msi.ErrUnavailable
+	}
+	checkReferences := func(r msi.ArtifactRecord) (string, error) {
+		if r.Version != msi.ReusableArtifactRecordVersion || r.Artifact == nil || r.RetirementStarted || r.Retired || msi.ArtifactIdentity(*r.Artifact) != artifactID {
+			return "", msi.ErrConsumed
+		}
+		bindings, e := m.store.WindowsManagedMSIFleetBindings(ctx, m.key)
+		if e != nil {
+			return "", e
+		}
+		var evidence []string
+		for _, b := range bindings {
+			v, e := store.ReadRegisteredWindowsManagedMSI(msi.WithFinalCheck(ctx, m.check), b, m.key)
+			if e != nil {
+				return "", e
+			}
+			if v.Artifact == nil || msi.ArtifactIdentity(*v.Artifact) != artifactID {
+				continue
+			}
+			if len(v.RetiredReport) == 0 {
+				return "", msi.ErrUncertain
+			}
+			evidence = append(evidence, msi.BindingDigest(b)+":"+msi.Digest(v.RetiredReport))
+		}
+		sort.Strings(evidence)
+		raw, _ := json.Marshal(evidence)
+		return msi.Digest(raw), nil
+	}
+	r, e := m.store.ReadWindowsManagedMSIArtifact(msi.WithFinalCheck(ctx, m.check), m.key)
+	if e != nil {
+		return e
+	}
+	proof, e := checkReferences(r)
+	if e != nil {
+		return e
+	}
+	r, e = m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {
+		if r.Artifact == nil || msi.ArtifactIdentity(*r.Artifact) != artifactID || r.RetirementStarted {
+			return msi.ErrConflict
+		}
+		r.RetirementStarted = true
+		r.RetirementEvidenceDigest = proof
+		r.RetiredBy = actor
+		return nil
+	})
+	if e != nil {
+		return e
+	}
+	exact := r
+	check := func() error {
+		_, e := m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {
+			if !sameJSON(*r, withArtifactClock(exact, r.ClockFloor)) {
+				return msi.ErrConflict
+			}
+			return nil
+		})
+		return e
+	}
+	if e = m.spool.Retire(ctx, *r.Artifact, check); e != nil {
+		m.failed = true
+		return msi.ErrUncertain
+	}
+	_, e = m.transaction(ctx, actor, "deliver", func(r *msi.ArtifactRecord, _ int64) error {
+		if !sameJSON(*r, withArtifactClock(exact, r.ClockFloor)) {
+			return msi.ErrConflict
+		}
+		r.Retired = true
+		return nil
+	})
+	return e
+}
+func withArtifactClock(r msi.ArtifactRecord, n int64) msi.ArtifactRecord { r.ClockFloor = n; return r }
+
+func artifactCustody(a msi.Artifact) []string {
+	if a.PublisherStatus != "" {
+		return []string{a.CustodyDigest}
+	}
+	return nil
 }

@@ -25,7 +25,7 @@ func windowsManagedMSIRoute(r *http.Request) (string, string, bool) {
 	if len(p) == 6 {
 		op = p[5]
 		switch op {
-		case "reserve", "upload", "complete", "deliver", "review", "review-coordinated", "approve":
+		case "reserve", "upload", "complete", "deliver", "review", "review-coordinated", "approve", "retire":
 		default:
 			return "", "", false
 		}
@@ -71,7 +71,7 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 	cap := operatorauth.Capability("")
 	if op != "" {
 		cap = operatorauth.WindowsManagedMSIDeliver
-		if op == "review" || op == "review-coordinated" || op == "approve" {
+		if op == "review" || op == "review-coordinated" || op == "approve" || op == "retire" {
 			cap = operatorauth.WindowsManagedMSIInstall
 		}
 	}
@@ -174,6 +174,21 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 			}
 		}
 		e = manager.Review(r.Context(), actor, in.PackageReviewAccepted, in.TermsAccepted, in.MaintenanceAcknowledged, in.SynchronousReviewAccepted)
+	case "retire":
+		var in struct {
+			ArtifactID    string `json:"artifactId"`
+			BindingDigest string `json:"bindingDigest"`
+			ResultDigest  string `json:"resultDigest"`
+			Acknowledged  bool   `json:"acknowledged"`
+		}
+		if !readObject(w, r, 512, []string{"artifactId", "bindingDigest", "resultDigest", "acknowledged"}, &in) {
+			return
+		}
+		if e = manager.CheckArtifactReference(r.Context(), in.ArtifactID, in.BindingDigest); e != nil {
+			managedMSIError(w, e)
+			return
+		}
+		e = manager.Retire(r.Context(), actor, in.ResultDigest, in.Acknowledged)
 	case "approve":
 		var in struct {
 			ArtifactID      string `json:"artifactId,omitempty"`

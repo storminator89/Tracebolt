@@ -26,6 +26,7 @@ func run(args []string, out io.Writer) error {
 	expires := flags.Int64("expires-at", 0, "Fixed absolute consent expiry, Unix seconds; prepare only")
 	registration := flags.String("registration-file", "", "Protected public Windows setup registration; finalize only")
 	fleet := flags.Bool("fleet", false, "Create fresh upload-once fleet v2; never adopts singleton v1")
+	reusable := flags.Bool("reusable-jobs", false, "Fresh v3 repeated separately approved jobs under original expiry; requires --fleet and coordinated endpoint setup")
 	additional := flags.Bool("additional-device", false, "Add one explicitly configured fleet target using the existing fleet key")
 	apply := flags.Bool("apply", false, "Explicitly apply this create-only phase")
 	approve := flags.String("approve-plan", "", "Exact reviewed public plan digest")
@@ -33,7 +34,7 @@ func run(args []string, out io.Writer) error {
 	if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *lan == "" || *en == "" || *device == "" || !*apply && (*approve != "" || *acknowledge) || *apply && (*approve == "" || !*acknowledge) {
 		return windowsmanagedmsimanager.ErrSetup
 	}
-	request := windowsmanagedmsimanager.SetupRequest{Fleet: *fleet, AdditionalDevice: *additional, Phase: args[0], LANConfig: *lan, EnrollmentConfig: *en, DeviceID: *device, ExpiresAt: *expires, RegistrationFile: *registration}
+	request := windowsmanagedmsimanager.SetupRequest{Reusable: *reusable, Fleet: *fleet, AdditionalDevice: *additional, Phase: args[0], LANConfig: *lan, EnrollmentConfig: *en, DeviceID: *device, ExpiresAt: *expires, RegistrationFile: *registration}
 	plan, e := windowsmanagedmsimanager.PlanSetup(context.Background(), request, time.Now().UTC())
 	if e != nil {
 		return windowsmanagedmsimanager.ErrSetup

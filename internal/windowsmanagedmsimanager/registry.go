@@ -12,9 +12,13 @@ import (
 	msi "localrmm/internal/windowsmanagedmsi"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 )
 
+const ReusableRegistryVersion = "tracebolt.windows-managed-msi-manager-registry.v3"
+const ReusableConfigVersion = "tracebolt.windows-managed-msi-manager-config.v3"
+const ReusableSetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v3"
 const RegistryVersion = "tracebolt.windows-managed-msi-manager-registry.v2"
 const FleetConfigVersion = "tracebolt.windows-managed-msi-manager-config.v2"
 const FleetSetupPlanVersion = "tracebolt.windows-managed-msi-manager-setup.v2"
@@ -34,7 +38,7 @@ func fleetDevicePath(state, device, name string) string {
 	return filepath.Join(state, "windows-managed-msi-fleet-"+device, name)
 }
 func validFleetConfig(c Config) bool {
-	return c.Version == FleetConfigVersion && c.Enabled && c.Binding.Validate() == nil && absolute(c.StateDirectory) && c.PrivateKeyFile == fleetPath(c.StateDirectory, "manager.key") && c.SetupReceiptFile == fleetDevicePath(c.StateDirectory, c.Binding.DeviceID, "complete.json") && msi.ValidDigest(c.SetupPlanDigest) && msi.ValidDigest(c.SetupRegistrationDigest)
+	return (c.Version == FleetConfigVersion || c.Version == ReusableConfigVersion) && c.Enabled && c.Binding.Validate() == nil && absolute(c.StateDirectory) && c.PrivateKeyFile == fleetPath(c.StateDirectory, "manager.key") && c.SetupReceiptFile == fleetDevicePath(c.StateDirectory, c.Binding.DeviceID, "complete.json") && msi.ValidDigest(c.SetupPlanDigest) && msi.ValidDigest(c.SetupRegistrationDigest)
 }
 func checkFleetReceipt(c Config) error {
 	var r setupComplete
@@ -42,7 +46,7 @@ func checkFleetReceipt(c Config) error {
 		return ErrConfiguration
 	}
 	raw, _ := json.Marshal(c)
-	if r.Version != FleetSetupPlanVersion || r.PlanDigest != c.SetupPlanDigest || r.RegistrationDigest != c.SetupRegistrationDigest || r.ConfigurationDigest != msi.Digest(raw) {
+	if (r.Version != FleetSetupPlanVersion && r.Version != ReusableSetupPlanVersion) || (r.Version == ReusableSetupPlanVersion) != (c.Version == ReusableConfigVersion) || r.PlanDigest != c.SetupPlanDigest || r.RegistrationDigest != c.SetupRegistrationDigest || r.ConfigurationDigest != msi.Digest(raw) {
 		return ErrConfiguration
 	}
 	return nil
@@ -50,7 +54,7 @@ func checkFleetReceipt(c Config) error {
 func readFleetRegistry(path, state string, limit int) (RegistryConfig, []Config, []byte, error) {
 	var r RegistryConfig
 	raw, e := lanconfig.ReadProtected(path, true, maxRegistryBytes)
-	if e != nil || msi.Canonical(raw, &r, maxRegistryBytes) != nil || r.Version != RegistryVersion || !r.Enabled || len(r.ConfigFiles) == 0 || len(r.ConfigFiles) > min(limit, msi.MaxDevices) {
+	if e != nil || msi.Canonical(raw, &r, maxRegistryBytes) != nil || (r.Version != RegistryVersion && r.Version != ReusableRegistryVersion) || !r.Enabled || len(r.ConfigFiles) == 0 || len(r.ConfigFiles) > min(limit, msi.MaxDevices) {
 		return r, nil, nil, ErrConfiguration
 	}
 	configs := []Config{}
@@ -62,7 +66,7 @@ func readFleetRegistry(path, state string, limit int) (RegistryConfig, []Config,
 		}
 		paths[p] = true
 		var c Config
-		if _, e := canonicalRead(p, &c); e != nil || !validFleetConfig(c) || c.StateDirectory != state || c.Binding.ManagerID != r.ManagerID || p != fleetDevicePath(state, c.Binding.DeviceID, "manager.json") || checkFleetReceipt(c) != nil {
+		if _, e := canonicalRead(p, &c); e != nil || !validFleetConfig(c) || (r.Version == ReusableRegistryVersion) != (c.Version == ReusableConfigVersion) || c.StateDirectory != state || c.Binding.ManagerID != r.ManagerID || p != fleetDevicePath(state, c.Binding.DeviceID, "manager.json") || checkFleetReceipt(c) != nil {
 			return r, nil, nil, ErrConfiguration
 		}
 		for _, b := range bindings {
@@ -224,6 +228,10 @@ func LoadRegistry(ctx context.Context, store *enrollmentstore.Store, path, state
 		expected[b.DeviceID] = b
 	}
 	for _, c := range configs {
+		saved, err := store.ReadRegisteredWindowsManagedMSI(ctx, c.Binding, pub)
+		if err != nil || (c.Version == ReusableConfigVersion) != (saved.Grant.Version == msi.ReusableGrantVersion) {
+			return nil, ErrConfiguration
+		}
 		if expected[c.Binding.DeviceID] != c.Binding {
 			return nil, ErrConfiguration
 		}
@@ -296,15 +304,23 @@ type ArtifactTarget struct {
 	BindingDigest string `json:"bindingDigest"`
 }
 type ArtifactView struct {
-	Version                string           `json:"version"`
-	ServerNow              int64            `json:"serverNow"`
-	State                  string           `json:"state"`
-	ArtifactID             string           `json:"artifactId"`
-	Package                *msi.Selection   `json:"package"`
-	NativeAcceptanceDigest string           `json:"nativeAcceptanceDigest"`
-	UploadOffset           int64            `json:"uploadOffset"`
-	UploadPendingDigest    string           `json:"uploadPendingDigest"`
-	Targets                []ArtifactTarget `json:"targets"`
+	CanRetire               *bool                 `json:"canRetire,omitempty"`
+	RetirementBlocked       *string               `json:"retirementBlocked,omitempty"`
+	Reusable                bool                  `json:"reusable,omitempty"`
+	PublisherStatus         string                `json:"publisherStatus,omitempty"`
+	PublisherEvidenceDigest string                `json:"publisherEvidenceDigest,omitempty"`
+	RetiredCount            string                `json:"retiredCount,omitempty"`
+	Recent                  []msi.RetiredArtifact `json:"recent,omitempty"`
+	MaxRetainedPayloadBytes int64                 `json:"maxRetainedPayloadBytes,omitempty"`
+	Version                 string                `json:"version"`
+	ServerNow               int64                 `json:"serverNow"`
+	State                   string                `json:"state"`
+	ArtifactID              string                `json:"artifactId"`
+	Package                 *msi.Selection        `json:"package"`
+	NativeAcceptanceDigest  string                `json:"nativeAcceptanceDigest"`
+	UploadOffset            int64                 `json:"uploadOffset"`
+	UploadPendingDigest     string                `json:"uploadPendingDigest"`
+	Targets                 []ArtifactTarget      `json:"targets"`
 }
 
 func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
@@ -316,6 +332,23 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 		return ArtifactView{}, e
 	}
 	out := ArtifactView{Version: "tracebolt.windows-managed-msi-artifact.v2", ServerNow: r.artifact.now().Unix(), State: "empty", Targets: []ArtifactTarget{}}
+	if record.Version == msi.ReusableArtifactRecordVersion {
+		out.Version = "tracebolt.windows-managed-msi-artifact.v3"
+		out.Reusable = true
+		out.RetiredCount = strconv.FormatUint(record.RetiredCount, 10)
+		out.Recent = record.Recent
+		out.MaxRetainedPayloadBytes = msi.MaxRetainedPayloadBytes
+		eligible := record.Artifact != nil && record.Artifact.CompletedAt != 0 && !record.RetirementStarted && !record.Retired
+		reason := "not_ready"
+		if eligible {
+			reason = ""
+		}
+		if record.RetirementStarted && !record.Retired {
+			reason = "unconfirmed_custody"
+		}
+		out.CanRetire = &eligible
+		out.RetirementBlocked = &reason
+	}
 	if out.ServerNow < record.ClockFloor {
 		return ArtifactView{}, msi.ErrExpired
 	}
@@ -324,6 +357,8 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 		out.Package = &p
 		out.ArtifactID = msi.ArtifactIdentity(*a)
 		out.NativeAcceptanceDigest = a.NativeAcceptanceDigest
+		out.PublisherStatus = a.PublisherStatus
+		out.PublisherEvidenceDigest = a.PublisherEvidenceDigest
 		out.UploadOffset = a.Offset
 		out.UploadPendingDigest = a.PendingDigest
 		out.State = "upload_incomplete"
@@ -331,8 +366,21 @@ func (r *Registry) ArtifactView(ctx context.Context) (ArtifactView, error) {
 			out.State = "uploaded"
 		}
 	}
+	if record.RetirementStarted {
+		out.State = "intervention_required"
+	}
+	if record.Retired {
+		out.State = "retired"
+	}
 	for _, m := range r.ordered {
 		out.Targets = append(out.Targets, ArtifactTarget{m.binding.DeviceID, msi.BindingDigest(m.binding)})
+		if out.Reusable && *out.CanRetire {
+			saved, err := m.store.ReadRegisteredWindowsManagedMSI(msi.WithFinalCheck(ctx, m.configurationCheck), m.binding, m.key.Public().(ed25519.PublicKey))
+			if err != nil || saved.Artifact != nil && msi.ArtifactIdentity(*saved.Artifact) == out.ArtifactID && len(saved.RetiredReport) == 0 {
+				*out.CanRetire = false
+				*out.RetirementBlocked = "awaiting_device_retirement"
+			}
+		}
 	}
 	sort.Slice(out.Targets, func(i, j int) bool { return out.Targets[i].DeviceID < out.Targets[j].DeviceID })
 	return out, nil

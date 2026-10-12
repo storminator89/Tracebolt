@@ -55,7 +55,11 @@ func id(prefix string, n int) string                { return fmt.Sprintf("%s%032
 func key(n byte) ed25519.PrivateKey                 { return ed25519.NewKeyFromSeed(bytes.Repeat([]byte{n}, 32)) }
 func public(k ed25519.PrivateKey) ed25519.PublicKey { return k.Public().(ed25519.PublicKey) }
 
-type memoryPayload struct{ data []byte }
+type memoryPayload struct {
+	data         []byte
+	beforeRetire func()
+	retireError  error
+}
 
 func (p *memoryPayload) Create(context.Context, msi.Selection) (json.RawMessage, error) {
 	if p.data != nil {
@@ -201,7 +205,7 @@ type pairedDomains struct {
 }
 
 func (f *pairedDomains) now() time.Time { return time.Unix(f.at.Load(), 0) }
-func newPair(t *testing.T) *pairedDomains {
+func newPair(t *testing.T, reusable ...bool) *pairedDomains {
 	t.Helper()
 	f := &pairedDomains{msiKey: key(1), msiExecutorKey: key(2), wuaKey: key(3), wuaExecutorKey: key(4)}
 	f.at.Store(1800000000)
@@ -211,6 +215,11 @@ func newPair(t *testing.T) *pairedDomains {
 	plan := fence.Plan{Identity: identity, PlanDigest: digest("exact combined plan"), MSIOfferDigest: digest("msi offer"), WUAOfferDigest: digest("wua offer"), MSIArtifactDigest: digest("msi image"), WUAArtifactDigest: digest("wua image")}
 	f.grant = msi.Grant{Version: msi.CoordinatedGrantVersion, MutationPlanDigest: plan.PlanDigest, PeerBindingDigest: objectDigest(wb), Binding: mb, DeliveryEnabled: true, InstallEnabled: true, DeliveryAcknowledged: true, InstallAcknowledged: true, ServiceRiskAcknowledged: true, ExpiresAt: f.at.Load() + 3600}
 	f.consent = wua.Consent{Version: wua.CoordinatedConsentVersion, MutationPlanDigest: plan.PlanDigest, PeerBindingDigest: objectDigest(mb), Scope: wua.Scope, Binding: wb, Enabled: true, Acknowledged: true, ExpiresAt: f.at.Load() + 3600}
+	if len(reusable) > 0 && reusable[0] {
+		plan.Version = fence.ReusablePlanVersion
+		f.grant.Version = msi.ReusableGrantVersion
+		f.grant.ReusableAcknowledged = true
+	}
 	f.shared = fence.NewIntegrationFence(t, plan, msi.MutationParticipant(f.grant), wua.MutationParticipant(f.consent), f.now)
 	f.msiSession = f.shared.Session(t, fence.ManagedMSI)
 	f.wuaSession = f.shared.Session(t, fence.CachedWUA)
@@ -265,6 +274,12 @@ func (f *pairedDomains) prepareMSI(t *testing.T) {
 	copy(data, []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1})
 	sel := msi.Selection{SHA256: actionpermit.Digest(data), Size: int64(len(data)), ProductCode: "{11111111-1111-1111-1111-111111111111}", PackageCode: "{22222222-2222-2222-2222-222222222222}", Version: "1.2.3", Architecture: "amd64", Name: "Inert fixture MSI", TermsReviewDigest: digest("reviewed terms fixture"), ReviewReference: "inert only"}
 	p := msi.Permit{Version: msi.Version, Kind: "deliver", TransferID: id("transfer_", 9), Binding: f.grant.Binding, LeafDigest: f.msiCurrent.LeafDigest, Package: sel, NativeAcceptanceDigest: digest("inert acceptance fixture"), ActorID: id("operator_", 10), IssuedAt: f.at.Load(), ExpiresAt: f.at.Load() + 600}
+	if f.grant.Version == msi.ReusableGrantVersion {
+		p.Version = msi.ReusableVersion
+		p.JobSequence = 1
+		p.PublisherStatus = "unverified"
+		p.PublisherEvidenceDigest = digest("publisher review")
+	}
 	raw, e := msi.SignPermit(p, f.msiKey)
 	if e != nil {
 		t.Fatal(e)

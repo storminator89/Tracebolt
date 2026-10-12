@@ -13,14 +13,27 @@ const MaxDevices = 25
 // ArtifactRecord is manager-owned custody metadata, independent of any endpoint
 // grant or leaf. It never contains package bytes or authorizes delivery/install.
 type ArtifactRecord struct {
-	Version    string    `json:"version"`
-	Artifact   *Artifact `json:"artifact"`
-	ClockFloor int64     `json:"clockFloor"`
+	RetiredCount             uint64            `json:"retiredCount,string,omitempty"`
+	RetiredChain             string            `json:"retiredChain,omitempty"`
+	RetirementStarted        bool              `json:"retirementStarted,omitempty"`
+	Retired                  bool              `json:"retired,omitempty"`
+	RetirementEvidenceDigest string            `json:"retirementEvidenceDigest,omitempty"`
+	RetiredBy                string            `json:"retiredBy,omitempty"`
+	Recent                   []RetiredArtifact `json:"recent,omitempty"`
+	Version                  string            `json:"version"`
+	Artifact                 *Artifact         `json:"artifact"`
+	ClockFloor               int64             `json:"clockFloor"`
 }
 
 func (a *Artifact) Validate(floor int64) error {
 	if a == nil {
 		return nil
+	}
+	if (a.PublisherStatus != "" || a.PublisherEvidenceDigest != "") && !ValidPublisherEvidence(a.PublisherStatus, a.PublisherEvidenceDigest) {
+		return ErrIntegrity
+	}
+	if a.CustodyDigest != "" && (!ValidDigest(a.CustodyDigest) || a.PublisherStatus == "") || a.PublisherStatus != "" && (a.Offset > 0 || a.CompletedAt > 0) && !ValidDigest(a.CustodyDigest) {
+		return ErrIntegrity
 	}
 	if !ValidSelection(a.Package) || !ValidDigest(a.NativeAcceptanceDigest) || !ValidTime(a.IntentAt) || a.IntentAt > floor || a.CompletedAt != 0 && (a.CompletedAt < a.IntentAt || a.CompletedAt > floor) {
 		return ErrIntegrity
@@ -36,7 +49,13 @@ func ArtifactTransition(before, after *Artifact) error {
 			return ErrConsumed
 		}
 		a, b := *before, *after
-		if a.Package != b.Package || a.NativeAcceptanceDigest != b.NativeAcceptanceDigest || a.IntentAt != b.IntentAt || a.CompletedAt != 0 && a != b {
+		if a.CustodyDigest != "" && a.CustodyDigest != b.CustodyDigest {
+			return ErrConsumed
+		}
+		if a.CustodyDigest == "" && b.CustodyDigest != "" && (a.Offset != 0 || a.PendingDigest == "" || a.PublisherStatus == "") {
+			return ErrConsumed
+		}
+		if a.Package != b.Package || a.NativeAcceptanceDigest != b.NativeAcceptanceDigest || a.PublisherStatus != b.PublisherStatus || a.PublisherEvidenceDigest != b.PublisherEvidenceDigest || a.IntentAt != b.IntentAt || a.CompletedAt != 0 && a != b {
 			return ErrConsumed
 		}
 		if a.Offset == b.Offset {
@@ -52,12 +71,21 @@ func ArtifactTransition(before, after *Artifact) error {
 	return nil
 }
 func (r ArtifactRecord) Validate() error {
-	if r.Version != ArtifactRecordVersion || !ValidTime(r.ClockFloor) || r.Artifact.Validate(r.ClockFloor) != nil {
+	if r.validateReusableArtifact() != nil || (r.Version != ArtifactRecordVersion && r.Version != ReusableArtifactRecordVersion) || !ValidTime(r.ClockFloor) || r.Artifact.Validate(r.ClockFloor) != nil {
 		return ErrIntegrity
 	}
 	return nil
 }
 func ArtifactIdentity(a Artifact) string {
+	if a.PublisherStatus != "" {
+		raw, _ := json.Marshal(struct {
+			Package                 Selection `json:"package"`
+			Native                  string    `json:"nativeAcceptanceDigest"`
+			PublisherStatus         string    `json:"publisherStatus"`
+			PublisherEvidenceDigest string    `json:"publisherEvidenceDigest"`
+		}{a.Package, a.NativeAcceptanceDigest, a.PublisherStatus, a.PublisherEvidenceDigest})
+		return Digest(append([]byte("Tracebolt reusable MSI artifact v3\x00"), raw...))
+	}
 	raw, _ := json.Marshal(struct {
 		Package                Selection `json:"package"`
 		NativeAcceptanceDigest string    `json:"nativeAcceptanceDigest"`

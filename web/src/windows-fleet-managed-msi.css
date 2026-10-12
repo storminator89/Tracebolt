@@ -13,3 +13,6 @@
 .windows-fleet-managed-msi .windows-fleet-msi-limits{color:var(--secondary);margin-top:10px}
 .windows-fleet-managed-msi .windows-fleet-msi-limits summary{cursor:pointer}
 .windows-fleet-managed-msi .windows-fleet-msi-device-id{font-variant-numeric:tabular-nums}
+.windows-fleet-managed-msi .managed-msi-reusable{display:grid;gap:8px;min-width:0}
+.windows-fleet-managed-msi .managed-msi-reusable article,.windows-fleet-managed-msi .managed-msi-artifact article{border-top:1px solid var(--line);padding-top:8px;margin-top:8px;min-width:0}
+.windows-fleet-managed-msi .managed-msi-publisher{font-size:12px}

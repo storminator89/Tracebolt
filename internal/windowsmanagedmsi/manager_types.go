@@ -23,21 +23,28 @@ type Current struct {
 	Enabled        bool
 }
 type Artifact struct {
-	Package                Selection `json:"package"`
-	NativeAcceptanceDigest string    `json:"nativeAcceptanceDigest"`
-	IntentAt               int64     `json:"intentAt"`
-	CompletedAt            int64     `json:"completedAt"`
-	Offset                 int64     `json:"offset"`
-	PrefixDigest           string    `json:"prefixDigest"`
-	PendingIndex           uint32    `json:"pendingIndex"`
-	PendingDigest          string    `json:"pendingDigest"`
-	PendingSize            int       `json:"pendingSize"`
-	LastChunkDigest        string    `json:"lastChunkDigest"`
+	CustodyDigest           string    `json:"custodyDigest,omitempty"`
+	PublisherStatus         string    `json:"publisherStatus,omitempty"`
+	PublisherEvidenceDigest string    `json:"publisherEvidenceDigest,omitempty"`
+	Package                 Selection `json:"package"`
+	NativeAcceptanceDigest  string    `json:"nativeAcceptanceDigest"`
+	IntentAt                int64     `json:"intentAt"`
+	CompletedAt             int64     `json:"completedAt"`
+	Offset                  int64     `json:"offset"`
+	PrefixDigest            string    `json:"prefixDigest"`
+	PendingIndex            uint32    `json:"pendingIndex"`
+	PendingDigest           string    `json:"pendingDigest"`
+	PendingSize             int       `json:"pendingSize"`
+	LastChunkDigest         string    `json:"lastChunkDigest"`
 }
 
 // Record contains bounded metadata and signed evidence only, never MSI chunks.
 // Upload intent is permanent even if its exact body never arrived or fsync failed.
 type Record struct {
+	Jobs               *JobLedger        `json:"jobs,omitempty"`
+	RetirePermit       []byte            `json:"retirePermit,omitempty"`
+	RetireClaimedAt    int64             `json:"retireClaimedAt,omitempty"`
+	RetiredReport      []byte            `json:"retiredReport,omitempty"`
 	MutationReport     []byte            `json:"mutationReport,omitempty"`
 	Version            string            `json:"version"`
 	Grant              Grant             `json:"grant"`
@@ -59,13 +66,17 @@ type Record struct {
 
 func NewRecord(g Grant, key, executor ed25519.PublicKey, at int64) (Record, error) {
 	r := Record{Version: RecordVersion, Grant: g, PublicKey: bytes.Clone(key), ExecutorPublicKey: bytes.Clone(executor), ClockFloor: at}
+	if g.Version == ReusableGrantVersion {
+		r.Version = ReusableRecordVersion
+		r.Jobs = NewJobLedger()
+	}
 	return r, r.Validate()
 }
 func (r Record) Validate() error {
 	if r.validateMutationReport() != nil {
 		return ErrIntegrity
 	}
-	if r.Version != RecordVersion || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
+	if r.validateReusableRecord() != nil || (r.Version != RecordVersion && r.Version != ReusableRecordVersion) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
 		return ErrIntegrity
 	}
 	if r.Artifact == nil {
@@ -99,7 +110,7 @@ func (r Record) Validate() error {
 			continue
 		}
 		p, e := VerifyPermit(part.permit, r.PublicKey)
-		if e != nil || p.Kind != part.kind || p.Binding != r.Grant.Binding || p.TransferID != r.TransferID || p.Package != a.Package || p.NativeAcceptanceDigest != a.NativeAcceptanceDigest || p.IssuedAt < a.CompletedAt || p.IssuedAt > r.ClockFloor || p.ExpiresAt > r.Grant.ExpiresAt || part.claim != 0 && (part.claim < p.IssuedAt || part.claim >= p.ExpiresAt || part.claim > r.ClockFloor) {
+		if e != nil || p.Kind != part.kind || !PermitMatchesGrant(p, r.Grant) || p.TransferID != r.TransferID || p.Package != a.Package || p.NativeAcceptanceDigest != a.NativeAcceptanceDigest || p.IssuedAt < a.CompletedAt || p.IssuedAt > r.ClockFloor || p.ExpiresAt > r.Grant.ExpiresAt || part.claim != 0 && (part.claim < p.IssuedAt || part.claim >= p.ExpiresAt || part.claim > r.ClockFloor) {
 			return ErrIntegrity
 		}
 		if i > 0 {
@@ -124,7 +135,7 @@ func (r Record) Validate() error {
 			if i == 2 {
 				kind = "result"
 			}
-			if e != nil || part.claim == 0 || report.Kind != kind || report.Binding != p.Binding || report.TransferID != p.TransferID || report.PermitDigest != Digest(part.permit) || report.Package != p.Package || report.NativeAcceptanceDigest != p.NativeAcceptanceDigest || report.CapturedAt < part.claim || report.CapturedAt > r.ClockFloor || report.CapturedAt >= r.Grant.ExpiresAt {
+			if e != nil || part.claim == 0 || report.Kind != kind || report.Version != p.Version || report.JobSequence != p.JobSequence || report.Binding != p.Binding || report.TransferID != p.TransferID || report.PermitDigest != Digest(part.permit) || report.Package != p.Package || report.NativeAcceptanceDigest != p.NativeAcceptanceDigest || report.CapturedAt < part.claim || report.CapturedAt > r.ClockFloor || report.CapturedAt >= r.Grant.ExpiresAt {
 				return ErrIntegrity
 			}
 			if i < 2 && report.CapturedAt >= p.ExpiresAt && !(i == 0 && report.State == "intervention_required") {
@@ -158,10 +169,15 @@ func DecodeRecord(raw []byte) (Record, error) {
 	return r, nil
 }
 func Transition(before, after Record) error {
-	if !validMutationReportAdvance(before.MutationReport, after.MutationReport, after.ExecutorPublicKey) {
+	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}
-	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
+	var err error
+	before, err = prepareJobTransition(before, after)
+	if err != nil {
+		return err
+	}
+	if !validMutationReportAdvance(before.MutationReport, after.MutationReport, after.ExecutorPublicKey) {
 		return ErrIntegrity
 	}
 	if ArtifactTransition(before.Artifact, after.Artifact) != nil {
@@ -184,12 +200,12 @@ func Transition(before, after Record) error {
 	if before.TransferID != "" && before.TransferID != after.TransferID {
 		return ErrConsumed
 	}
-	for _, pair := range [][2][]byte{{before.DeliveryPermit, after.DeliveryPermit}, {before.DeliveryReport, after.DeliveryReport}, {before.ReadinessPermit, after.ReadinessPermit}, {before.ReadinessReport, after.ReadinessReport}, {before.InstallPermit, after.InstallPermit}, {before.ResultReport, after.ResultReport}} {
+	for _, pair := range [][2][]byte{{before.RetirePermit, after.RetirePermit}, {before.RetiredReport, after.RetiredReport}, {before.DeliveryPermit, after.DeliveryPermit}, {before.DeliveryReport, after.DeliveryReport}, {before.ReadinessPermit, after.ReadinessPermit}, {before.ReadinessReport, after.ReadinessReport}, {before.InstallPermit, after.InstallPermit}, {before.ResultReport, after.ResultReport}} {
 		if len(pair[0]) != 0 && !bytes.Equal(pair[0], pair[1]) {
 			return ErrConsumed
 		}
 	}
-	for _, pair := range [][2]int64{{before.DeliveryClaimedAt, after.DeliveryClaimedAt}, {before.ReadinessClaimedAt, after.ReadinessClaimedAt}, {before.InstallClaimedAt, after.InstallClaimedAt}} {
+	for _, pair := range [][2]int64{{before.RetireClaimedAt, after.RetireClaimedAt}, {before.DeliveryClaimedAt, after.DeliveryClaimedAt}, {before.ReadinessClaimedAt, after.ReadinessClaimedAt}, {before.InstallClaimedAt, after.InstallClaimedAt}} {
 		if pair[0] != 0 && pair[0] != pair[1] {
 			return ErrConsumed
 		}
@@ -213,7 +229,7 @@ func FinalDeadline(before, after Record, current Current, at int64) error {
 	for _, p := range []struct {
 		old, next           []byte
 		oldClaim, nextClaim int64
-	}{{before.DeliveryPermit, after.DeliveryPermit, before.DeliveryClaimedAt, after.DeliveryClaimedAt}, {before.ReadinessPermit, after.ReadinessPermit, before.ReadinessClaimedAt, after.ReadinessClaimedAt}, {before.InstallPermit, after.InstallPermit, before.InstallClaimedAt, after.InstallClaimedAt}} {
+	}{{before.RetirePermit, after.RetirePermit, before.RetireClaimedAt, after.RetireClaimedAt}, {before.DeliveryPermit, after.DeliveryPermit, before.DeliveryClaimedAt, after.DeliveryClaimedAt}, {before.ReadinessPermit, after.ReadinessPermit, before.ReadinessClaimedAt, after.ReadinessClaimedAt}, {before.InstallPermit, after.InstallPermit, before.InstallClaimedAt, after.InstallClaimedAt}} {
 		if len(p.next) == 0 || bytes.Equal(p.old, p.next) && p.oldClaim == p.nextClaim {
 			continue
 		}

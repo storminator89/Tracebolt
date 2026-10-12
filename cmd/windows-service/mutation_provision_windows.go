@@ -46,6 +46,10 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 			return nil, e
 		}
 		plan := coordinatedMutationPlan{Version: coordinatedMutationVersion, MSI: m.plan, WUA: w.plan, Disclosure: coordinatedMutationDisclosure}
+		if in.MSI.offer.Version == managed.ReusableOfferVersion {
+			plan.Version = reusableMutationVersion
+			plan.Disclosure += " " + managed.ReusableDisclosure
+		}
 		if plan.Validate() != nil {
 			return nil, managed.ErrAuthority
 		}
@@ -99,6 +103,10 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		id := func(prefix string, start int) string { return prefix + hex.EncodeToString(ids[start:start+16]) }
 		b := managed.Binding{ManagerID: in.MSI.offer.ManagerID, DeviceID: in.MSI.offer.DeviceID, IncarnationDigest: in.MSI.offer.IncarnationDigest, ExecutorID: id("executor_", 0), ExecutorKeyID: managed.Digest(mPub), KeyID: managed.Digest(in.MSI.offer.ManagerPublicKey), DeliveryGrantID: id("grant_", 16), InstallGrantID: id("grant_", 32)}
 		g := managed.Grant{Version: managed.CoordinatedGrantVersion, MutationPlanDigest: plan.Digest(), Binding: b, DeliveryEnabled: true, InstallEnabled: true, DeliveryAcknowledged: true, InstallAcknowledged: true, ServiceRiskAcknowledged: true, ExpiresAt: in.MSI.offer.ExpiresAt}
+		if in.MSI.offer.Version == managed.ReusableOfferVersion {
+			g.Version = managed.ReusableGrantVersion
+			g.ReusableAcknowledged = true
+		}
 		wb := job.Binding{ManagerID: in.WUA.offer.ManagerID, DeviceID: in.WUA.offer.DeviceID, IncarnationDigest: in.WUA.offer.IncarnationDigest, ExecutorID: id("executor_", 48), ExecutorKeyID: managed.Digest(wPub), KeyID: managed.Digest(in.WUA.offer.ManagerPublicKey), GrantID: id("grant_", 64)}
 		consent := job.Consent{Version: job.CoordinatedConsentVersion, MutationPlanDigest: plan.Digest(), Scope: job.Scope, Binding: wb, Enabled: true, Acknowledged: true, ExpiresAt: in.WUA.offer.ExpiresAt}
 		mbJSON, _ := json.Marshal(b)
@@ -106,6 +114,9 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		g.PeerBindingDigest = managed.Digest(wbJSON)
 		consent.PeerBindingDigest = managed.Digest(mbJSON)
 		roster := fence.Roster{Plan: plan.FencePlan(), FenceID: fenceID, MSI: managed.MutationParticipant(g), WUA: job.MutationParticipant(consent)}
+		if g.Version == managed.ReusableGrantVersion {
+			roster.Version = fence.ReusableRosterVersion
+		}
 		if g.Validate() != nil || consent.Validate() != nil || roster.Validate() != nil || b.ExecutorKeyID == plan.MSI.Identity.LeafPublicKeyDigest || wb.ExecutorKeyID == plan.MSI.Identity.LeafPublicKeyDigest {
 			return nil, managed.ErrAuthority
 		}
@@ -251,5 +262,8 @@ func verifyCoordinatedParticipants(ctx context.Context, receipt installReceipt, 
 		return out, managed.ErrIntegrity
 	}
 	out = fence.Activation{MSIReceiptDigest: managed.Digest(mreceipt), MSIConfigDigest: managed.Digest(mraw), WUAReceiptDigest: managed.Digest(wreceipt), WUAConfigDigest: managed.Digest(wraw)}
+	if roster.Version == fence.ReusableRosterVersion {
+		out.Version = fence.ReusableActivationVersion
+	}
 	return out, out.Validate()
 }

@@ -47,6 +47,9 @@ type ChunkIntent struct {
 	Size   int    `json:"size"`
 }
 type EndpointRecord struct {
+	Jobs                *JobLedger      `json:"jobs,omitempty"`
+	RetirePermit        []byte          `json:"retirePermit,omitempty"`
+	RetiredReport       []byte          `json:"retiredReport,omitempty"`
 	Mutation            *fence.Roster   `json:"mutation,omitempty"`
 	MutationCompletion  *fence.Receipt  `json:"mutationCompletion,omitempty"`
 	Version             string          `json:"version"`
@@ -76,10 +79,10 @@ func NewEndpointRecord(g Grant, manager, executor []byte, at int64) (EndpointRec
 	return r, r.Validate()
 }
 func (r EndpointRecord) Validate() error {
-	if r.validateMutationCompletion() != nil {
+	if r.validateReusableEndpoint() != nil || r.validateMutationCompletion() != nil {
 		return ErrIntegrity
 	}
-	if !(r.Version == Version && r.Mutation == nil && r.Grant.MutationPlanDigest == "" || r.Version == CoordinatedEndpointVersion && ValidMutationRoster(r.Mutation, r.Grant)) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.ManagerPublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) || !ValidDigest(r.PrefixDigest) || len(r.Custody) > 4096 || len(r.ImportReceipt) > 4096 {
+	if !(r.Version == Version && r.Mutation == nil && r.Grant.MutationPlanDigest == "" || (r.Version == CoordinatedEndpointVersion || r.Version == ReusableEndpointVersion) && ValidMutationRoster(r.Mutation, r.Grant)) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.ManagerPublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) || !ValidDigest(r.PrefixDigest) || len(r.Custody) > 4096 || len(r.ImportReceipt) > 4096 {
 		return ErrIntegrity
 	}
 	if len(r.Delivery) == 0 {
@@ -89,7 +92,7 @@ func (r EndpointRecord) Validate() error {
 		return nil
 	}
 	p, e := VerifyPermit(r.Delivery, r.ManagerPublicKey)
-	if e != nil || p.Kind != "deliver" || p.Binding != r.Grant.Binding || !r.CreationStarted || p.IssuedAt > r.ClockFloor || r.Offset < 0 || r.Offset > p.Package.Size || r.Offset != p.Package.Size && r.Offset%MaxChunkBytes != 0 {
+	if e != nil || p.Kind != "deliver" || !PermitMatchesGrant(p, r.Grant) || !r.CreationStarted || p.IssuedAt > r.ClockFloor || r.Offset < 0 || r.Offset > p.Package.Size || r.Offset != p.Package.Size && r.Offset%MaxChunkBytes != 0 {
 		return ErrIntegrity
 	}
 	if r.Offset > 0 && r.Custody == nil || r.Pending != nil && (r.Custody == nil || r.Pending.Index >= MaxChunks || int64(r.Pending.Index)*MaxChunkBytes != r.Offset || r.Pending.Size != int(min(int64(MaxChunkBytes), p.Package.Size-r.Offset)) || !ValidDigest(r.Pending.Digest)) {
@@ -144,7 +147,7 @@ func (r EndpointRecord) Validate() error {
 	return nil
 }
 func samePackage(a, b Permit) bool {
-	return a.TransferID == b.TransferID && a.Binding == b.Binding && a.Package == b.Package && a.NativeAcceptanceDigest == b.NativeAcceptanceDigest
+	return a.Version == b.Version && a.JobSequence == b.JobSequence && a.PublisherStatus == b.PublisherStatus && a.PublisherEvidenceDigest == b.PublisherEvidenceDigest && a.TransferID == b.TransferID && a.Binding == b.Binding && a.Package == b.Package && a.NativeAcceptanceDigest == b.NativeAcceptanceDigest
 }
 
 type Endpoint struct {
@@ -189,11 +192,14 @@ func openEndpoint(store Storage, payload Payload, installer Installer, current C
 		x.Close()
 		return nil, e
 	}
-	if r.MutationCompletion != nil {
+	if r.MutationCompletion != nil && len(r.RetirePermit) == 0 {
 		if e = x.mutation.Recover(context.Background(), *r.MutationCompletion, x.verifyMutationCompletion); e != nil {
 			x.Close()
 			return nil, e
 		}
+	}
+	if len(r.RetirePermit) > 0 {
+		return x, nil
 	}
 	if len(r.Delivery) > 0 {
 		if len(r.InterventionReport) > 0 {
@@ -252,7 +258,7 @@ func (x *Endpoint) check(ctx context.Context, p *Permit) error {
 	if g.Validate() != nil || !g.DeliveryEnabled || !c.Enabled || c.Revoked || c.Binding != g.Binding || !ValidDigest(c.LeafDigest) || !ValidTime(n) || n < x.record.ClockFloor || n < c.LeafNotBefore || n >= c.LeafNotAfter || n >= g.ExpiresAt {
 		return ErrAuthority
 	}
-	if p != nil && (p.Binding != g.Binding || n < p.IssuedAt || n >= p.ExpiresAt || p.ExpiresAt > g.ExpiresAt || p.ExpiresAt > c.LeafNotAfter || p.LeafDigest != c.LeafDigest || p.Kind != "deliver" && !g.InstallEnabled) {
+	if p != nil && (!PermitMatchesGrant(*p, g) || n < p.IssuedAt || n >= p.ExpiresAt || p.ExpiresAt > g.ExpiresAt || p.ExpiresAt > c.LeafNotAfter || p.LeafDigest != c.LeafDigest || p.Kind != "deliver" && !g.InstallEnabled) {
 		return ErrExpired
 	}
 	return ctx.Err()
@@ -272,7 +278,7 @@ func (x *Endpoint) save() error {
 	return nil
 }
 func (x *Endpoint) report(p Permit, raw []byte, kind, state string, r *Readiness, result *Result) ([]byte, error) {
-	v := Report{Version: Version, Kind: kind, Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(raw), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: x.now().UTC().Unix(), Offset: x.record.Offset, State: state, Readiness: r, Result: result}
+	v := Report{Version: p.Version, JobSequence: p.JobSequence, Kind: kind, Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(raw), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: x.now().UTC().Unix(), Offset: x.record.Offset, State: state, Readiness: r, Result: result}
 	if r != nil {
 		v.CapturedAt = r.CapturedAt
 	}
@@ -294,11 +300,24 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 	if x.mutation != nil && p.Kind != "deliver" && p.SynchronousReviewDigest != SynchronousReviewDigest(p.Package, p.NativeAcceptanceDigest) {
 		return ErrAuthority
 	}
+	if len(x.record.RetirePermit) > 0 && len(x.record.RetiredReport) == 0 {
+		return ErrUncertain
+	}
+	if len(x.record.RetiredReport) > 0 && p.Kind != "deliver" {
+		return ErrConsumed
+	}
 	if len(x.record.InterventionReport) > 0 {
 		return ErrConsumed
 	}
 	switch p.Kind {
+	case "retire":
+		return x.retire(ctx, p, raw)
 	case "deliver":
+		if p.Version == ReusableVersion && !bytes.Equal(raw, x.record.Delivery) {
+			if e = x.beginNextJob(p); e != nil {
+				return e
+			}
+		}
 		if len(x.record.Delivery) > 0 {
 			if bytes.Equal(raw, x.record.Delivery) {
 				return nil
@@ -561,6 +580,7 @@ func (x *Endpoint) Status(ctx context.Context) (Status, error) {
 		return s, e
 	}
 	r := x.record
+	s.Reusable = r.Grant.Version == ReusableGrantVersion
 	if len(r.Delivery) == 0 {
 		return s, nil
 	}
@@ -574,7 +594,7 @@ func (x *Endpoint) Status(ctx context.Context) (Status, error) {
 		if e = x.check(ctx, nil); e != nil {
 			return s, e
 		}
-		report := Report{Version: Version, Kind: "mutation", Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(r.Delivery), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: captured, Offset: r.Offset, State: snapshot.Phase, Mutation: &snapshot}
+		report := Report{Version: p.Version, JobSequence: p.JobSequence, Kind: "mutation", Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(r.Delivery), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: captured, Offset: r.Offset, State: snapshot.Phase, Mutation: &snapshot}
 		s.MutationReport, e = SignReport(report, x.key)
 		if e != nil {
 			return s, e
@@ -612,6 +632,14 @@ func (x *Endpoint) Status(ctx context.Context) (Status, error) {
 		s.Report = bytes.Clone(r.ResultReport)
 		v, _ := VerifyReport(s.Report, r.ExecutorPublicKey)
 		s.State = v.State
+	}
+	if len(r.RetirePermit) > 0 {
+		s.State = "intervention_required"
+		s.Report = nil
+	}
+	if len(r.RetiredReport) > 0 {
+		s.State = "retired"
+		s.Report = bytes.Clone(r.RetiredReport)
 	}
 	return s, nil
 }
@@ -687,6 +715,12 @@ func (x *Endpoint) markIntervention() error {
 	if e := x.check(context.Background(), nil); e != nil {
 		x.failed = true
 		return ErrUncertain
+	}
+	if len(x.record.RetirePermit) > 0 && len(x.record.RetiredReport) == 0 {
+		return ErrUncertain
+	}
+	if len(x.record.RetiredReport) > 0 {
+		return ErrConsumed
 	}
 	if len(x.record.InterventionReport) > 0 {
 		return ErrUncertain

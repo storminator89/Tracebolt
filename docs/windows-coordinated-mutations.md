@@ -9,6 +9,9 @@ explicitly administrator-launched cached WUA executor. Their independent keys,
 grants, IPC, ledgers and original identity remain separate. The observer remains
 LocalService. Prepared-MSI v1 and service-control brokers remain incompatible.
 Existing standalone state is not adopted or migrated.
+The separate [fresh reusable MSI v3 profile](windows-reusable-managed-msi.md)
+adds explicit reviewed retirement and another independently approved MSI job under
+the same original grant. The v1 paired profile described below is unchanged.
 
 ## One reviewed fresh setup
 

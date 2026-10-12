@@ -66,7 +66,7 @@ func (s *fleetMemoryStore) WindowsManagedMSIArtifactTransaction(ctx context.Cont
 	if e = msi.CheckFinal(ctx); e != nil {
 		return r, e
 	}
-	if r.Validate() != nil || msi.ArtifactTransition(s.artifact.Artifact, r.Artifact) != nil {
+	if r.Validate() != nil || msi.ArtifactRecordTransition(s.artifact, r) != nil {
 		return r, msi.ErrIntegrity
 	}
 	s.artifact = r
