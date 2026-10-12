@@ -16,7 +16,7 @@ await fs.mkdir(out,{recursive:true});
 const safeFailure=()=>new Error('Fleet-groups browser gate failed; raw state intentionally withheld.');
 async function stop(){if(server&&!serverFailed&&server.exitCode===null){const end=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');const deadline=setTimeout(()=>server.kill('SIGKILL'),5000);await end;clearTimeout(deadline);}server=null;}
 async function shot(page,name,fixtureDisclosure){
- const match=/^synthetic-fleet-groups-(?:groups|review|results)-(1440|390)-(en|de)$/.exec(name);
+ const match=/^synthetic-fleet-groups-(?:groups|draft|review|results)-(1440|390)-(en|de)$/.exec(name);
  if(!match||page.viewportSize()?.width!==Number(match[1])||await page.locator('html').getAttribute('lang')!==match[2]||fixtureDisclosure!==fleetGroupsDisclosure)throw safeFailure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
  screenshots.push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:fleetGroupsCaseName});

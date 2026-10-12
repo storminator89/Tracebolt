@@ -13,6 +13,16 @@ test('completion requires exactly sixteen source-bound EN/DE desktop/mobile scre
  for(let index=0;index<rows.length;index++)for(const changed of [null,{sourceSha:'b'.repeat(40)},{fullPage:true},{publicSafe:false},{fixtureDisclosure:'native'},{test:'other'},{viewport:{width:800,height:600}}])assert.throws(()=>requireFleetGroupsEvidence(changed?rows.map((r,i)=>i===index?{...r,...changed}:r):rows.filter((_,i)=>i!==index),source));
  assert.throws(()=>requireFleetGroupsEvidence([...rows,rows[0]],source));
 });
+test('hosted capture admission includes every required image and rejects noncontract names',()=>{
+ const runner=fs.readFileSync(new URL('./fleet-groups-runner.mjs',import.meta.url),'utf8');
+ const literals=[...runner.matchAll(/const match=(\/[^\n]+\/)\.exec\(name\);/g)];
+ assert.equal(literals.length,1);const admission=new RegExp(literals[0][1].slice(1,-1));
+ for(const kind of ['groups','draft','review','results'])for(const locale of ['en','de'])for(const width of [1440,390]){
+  const match=admission.exec(`synthetic-fleet-groups-${kind}-${width}-${locale}`);
+  assert.ok(match,`required ${kind}/${width}/${locale} capture rejected`);assert.deepEqual(match.slice(1),[String(width),locale]);
+ }
+ for(const invalid of ['synthetic-fleet-groups-other-1440-en','synthetic-fleet-groups-draft-800-en','synthetic-fleet-groups-draft-1440-fr','../synthetic-fleet-groups-draft-1440-en','synthetic-fleet-groups-draft-1440-en.png','synthetic-fleet-groups-draft-1440-en-extra'])assert.equal(admission.test(invalid),false);
+});
 test('route assertion failures remain failures and cannot disappear in detached callbacks',async()=>{
  const before=fleetGroupsRouteState(),route={abort:async()=>{}};await guardFleetGroupsRoute(route,async()=>{throw new Error('inert failure');});assert.deepEqual(fleetGroupsRouteState(),{failures:before.failures+1,pending:0});
 });

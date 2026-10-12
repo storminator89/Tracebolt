@@ -128,14 +128,9 @@ func currentSetupReceipt(layout windowsservice.Layout) (installReceipt, error) {
 		return installReceipt{}, setupgate.ErrGuard
 	}
 	defer clear(raw)
-	var r installReceipt
-	if len(raw) > 64<<10 || json.Unmarshal(raw, &r) != nil || r.Version != 12 || r.ReadSetup == nil || r.Service.Layout != layout {
-		return r, setupgate.ErrGuard
-	}
-	canonical, e := json.Marshal(r)
-	defer clear(canonical)
-	if e != nil || !reflect.DeepEqual(raw, canonical) || !reflect.DeepEqual(r.ReadSetup.Consent, freshReadAdminSetupConsent(false)) {
-		return r, setupgate.ErrGuard
+	r, e := decodeCurrentSetupReceipt(raw, layout)
+	if e != nil {
+		return installReceipt{}, e
 	}
 	return r, s.Close()
 }
@@ -374,10 +369,11 @@ func currentSetupGUIController(ctx context.Context, b currentgate.Binding) (r cu
 	}
 	r.Checks["hiddenConsoleExercised"] = true
 	r.Stage = "pending-capture"
-	// Capture the protected receipt while the worker is blocked at hidden input.
-	// Active pending observations must not reopen its exclusive installer store.
+	// Read only the protected receipt file while the worker is blocked at hidden
+	// input. Its installer store is exclusively held for the whole transaction.
+	// Full-store validation remains mandatory after the worker is quiescent.
 	pending, e := captureCurrentSetupPendingObservation(ctx, func() (installReceipt, error) {
-		return currentSetupReceipt(l)
+		return readCurrentSetupPendingReceipt(ctx, l, windowsstate.ReadSetupReceiptSnapshot)
 	}, windowsservice.InspectFreshReadSetup)
 	if e != nil {
 		return r
@@ -466,8 +462,8 @@ func currentSetupGUIController(ctx context.Context, b currentgate.Binding) (r cu
 			if g.finished(ctx) != nil || !strings.Contains(g.operationText(), "Service start requested") {
 				return r
 			}
-			receipt, e := currentSetupReceipt(l)
-			if e != nil || !completeCurrentReadSetup(receipt) {
+			receipt, e := pending.verifyCompleted(ctx, func() (installReceipt, error) { return currentSetupReceipt(l) }, windowsservice.InspectOwned)
+			if e != nil {
 				return r
 			}
 			r.Checks["completedReceipt"] = true
