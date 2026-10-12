@@ -1,4 +1,4 @@
-/** Ordinary hosted-CI-only driver for three changed catalogue flows.
+/** Ordinary hosted-CI-only driver for five bounded catalogue/review flows.
  * Every browser route is invented/intercepted. No real manager or listener runs. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -8,15 +8,15 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {captureWindowsMSICatalogueFixtures,msiCatalogueDisclosure,msiCatalogueCaptureMatrix} from './capture-windows-msi-catalogue-fixtures.mjs';
+import {captureWindowsMSICatalogueFixtures,msiCatalogueDisclosure,msiCatalogueCaptureMatrix,msiCatalogueScenes,msiCatalogueSceneManifestSHA256} from './capture-windows-msi-catalogue-fixtures.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const sourceSha=process.env.TRACEBOLT_SOURCE_SHA??'';
 assert(process.env.GITHUB_ACTIONS==='true'&&process.env.RUNNER_ENVIRONMENT==='github-hosted','Ordinary hosted CI only; use the inert fixture --check locally.');
 assert(/^[a-f0-9]{40}$/.test(sourceSha));
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceSha);
-assert(msiCatalogueCaptureMatrix.length>0&&msiCatalogueCaptureMatrix.length<=12);
-assert.equal(new Set(msiCatalogueCaptureMatrix.map(row=>row.scene)).size,3);
+assert(msiCatalogueCaptureMatrix.length>0&&msiCatalogueCaptureMatrix.length<=20);
+assert.deepEqual([...new Set(msiCatalogueCaptureMatrix.map(row=>row.scene))],msiCatalogueScenes);
 const {chromium,expect}=require('@playwright/test');
 const output=path.join(root,'artifacts/review'),temporary=await fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-msi-catalogue-browser-'));
 await fs.mkdir(output,{recursive:true});
@@ -41,7 +41,7 @@ try{
 }catch{console.log('FAIL: synthetic MSI catalogue browser gate; raw diagnostics withheld.');}
 finally{
  clearTimeout(timer);try{if(browser)await browser.close();}catch{passed=false}
- await fs.writeFile(path.join(output,'windows-msi-catalogue-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,scenes:passed?3:0,screenshots:passed?msiCatalogueCaptureMatrix.length:0,requestsToRealAPI:0,actualMutationRequests:0,nativeAcceptance:false,disclosure:msiCatalogueDisclosure},null,2)+'\n');
+ await fs.writeFile(path.join(output,'windows-msi-catalogue-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,sceneManifestSHA256:msiCatalogueSceneManifestSHA256,scenes:passed?msiCatalogueScenes.length:0,screenshots:passed?msiCatalogueCaptureMatrix.length:0,requestsToRealAPI:0,actualMutationRequests:0,nativeAcceptance:false,disclosure:msiCatalogueDisclosure},null,2)+'\n');
  await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
- if(passed)console.log(`PASS: ${msiCatalogueCaptureMatrix.length} exact-source MSI catalogue captures for package/storage choice, selected-device worklists and retained outcomes; no real requests or mutation.`);
+ if(passed)console.log(`PASS: ${msiCatalogueCaptureMatrix.length} exact-source MSI catalogue captures for package/storage choice, selected-device worklists retained outcomes and guided package review; no real requests or mutation.`);
 }

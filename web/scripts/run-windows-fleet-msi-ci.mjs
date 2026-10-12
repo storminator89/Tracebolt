@@ -21,11 +21,17 @@ assert(/^[a-f0-9]{40}$/.test(sourceSha));
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sourceSha);
 const output=path.join(root,'artifacts/review'),temporary=await fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-fleet-msi-browser-'));
 await fs.mkdir(output,{recursive:true});
-let browser,timer,passed=false;
+let browser,timer,passed=false,failureRecorded=null;
+// Fixed recipe coordinates only; never persist caught errors, DTOs or URLs.
+let failure={phase:'launch',producer:null,scene:null,locale:null,width:null};
+const phase=(producer,step)=>{failure={phase:step,producer,scene:null,locale:null,width:null}};
+const currentCase=producer=>({scene,locale,width})=>{failure={phase:'capture',producer,scene,locale,width}};
 try{
  await Promise.race([(async()=>{
   browser=await chromium.launch({headless:true,args:['--no-sandbox'],env:{...process.env,HOME:temporary,XDG_CONFIG_HOME:temporary,XDG_CACHE_HOME:temporary}});
-  const manifest=await captureWindowsFleetMSIFixtures({browser,expect,output});
+  phase('fleet','capture');
+  const manifest=await captureWindowsFleetMSIFixtures({browser,expect,output,onCase:currentCase('fleet')});
+  phase('fleet','validate');
   assert.equal(manifest.browserExecuted,true);assert.equal(manifest.nativeAcceptance,false);assert.equal(manifest.captures.length,16);
   assert.equal(manifest.disclosure,windowsFleetMSIDisclosure);
   assert.equal(new Set(manifest.captures.map(c=>c.file)).size,16);
@@ -36,7 +42,9 @@ try{
    const bytes=await fs.readFile(path.join(output,file));assert(bytes.length>8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));
    row.sha256=createHash('sha256').update(bytes).digest('hex');row.sourceSha=sourceSha;row.publicSafe=true;row.fullPage=false;
   }
-  const saved=await captureWindowsSavedMSIFixtures({browser,expect,output});
+  phase('saved','capture');
+  const saved=await captureWindowsSavedMSIFixtures({browser,expect,output,onCase:currentCase('saved')});
+  phase('saved','validate');
   assert.equal(saved.browserExecuted,true);assert.equal(saved.nativeAcceptance,false);assert.equal(saved.captures.length,windowsSavedMSICaptureMatrix.length);
   assert.equal(saved.sourceDigest,manifest.sourceDigest);assert.equal(saved.disclosure,windowsSavedMSIDisclosure);
   assert.equal(new Set(saved.captures.map(c=>c.file)).size,windowsSavedMSICaptureMatrix.length);
@@ -50,7 +58,9 @@ try{
   }
   saved.sourceSha=sourceSha;
   await fs.writeFile(path.join(output,'windows-saved-msi-manifest.json'),JSON.stringify(saved,null,2)+'\n');
-  const reusable=await captureWindowsReusableMSIFixtures({browser,expect,output});
+  phase('reusable','capture');
+  const reusable=await captureWindowsReusableMSIFixtures({browser,expect,output,onCase:currentCase('reusable')});
+  phase('reusable','validate');
   assert.equal(reusable.browserExecuted,true);assert.equal(reusable.nativeAcceptance,false);assert.equal(reusable.captures.length,16);
   assert.equal(reusable.sourceDigest,manifest.sourceDigest);assert.equal(reusable.disclosure,reusableMSIDisclosure);
   assert.equal(new Set(reusable.captures.map(c=>c.file)).size,16);
@@ -60,18 +70,23 @@ try{
    const bytes=await fs.readFile(path.join(output,file));assert(bytes.length>8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));
    row.sha256=createHash('sha256').update(bytes).digest('hex');row.sourceSha=sourceSha;row.publicSafe=true;row.fullPage=false;
   }
-  const scheduled=await captureWindowsScheduledMSIFixtures({browser,expect,output});
+  phase('scheduled','capture');
+  const scheduled=await captureWindowsScheduledMSIFixtures({browser,expect,output,onCase:currentCase('scheduled')});
+  phase('scheduled','validate');
   assert.equal(scheduled.browserExecuted,true);assert.equal(scheduled.nativeAcceptance,false);assert.equal(scheduled.captures.length,scheduledMSIScenes.length*4);
-  assert.equal(scheduled.sourceDigest,manifest.sourceDigest);assert.equal(scheduled.disclosure,scheduledMSIDisclosure);assert.equal(new Set(scheduled.captures.map(c=>c.file)).size,scheduledMSIScenes.length*4);
+  assert.equal(scheduled.sourceDigest,manifest.sourceDigest);assert.equal(scheduled.disclosure,scheduledMSIDisclosure);for(const file of ['web/scripts/capture-windows-scheduled-msi-fixtures.mjs','web/scripts/run-windows-fleet-msi-ci.mjs'])assert(scheduled.sourceInputs.some(input=>input.file===file));assert.equal(new Set(scheduled.captures.map(c=>c.file)).size,scheduledMSIScenes.length*4);
   for(const locale of ['en','de'])for(const width of [1440,390])for(const scene of scheduledMSIScenes){
    const file=`synthetic-windows-scheduled-msi-${scene}-${width}-${locale}.png`,row=scheduled.captures.find(c=>c.file===file);
    assert(row&&row.locale===locale&&row.width===width&&row.height===(width===390?844:1100)&&row.synthetic===true&&row.sourceDigest===scheduled.sourceDigest&&row.disclosure===scheduledMSIDisclosure);
+   assert.deepEqual(row.assertions,{fleet:scene.startsWith('fleet-'),confirmationUnchecked:scene==='fleet-shared-window-unchecked'||scene==='approval-unchecked',sharedWindowExact:scene==='fleet-shared-window-unchecked',mixedSavedOutcome:scene==='fleet-mixed-scheduled-unsent',previewReads:scene==='fleet-shared-window-unchecked'?1:0,actualMutationRequests:0});
    const bytes=await fs.readFile(path.join(output,file));assert(bytes.length>8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));
    row.sha256=createHash('sha256').update(bytes).digest('hex');row.sourceSha=sourceSha;row.publicSafe=true;row.fullPage=false;
   }
   scheduled.sourceSha=sourceSha;
   await fs.writeFile(path.join(output,'windows-scheduled-msi-manifest.json'),JSON.stringify(scheduled,null,2)+'\n');
-  const catalogue=await captureSoftwareCatalogueFixtures({browser,expect,output});
+  phase('recent-package','capture');
+  const catalogue=await captureSoftwareCatalogueFixtures({browser,expect,output,onCase:currentCase('recent-package')});
+  phase('recent-package','validate');
   assert.equal(catalogue.browserExecuted,true);assert.equal(catalogue.nativeAcceptance,false);assert.equal(catalogue.captures.length,8);assert.equal(catalogue.sourceDigest,manifest.sourceDigest);assert.equal(catalogue.disclosure,softwareCatalogueDisclosure);assert.equal(new Set(catalogue.captures.map(c=>c.file)).size,8);
   for(const locale of ['en','de'])for(const width of [1440,390])for(const scene of softwareCatalogueScenes){
    const file=`synthetic-windows-software-catalogue-${scene}-${width}-${locale}.png`,row=catalogue.captures.find(c=>c.file===file);
@@ -87,11 +102,11 @@ try{
   await fs.writeFile(path.join(output,'windows-fleet-msi-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
  })(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Synthetic fleet MSI browser gate timed out')),240000)})]);
  passed=true;
-}catch{console.log('FAIL: synthetic fleet MSI browser gate; raw diagnostics withheld.');}
+}catch{failureRecorded={...failure};console.log('FAIL: synthetic fleet MSI browser gate; raw diagnostics withheld.');}
 finally{
- clearTimeout(timer);try{if(browser)await browser.close();}catch{passed=false}
- await fs.writeFile(path.join(output,'windows-scheduled-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?scheduledMSIScenes.length*4:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:scheduledMSIDisclosure},null,2)+'\n');
- await fs.writeFile(path.join(output,'windows-fleet-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?16:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:windowsFleetMSIDisclosure},null,2)+'\n');
+ clearTimeout(timer);try{if(passed)phase(null,'close');if(browser)await browser.close();}catch{if(passed)failureRecorded={...failure};passed=false}
+ await fs.writeFile(path.join(output,'windows-scheduled-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?scheduledMSIScenes.length*4:0,syntheticPreviewReads:passed?4:0,actualMutationRequests:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:scheduledMSIDisclosure},null,2)+'\n');
+ await fs.writeFile(path.join(output,'windows-fleet-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?16:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:windowsFleetMSIDisclosure,...(!passed?{failure:failureRecorded??failure}:{})},null,2)+'\n');
  await fs.writeFile(path.join(output,'windows-saved-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?windowsSavedMSICaptureMatrix.length:0,syntheticPreviewReads:passed?windowsSavedMSICaptureMatrix.filter(row=>row.scene.endsWith('-unchecked')).length:0,requestsToRealAPI:0,actualMutationRequests:0,nativeAcceptance:false,disclosure:windowsSavedMSIDisclosure},null,2)+'\n');
  await fs.writeFile(path.join(output,'windows-reusable-msi-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?16:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:reusableMSIDisclosure},null,2)+'\n');
  await fs.writeFile(path.join(output,'windows-software-catalogue-results.json'),JSON.stringify({sourceSha,status:passed?'PASS':'FAIL',browserAcceptance:passed,variants:passed?4:0,screenshots:passed?8:0,requestsToRealAPI:0,nativeAcceptance:false,disclosure:softwareCatalogueDisclosure},null,2)+'\n');

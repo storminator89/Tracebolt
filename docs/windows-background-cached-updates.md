@@ -26,7 +26,9 @@ key domain, observer relay v3 and shared plan/roster/activation v3 are create-on
 They cannot adopt foreground v1, scheduling v2, coordinated v3, prepared-MSI or
 existing reusable foreground state. The existing foreground entry still rejects
 service tokens and requires its original elevated interactive nonzero session.
-Scheduling is excluded. A later combined scheduling profile needs separate consent.
+Scheduling is excluded from this v4 profile. The separately implemented
+[fresh combined v5 profile](windows-scheduled-background-updates.md) requires
+its own scheduling consent; this profile is not promoted.
 
 The service reads protected public agent configuration, original certificate,
 renewal manifest, activated ready marker and exact relay consent. It never calls

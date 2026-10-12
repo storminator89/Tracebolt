@@ -3,10 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createWindowsUpdateJobsFixture,requireWindowsUpdateJobsEvidence,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
-import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
+import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,requireWindowsFleetUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
 const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8'),id='update_'+'9'.repeat(32);
-function setup(profile='standalone'){
- const base=windowsUpdateJobsOrigin,fixture=createWindowsUpdateScheduleFixture(profile),state={blocked:[],external:[]},prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
+function setup(profile='standalone',fixture=createWindowsUpdateScheduleFixture(profile)){
+ const base=windowsUpdateJobsOrigin,state={blocked:[],external:[]},prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
  const headers={'x-csrf-token':fixture.session.csrfToken,origin:base,'content-type':'application/json'};
  let assetPath=null,continued=false;
  const handler=windowsUpdateScheduleRoute({base,fixture,state,asset:async(_route,path)=>{assetPath=path;}});
@@ -124,4 +124,43 @@ test('hosted combined supplement preserves earlier gates, real screenshot helper
  // The dedicated manual-background coexistence case remains a required independent gate.
  assert.match(read('./windows-mutation-coexistence-browser.mjs'),/Background update service · Manual approvals only/);assert.match(read('./windows-mutation-coexistence-fixtures.test.mjs'),/schedulingAvailable/);
  assert.match(windowsBackgroundUpdateScheduleDisclosure,/Fresh combined-background scheduling profile/);assert.match(windowsBackgroundUpdateScheduleDisclosure,/availability is not checked live/);
+});
+
+
+test('fleet scheduling fixture keeps two exact independent bindings and a fixed common UTC window',()=>{
+ const f=createWindowsFleetUpdateScheduleFixture(),first=f.updateView(),second=f.secondUpdateView(),history=f.secondUpdateHistory();
+ assert.equal(first.deviceId,f.device.id);assert.equal(first.job,null);assert.equal(first.backgroundScheduling,true);
+ assert.equal(second.deviceId,f.secondDevice.id);assert.notEqual(second.deviceId,first.deviceId);assert.equal(second.schedulingAvailable,false);assert.equal(second.schedulingRevoked,true);assert.equal(second.job.state,'schedule_blocked');assert.equal(second.job.reason,'schedule_authority_revoked');assert.equal(second.job.schedule.revoked,true);assert.equal(second.job.schedule.permitIssuedAt,0);
+ assert.deepEqual(second.job.selection,f.secondSelection);assert.notDeepEqual(second.job.selection,f.selection);assert.equal(second.job.schedule.startAt,f.scheduleWindow.startAt);assert.equal(second.job.schedule.endAt,f.scheduleWindow.endAt);assert.notEqual(second.job.schedule.digest,f.scheduleDigest);
+ assert.equal(history.remainingCapacity,31);assert.equal(history.jobs[0].id,f.secondSavedID);assert.deepEqual(history.jobs[0].schedule,second.job.schedule);assert.equal(history.jobs[0].approvedAt,0);assert.equal(history.jobs[0].claimedAt,0);
+ second.job.schedule.endAt++;history.jobs[0].schedule.revoked=false;assert.equal(f.secondUpdateView().job.schedule.endAt,f.scheduleWindow.endAt);assert.equal(f.secondUpdateHistory().jobs[0].schedule.revoked,true);
+ assert.deepEqual(f.secondPostAttempts,{request:0,preview:0,approve:0,other:0});assert.deepEqual(f.scheduleCounts,{schedule:0,cancel:0,immediateInstallWrites:0});
+});
+test('one synthetic fleet approval never advances or replaces the other saved device schedule',async()=>{
+ const f=setup('background',createWindowsFleetUpdateScheduleFixture()),secondPath='/api/devices/'+f.fixture.secondDevice.id+'/windows-update-jobs';
+ const before=(await f.invokePath(secondPath)).value;await reviewed(f);
+ assert.deepEqual(await f.invoke('/schedule',post({...approval(f),endAt:f.fixture.scheduleWindow.endAt+60})),{abort:'blockedbyclient'});
+ const saved=(await f.invoke('/schedule',post(approval(f)))).value;assert.equal(saved.job.state,'scheduled');assert.deepEqual(saved.job.selection,f.fixture.selection);assert.equal(saved.job.schedule.startAt,f.fixture.scheduleWindow.startAt);assert.equal(saved.job.schedule.endAt,f.fixture.scheduleWindow.endAt);
+ assert.deepEqual((await f.invoke('?jobId='+id)).value,saved);assert.deepEqual((await f.invokePath(secondPath+'?jobId='+f.fixture.secondSavedID)).value,before);assert.equal((await f.invokePath(secondPath+'?history=1')).value.jobs[0].state,'schedule_blocked');
+ assert.deepEqual(f.fixture.scheduleCounts,{schedule:1,cancel:0,immediateInstallWrites:0});assert.deepEqual(f.fixture.secondPostAttempts,{request:0,preview:0,approve:0,other:0});assert.deepEqual(f.fixture.secondUpdateCounts,{request:0,preview:0,approve:0,status:2});assert.deepEqual(f.state.external,[]);assert.equal(f.assetState().continued,false);
+});
+test('fleet peer mutation routes stay rejected and counted rather than gaining authority from selection',async()=>{
+ const f=setup('background',createWindowsFleetUpdateScheduleFixture()),secondPath='/api/devices/'+f.fixture.secondDevice.id+'/windows-update-jobs';
+ for(const operation of ['request','preview','approve','schedule','cancel-schedule','revoke-scheduling'])assert.deepEqual(await f.invokePath(secondPath+'/'+operation,post({})),{abort:'blockedbyclient'});
+ assert.deepEqual(f.fixture.secondPostAttempts,{request:1,preview:1,approve:1,other:3});assert.deepEqual(f.fixture.scheduleCounts,{schedule:0,cancel:0,immediateInstallWrites:0});assert.equal(f.fixture.updateCounts.request,0);assert.equal(f.fixture.secondUpdateView().job.state,'schedule_blocked');
+ for(const query of ['?jobId='+id,'?history=1&extra=1'])assert.deepEqual(await f.invokePath(secondPath+query),{abort:'blockedbyclient'});
+});
+const fleetEvidence=()=>windowsFleetUpdateScheduleScenes.flatMap(kind=>['en','de'].flatMap(locale=>[1440,390].map(width=>({file:`synthetic-windows-fleet-update-schedule-${kind}-${width}-${locale}.png`,sourceSha,test:windowsFleetUpdateScheduleCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsFleetUpdateScheduleDisclosure}))));
+test('fleet captures require exactly two distinct scenes in both locales and viewports at the exact source',()=>{
+ assert.deepEqual(windowsFleetUpdateScheduleScenes,['shared-window-review','per-device-summary']);assert.deepEqual(requireWindowsFleetUpdateScheduleEvidence(fleetEvidence(),sourceSha),{screens:8,nativeAcceptance:false});
+ for(const mutate of [r=>r.pop(),r=>r.push(r[0]),r=>{r[1]=r[0];},r=>{r[0].file='synthetic-windows-update-schedule-review-1440-en.png';},r=>{r[0].sourceSha='b'.repeat(40);},r=>{r[0].locale='de';},r=>{r[0].viewport.width=800;},r=>{r[0].viewport.height=844;},r=>{r[0].fullPage=true;},r=>{r[0].publicSafe=false;},r=>{r[0].fixtureDisclosure=windowsBackgroundUpdateScheduleDisclosure;},r=>{r[0].test=windowsBackgroundUpdateScheduleCaseName;}]){const rows=fleetEvidence();mutate(rows);assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(rows,sourceSha));}
+ assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(fleetEvidence(),null));assert.throws(()=>requireWindowsFleetUpdateScheduleEvidence(backgroundEvidence(),sourceSha));assert.throws(()=>requireWindowsBackgroundUpdateScheduleEvidence(fleetEvidence(),sourceSha));
+});
+test('common-window scenes are additive to the existing intercepted gate without new timeout or weaker original checks',()=>{
+ const runner=read('./windows-service-actions-runner.mjs'),helper=read('./windows-update-schedule-browser.mjs'),workflow=read('../../.github/workflows/validate.yml');
+ assert.equal(typeof exerciseWindowsFleetUpdateSchedule,'function');assert.match(runner,/createWindowsFleetUpdateScheduleFixture\(\)/);assert.match(runner,/requireWindowsFleetUpdateScheduleEvidence\(fleetScheduleScreenshots,sourceSha\)/);assert.match(runner,/fleetScheduleVariants.length!==4/);assert.match(runner,/\.\.\.fleetScheduleScreenshots/);assert.match(runner,/fleetState.blocked\)\.toEqual\(\[\]\)/);assert.match(runner,/fleetState.external\)\.toEqual\(\[\]\)/);assert.match(runner,/fleetStorage.includes\(value\)/);
+ assert.equal((runner.match(/120000/g)||[]).length,1);for(const check of ['requireWindowsServiceActionsEvidence','requireWindowsServiceActionHistoryEvidence','requireWindowsUpdateJobsEvidence','requireWindowsUpdateScheduleEvidence','requireWindowsBackgroundUpdateScheduleEvidence','requireWindowsSoftwareJobsEvidence'])assert.ok(runner.includes(check+'('));
+ for(const hook of ["capture('shared-window-review',schedule)","capture('per-device-summary',worklist.locator('.windows-fleet-update-list'))","await expect(ack).not.toBeChecked();await expect(approve).toBeDisabled()","await expect(summary).toBeInViewport({ratio:1})","expect(fixture.secondUpdateCounts.status).toBe(0)","expect(fixture.updateReads.exact).toBeGreaterThan(0)"])assert.ok(helper.includes(hook),hook);
+ assert.match(workflow,/node tests\/e2e-review\/windows-service-actions-runner.mjs/);assert.match(workflow,/artifacts\/review\/synthetic-\*\.png/);assert.match(workflow,/artifacts\/review\/windows-service-actions-manifest.json/);
+ assert.match(windowsFleetUpdateScheduleDisclosure,/second device.*GETs only/);assert.match(windowsFleetUpdateScheduleDisclosure,/no real API request or mutation/);assert.doesNotMatch(helper,/chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(|route\.continue|route\.fetch|setTimeout/);
 });

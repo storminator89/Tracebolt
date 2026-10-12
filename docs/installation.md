@@ -42,9 +42,12 @@ reset state. If approved TLS material is unavailable, explain the blocker; the
 [disposable HTTP test](http-complete-first-start.md) is only an explicitly approved
 isolated alternative, with plaintext credential/content risks.
 
-**Windows:** use the separate [status and setup guide](windows-status.md). The
-published unsigned five-scope preview is older than current source-only Read
-admin. Do not use the Linux command on Windows or claim the new profile is released.
+**Windows:** use unsigned x64
+[preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+and its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
+Prepare matching reviewed manager/frontend source separately. Native acceptance
+covers a bounded Server 2025 packaged-Setup subset; see [Windows status](windows-status.md).
+Do not use the Linux endpoint command on Windows.
 
 ## Other supported development paths
 
@@ -64,7 +67,7 @@ separate from endpoint releases; no manager update silently replaces an agent.
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
 | Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native evidence is linked in the read-admin guide; other host/profile combinations remain separate |
-| Windows endpoint | [Published unsigned x64 prerelease](windows-prerelease-historical/windows-prerelease-install.md), bounded read-only inventory and shared dashboard; accepted hosted Windows Server 2025 subset in [Windows status](windows-status.md) | Windows 10/11, real Linux-manager/browser interoperability, interactive UAC/reboot/upgrade/full-removal proof or ARM64 runtime acceptance |
+| Windows endpoint | [Unsigned x64 preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2), fresh twenty-one-scope Read admin setup; bounded hosted Server 2025 packaged-Setup acceptance in [Windows status](windows-status.md) | Windows 10/11, complete provider coverage, real Linux-manager/browser interoperability, native restart/reboot, interactive UAC, full removal or ARM64 runtime acceptance |
 | macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
@@ -103,7 +106,7 @@ plan. Record these answers without secrets:
   foreground Linux sender meets the request. For a Linux installed service, read
   the [service contract](linux-agent-service.md) and exact manual-gate evidence.
   For Windows, read [preview status](windows-status.md) and the
-  [Setup guide](windows-setup-preview.md). There is no supported macOS LAN
+  [release installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md). There is no supported macOS LAN
   installation path. True reboot persistence remains unverified.
 
 Before changing the target, get approval for the concrete plan, destinations and
@@ -419,7 +422,8 @@ go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
 This starts foreground reporting only. Closing/stopping it stops reporting.
 This command installs no service. A separate Linux/systemd installer candidate is
 described below; automatic renewal and true reboot acceptance remain open.
-Keep Windows/macOS limited to their separately tested stdout collectors.
+For Windows use its [separate installation path](#windows-installation-paths);
+macOS remains limited to its standalone collector.
 
 For deliberately insecure HTTP testing, the native enrollment command also
 requires `--insecure-http-test` on every invocation. Invitations, reports and
@@ -478,8 +482,8 @@ The manual [disposable-systemd acceptance gate](../tests/systemd/README.md) test
 actual install/start/reporting/restart/artifact replacement/uninstall only when
 explicitly enabled on a fresh hosted Ubuntu VM. Default tests skip it before
 effects. Source and inert-fixture passes do not establish this runtime result;
-check the selected source's manual workflow evidence. True OS reboot, native
-Windows/macOS installation and automatic credential renewal remain separate gaps.
+check the selected source's manual workflow evidence. True OS reboot, complete
+Windows lifecycle, macOS LAN installation and renewal cutover remain separate gaps.
 
 ### Optional on-demand service log content
 
@@ -658,17 +662,21 @@ was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
 
 ## Windows installation paths
 
-The published unsigned x64 [Windows preview](windows-prerelease-install.md)
-contains a five-scope read-only setup and a limited hosted Server 2025 acceptance
-result. Use that release guide for its exact binaries and prerequisites.
+Download unsigned x64 [Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+and follow its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
+Use the original `v0.0.0-setup-candidate` filenames and verify the exact files.
+Prepare the matching reviewed manager/frontend source separately; the Linux
+rc.3 endpoint release is not a manager compatibility guarantee.
 
-The current [Read admin source setup](windows-read-admin-setup.md) offers the complete
-explicitly disclosed read profile. It needs matching reviewed source-built Setup,
-service and manager artifacts, with actual consent unchecked. Native/provider
-acceptance and a new release remain pending. No Windows migration rollout is
-required for the current fresh-install target. [Current limits and priorities](windows-status.md).
+Fresh [Read admin setup](windows-read-admin-setup.md) has twenty-one disclosed
+read scopes with unchecked consent. Its accepted native subset covers only
+Server 2025 x64 packaged installation/service removal, hidden-input cancellation
+and interrupted transport with a loopback TLS fixture manager.
+[Current limits](windows-status.md) include unproved real-manager/dashboard
+interoperability, complete provider coverage, Windows 11 and native restart/reboot.
 
-Both paths require protected setup resources, hidden invitation entry, deliberate
-fingerprint approval and appropriate host authorization. Keep the service staged
-disabled until activation and exact grants are verified. Neither path grants
-selected message content, cached updates or service control implicitly.
+Installation requires protected resources, hidden invitation entry, deliberate
+fingerprint approval and appropriate host authorization. The service stays staged
+disabled until activation and exact grants are verified. Optional MSI/WUA installs,
+service actions and selected-user helpers are separately gated. For preview.1
+bytes, use the [historical guide](windows-prerelease-historical/windows-prerelease-install.md).

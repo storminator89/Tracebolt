@@ -150,7 +150,7 @@ func TestManagedMSISchedulePolicyLegacyBytesRemainUnchanged(t *testing.T) {
 
 // All evidence is signed inert metadata. The fixture performs no MSI inspection,
 // installation, native admission, host enrollment, or service operation.
-func newManagedScheduledStoreFixture(t *testing.T) (windowsSoftwareStoreFixture, msi.Grant) {
+func newManagedScheduledStoreFixture(t *testing.T, baselineOnly ...bool) (windowsSoftwareStoreFixture, msi.Grant) {
 	t.Helper()
 	f, g, a, delivered := savedMSIStoreFixture(t, true)
 	ctx := context.Background()
@@ -159,6 +159,9 @@ func newManagedScheduledStoreFixture(t *testing.T) (windowsSoftwareStoreFixture,
 		t.Fatal("deliver exact scheduled assignment", err)
 	}
 	for _, step := range []string{"claim-delivery", "imported", "review", "claim-readiness", "ready", "schedule"} {
+		if step == "schedule" && len(baselineOnly) == 1 && baselineOnly[0] {
+			break
+		}
 		_, _, err := f.store.WindowsManagedMSITransaction(ctx, g.Binding, key, f.at, func(r *msi.Record, c msi.Current, at time.Time) error {
 			var err error
 			switch step {

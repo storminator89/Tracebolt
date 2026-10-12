@@ -1,5 +1,7 @@
 """Inert selection/contract tests; no Go tests, browser, network, or host actions."""
 import importlib.util
+import io
+from contextlib import redirect_stdout
 import json
 import os
 from pathlib import Path
@@ -152,6 +154,9 @@ class SelectionTests(unittest.TestCase):
             'windows-software-catalogue.tsx': ['windows-fleet-msi'],
             'journal-ai.tsx': ['lan'], 'journal-browse.tsx': ['lan'],
             'windows-update-jobs.tsx': ['windows-mutation-coexistence', 'windows-service-actions'],
+            'windows-update-retirement.tsx': ['windows-mutation-coexistence', 'windows-service-actions'],
+            'windows-update-retirement-resource.ts': ['windows-mutation-coexistence', 'windows-service-actions'],
+            'windows-update-retirement.test.tsx': ['windows-mutation-coexistence', 'windows-service-actions'],
             'package-updates.tsx': ['conditional', 'lan'],
             'service-actions.tsx': ['service-action', 'service-action-v2'],
             'windows-managed-msi.tsx': ['windows-fleet-msi', 'windows-managed-msi', 'windows-mutation-coexistence'],
@@ -162,6 +167,197 @@ class SelectionTests(unittest.TestCase):
     def test_shared_or_unknown_ui_broadens_instead_of_guessing(self):
         for path in ['web/src/App.tsx', 'web/src/api.ts', 'web/src/new-feature.tsx', 'web/package-lock.json']:
             self.assertTrue(self.select(('M', path))['broadWeb'])
+
+    def test_exact_owned_scripts_select_the_existing_complete_fleet_flow(self):
+        expected = {
+            'capture-windows-fleet-msi-fixtures.mjs', 'capture-windows-msi-catalogue-fixtures.mjs',
+            'capture-windows-reusable-msi-fixtures.mjs', 'capture-windows-scheduled-msi-fixtures.mjs',
+            'capture-windows-software-catalogue-fixtures.mjs', 'run-windows-fleet-msi-ci.mjs',
+            'run-windows-msi-catalogue-ci.mjs',
+            'windows-msi-catalogue-scenes.json',
+        }
+        self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items() if flows == {'windows-fleet-msi'}}, {'web/scripts/' + name for name in expected})
+        for path, flows in p.DOMAIN_SCRIPTS.items():
+            if flows != {'windows-fleet-msi'}:
+                continue
+            self.assertEqual(flows, {'windows-fleet-msi'})
+            self.assertTrue((ROOT / path).is_file())
+            for status in ['A', 'M']:
+                with self.subTest(path=path, status=status):
+                    plan = self.select((status, path))
+                    self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                    self.assertEqual(plan['packages'], []); self.assertEqual(plan['web'], [])
+                    self.assertEqual(plan['flows'], ['windows-fleet-msi'])
+                    with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+                        p.browser_checks(plan)
+                    self.assertEqual([call.args[0] for call in run.call_args_list], [
+                        ['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'],
+                        ['node', 'web/scripts/run-windows-fleet-msi-ci.mjs'],
+                        ['node', 'web/scripts/run-windows-msi-catalogue-ci.mjs'],
+                    ])
+                    report.assert_called_once_with('windows-fleet-msi', SHA)
+
+    def test_exact_retirement_fixture_selects_its_existing_update_owner(self):
+        expected = {'tests/e2e-review/windows-update-retirement-browser.mjs',
+                    'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'}
+        self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items()
+                          if flows == {'windows-service-actions'}}, expected)
+        for path in expected:
+            self.assertTrue((ROOT / path).is_file())
+            for status in ['A', 'M']:
+                plan = self.select((status, path))
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['flows'], ['windows-service-actions'])
+                with patch.object(p, 'run') as run:
+                    p.web_checks(plan)
+                self.assertIn(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'],
+                              [call.args[0] for call in run.call_args_list])
+        # A new caller must be reviewed before narrowing this exact dependency.
+        consumers = set()
+        for directory in ['web/scripts', 'web/src', 'tests/e2e-review']:
+            for source in (ROOT / directory).rglob('*'):
+                if source.suffix in {'.js', '.mjs', '.ts', '.tsx', '.mts'} and 'windows-update-retirement-browser.mjs' in source.read_text():
+                    consumers.add(source.relative_to(ROOT).as_posix())
+        self.assertEqual(consumers, {'tests/e2e-review/windows-service-actions-runner.mjs',
+                                     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'})
+
+    def test_retirement_browser_report_uses_the_canonical_source_validator(self):
+        plan = self.select(('M', 'tests/e2e-review/windows-update-retirement-browser.mjs'))
+        with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+            p.browser_checks(plan)
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'],
+            ['node', 'tests/e2e-review/windows-service-actions-runner.mjs'],
+            ['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', SHA],
+        ])
+        report.assert_called_once_with('windows-service-actions', SHA)
+
+    def test_owned_script_selection_unions_with_go_dependencies_and_other_flows(self):
+        edits = [('M', 'internal/api/windows_maintenance.go'), ('M', 'web/src/windows-maintenance.test.tsx')]
+        expected = self.select(*edits)
+        changes = edits + [('M', path) for path in p.DOMAIN_SCRIPTS] + [('M', p.GENERATED_ALLOWLIST)]
+        plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
+        self.assertEqual(plan['packages'], expected['packages'])
+        self.assertEqual(plan['web'], expected['web'])
+        self.assertEqual(plan['flows'], ['windows-fleet-msi', 'windows-maintenance', 'windows-service-actions'])
+        self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+        self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
+                                      generated_allowlist_verified=True))
+
+    def test_exact_msi_ui_owners_keep_changed_and_related_interaction_checks(self):
+        self.assertEqual(set(p.DOMAIN_UI), {
+            'web/src/windows-fleet-managed-msi.css',
+            'web/src/windows-fleet-managed-msi.test.tsx',
+            'web/src/windows-reusable-managed-msi.test.tsx',
+        })
+        for path, flows in p.DOMAIN_UI.items():
+            with self.subTest(path=path):
+                self.assertEqual(flows, {'windows-fleet-msi'})
+                self.assertTrue((ROOT / path).is_file())
+                plan = self.select(('M', path))
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['flows'], ['windows-fleet-msi'])
+                self.assertEqual(plan['web'], [path.removeprefix('web/')])
+                with patch.object(p, 'run') as run:
+                    p.web_checks(plan)
+                calls = [call.args[0] for call in run.call_args_list]
+                self.assertIn(['node', 'web/scripts/capture-windows-msi-catalogue-fixtures.mjs', '--check'], calls)
+                self.assertTrue(any('related' in call and path.removeprefix('web/') in call for call in calls))
+                for config in ['vitest.config.mts', 'v3-dom.config.mts']:
+                    self.assertTrue(any('related' in call and 'tests/e2e-review/' + config in call and path in call
+                                        for call in calls))
+                if '.test.' in path:
+                    self.assertTrue(any('run' in call and path.removeprefix('web/') in call for call in calls))
+                for status in ['D', 'R100', 'T']:
+                    deleted = self.select((status, path))
+                    self.assertTrue(deleted['broadGo']); self.assertTrue(deleted['broadWeb'])
+        for path in ['web/src/windows-fleet-managed-msi-new-helper.ts',
+                     'web/src/windows-reusable-managed-msi-new.test.tsx']:
+            self.assertTrue(self.select(('M', path))['broadWeb'])
+
+    def test_owned_script_map_never_exempts_unknown_shared_security_or_deleted_paths(self):
+        for change in [
+            ('M', 'web/scripts/capture-windows-new-msi-fixtures.mjs'),
+            ('M', 'web/scripts/run-windows-new-msi-ci.mjs'),
+            ('M', 'web/scripts/windows-msi-new-scenes.json'),
+            ('M', 'web/scripts/capture-screenshots.mjs'),
+            ('M', 'web/scripts/check-test-environments.mjs'),
+            ('M', 'web/scripts/windows-updates-fixtures.go'),
+            ('M', 'tests/e2e-review/windows-maintenance-runner.mjs'),
+            ('M', 'tests/fixtures/windows-maintenance-view.json'),
+            ('M', 'internal/windowsstorageio/testdata/snapshot.json'),
+            ('M', 'tests/security/pr_checks.py'),
+            ('M', 'tests/security/report_go_failure.py'),
+            ('M', p.GENERATED_ALLOWLIST),
+            ('M', 'web/scripts/../scripts/run-windows-fleet-msi-ci.mjs'),
+            *[(status, path) for path in p.DOMAIN_SCRIPTS for status in ['D', 'R100', 'T']],
+        ]:
+            with self.subTest(change=change):
+                plan = self.select(('M', 'web/scripts/run-windows-fleet-msi-ci.mjs'), change)
+                self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+                self.assertEqual(plan['packages'], sorted(self.packages))
+                self.assertEqual(plan['flows'], sorted(p.FLOWS))
+        plan = self.select(('M', 'web/scripts/run-windows-fleet-msi-ci.mjs'), ('M', 'web/src/api.ts'))
+        self.assertFalse(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+        self.assertEqual(plan['flows'], sorted(p.FLOWS))
+
+    def test_msi_script_dependency_ownership_and_complete_capture_calls(self):
+        # Fail closed on new direct source consumers: an exact script must never
+        # become a cross-domain helper while retaining only its old flow mapping.
+        # This bounded literal-reference contract supplements the reviewed map;
+        # it is not a JavaScript dependency resolver or a prefix-based exemption.
+        names = {Path(path).name for path, flows in p.DOMAIN_SCRIPTS.items() if flows == {'windows-fleet-msi'}}
+        for directory in ['web/scripts', 'web/src', 'tests/e2e-review']:
+            for source in (ROOT / directory).rglob('*'):
+                if source.suffix not in {'.js', '.cjs', '.mjs', '.ts', '.tsx', '.mts', '.cts'}:
+                    continue
+                text = source.read_text()
+                if any(name in text for name in names):
+                    relative = source.relative_to(ROOT).as_posix()
+                    self.assertIn(relative, p.DOMAIN_SCRIPTS, relative)
+        runner = (ROOT / p.FLOWS['windows-fleet-msi']).read_text()
+        for name, function, producer, result in [
+            ('capture-windows-fleet-msi-fixtures.mjs', 'captureWindowsFleetMSIFixtures', 'fleet', 'manifest'),
+            ('capture-windows-fleet-msi-fixtures.mjs', 'captureWindowsSavedMSIFixtures', 'saved', 'saved'),
+            ('capture-windows-reusable-msi-fixtures.mjs', 'captureWindowsReusableMSIFixtures', 'reusable', 'reusable'),
+            ('capture-windows-scheduled-msi-fixtures.mjs', 'captureWindowsScheduledMSIFixtures', 'scheduled', 'scheduled'),
+            ('capture-windows-software-catalogue-fixtures.mjs', 'captureSoftwareCatalogueFixtures', 'recent-package', 'catalogue'),
+        ]:
+            self.assertIn("from './" + name + "'", runner)
+            # Pin the full producer call and its matching closed diagnostic
+            # coordinate, between the same producer's capture/validate phases.
+            self.assertIn("phase('" + producer + "','capture');\n  const " + result
+                          + '=await ' + function + "({browser,expect,output,onCase:currentCase('"
+                          + producer + "')});\n  phase('" + producer + "','validate');", runner)
+        companion = (ROOT / 'web/scripts/run-windows-msi-catalogue-ci.mjs').read_text()
+        self.assertIn("from './capture-windows-msi-catalogue-fixtures.mjs'", companion)
+        self.assertIn('await captureWindowsMSICatalogueFixtures({browser,expect,output})', companion)
+
+    def test_ordinary_domain_test_fixtures_keep_exact_owners_or_conservative_fallback(self):
+        package = 'localrmm/internal/windowsmaintenance'
+        packages, files = p.graph([
+            {'ImportPath': package, 'GoFiles': ['maintenance.go'], 'TestGoFiles': ['fixtures_test.go'],
+             'TestEmbedFiles': ['testdata/fixture.json']},
+            {'ImportPath': 'localrmm/internal/api', 'Imports': [package]},
+            {'ImportPath': 'localrmm/tests/domain', 'TestImports': [package]},
+            {'ImportPath': 'localrmm/internal/independent'},
+        ])
+        for path in ['internal/windowsmaintenance/fixtures_test.go', 'internal/windowsmaintenance/testdata/fixture.json']:
+            with self.subTest(path=path):
+                plan = p.select([('M', path)], packages, files, SHA)
+                self.assertFalse(plan['broadGo'])
+                self.assertEqual(plan['packages'], sorted(set(packages) - {'localrmm/internal/independent'}))
+                # The generic nested embed name has a Go owner, but no explicit
+                # browser-domain name; its API dependents therefore broaden web.
+                nested_embed = path.endswith('.json')
+                self.assertEqual(plan['broadWeb'], nested_embed)
+                self.assertEqual(plan['flows'], sorted(p.FLOWS) if nested_embed else ['windows-maintenance'])
+        for path in ['web/src/windows-maintenance-fixture.ts', 'web/src/windows-maintenance.test.tsx']:
+            with self.subTest(path=path):
+                plan = self.select(('M', path))
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['packages'], []); self.assertEqual(plan['web'], [path.removeprefix('web/')])
+                self.assertEqual(plan['flows'], ['windows-maintenance'])
 
     def test_scheduled_msi_product_and_paired_setup_select_existing_hosted_flows(self):
         msi = {'windows-fleet-msi', 'windows-managed-msi', 'windows-mutation-coexistence'}
@@ -199,6 +395,60 @@ class SelectionTests(unittest.TestCase):
                 source = (ROOT / '.github/workflows' / workflow).read_text()
                 self.assertEqual(source.count('            artifacts/review/' + name + '\n'), 1)
 
+    def test_fleet_failure_reports_only_bounded_same_source_recipe_location(self):
+        failure = {'phase': 'capture', 'producer': 'scheduled', 'scene': 'fleet-shared-window-unchecked', 'locale': 'de', 'width': 390}
+        report = {'sourceSha': SHA, 'status': 'FAIL', 'browserAcceptance': False, 'variants': 0,
+                  'screenshots': 0, 'requestsToRealAPI': 0, 'nativeAcceptance': False,
+                  'disclosure': 'synthetic fixture', 'failure': failure}
+        marker = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD'
+        cases = [('valid', report, True)]
+        for producer, scenes in p.FLEET_MSI_FAILURE_SCENES.items():
+            for scene in scenes:
+                cases.append(('coordinate', {**report, 'failure': {**failure, 'producer': producer, 'scene': scene}}, True))
+        for phase in ['launch', 'close']:
+            cases.append((phase, {**report, 'failure': dict.fromkeys(failure, None) | {'phase': phase}}, True))
+        for producer in p.FLEET_MSI_FAILURE_SCENES:
+            for phase in ['capture', 'validate']:
+                cases.append((phase, {**report, 'failure': dict.fromkeys(failure, None) | {'phase': phase, 'producer': producer}}, True))
+        for key, value in [('sourceSha', 'b' * 40), ('status', 'PASS'), ('screenshots', True), ('nativeAcceptance', True), ('raw', marker)]:
+            cases.append((key, {**report, key: value}, False))
+        for key, value in [('phase', marker), ('producer', marker), ('scene', marker), ('locale', marker), ('width', marker), ('raw', marker), ('scene', ['scheduled'])]:
+            cases.append((key, {**report, 'failure': {**failure, key: value}}, False))
+        cases.extend([('malformed', marker.encode(), False), ('oversized', b' ' * 4097, False),
+                      ('duplicate', json.dumps(report).replace('"phase": "capture"', '"phase": "capture", "phase": "capture"').encode(), False),
+                      ('missing', None, False), ('symlink', report, False)])
+        for name, value, admitted in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); target = root / 'artifacts/review/windows-fleet-msi-results.json'
+                target.parent.mkdir(parents=True)
+                calls = []
+                def process(args, **kwargs):
+                    calls.append(args)
+                    kwargs['stdout'].write(marker.encode())
+                    if args == ['node', p.FLOWS['windows-fleet-msi']]:
+                        if value is not None:
+                            raw = value if isinstance(value, bytes) else json.dumps(value).encode()
+                            if name == 'symlink':
+                                backing = root / 'untrusted.json'; backing.write_bytes(raw); target.symlink_to(backing)
+                            else:
+                                target.write_bytes(raw)
+                        return SimpleNamespace(returncode=1)
+                    return SimpleNamespace(returncode=0)
+                output = io.StringIO()
+                with patch.object(p, 'ROOT', root), patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+                    with self.assertRaises(ValueError):
+                        p.browser_checks({'flows': ['windows-fleet-msi'], 'sha': SHA})
+                text = output.getvalue()
+                self.assertIn('FAIL stage: browser-windows-fleet-msi', text)
+                self.assertEqual('FAIL fleet MSI location:' in text, admitted)
+                self.assertNotIn(marker, text)
+                self.assertNotIn(['node', 'web/scripts/run-windows-msi-catalogue-ci.mjs'], calls)
+        runner = (ROOT / p.FLOWS['windows-fleet-msi']).read_text()
+        for producer in p.FLEET_MSI_FAILURE_SCENES:
+            self.assertIn("onCase:currentCase('" + producer + "')", runner)
+        self.assertIn('failureRecorded={...failure}', runner)
+        self.assertIn('process.exitCode=passed?0:1', runner)
+
     def test_catalogue_companion_runs_in_focused_fleet_flow_and_retains_evidence(self):
         plan = {'flows': ['windows-fleet-msi'], 'sha': SHA, 'broadWeb': False, 'web': []}
         with patch.object(p, 'run') as run, patch.object(p, 'browser_report'):
@@ -213,11 +463,15 @@ class SelectionTests(unittest.TestCase):
                 source = (ROOT / '.github/workflows' / workflow).read_text()
                 self.assertEqual(source.count('            artifacts/review/' + name + '\n'), 1)
         report = {'sourceSha': SHA, 'status': 'PASS', 'browserAcceptance': True,
-                  'scenes': 3, 'screenshots': 12, 'requestsToRealAPI': 0,
-                  'actualMutationRequests': 0, 'nativeAcceptance': False}
+                  'scenes': 5, 'screenshots': 20, 'requestsToRealAPI': 0,
+                  'actualMutationRequests': 0, 'nativeAcceptance': False,
+                  'sceneManifestSHA256': p.catalogue_scene_contract()[1]}
         p.validate_catalogue_browser_report(report, SHA)
-        for key, value in [('sourceSha', 'b' * 40), ('status', 'FAIL'), ('browserAcceptance', False), ('scenes', 2),
-                           ('screenshots', 11), ('actualMutationRequests', 1), ('nativeAcceptance', True)]:
+        for key, value in [('sourceSha', 'b' * 40), ('status', 'FAIL'), ('browserAcceptance', False), ('scenes', 4), ('scenes', 3),
+                           ('screenshots', 19), ('screenshots', 12), ('scenes', 6), ('screenshots', 21),
+                           ('scenes', 5.0), ('screenshots', 20.0), ('sceneManifestSHA256', ''),
+                           ('sceneManifestSHA256', 'b' * 64), ('requestsToRealAPI', 1),
+                           ('actualMutationRequests', 1), ('nativeAcceptance', True)]:
             with self.subTest(key=key), self.assertRaises(ValueError):
                 p.validate_catalogue_browser_report({**report, key: value}, SHA)
         alternate = {**report, 'results': [{'name': 'generic result', 'status': 'PASS'}],
@@ -225,6 +479,47 @@ class SelectionTests(unittest.TestCase):
         del alternate['browserAcceptance']
         with self.assertRaises(ValueError):
             p.validate_catalogue_browser_report(alternate, SHA)
+
+    def test_catalogue_producer_and_gate_share_exact_required_scene_contract(self):
+        contract, digest = p.catalogue_scene_contract()
+        self.assertEqual(contract['scenes'], ['catalogue-storage-limit', 'selected-package-worklist',
+                         'retained-outcome-after-reuse', 'guided-review-missing', 'guided-review-ready'])
+        self.assertEqual(contract['viewports'], [
+            {'locale': locale, 'width': width, 'height': 844 if width == 390 else 1100}
+            for locale in ['en', 'de'] for width in [1440, 390]])
+        self.assertRegex(digest, r'^[0-9a-f]{64}$')
+        fixture = (ROOT / 'web/scripts/capture-windows-msi-catalogue-fixtures.mjs').read_text()
+        runner = (ROOT / 'web/scripts/run-windows-msi-catalogue-ci.mjs').read_text()
+        self.assertIn("readFile(new URL('./windows-msi-catalogue-scenes.json',import.meta.url))", fixture)
+        self.assertIn('msiCatalogueScenes=Object.freeze([...sceneManifest.scenes])', fixture)
+        self.assertIn('msiCatalogueScenes.flatMap(scene=>msiCatalogueViewports.map', fixture)
+        self.assertIn('scenes:passed?msiCatalogueScenes.length:0', runner)
+        self.assertIn('screenshots:passed?msiCatalogueCaptureMatrix.length:0', runner)
+        self.assertIn('sceneManifestSHA256:msiCatalogueSceneManifestSHA256', runner)
+        self.assertIn("'windows-msi-catalogue-scenes.json'", (ROOT / 'web/scripts/capture-windows-fleet-msi-fixtures.mjs').read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); path = root / 'web/scripts/windows-msi-catalogue-scenes.json'
+            path.parent.mkdir(parents=True)
+            invalid = [None, [], {}, {**contract, 'schemaVersion': True}, {**contract, 'schemaVersion': 2},
+                       {**contract, 'extra': 1}, {**contract, 'scenes': []},
+                       {**contract, 'scenes': contract['scenes'] + [contract['scenes'][0]]},
+                       {**contract, 'scenes': ['../outside']}, {**contract, 'scenes': [1]},
+                       {**contract, 'viewports': contract['viewports'][:-1]},
+                       {**contract, 'viewports': [*contract['viewports'], contract['viewports'][0]]},
+                       {**contract, 'viewports': [{**contract['viewports'][0], 'width': 1440.0}, *contract['viewports'][1:]]}]
+            with patch.object(p, 'ROOT', root):
+                for value in invalid:
+                    path.write_text(json.dumps(value, indent=2) + '\n')
+                    with self.subTest(value=value), self.assertRaises((ValueError, TypeError)):
+                        p.catalogue_scene_contract()
+                for raw in ['', '{', 'x' * 8193,
+                            '{"schemaVersion":1,"schemaVersion":1,"scenes":[],"viewports":[]}']:
+                    path.write_text(raw)
+                    with self.assertRaises(ValueError): p.catalogue_scene_contract()
+                path.unlink()
+                with self.assertRaises(OSError): p.catalogue_scene_contract()
+                target = root / 'target.json'; target.write_text(json.dumps(contract)); path.symlink_to(target)
+                with self.assertRaises(OSError): p.catalogue_scene_contract()
 
     def test_docs_keep_fixed_safety_checks_without_affected_package_claim(self):
         plan = self.select(('M', 'docs/example.md'))

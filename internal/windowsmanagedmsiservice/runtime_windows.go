@@ -151,7 +151,7 @@ func run(ctx context.Context, ready func()) error {
 		if ctx.Err() != nil || c == nil || c.Err() != nil || windowsmanagedmsiexecutor.VerifyServiceToken() != nil || guard.Check(c) != nil || CheckInstalled(c, config, true) != nil || CheckProfile(c, config) != nil || store.Verify() != nil {
 			return managed.ErrAuthority
 		}
-		if config.Mutation != nil && config.Mutation.Version == fence.BackgroundRosterVersion {
+		if config.Mutation != nil && config.Mutation.BackgroundWUA() {
 			currentActivation, ae := store.Read("activation.json")
 			if ae != nil || !bytes.Equal(currentActivation, activation) {
 				return managed.ErrAuthority

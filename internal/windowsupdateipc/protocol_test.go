@@ -106,3 +106,33 @@ func TestPipeAccessExcludesInstanceCreation(t *testing.T) {
 		t.Fatal("FILE_CREATE_PIPE_INSTANCE")
 	}
 }
+
+func TestRetirementIPCIsTypedAndNeverRetries(t *testing.T) {
+	peer, _ := testPeer()
+	client, _ := NewClient(peer)
+	calls := 0
+	client.call = func(_ context.Context, _ PeerConfig, r request) (response, error) {
+		calls++
+		if r.Operation != "retire" || !bytes.Equal(r.Envelope, []byte("exact retirement")) {
+			t.Fatal("wrong opcode", r.Operation)
+		}
+		return response{}, job.ErrUncertain
+	}
+	if _, e := client.Retire(context.Background(), []byte("exact retirement")); !errors.Is(e, job.ErrUncertain) || calls != 1 {
+		t.Fatal("retirement replayed", calls, e)
+	}
+	r := request{Version: Version, Operation: "outbox", Kind: "retired", JobID: "update_" + strings.Repeat("4", 32), ReferenceDigest: actionpermit.Digest([]byte("retire"))}
+	if r.validate() != nil {
+		t.Fatal("saved retirement outbox denied")
+	}
+	r.Envelope = []byte("smuggled")
+	if r.validate() == nil {
+		t.Fatal("outbox accepted command")
+	}
+	client.call = func(context.Context, PeerConfig, request) (response, error) {
+		return response{Version: Version, Status: &job.ExecutorStatus{}}, nil
+	}
+	if _, e := client.Retire(context.Background(), []byte("exact retirement")); e == nil {
+		t.Fatal("retirement accepted untyped status")
+	}
+}

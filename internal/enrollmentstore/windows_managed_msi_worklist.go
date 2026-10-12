@@ -265,6 +265,11 @@ func (s *Store) WindowsMSIWorklistTransaction(ctx context.Context, key ed25519.P
 					if !found && fresh.Unix() >= b.ExpiresAt {
 						return msi.ErrExpired
 					}
+					if !found {
+						if err := msi.CheckWorklistScheduleAuthority(b, records, currents, fresh.Unix()); err != nil {
+							return err
+						}
+					}
 				}
 			}
 			j.ClockFloor = fresh.Unix()

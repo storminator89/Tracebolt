@@ -34,7 +34,7 @@ func windowsUpdateJobRoute(r *http.Request) (string, string, bool) {
 	op := ""
 	if len(p) == 6 {
 		op = p[5]
-		if op != "request" && op != "approve" && op != "preview" && !windowsUpdateScheduleOperation(op) {
+		if op != "request" && op != "approve" && op != "preview" && op != "retire" && !windowsUpdateScheduleOperation(op) {
 			return "", "", false
 		}
 	}
@@ -132,6 +132,21 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		selectedID = in.RequestID
 		mutate = func() error {
 			return manager.Request(r.Context(), device, actor, in.RequestID, windowsupdatejob.Selection{UpdateID: in.UpdateID, Revision: in.Revision})
+		}
+	} else if op == "retire" {
+		var in struct {
+			JobID          string `json:"jobId"`
+			Occurrence     uint64 `json:"occurrence,string"`
+			EnvelopeDigest string `json:"envelopeDigest"`
+			ResultDigest   string `json:"resultDigest"`
+			Acknowledged   bool   `json:"acknowledged"`
+		}
+		if !readObject(w, r, 1024, []string{"jobId", "occurrence", "envelopeDigest", "resultDigest", "acknowledged"}, &in) {
+			return
+		}
+		selectedID = in.JobID
+		mutate = func() error {
+			return manager.Retire(r.Context(), device, actor, in.JobID, in.Occurrence, in.EnvelopeDigest, in.ResultDigest, in.Acknowledged)
 		}
 	} else if op == "preview" {
 		var in struct {
@@ -273,6 +288,9 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 		v.Reason = "operator_capability_required"
 		if v.Job != nil {
 			v.Job.Preview = nil
+			if v.Job.Retirement != nil {
+				v.Job.Retirement.State = "blocked"
+			}
 		}
 	}
 	if h.insecureHTTPTest {
@@ -281,6 +299,9 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 		v.Reason = "tls_required"
 		if v.Job != nil {
 			v.Job.Preview = nil
+			if v.Job.Retirement != nil {
+				v.Job.Retirement.State = "blocked"
+			}
 		}
 	}
 	if operatorStillActive(w, r) {

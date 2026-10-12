@@ -58,12 +58,55 @@ full grant digest, leaf/expiry and original signed baseline evidence. Changed
 occurrences, renewed leaves and different readiness cannot substitute for it.
 Approval requires the current authenticated session, CSRF and final session fence.
 Later dispatch is separately approved prospective authority, so the browser need
-not remain open. There is no saved fleet scheduling batch in this first slice.
+not remain open. The saved fleet stage below only submits these exact per-device approvals.
 
 The intent lives on the existing per-device record in the same enrollment
 transaction, not another execution ledger. A saved request digest and actor let
 GET reconcile a lost approval response. The browser never retries an unconfirmed
 POST. Cancel uses the exact schedule digest and serializes with issuance.
+
+## Saved fleet scheduling for one selected package
+
+Select one retained catalogue occurrence and save the intended device list. After
+explicit delivery and package review, choose Schedule and review one shared UTC
+window. The preview enumerates exact eligible devices and shows separate exclusions
+for unavailable/changed assignment, local scheduling capability, original actor,
+fresh readiness and window bounds. Another retained package, identical content in
+a new custody occurrence, later-ready devices or a renewed leaf cannot substitute.
+
+A fresh unchecked acknowledgement explicitly covers the selected package and terms,
+LocalSystem/custom-action risk, synchronous actions and prospective dispatch after
+the browser closes. Both named-operator install and schedule capabilities and each
+device's original fresh scheduled grant are required. Confirming the bounded list
+creates no intent or permit. While its original session and baseline readiness
+remain valid, the browser submits each original per-device schedule request in
+order through the existing endpoint, with its exact batch reference. The batch
+lasts at most 60 seconds; it does not wait for the UTC window. There is no deferred
+manual approval, timer queue, automatic next stage or all-or-nothing execution
+across devices.
+
+Each successful request atomically saves the existing per-device prospective intent
+and a `scheduled` journal item with the distinct approval digest. Scheduled means
+intended, not permit issued or installed. The existing authenticated endpoint relay
+and original bounded local authority must still satisfy every v4 dispatch guard.
+One device can be scheduled while another remains unsent or fails. An uncertain
+response stops further sends and reconciles only with GET; it never retries or
+resumes a POST. Reopening preserves those separate outcomes. Explicit Stop closes
+only remaining unsent batch requests; it does not cancel saved intents. Cancel each
+saved schedule through its existing exact digest control; issued permits cannot be
+recalled. Installation results and explicit result-bound cleanup remain unchanged.
+
+Original worklist limits (nine lists, 25 targets, nine batches and 256 KiB per
+record), catalogue limits (four entries, shared 128 MiB reserved-byte budget),
+monotonic custody occurrences and retirement floors remain unchanged. Schedule-only
+fields are omitted from all earlier stage bytes. Pending, blocked, expired or
+canceled intents do not qualify unresolved assignments for history compaction.
+
+The private worklist API adds POST `/worklists/{id}/schedule-preview` with the
+revision and exact start/end. POST `/batches` accepts `kind: "schedule"` with those
+same window bounds on every item and fresh schedule-specific acknowledgements.
+The existing per-device `/schedule` accepts the strict optional batch reference;
+its original standalone body and v4 request/approval/permit contract are unchanged.
 
 ## One readiness, one permit, one native attempt
 

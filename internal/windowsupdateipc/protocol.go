@@ -107,12 +107,12 @@ func (r request) validate() error {
 		if r.Envelope != nil || r.Kind != "" || r.JobID != "" || r.ReferenceDigest != "" {
 			return job.ErrInvalid
 		}
-	case "readiness", "submit":
+	case "readiness", "submit", "retire":
 		if len(r.Envelope) == 0 || len(r.Envelope) > job.MaxRelayBytes || r.Kind != "" || r.JobID != "" || r.ReferenceDigest != "" {
 			return job.ErrInvalid
 		}
 	case "outbox":
-		if r.Envelope != nil || (r.Kind != "readiness" && r.Kind != "result") || !enrollmentcrypto.ValidID(r.JobID, "update_") || !actionpermit.ValidDigest(r.ReferenceDigest) {
+		if r.Envelope != nil || (r.Kind != "readiness" && r.Kind != "result" && r.Kind != "retired") || !enrollmentcrypto.ValidID(r.JobID, "update_") || !actionpermit.ValidDigest(r.ReferenceDigest) {
 			return job.ErrInvalid
 		}
 	default:
@@ -186,6 +186,18 @@ func (c *Client) CheckPeer(ctx context.Context, b job.Binding) error {
 }
 func (c *Client) Readiness(ctx context.Context, raw []byte) ([]byte, error) {
 	r, e := c.request(ctx, request{Version: Version, Operation: "readiness", Envelope: raw})
+	if e != nil {
+		return nil, e
+	}
+	if r.Status != nil || len(r.Report) == 0 || len(r.Report) > job.MaxRelayBytes {
+		return nil, job.ErrInvalid
+	}
+	return r.Report, nil
+}
+
+// Retire forwards only exact manager-reviewed metadata retirement. It is not a submit.
+func (c *Client) Retire(ctx context.Context, raw []byte) ([]byte, error) {
+	r, e := c.request(ctx, request{Version: Version, Operation: "retire", Envelope: raw})
 	if e != nil {
 		return nil, e
 	}

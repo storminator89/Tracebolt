@@ -37,7 +37,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		var m managedMSIResult
 		var w updateProvisionResult
 		// Caller cannot inject already generated material or a nested apply.
-		if in.MSI.apply || in.WUA.apply || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
+		if in.MSI.apply || in.WUA.apply || in.WUA.reusable && !in.WUA.background || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
 			return nil, managed.ErrAuthority
 		}
 		if _, e := nativeManagedMSIProvisionUnderLease(ctx, in.MSI, &m, receipt, lease); e != nil {
@@ -65,6 +65,16 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 				plan.Version = scheduledMSIAndWUAMutationVersion
 			}
 			plan.Disclosure += " " + managed.ScheduledDisclosure
+		}
+		if in.WUA.reusable {
+			plan.Version = reusableWUAMutationVersion
+			plan.Disclosure = windowsupdatesetup.ReusableBackgroundDisclosure + " " + managed.ReusableDisclosure
+			if in.WUA.schedule {
+				plan.Disclosure += " " + windowsupdatesetup.ReusableBackgroundScheduleDisclosure
+			}
+			if in.MSI.schedule {
+				plan.Disclosure += " " + managed.ScheduledDisclosure
+			}
 		}
 		if plan.Validate() != nil {
 			return nil, managed.ErrAuthority
@@ -139,6 +149,10 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 				consent.ScheduleAcknowledged = true
 			}
 		}
+		if in.WUA.reusable {
+			consent.Version = job.ReusableConsentVersion
+			consent.ReusableAcknowledged = true
+		}
 		mbJSON, _ := json.Marshal(b)
 		wbJSON, _ := json.Marshal(wb)
 		g.PeerBindingDigest = managed.Digest(wbJSON)
@@ -149,6 +163,9 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 			if in.WUA.background {
 				roster.Version = fence.BackgroundRosterVersion
 			}
+		}
+		if in.WUA.reusable {
+			roster.Version = fence.ReusableWUARosterVersion
 		}
 		if g.Validate() != nil || consent.Validate() != nil || roster.Validate() != nil || b.ExecutorKeyID == plan.MSI.Identity.LeafPublicKeyDigest || wb.ExecutorKeyID == plan.MSI.Identity.LeafPublicKeyDigest {
 			return nil, managed.ErrAuthority
@@ -168,7 +185,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		}
 		wi := in.WUA
 		wi.apply = true
-		wi.approval = windowsupdatesetup.Approval{Digest: plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Background: in.WUA.background, Schedule: in.WUA.schedule}
+		wi.approval = windowsupdatesetup.Approval{Digest: plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Background: in.WUA.background, Schedule: in.WUA.schedule, Reusable: in.WUA.reusable}
 		wi.coordinated = &windowsupdatesetup.CoordinatedMaterial{Roster: roster, Key: wKey, ExecutorID: wb.ExecutorID, GrantID: wb.GrantID}
 		if _, e = nativeUpdateProvisionUnderLease(ctx, wi, &w, receipt, lease); e != nil {
 			return nil, e
@@ -254,7 +271,7 @@ func verifyCoordinatedParticipants(ctx context.Context, receipt installReceipt, 
 	rootFunc := windowsupdateipc.RootPath
 	options := windowsupdateipc.StoreOptions()
 	imageFunc := windowspackage.OpenUpdateExecutorImage
-	if roster.Version == fence.BackgroundRosterVersion {
+	if roster.BackgroundWUA() {
 		rootFunc = windowsupdateipc.ServiceRootPath
 		options = windowsupdateipc.ServiceStoreOptions()
 		imageFunc = windowspackage.OpenUpdateServiceImage
@@ -276,7 +293,7 @@ func verifyCoordinatedParticipants(ctx context.Context, receipt installReceipt, 
 	if e != nil || wc.Mutation == nil || *wc.Mutation != roster || wc.ObserverReceipt != receipt.Service || windowsupdatesetup.VerifyInstalled(ws, wc) != nil {
 		return out, managed.ErrAuthority
 	}
-	if roster.Version == fence.BackgroundRosterVersion && windowsupdateservice.CheckInstalled(ctx, wc, false) != nil {
+	if roster.BackgroundWUA() && windowsupdateservice.CheckInstalled(ctx, wc, false) != nil {
 		return out, managed.ErrAuthority
 	}
 	wreceipt, e := ws.Read("progress.json")
@@ -314,6 +331,9 @@ func verifyCoordinatedParticipants(ctx context.Context, receipt installReceipt, 
 	}
 	if roster.Version == fence.BackgroundRosterVersion {
 		out.Version = fence.BackgroundActivationVersion
+	}
+	if roster.ReusableWUA() {
+		out.Version = fence.ReusableWUAActivationVersion
 	}
 	return out, out.Validate()
 }

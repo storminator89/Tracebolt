@@ -304,7 +304,7 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 	if t.TransferID == "" || v.TransferID != t.TransferID || v.JobSequence != strconv.FormatUint(t.JobSequence, 10) {
 		return "changed"
 	}
-	if (kind == "review" || kind == "approve") && v.Schedule != nil {
+	if (kind == "review" || kind == "approve" || kind == "schedule") && v.Schedule != nil {
 		return "not_eligible"
 	}
 	if kind == "review" {
@@ -331,7 +331,7 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 		}
 		return ""
 	}
-	if kind != "approve" {
+	if kind != "approve" && kind != "schedule" {
 		return "not_eligible"
 	}
 	if v.State != "ready" || !msi.ValidDigest(v.ReadinessDigest) {
@@ -340,14 +340,29 @@ func worklistEligible(w msi.Worklist, t msi.WorklistTarget, v View, kind string,
 	if now >= v.ExpiresAt {
 		return "expired"
 	}
+	if kind == "schedule" {
+		if !v.SchedulingAvailable {
+			return "capability"
+		}
+		return ""
+	}
 	if v.Mutation == nil || !v.Mutation.Active || v.Mutation.Blocked || v.Mutation.Phase != "idle" || v.MutationCapturedAt > now || now-v.MutationCapturedAt >= 60 {
 		return "busy"
 	}
 	return ""
 }
 func (r *Registry) PreviewWorklist(ctx context.Context, actor, id string, revision uint64, kind string) (WorklistPreview, error) {
+	return r.previewWorklist(ctx, actor, id, revision, kind, 0, 0)
+}
+func (r *Registry) PreviewWorklistSchedule(ctx context.Context, actor, id string, revision uint64, startAt, endAt int64) (WorklistPreview, error) {
+	return r.previewWorklist(ctx, actor, id, revision, "schedule", startAt, endAt)
+}
+func (r *Registry) previewWorklist(ctx context.Context, actor, id string, revision uint64, kind string, startAt, endAt int64) (WorklistPreview, error) {
 	out := WorklistPreview{WorklistID: id, Revision: revision, Kind: kind, Items: []msi.WorklistRequest{}, Excluded: []WorklistExcluded{}}
-	if kind != "deliver" && kind != "review" && kind != "approve" && kind != "retire" {
+	if kind == "schedule" && (!msi.ValidTime(startAt) || !msi.ValidTime(endAt) || endAt-startAt < 60 || endAt-startAt > 600) {
+		return out, msi.ErrInvalid
+	}
+	if kind != "deliver" && kind != "review" && kind != "approve" && kind != "retire" && kind != "schedule" {
 		return out, msi.ErrInvalid
 	}
 	j, e := r.worklistRead(ctx, actor)
@@ -373,6 +388,9 @@ func (r *Registry) PreviewWorklist(ctx context.Context, actor, id string, revisi
 				reason = worklistEligible(*w, t, v, kind, r.artifact.now().Unix())
 			}
 		}
+		if reason == "" && kind == "schedule" {
+			reason = m.scheduleWorklistEligibility(ctx, actor, *w, t, v.ReadinessDigest, startAt, endAt)
+		}
 		if reason != "" {
 			out.Excluded = append(out.Excluded, WorklistExcluded{t.Binding.DeviceID, reason})
 			continue
@@ -387,8 +405,11 @@ func (r *Registry) PreviewWorklist(ctx context.Context, actor, id string, revisi
 		} else {
 			q.JobSequence = strconv.FormatUint(t.JobSequence, 10)
 			q.Operation = "review-coordinated"
-			if kind == "approve" {
-				q.Operation = "approve"
+			if kind == "approve" || kind == "schedule" {
+				q.Operation = kind
+				if kind == "schedule" {
+					q.StartAt, q.EndAt = startAt, endAt
+				}
 				q.ReadinessDigest = v.ReadinessDigest
 				q.ExpiresAt = min(q.ExpiresAt, v.ExpiresAt)
 			} else if kind == "retire" {
@@ -433,6 +454,21 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 		return WorklistView{}, err
 	}
 	ctx = msi.WithCatalogueOccurrence(ctx, occ)
+	if q.Kind == "schedule" {
+		check := func() error {
+			for _, b := range bindings {
+				m := r.Manager(b.DeviceID)
+				if m == nil || m.Binding() != b || !m.scheduleAllowed(sess.ActorID) {
+					return msi.ErrAuthority
+				}
+			}
+			return nil
+		}
+		if err := check(); err != nil {
+			return WorklistView{}, err
+		}
+		ctx = msi.WithFinalCheck(ctx, check)
+	}
 	_, e = r.worklistWrite(ctx, sess.ActorID, kind, bindings, func(j *msi.WorklistJournal, a msi.ArtifactRecord, records map[string]msi.Record, at time.Time) error {
 		w := j.Find(id)
 		if w == nil || w.Revision != q.Revision || w.ArchivedAt != 0 {
@@ -451,6 +487,9 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 		}
 		b := msi.WorklistBatch{ID: batchID, Kind: q.Kind, ActorID: sess.ActorID, SessionDigest: sess.Digest, SessionExpiresAt: sess.ExpiresAt, CreatedAt: at.Unix(), ExpiresAt: min(at.Unix()+60, sess.ExpiresAt), Acknowledgements: q.Acknowledgements, Items: []msi.WorklistBatchItem{}}
 		for _, item := range q.Items {
+			if q.Kind == "schedule" && (item.StartAt != q.Items[0].StartAt || item.EndAt != q.Items[0].EndAt) {
+				return msi.ErrConflict
+			}
 			var t *msi.WorklistTarget
 			for ti := range w.Targets {
 				if w.Targets[ti].Binding.DeviceID == item.DeviceID {
@@ -512,9 +551,18 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 					if e != nil || re != nil || rp.ActorID != sess.ActorID || ready.State != "ready" || item.ReadinessDigest != msi.Digest(rec.ReadinessReport) || at.Unix() >= rp.ExpiresAt || at.Unix() < ready.CapturedAt || at.Unix()-ready.CapturedAt >= 60 || item.ExpiresAt > min(rp.ExpiresAt, ready.CapturedAt+60) {
 						return msi.ErrExpired
 					}
-					shared, e := msi.VerifyReport(rec.MutationReport, rec.ExecutorPublicKey)
-					if e != nil || shared.Mutation == nil || !shared.Mutation.Active || shared.Mutation.Blocked || shared.Mutation.Phase != "idle" || shared.CapturedAt > at.Unix() || at.Unix()-shared.CapturedAt >= 60 {
-						return msi.ErrUnavailable
+					if q.Kind == "schedule" {
+						if !rec.Grant.Scheduled() || rp.ScheduleDigest != "" || ready.Readiness == nil {
+							return msi.ErrAuthority
+						}
+						if item.StartAt <= at.Unix() || item.StartAt-at.Unix() > 86400 || item.StartAt < rp.ExpiresAt || item.EndAt > rec.Grant.ExpiresAt {
+							return msi.ErrExpired
+						}
+					} else {
+						shared, e := msi.VerifyReport(rec.MutationReport, rec.ExecutorPublicKey)
+						if e != nil || shared.Mutation == nil || !shared.Mutation.Active || shared.Mutation.Blocked || shared.Mutation.Phase != "idle" || shared.CapturedAt > at.Unix() || at.Unix()-shared.CapturedAt >= 60 {
+							return msi.ErrUnavailable
+						}
 					}
 				}
 			}

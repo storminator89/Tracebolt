@@ -1,5 +1,6 @@
 """Bounded PR/main source checks. This is never full-race or native evidence."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -69,6 +70,30 @@ FLOWS = {
     'conditional': 'tests/e2e-review/conditional-browser.mjs',
     'v3': 'tests/e2e-review/v3-mvp-browser.mjs',
     'managed': 'tests/e2e-review/managed-preview.mjs',
+}
+# Exact reviewed script dependencies, not filename/prefix guesses. The fleet
+# entry point exercises fleet/saved/reusable/scheduled/recent-package captures;
+# browser_checks also runs its multi-package catalogue companion. The shared
+# compiler/router below is owned by these same flows. Unknown scripts, general
+# helpers, generators and independent test fixtures retain the broad fallback.
+DOMAIN_SCRIPTS = {
+    'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
+    'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
+    'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi'},
+    'web/scripts/capture-windows-msi-catalogue-fixtures.mjs': {'windows-fleet-msi'},
+    'web/scripts/capture-windows-reusable-msi-fixtures.mjs': {'windows-fleet-msi'},
+    'web/scripts/capture-windows-scheduled-msi-fixtures.mjs': {'windows-fleet-msi'},
+    'web/scripts/capture-windows-software-catalogue-fixtures.mjs': {'windows-fleet-msi'},
+    'web/scripts/run-windows-fleet-msi-ci.mjs': {'windows-fleet-msi'},
+    'web/scripts/run-windows-msi-catalogue-ci.mjs': {'windows-fleet-msi'},
+    'web/scripts/windows-msi-catalogue-scenes.json': {'windows-fleet-msi'},
+}
+# These existing UI names do not match the older domain aliases. Keep them in
+# the normal changed/related Vitest path while selecting their verified owner.
+DOMAIN_UI = {
+    'web/src/windows-fleet-managed-msi.css': {'windows-fleet-msi'},
+    'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
+    'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
 }
 ALIASES = {'windowsmanagedmsiworklist': ['windows-fleet-msi'],
            'windowsmanagedmsireusable': ['windows-fleet-msi'],
@@ -203,6 +228,9 @@ def select(changes, packages, files, sha, runnable=None, generated_allowlist_ver
             continue  # Generated vocabulary only; actual Go edits remain in the diff.
         if path.startswith(SHARED):
             broad = broad_web = True
+        if path in DOMAIN_SCRIPTS:
+            flows |= DOMAIN_SCRIPTS[path]
+            continue  # Existing full domain flows cover these exact non-Go files.
         if path.startswith(UI_SHARED):
             broad_web = True
         if path in files:
@@ -215,7 +243,7 @@ def select(changes, packages, files, sha, runnable=None, generated_allowlist_ver
                 unmapped |= files[path]
         elif path.startswith('web/src/') and Path(path).suffix in {'.ts', '.tsx', '.css'}:
             web.add(path.removeprefix('web/'))
-            domain = flow_names(path)
+            domain = DOMAIN_UI.get(path, set()) or flow_names(path)
             flows |= domain
             if not domain:
                 broad_web = True
@@ -323,6 +351,8 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-windows-msi-catalogue-fixtures.mjs', '--check'], stage='ui-msi-catalogue-contract')
     run(['npm', 'run', 'test:environments'], ROOT / 'web', stage='ui-environment-contract')
@@ -383,10 +413,42 @@ def validate_browser_report(flow, value, sha):
             raise ValueError('incomplete enrollment browser cases')
 
 
+def catalogue_scene_contract():
+    """Read the same bounded, domain-owned scene/viewport source as the producer."""
+    path = ROOT / 'web/scripts/windows-msi-catalogue-scenes.json'
+    with os.fdopen(reporter.open_log(path), 'rb') as stream:
+        metadata = os.fstat(stream.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 8192:
+            raise ValueError('invalid catalogue scene contract')
+        raw = stream.read(8193)
+    if not raw or len(raw) > 8192:
+        raise ValueError('invalid catalogue scene contract')
+    value = reporter.decode(raw)
+    if raw != (json.dumps(value, indent=2) + '\n').encode():
+        raise ValueError('noncanonical catalogue scene contract')
+    if (not isinstance(value, dict) or set(value) != {'schemaVersion', 'scenes', 'viewports'}
+            or type(value['schemaVersion']) is not int or value['schemaVersion'] != 1
+            or not isinstance(value['scenes'], list) or not 0 < len(value['scenes']) <= 8
+            or any(not isinstance(scene, str) or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', scene)
+                   for scene in value['scenes']) or len(set(value['scenes'])) != len(value['scenes'])):
+        raise ValueError('invalid catalogue scene contract')
+    expected_viewports = [{'locale': locale, 'width': width, 'height': 844 if width == 390 else 1100}
+                          for locale in ['en', 'de'] for width in [1440, 390]]
+    if (value['viewports'] != expected_viewports
+            or any(type(row['width']) is not int or type(row['height']) is not int
+                   for row in value['viewports'])):
+        raise ValueError('invalid catalogue viewport contract')
+    return value, hashlib.sha256(raw).hexdigest()
+
+
 def validate_catalogue_browser_report(value, sha):
     validate_browser_report('windows-fleet-msi', value, sha)
+    contract, digest = catalogue_scene_contract()
     if (value.get('browserAcceptance') is not True or value.get('status') != 'PASS'
-            or value.get('scenes') != 3 or value.get('screenshots') != 12
+            or value.get('sceneManifestSHA256') != digest
+            or type(value.get('scenes')) is not int or value['scenes'] != len(contract['scenes'])
+            or type(value.get('screenshots')) is not int
+            or value['screenshots'] != len(contract['scenes']) * len(contract['viewports'])
             or value.get('requestsToRealAPI') != 0 or value.get('actualMutationRequests') != 0
             or value.get('nativeAcceptance') is not False):
         raise ValueError('incomplete catalogue changed-flow captures')
@@ -408,6 +470,57 @@ def browser_report(flow, sha):
             stage='browser-evidence-' + flow)
 
 
+
+# Closed recipe coordinates for this one runner. No exception text or fixture data
+# is admitted, even if a failed process writes it into its report.
+FLEET_MSI_FAILURE_SCENES = {
+    'fleet': {'uploaded-artifact', 'delivery-unchecked', 'saved-3010-shared-owner', 'saved-3010-owner-refreshed'},
+    'saved': {'compact-summary', 'expanded-evidence', 'delivery-unchecked', 'review-unchecked', 'approval-unchecked', 'retirement-unchecked', 'retired-outcomes'},
+    'reusable': {'retirement-review', 'retired', 'next-package', 'intervention'},
+    'scheduled': {'approval-unchecked', 'scheduled', 'permit-issued', 'canceled', 'blocked', 'fleet-shared-window-unchecked', 'fleet-mixed-scheduled-unsent'},
+    'recent-package': {'ready-and-blocked', 'upload-required'},
+}
+
+
+def fleet_msi_failure_location(sha):
+    """Read only a bounded, same-source, finite-location failed-run report."""
+    try:
+        path = ROOT / 'artifacts/review/windows-fleet-msi-results.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4096:
+                return None
+            raw = stream.read(4097)
+        if len(raw) > 4096:
+            return None
+        value = reporter.decode(raw)
+        if (not HEX.fullmatch(sha) or not isinstance(value, dict)
+                or set(value) != {'sourceSha', 'status', 'browserAcceptance', 'variants', 'screenshots', 'requestsToRealAPI', 'nativeAcceptance', 'disclosure', 'failure'}
+                or value['sourceSha'] != sha or value['status'] != 'FAIL'
+                or value['browserAcceptance'] is not False or value['nativeAcceptance'] is not False
+                or any(type(value[key]) is not int or value[key] != 0 for key in ['variants', 'screenshots', 'requestsToRealAPI'])):
+            return None
+        failure = value['failure']
+        if not isinstance(failure, dict) or set(failure) != {'phase', 'producer', 'scene', 'locale', 'width'}:
+            return None
+        phase, producer, scene, locale, width = (failure[key] for key in ['phase', 'producer', 'scene', 'locale', 'width'])
+        if phase in ['launch', 'close']:
+            if any(item is not None for item in [producer, scene, locale, width]):
+                return None
+        elif phase in ['capture', 'validate'] and isinstance(producer, str) and producer in FLEET_MSI_FAILURE_SCENES:
+            if scene is None:
+                if locale is not None or width is not None:
+                    return None
+            elif (phase != 'capture' or not isinstance(scene, str) or scene not in FLEET_MSI_FAILURE_SCENES[producer]
+                  or locale not in ['en', 'de'] or type(width) is not int or width not in [390, 1440]):
+                return None
+        else:
+            return None
+        return 'phase=%s producer=%s scene=%s locale=%s width=%s' % (phase, producer or '-', scene or '-', locale or '-', width or '-')
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -422,11 +535,21 @@ def browser_checks(plan):
             if not Path(executable).is_absolute() or not Path(executable).is_file():
                 raise ValueError('installed browser unavailable')
             env['CHROMIUM_PATH'] = executable
-        run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
+        try:
+            run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
+        except ValueError:
+            if flow == 'windows-fleet-msi':
+                location = fleet_msi_failure_location(plan['sha'])
+                if location is not None:
+                    print('FAIL fleet MSI location: ' + location, flush=True)
+            raise  # Diagnostics never turn a failed browser flow into success.
         if flow == 'windows-fleet-msi':
             # Three bounded changed flows accompany the existing MSI selection;
             # no new broad-flow mapping or older screenshot expansion.
             run(['node', 'web/scripts/run-windows-msi-catalogue-ci.mjs'], stage='browser-msi-catalogue', env=env)
+        if flow == 'windows-service-actions':
+            run(['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', plan['sha']],
+                stage='browser-update-retirement-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

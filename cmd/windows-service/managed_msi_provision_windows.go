@@ -45,7 +45,7 @@ func nativeManagedMSIProvisionUnderLease(ctx context.Context, in managedMSIInput
 			return windowspackage.CheckManagedMSIExclusive(ctx)
 		}
 		exclusive := windowspackage.CheckCoordinatedMutationExclusive
-		if in.coordinated.Roster.Version == fence.BackgroundRosterVersion {
+		if in.coordinated.Roster.BackgroundWUA() {
 			exclusive = windowspackage.CheckBackgroundMutationExclusive
 		}
 		if e := exclusive(ctx); e != nil {
@@ -333,7 +333,7 @@ func nativeManagedMSIActivate(ctx context.Context, digest string, proof *windows
 		return managed.ErrAuthority
 	}
 	intent := windowsmanagedmsiservice.Activation{Version: managed.Version, ConfigDigest: digest, Acknowledged: true, Background: proof}
-	if c.Mutation != nil && c.Mutation.Version == fence.BackgroundRosterVersion {
+	if c.Mutation != nil && c.Mutation.BackgroundWUA() {
 		intent.Version = windowsmanagedmsiservice.BackgroundActivationVersion
 	}
 	if intent.Validate(c) != nil || proof != nil && time.Now().UTC().Unix() >= proof.Registration.Consent.ExpiresAt {

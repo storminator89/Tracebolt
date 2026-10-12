@@ -50,7 +50,7 @@ func CheckProfile(ctx context.Context, c windowsmanagedmsiipc.Config) error {
 		return CheckExclusive(ctx)
 	}
 	exclusive := windowspackage.CheckCoordinatedMutationExclusive
-	if c.Mutation.Version == fence.BackgroundRosterVersion {
+	if c.Mutation.BackgroundWUA() {
 		exclusive = windowspackage.CheckBackgroundMutationExclusive
 	}
 	if exclusive(ctx) != nil {

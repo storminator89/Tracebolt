@@ -14,7 +14,7 @@ import (
 
 func Marker(c windowsupdateipc.Config) string { return windowsupdatesetup.ServiceMarker(c) }
 func CheckProfile(ctx context.Context, c windowsupdateipc.Config) error {
-	if c.Validate() != nil || c.Version != windowsupdateipc.ServiceConfigVersion || c.Mutation == nil || c.Mutation.Version != fence.BackgroundRosterVersion || windowspackage.CheckBackgroundMutationExclusive(ctx) != nil {
+	if c.Validate() != nil || c.Version != windowsupdateipc.ServiceConfigVersion || c.Mutation == nil || !c.Mutation.BackgroundWUA() || windowspackage.CheckBackgroundMutationExclusive(ctx) != nil {
 		return job.ErrAuthority
 	}
 	s, e := fence.Open(ctx, *c.Mutation, fence.CachedWUA, time.Now)

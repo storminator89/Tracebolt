@@ -85,22 +85,23 @@ install a service. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
    [verified installation command](docs/dashboard-verified-download.md). Review
    the read-admin scope locally, enter the invitation at the hidden prompt, then
    compare and approve the device fingerprint in the dashboard.
-3. **Windows development:** the current fresh Setup offers
-   [Read admin](docs/windows-read-admin-setup.md), with grouped scope details and
-   unchecked consent. It requires matching source-built manager/endpoint
-   artifacts. The exact [accepted source](docs/windows-status.md#current-hosted-setup-acceptance)
-   passed a bounded Server 2025 x64 packaged-Setup subset; publication is still
-   gated on exact-source full validation and reviewed promotion.
+3. **Windows preview:** download unsigned x64
+   [preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+   and follow its attached
+   [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
+   Fresh Setup offers [Read admin](docs/windows-read-admin-setup.md) with unchecked
+   consent. Prepare the matching reviewed manager/frontend source separately;
+   native acceptance covers only a bounded Server 2025 x64 packaged-Setup subset.
 4. Check the first accepted report, observation time and actual source coverage.
    Choosing a profile does not prove that every provider returned data.
 
 The published Linux endpoint is
 [v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3).
-The separate unsigned x64
-[Windows preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1)
-contains the older five-scope read-only setup, not the current Read admin profile.
-Use its [historical installation guide](docs/windows-prerelease-historical/windows-prerelease-install.md) only for those
-published bytes. Manager deployment is separate from both endpoint downloads.
+It is separate from the Windows preview and does not supply the matching manager.
+Manager deployment is separate from both endpoint downloads. Windows
+preview.2 retains the tested `v0.0.0-setup-candidate` executable names and version;
+verify its files using the attached guide. For older five-scope preview.1 bytes,
+use the [historical installation guide](docs/windows-prerelease-historical/windows-prerelease-install.md).
 
 ## Giving this repository to an agent
 
@@ -111,8 +112,8 @@ Include the target computer and use this short handoff:
 > manager setup, then the dashboard's verified Linux enrollment command. Ask for
 > approval before credential/trust, network or service changes; never put secrets
 > in chat. Check login, the endpoint service and fresh real device data. Report
-> what works and what is still blocked. For Windows, distinguish the published
-> preview from the current source-only Read admin setup.
+> what works and what is still blocked. For Windows, use preview.2's attached
+> guide and matching manager source, and report its bounded native coverage.
 
 The [installation-agent fast path](docs/installation.md#fast-path-for-installation-agents)
 points directly to the Compose commands, required configuration and smoke checks.
@@ -124,9 +125,9 @@ quickest way to look at the dashboard.
 - **Manager:** Linux, native or Docker.
 - **Linux release:** amd64, Ubuntu 24.04 or Debian 13, systemd, cgroup v2 and
   kernel 6.5+. [ARM64/Pi](docs/linux-arm64-support.md) remains a source/testing path.
-- **Windows:** current development targets a fresh x64 installation. The old
-  preview and the exact accepted current source have bounded hosted Server 2025
-  results. Windows 10/11, real Linux-manager/shared-dashboard interoperability,
+- **Windows:** unsigned preview.2 targets a fresh x64 installation and has
+  bounded hosted Server 2025 packaged-Setup results. Windows 10/11, real
+  Linux-manager/shared-dashboard interoperability,
   complete provider coverage, native restart and reboot remain unverified.
 - **macOS:** a limited standalone collector; no supported LAN installation path.
 
@@ -140,9 +141,9 @@ credentials and content on the network. Production hardening remains open.
 
 Build on the inventory with useful job results, fleet monitoring policies and
 carefully scoped software/update management. Close the remaining Admin data gaps
-alongside that work. The accepted packaged-Setup subset can support only a bounded
-unsigned preview after its publication gates pass. Real Linux-manager/shared-dashboard
-interoperability and the remaining native scopes still need separate acceptance.
+alongside that work. Preview.2 is available with bounded packaged-Setup acceptance.
+Real Linux-manager/shared-dashboard interoperability and the remaining native
+scopes still need separate acceptance.
 There is no existing-user migration rollout. Remote desktop is deferred.
 
 [Windows priorities](docs/windows-admin-roadmap.md) · [Linux priorities](docs/roadmap.md)
@@ -154,8 +155,8 @@ There is no existing-user migration rollout. Remote desktop is deferred.
 | [<img src="docs/screenshots/2026-10-09-main-ui/log-workspace.png" width="360" alt="Linux Logs workspace with service selection and time-window controls">](docs/screenshots/2026-10-09-main-ui/log-workspace.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="360" alt="Windows cached update rows with explicit freshness and coverage limits">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="150" alt="German mobile Windows overview with inventory counts and observation times">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
 
 *Genuine dashboard captures with invented test data; click to enlarge. Windows
-examples show unreleased source previews. These illustrate the recorded source,
-not native acceptance. [Linux capture details](docs/screenshots/2026-10-09-main-ui/README.md)
+examples show source previews, including separately gated features. These illustrate
+the recorded source, not native acceptance. [Linux capture details](docs/screenshots/2026-10-09-main-ui/README.md)
 and [Windows capture details](docs/screenshots/2026-10-10-windows-parity/README.md).*
 
 ## Development

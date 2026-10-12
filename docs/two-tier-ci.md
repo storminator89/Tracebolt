@@ -29,6 +29,56 @@ Ordinary recognized API/UI changes select their dependent packages and existing
 browser flows. Vite's actual dependency graph selects related UI tests. New
 unknown features broaden until an explicit reviewed flow mapping exists.
 
+The eight exact MSI fixture/runner/scene-input paths in `pr_checks.py`'s `DOMAIN_SCRIPTS`
+select the existing full `windows-fleet-msi` flow. Its entry point keeps all
+fleet, saved-worklist, reusable, scheduled and recent-package captures, and the
+selector still invokes the multi-package catalogue companion and validates its
+report. The common MSI compiler/router is covered by that complete flow. This is
+an exact dependency-ownership map, never a `web/scripts/` or filename-prefix
+exemption. Inert contracts check the current direct source consumers and all
+capture calls. A new consumer outside this owned set requires review of its
+flow coverage; unknown capture/runner names and general helpers stay broad.
+The catalogue scene manifest is shared with the report validator; its exact
+required scenes and viewport coverage remain checked by the inert contracts.
+Three exact existing MSI UI inputs whose names predate the domain aliases
+(`windows-fleet-managed-msi.css`, `windows-fleet-managed-msi.test.tsx` and
+`windows-reusable-managed-msi.test.tsx` under `web/src/`) select that same complete
+flow. They remain normal changed/related Vitest inputs; no similarly named
+unknown file inherits this exception.
+
+### Ordinary-change selection examples
+
+These expectations describe selection, not measured speed or executed tests:
+
+- Canonical generated allowlist metadata alone selects no affected packages or
+  domain flows, only after the unchanged exact-byte/mode guard succeeds. With
+  actual Go changes, their owner and reverse-dependency selection is retained.
+- An exact owned MSI script selects no affected Go package by itself, and selects
+  the complete fleet MSI flow plus its catalogue companion. With Go/UI changes,
+  selections are unioned; a shared/security/unknown path still broadens the run.
+- Recognized domain Go tests and graph-declared embed fixtures select their
+  owning package and reverse dependents, including test-import dependents.
+  A nested embed with an unmapped basename/parent still broadens web when its
+  reverse dependents reach the API/manager; Go ownership alone is not UI coverage.
+  Recognized `web/src/` domain tests/fixtures retain changed and related UI test
+  selection and their existing browser entry point.
+- Unowned JSON/testdata, `tests/fixtures/`, and `tests/e2e-review/` files still
+  broaden both Go and web selection, even when their names appear domain-specific.
+  Runtime file reads and cross-domain fixture/helper ownership are not inferred
+  from a basename. They need separate dependency evidence before narrowing.
+- Markdown docs alone select no affected packages or domain flows. Other unknown
+  documentation formats, deletions, renames and type changes stay broad.
+- Shared UI source such as `web/src/api.ts` broadens web selection. Shared Go,
+  security, selector, reporter/generator, workflows, dependency manifests and
+  unknown script helpers retain their existing broad fallback. This selector
+  change itself therefore runs broad checks when introduced.
+
+Every case still retains the whole-source builds, fixed authorization/durability
+roots, UI authorization checks and authenticated browser smoke described here.
+An empty affected selection never means an empty CI gate. Static representative
+graphs establish these selection contracts; actual package counts require the
+exact hosted Linux/Windows package graph.
+
 Ten exact existing regression roots always run: named authorization/revocation,
 certificate/activation admission, durable telemetry replay, claim rollback,
 missing Windows event authority, Linux/Windows mutation fences, journal durability,

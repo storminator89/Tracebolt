@@ -30,6 +30,9 @@ func NewIntegrationFence(t *testing.T, p Plan, msi, wua Participant, now func() 
 	if p.Version == BackgroundPlanVersion {
 		r.Version = BackgroundRosterVersion
 	}
+	if p.Version == ReusableWUAPlanVersion {
+		r.Version = ReusableWUARosterVersion
+	}
 	if e = setupChange(context.Background(), r, nil, now().Unix(), f.open); e != nil {
 		t.Fatal(e)
 	}
@@ -39,6 +42,9 @@ func NewIntegrationFence(t *testing.T, p Plan, msi, wua Participant, now func() 
 	}
 	if p.Version == BackgroundPlanVersion {
 		a.Version = BackgroundActivationVersion
+	}
+	if p.Version == ReusableWUAPlanVersion {
+		a.Version = ReusableWUAActivationVersion
 	}
 	if e = setupChange(context.Background(), r, &a, now().Unix(), f.open); e != nil {
 		t.Fatal(e)

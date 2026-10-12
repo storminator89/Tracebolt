@@ -74,6 +74,8 @@ func (s *Server) dispatch(ctx context.Context, raw []byte) response {
 	case "peer":
 	case "readiness":
 		out.Report, e = s.executor.Readiness(ctx, r.Envelope)
+	case "retire":
+		out.Report, e = s.executor.Retire(ctx, r.Envelope)
 	case "submit":
 		var h *job.Accepted
 		h, e = s.executor.Accept(ctx, r.Envelope)

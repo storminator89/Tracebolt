@@ -346,3 +346,31 @@ it('reconciles combined scheduling revocation only from explicit saved evidence'
  vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?scheduleSession():{...backgroundScheduleView(),schedulingRevoked:true}) as never);fireEvent.click(screen.getByRole('button',{name:'Read saved status'}));await flush();
  expect(screen.getByText('Scheduling was revoked for this original grant.')).toBeVisible();expect(screen.queryByRole('alert')).toBeNull();expect(document.querySelector('.windows-update-executor-status')).toHaveTextContent('Approved UTC windows');expect(mutateRaw).toHaveBeenCalledTimes(1);
 });
+
+it.each(['busy','stale','absent'] as const)('allows a future background schedule and cancellation with %s shared evidence, but blocks immediate install',async shared=>{
+ const profile=(value:UpdateJobView)=>{const result=backgroundScheduleView(value);result.schedulingAvailable=true;
+  if(shared==='busy')result.mutation={active:true,blocked:true,domain:'managed_msi',jobId:`transfer_${'9'.repeat(32)}`,phase:'dispatch_intent',recovery:'intervention_required',revision:'10',retained:1};
+  if(shared==='stale')result.mutationCapturedAt=seconds-61;
+  if(shared==='absent'){delete result.mutation;delete result.mutationCapturedAt}return result;
+ };
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?scheduleSession():profile(view())) as never);
+ vi.mocked(mutateRaw).mockImplementation(async(path,raw)=>{const body=JSON.parse(raw);let value=profile(path.endsWith('/request')?previewView(body.requestId):scheduled(body.previewId??body.scheduleId));
+  if(path.endsWith('/cancel-schedule')){value.job!.state='schedule_canceled';value.job!.reason='schedule_canceled';value.available=true;value.reason='ready'}
+  if(path.endsWith('/revoke-scheduling'))value={...profile(view()),schedulingAvailable:false,schedulingRevoked:true};return structuredClone(value) as never;
+ });
+ await scheduleReview();await act(async()=>vi.advanceTimersByTime(500));expect(screen.getByRole('group',{name:'Check readiness'})).toBeVisible();fireEvent.click(screen.getByRole('checkbox',{name:/I approve installation of this exact revision and/}));expect(screen.getByRole('button',{name:'Approve this update once'})).toBeDisabled();
+ fireEvent.click(screen.getByRole('checkbox',{name:/prospectively for this UTC/}));fireEvent.click(screen.getByRole('button',{name:'Approve scheduled update once'}));await flush();expect(mutateRaw).toHaveBeenCalledTimes(2);expect(vi.mocked(mutateRaw).mock.calls[1][0]).toMatch(/\/schedule$/);
+ const cancel=screen.getByRole('button',{name:'Cancel this schedule'});expect(cancel).toBeEnabled();fireEvent.click(cancel);await flush();expect(screen.getByText('Schedule canceled before claim')).toBeVisible();
+ fireEvent.click(screen.getByText('Revoke scheduling',{selector:'summary'}));fireEvent.click(screen.getByRole('checkbox',{name:/Permanently revoke scheduling/}));fireEvent.click(screen.getByRole('button',{name:'Revoke scheduling for this grant'}));await flush();expect(screen.getByText('Scheduling was revoked for this original grant.')).toBeVisible();expect(mutateRaw).toHaveBeenCalledTimes(4);expect(vi.mocked(mutateRaw).mock.calls.some(([path])=>path.endsWith('/approve'))).toBe(false);
+});
+it.each(['actor','capability','expiry'] as const)('keeps final %s validation when prospective approval no longer requires shared idle',async changed=>{
+ enableScheduling(true);await scheduleReview();const current=scheduleSession();if(changed==='actor')current.actorId=`operator_${'9'.repeat(32)}`;if(changed==='capability')current.capabilities=['read','windows_update_install'];if(changed==='expiry')current.serverNow=new Date((seconds+61)*1000).toISOString();vi.mocked(request).mockResolvedValueOnce(current as never);
+ fireEvent.click(screen.getByRole('checkbox',{name:/prospectively for this UTC/}));fireEvent.click(screen.getByRole('button',{name:'Approve scheduled update once'}));await flush();expect(mutateRaw).toHaveBeenCalledTimes(1);expect(screen.getByRole('alert')).toHaveTextContent('unavailable or changed');
+});
+it('does not request readiness for a device with its own unresolved update even with future scheduling available',async()=>{
+ const value=backgroundScheduleView(approved(`update_${'7'.repeat(32)}`));value.schedulingAvailable=true;vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?scheduleSession():value) as never);await open();expect(screen.queryByRole('combobox')).toBeNull();expect(screen.queryByRole('button',{name:'Check readiness'})).toBeNull();expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('rejects a fixed window whose start passes before the final named session check',async()=>{
+ enableScheduling(true);const fixed={startAt:seconds+30,endAt:seconds+120};render(<WindowsUpdateJobSession device={device} actor={actor} sessionKey={until} rows={resource.updates!.rows} fixedScheduleWindow={fixed}/>);await flush();await review();expect(screen.queryByRole('button',{name:'Approve this update once'})).toBeNull();
+ vi.mocked(request).mockResolvedValueOnce({...scheduleSession(),serverNow:new Date((seconds+30)*1000).toISOString()} as never);fireEvent.click(screen.getByRole('checkbox',{name:/prospectively for this UTC/}));fireEvent.click(screen.getByRole('button',{name:'Approve scheduled update once'}));await flush();expect(mutateRaw).toHaveBeenCalledTimes(1);expect(screen.getByRole('alert')).toHaveTextContent('unavailable or changed');
+});

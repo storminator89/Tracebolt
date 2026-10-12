@@ -132,3 +132,8 @@ here runs a native installer or treats compilation as host acceptance.
 Coordinated manager approval requires a signed active-idle observation less than 60 seconds old. Missing, stale, busy or unknown status blocks approval without consuming it. This is a consumption safeguard only; the durable endpoint fence remains the final native admission authority.
 
 The separate fresh [background manual cached-update profile](windows-background-cached-updates.md) removes repeated foreground launch only after new explicit paired setup and activation. It does not adopt this foreground profile or enable scheduling.
+
+The separate [fresh reusable cached-update profile](windows-reusable-cached-update-jobs.md)
+uses an explicit new v4 shared roster and successful-result-bound WUA retirement.
+It preserves independent reusable MSI retirement, original fixed grants and exact
+idle-owner checks. Earlier coordinated profiles cannot acquire this authority.

@@ -61,16 +61,17 @@ type Attempt struct {
 	ResultReport       []byte         `json:"resultReport"`
 }
 type ExecutorRecord struct {
-	Mutation          *fence.Roster     `json:"mutation,omitempty"`
-	Version           string            `json:"version"`
-	Consent           Consent           `json:"consent"`
-	PublicKey         []byte            `json:"publicKey"`
-	ExecutorPublicKey []byte            `json:"executorPublicKey"`
-	ClockFloor        int64             `json:"clockFloor"`
-	Sequence          uint64            `json:"sequence,string"`
-	ReadinessSequence uint64            `json:"readinessSequence,string"`
-	LatestReadiness   *ReadinessAttempt `json:"latestReadiness"`
-	Attempts          []Attempt         `json:"attempts"`
+	Reusable          *ReusableExecutorState `json:"reusable,omitempty"`
+	Mutation          *fence.Roster          `json:"mutation,omitempty"`
+	Version           string                 `json:"version"`
+	Consent           Consent                `json:"consent"`
+	PublicKey         []byte                 `json:"publicKey"`
+	ExecutorPublicKey []byte                 `json:"executorPublicKey"`
+	ClockFloor        int64                  `json:"clockFloor"`
+	Sequence          uint64                 `json:"sequence,string"`
+	ReadinessSequence uint64                 `json:"readinessSequence,string"`
+	LatestReadiness   *ReadinessAttempt      `json:"latestReadiness"`
+	Attempts          []Attempt              `json:"attempts"`
 }
 
 func NewExecutorRecord(c Consent, key, executorKey ed25519.PublicKey, now int64) (ExecutorRecord, error) {
@@ -78,17 +79,23 @@ func NewExecutorRecord(c Consent, key, executorKey ed25519.PublicKey, now int64)
 	return r, r.Validate()
 }
 func (r ExecutorRecord) Validate() error {
-	if _, e := NewRecordWithExecutor(r.Consent, r.PublicKey, r.ExecutorPublicKey, r.ClockFloor); e != nil || !(r.Version == Version && r.Mutation == nil && r.Consent.MutationPlanDigest == "" || r.Version == CoordinatedExecutorVersion && ValidMutationRoster(r.Mutation, r.Consent)) || r.Attempts == nil || len(r.Attempts) > MaxJobs {
+	if _, e := NewRecordWithExecutor(r.Consent, r.PublicKey, r.ExecutorPublicKey, r.ClockFloor); e != nil || !(r.Version == Version && r.Mutation == nil && r.Consent.MutationPlanDigest == "" || (r.Version == CoordinatedExecutorVersion && !r.Consent.Reusable() || r.Version == ReusableExecutorVersion && r.Consent.Reusable()) && ValidMutationRoster(r.Mutation, r.Consent)) || r.Attempts == nil || len(r.Attempts) > MaxJobs {
 		return ErrIntegrity
+	}
+	if e := r.validateReusableExecutor(); e != nil {
+		return e
 	}
 	if e := r.validateReadiness(); e != nil {
 		return e
 	}
 	var seq uint64
+	if r.Reusable != nil {
+		seq = r.Reusable.RetiredFloor
+	}
 	ids := map[string]bool{}
 	for _, a := range r.Attempts {
 		p, e := Verify(a.Envelope, r.PublicKey)
-		if e != nil || p.Preview.Binding != r.Consent.Binding || p.Sequence <= seq || ids[p.Preview.ID] || a.ClaimedAt < p.IssuedAt() || a.ClaimedAt >= p.Preview.ExpiresAt || a.ClaimedAt > r.ClockFloor {
+		if e != nil || p.Preview.Binding != r.Consent.Binding || (p.Version == ReusablePermitVersion) != r.Consent.Reusable() || p.Sequence <= seq || ids[p.Preview.ID] || a.ClaimedAt < p.IssuedAt() || a.ClaimedAt >= p.Preview.ExpiresAt || a.ClaimedAt > r.ClockFloor {
 			return ErrIntegrity
 		}
 		seq = p.Sequence
@@ -164,10 +171,18 @@ func openExecutor(store Storage, authority Authority, adapter ExecutorAdapter, k
 		return nil, e
 	}
 	for _, a := range r.Attempts {
-		if a.MutationCompletion != nil {
+		if a.MutationCompletion != nil && (r.Reusable == nil || len(r.Reusable.Pending) == 0) {
 			if e = x.mutation.Recover(context.Background(), *a.MutationCompletion, x.verifyMutationCompletion); e != nil {
 				return nil, e
 			}
+		}
+	}
+	if r.Reusable != nil && len(r.Reusable.Pending) > 0 {
+		// Retirement is metadata-only; recovery never reconstructs a native capability.
+		_, _ = x.Retire(context.Background(), r.Reusable.Pending)
+		if x.failed {
+			clear(x.key)
+			return nil, ErrUncertain
 		}
 	}
 	return x, nil
@@ -235,7 +250,7 @@ func (x *Executor) currentPermit(c Current, p Permit) (int64, error) {
 	if e != nil {
 		return n, e
 	}
-	if p.Preview.Binding != c.Binding {
+	if p.Preview.Binding != c.Binding || (p.Version == ReusablePermitVersion) != x.record.Consent.Reusable() {
 		return n, x.rejectTime(n, ErrAuthority)
 	}
 	if p.Schedule != nil && (!x.record.Consent.ScheduleAcknowledged || x.record.Consent.ScheduleScope != ScheduleScope) {
@@ -295,6 +310,9 @@ func (x *Executor) Accept(ctx context.Context, raw []byte) (*Accepted, error) {
 	p, e := Verify(raw, x.record.PublicKey)
 	if e != nil {
 		return nil, e
+	}
+	if x.record.Reusable != nil && (len(x.record.Reusable.Pending) != 0 || len(x.record.Attempts) != 0) {
+		return nil, ErrConflict
 	}
 	for _, a := range x.record.Attempts {
 		old, _ := Verify(a.Envelope, x.record.PublicKey)
@@ -377,7 +395,11 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 		a.Result = &r
 		a.ResultReport = report
 		if x.mutation != nil && nativeSettled && outcome != "uncertain" && outcome != "not_attempted" {
-			receipt, err := capability.Completion(actionpermit.Digest(report), "completed", r.CompletedAt)
+			receiptOutcome := "completed"
+			if x.record.Consent.Reusable() && outcome == "succeeded" {
+				receiptOutcome = "succeeded"
+			}
+			receipt, err := capability.Completion(actionpermit.Digest(report), receiptOutcome, r.CompletedAt)
 			if err != nil {
 				x.failed = true
 				return Result{}, ErrUncertain

@@ -48,7 +48,7 @@ func (p Permit) IssuedAt() int64 {
 }
 func (p Permit) validateScheduled() error {
 	a := p.Schedule
-	if a == nil || p.Version != ScheduledPermitVersion || a.Validate() != nil || p.Preview.Validate() != nil || p.Sequence == 0 || p.ApprovedAt != a.ApprovedAt || p.PermitIssuedAt < p.Preview.CreatedAt || p.PermitIssuedAt >= p.Preview.ExpiresAt || p.PermitIssuedAt < a.StartAt || p.Preview.ExpiresAt > a.EndAt || p.Preview.ID != a.Baseline.ID || p.Preview.ActorID != a.Baseline.ActorID || p.Preview.Binding != a.Baseline.Binding || !SameFacts(p.Preview.Readiness, a.Baseline.Readiness) || p.Preview.Readiness.CapturedAt < a.StartAt {
+	if a == nil || (p.Version != ScheduledPermitVersion && p.Version != ReusablePermitVersion) || a.Validate() != nil || p.Preview.Validate() != nil || p.Sequence == 0 || p.ApprovedAt != a.ApprovedAt || p.PermitIssuedAt < p.Preview.CreatedAt || p.PermitIssuedAt >= p.Preview.ExpiresAt || p.PermitIssuedAt < a.StartAt || p.Preview.ExpiresAt > a.EndAt || p.Preview.ID != a.Baseline.ID || p.Preview.ActorID != a.Baseline.ActorID || p.Preview.Binding != a.Baseline.Binding || !SameFacts(p.Preview.Readiness, a.Baseline.Readiness) || p.Preview.Readiness.CapturedAt < a.StartAt {
 		return ErrInvalid
 	}
 	return nil
@@ -213,6 +213,13 @@ func (m *Manager) Schedule(ctx context.Context, device, actor, id, d string, sta
 			a.Digest = scheduleDigest(a)
 			if a.Validate() != nil {
 				return ErrInvalid
+			}
+			if m.record.Consent.Reusable() {
+				if m.record.Sequence == ^uint64(0) {
+					return ErrConflict
+				}
+				m.record.Sequence++
+				j.Occurrence = m.record.Sequence
 			}
 			j.Schedule = &ScheduledIntent{Approval: a, BaselineChallenge: bytes.Clone(j.Challenge), BaselineReport: bytes.Clone(j.ReadinessReport)}
 			j.State = "scheduled"
@@ -436,12 +443,18 @@ func (m *Manager) issueScheduled(j *Job, n int64) error {
 	if e := CheckScheduledMutationIssue(m.record, *j, n); e != nil {
 		return e
 	}
-	if m.record.Sequence >= MaxJobs {
-		return ErrConflict
+	if !m.record.Consent.Reusable() {
+		if m.record.Sequence >= MaxJobs {
+			return ErrConflict
+		}
+		m.record.Sequence++
 	}
-	m.record.Sequence++
 	a := j.Schedule.Approval
 	p := Permit{Version: ScheduledPermitVersion, Preview: *j.Preview, Sequence: m.record.Sequence, ApprovedAt: a.ApprovedAt, PermitIssuedAt: n, Schedule: &a}
+	if m.record.Consent.Reusable() {
+		p.Version = ReusablePermitVersion
+		p.Sequence = j.Occurrence
+	}
 	raw, e := Sign(p, m.key)
 	if e != nil {
 		return e
@@ -485,6 +498,7 @@ func CheckScheduleTransition(before, after Record) error {
 				return ErrConflict
 			}
 			old.Schedule = next.Schedule
+			old.Occurrence = next.Occurrence
 			old.State = next.State
 			old.Reason = next.Reason
 		} else {
@@ -538,6 +552,8 @@ func CheckScheduleTransition(before, after Record) error {
 			}
 			old.State = next.State
 		}
+		ClearRetirementFields(&old)
+		ClearRetirementFields(&next)
 		x, _ := json.Marshal(old)
 		y, _ := json.Marshal(next)
 		if !bytes.Equal(x, y) {
@@ -547,7 +563,7 @@ func CheckScheduleTransition(before, after Record) error {
 	for _, old := range before.Jobs {
 		if old.Schedule != nil {
 			next, ok := nextByID[old.ID]
-			if !ok || next.Schedule == nil {
+			if (!ok || next.Schedule == nil) && !CanCompactRetiredJob(before, after, old) {
 				return ErrConflict
 			}
 		}
@@ -597,7 +613,16 @@ func TerminalizeSchedulePolicy(r *Record, n int64, allowed func(string) bool) er
 // change the intent: the same immutable saved readiness report may reconcile
 // while its original deadline and fixed window still permit issuance.
 func CheckScheduledMutationIssue(r Record, j Job, n int64) error {
-	if r.Consent.Version != ScheduledBackgroundConsentVersion || j.Schedule == nil {
+	// Fresh reusable manual approval has the same final freshness fence as its
+	// scheduled form. Native admission still independently owns exclusion.
+	if r.Consent.Reusable() && j.Schedule == nil {
+		s, e := VerifyStatement(r.MutationReport, r.ExecutorPublicKey)
+		if e != nil || s.Kind != "mutation" || s.Binding != r.Consent.Binding || s.Mutation == nil || !s.Mutation.Active || s.Mutation.Blocked || s.Mutation.Phase != "idle" || s.IssuedAt > n || n-s.IssuedAt >= 60 || n >= s.ExpiresAt {
+			return ErrUnavailable
+		}
+		return nil
+	}
+	if (!r.Consent.Background() || !r.Consent.ScheduleAcknowledged) || j.Schedule == nil {
 		return nil
 	}
 	a := j.Schedule.Approval

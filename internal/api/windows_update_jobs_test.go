@@ -43,6 +43,7 @@ func (a updateAPIReadiness) Readiness(context.Context, windowsupdatejob.Binding,
 }
 
 type updateAPIFixture struct {
+	store      updateAPIStore
 	handler    *operatorHandler
 	session    operatorauth.Session
 	authority  *updateAPIAuthority
@@ -66,10 +67,17 @@ func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability, schedulin
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{62}, 32))
 	b := windowsupdatejob.Binding{ManagerID: "manager_" + strings.Repeat("1", 32), DeviceID: namedDeviceID, IncarnationDigest: actionpermit.Digest([]byte("anchor")), ExecutorID: "executor_" + strings.Repeat("3", 32), ExecutorKeyID: actionpermit.Digest(apiExecutorKey.Public().(ed25519.PublicKey)), GrantID: "grant_" + strings.Repeat("4", 32), KeyID: actionpermit.Digest(key.Public().(ed25519.PublicKey))}
 	c := windowsupdatejob.Consent{Version: windowsupdatejob.ConsentVersion, Scope: windowsupdatejob.Scope, Binding: b, Enabled: true, Acknowledged: true, ExpiresAt: at + 3600}
-	if len(scheduling) == 1 && scheduling[0] {
+	if len(scheduling) >= 1 && scheduling[0] {
 		c.Version = windowsupdatejob.ScheduledConsentVersion
 		c.ScheduleScope = windowsupdatejob.ScheduleScope
 		c.ScheduleAcknowledged = true
+	}
+	if len(scheduling) > 1 && scheduling[1] {
+		c.Version = windowsupdatejob.ReusableConsentVersion
+		c.ReusableAcknowledged = true
+		c.BackgroundAcknowledged = true
+		c.MutationPlanDigest = actionpermit.Digest([]byte("fresh reusable plan"))
+		c.PeerBindingDigest = actionpermit.Digest([]byte("exact peer"))
 	}
 	record, e := windowsupdatejob.NewRecordWithExecutor(c, key.Public().(ed25519.PublicKey), apiExecutorKey.Public().(ed25519.PublicKey), at)
 	if e != nil {
@@ -85,7 +93,7 @@ func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability, schedulin
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(scheduling) == 1 && scheduling[0] {
+	if len(scheduling) >= 1 && scheduling[0] {
 		if e = m.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateInstall) }); e != nil {
 			t.Fatal(e)
 		}
@@ -98,7 +106,7 @@ func newUpdateAPIFixture(t *testing.T, caps []operatorauth.Capability, schedulin
 	app.lanDevices = func() ([]model.Device, error) { return []model.Device{{ID: namedDeviceID, Platform: "windows"}}, nil }
 	app.mu.Unlock()
 	h := &operatorHandler{app: app, auth: auth, origin: "https://manager.invalid", authority: "manager.invalid", cookieName: operatorauth.CookieName, windowsUpdateJobs: m}
-	return updateAPIFixture{h, session, a, selection, namedDeviceID, "update_" + strings.Repeat("6", 32)}
+	return updateAPIFixture{s, h, session, a, selection, namedDeviceID, "update_" + strings.Repeat("6", 32)}
 }
 
 // In-process recorder only: these API fixtures never listen on a local socket.

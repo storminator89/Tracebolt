@@ -158,3 +158,11 @@ explicit prospective UTC installation approval for an already-imported exact
 assignment. It requires fresh paired background setup and a separate scheduling
 capability; reusable-v3 state and manual approvals never acquire that authority.
 Delivery and both package-retirement operations remain explicit.
+
+## Pairing with fresh reusable cached updates
+
+The separate [fresh reusable cached-update profile](windows-reusable-cached-update-jobs.md)
+adds WUA retirement only with new explicit WUA consent and a v4 shared roster.
+Reusable or scheduled MSI can participate with its existing independently reviewed
+grant and retirement rules. Its MSI sequence floor/chain remain separate; WUA
+retirement cannot erase MSI evidence or bypass an active shared owner.

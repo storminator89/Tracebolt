@@ -10,6 +10,7 @@ import (
 	msi "localrmm/internal/windowsmanagedmsi"
 	"localrmm/internal/windowsmanagedmsimanager"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -107,11 +108,21 @@ func (h *operatorHandler) windowsManagedMSIAPI(w http.ResponseWriter, r *http.Re
 	var e error
 	switch op {
 	case "schedule":
-		var in msi.ScheduleRequest
-		if !readObject(w, r, 4096, []string{"artifactId", "artifactRetiredCount", "bindingDigest", "transferId", "jobSequence", "readinessDigest", "startAt", "endAt", "packageReviewAccepted", "termsAccepted", "serviceRiskAccepted", "synchronousActionsAccepted", "scheduleAccepted"}, &in) {
+		var in struct {
+			msi.ScheduleRequest
+			Batch *msi.WorklistDispatchReference `json:"batch,omitempty"`
+		}
+		if !readManagedMSIBatchObjectBounded(w, r, manager.Reusable(), []string{"artifactId", "artifactRetiredCount", "bindingDigest", "transferId", "jobSequence", "readinessDigest", "startAt", "endAt", "packageReviewAccepted", "termsAccepted", "serviceRiskAccepted", "synchronousActionsAccepted", "scheduleAccepted"}, &in, 4096) {
 			return
 		}
-		e = manager.Schedule(r.Context(), actor, in)
+		q := msi.WorklistRequest{DeviceID: device, Operation: "schedule", ArtifactID: in.ArtifactID, ArtifactRetiredCount: strconv.FormatUint(in.ArtifactRetiredCount, 10), BindingDigest: in.BindingDigest, TransferID: in.TransferID, JobSequence: strconv.FormatUint(in.JobSequence, 10), ReadinessDigest: in.ReadinessDigest, StartAt: in.StartAt, EndAt: in.EndAt}
+		acks := msi.WorklistAcknowledgements{PackageReviewAccepted: in.PackageReviewAccepted, TermsAccepted: in.TermsAccepted, SynchronousReviewAccepted: in.SynchronousActionsAccepted, ServiceRiskAccepted: in.ServiceRiskAccepted, ScheduleAccepted: in.ScheduleAccepted}
+		ctx, err := h.managedMSIBatchContext(r, in.Batch, q, acks)
+		if err != nil {
+			e = err
+			break
+		}
+		e = manager.Schedule(ctx, actor, in.ScheduleRequest)
 	case "cancel-schedule":
 		var in struct {
 			ScheduleDigest string `json:"scheduleDigest"`

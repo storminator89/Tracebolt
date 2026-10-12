@@ -20,3 +20,12 @@
 .windows-update-jobs .windows-inventory-section-header{flex-wrap:wrap;gap:8px}
 .windows-update-history li{padding:8px 0}.windows-update-history .text-button{text-align:left;overflow-wrap:anywhere;max-width:100%}
 @media(max-width:600px){.windows-fleet-update-worklist{padding:12px}.windows-fleet-update-row{align-items:flex-start;flex-direction:column;gap:8px}.windows-fleet-update-choices{grid-template-columns:minmax(0,1fr)}.windows-update-jobs .windows-inventory-table-controls{align-items:stretch;flex-direction:column}.windows-update-jobs select{width:100%;min-width:0}}
+
+.windows-fleet-update-window{border:1px solid var(--line);border-radius:8px;padding:12px;margin:12px 0;font-size:12px;min-width:0}
+.windows-fleet-update-window-choice{display:flex;align-items:center;gap:8px;font-weight:600}
+.windows-fleet-update-window-inputs{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+.windows-fleet-update-window-inputs label{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1 1 210px}
+.windows-fleet-update-window-inputs input{width:100%;min-width:0;box-sizing:border-box;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit}
+.windows-fleet-update-window-frozen p,.windows-update-fixed-window{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.windows-fleet-update-summary{color:var(--secondary)}
+.windows-fleet-update-outcome{font-weight:500}

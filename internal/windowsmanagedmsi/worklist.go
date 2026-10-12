@@ -20,7 +20,8 @@ const MaxWorklistBytes = 256 << 10
 const MaxWorklistJournalBytes = MaxWorklists*MaxWorklistBytes + 4096
 
 // Manager metadata only. No signed grant/permit/report bytes or payload bytes
-// are changed. Persisted acknowledgements are an audit, not deferred authority.
+// are changed. Batch acknowledgements never authorize deferred dispatch.
+// A schedule stage records only the existing per-device prospective approval.
 type WorklistTarget struct {
 	Name        string  `json:"name"`
 	Binding     Binding `json:"binding"`
@@ -55,9 +56,17 @@ type WorklistAcknowledgements struct {
 	TermsAccepted             bool `json:"termsAccepted"`
 	MaintenanceAcknowledged   bool `json:"maintenanceAcknowledged"`
 	SynchronousReviewAccepted bool `json:"synchronousReviewAccepted"`
+	ServiceRiskAccepted       bool `json:"serviceRiskAccepted,omitempty"`
+	ScheduleAccepted          bool `json:"scheduleAccepted,omitempty"`
 }
 
 func (a WorklistAcknowledgements) Valid(kind string) bool {
+	if kind == "schedule" {
+		return !a.Acknowledged && a.PackageReviewAccepted && a.TermsAccepted && !a.MaintenanceAcknowledged && a.SynchronousReviewAccepted && a.ServiceRiskAccepted && a.ScheduleAccepted
+	}
+	if a.ServiceRiskAccepted || a.ScheduleAccepted {
+		return false
+	}
 	if kind == "review" {
 		return !a.Acknowledged && a.PackageReviewAccepted && a.TermsAccepted && a.MaintenanceAcknowledged && a.SynchronousReviewAccepted
 	}
@@ -76,9 +85,19 @@ type WorklistRequest struct {
 	ExpiresAt            int64  `json:"expiresAt"`
 	// Retirement-only: omission preserves every existing stage's canonical bytes.
 	ResultDigest string `json:"resultDigest,omitempty"`
+	// Schedule-only fixed UTC window; omitted from every legacy stage.
+	StartAt int64 `json:"startAt,omitempty"`
+	EndAt   int64 `json:"endAt,omitempty"`
 }
 
 func (q WorklistRequest) Valid(kind string) bool {
+	if kind == "schedule" {
+		if !ValidTime(q.StartAt) || !ValidTime(q.EndAt) || q.EndAt-q.StartAt < 60 || q.EndAt-q.StartAt > 600 {
+			return false
+		}
+	} else if q.StartAt != 0 || q.EndAt != 0 {
+		return false
+	}
 	n, e := strconv.ParseUint(q.ArtifactRetiredCount, 10, 64)
 	if e != nil || strconv.FormatUint(n, 10) != q.ArtifactRetiredCount || !enrollmentcrypto.ValidID(q.DeviceID, "agent_") || !ValidDigest(q.ArtifactID) || !ValidDigest(q.BindingDigest) || !ValidTransferID(q.TransferID) || !ValidTime(q.ExpiresAt) {
 		return false
@@ -93,15 +112,16 @@ func (q WorklistRequest) Valid(kind string) bool {
 	if kind == "retire" {
 		return q.Operation == "retire" && q.ReadinessDigest == "" && ValidDigest(q.ResultDigest)
 	}
-	return q.ResultDigest == "" && (kind == "review" && q.Operation == "review-coordinated" && q.ReadinessDigest == "" || kind == "approve" && q.Operation == "approve" && ValidDigest(q.ReadinessDigest))
+	return q.ResultDigest == "" && (kind == "review" && q.Operation == "review-coordinated" && q.ReadinessDigest == "" || (kind == "approve" && q.Operation == "approve" || kind == "schedule" && q.Operation == "schedule") && ValidDigest(q.ReadinessDigest))
 }
 
 type WorklistBatchItem struct {
-	Request      WorklistRequest `json:"request"`
-	State        string          `json:"state"`
-	IssuedAt     int64           `json:"issuedAt"`
-	PermitDigest string          `json:"permitDigest"`
-	JobSequence  uint64          `json:"jobSequence,string"`
+	Request        WorklistRequest `json:"request"`
+	State          string          `json:"state"`
+	IssuedAt       int64           `json:"issuedAt"`
+	PermitDigest   string          `json:"permitDigest"`
+	ScheduleDigest string          `json:"scheduleDigest,omitempty"`
+	JobSequence    uint64          `json:"jobSequence,string"`
 }
 type WorklistBatch struct {
 	ID                 string                   `json:"id"`
@@ -190,20 +210,27 @@ func (w Worklist) Validate() error {
 			if !ok || q.DeviceID <= previous || !q.Valid(b.Kind) || q.ArtifactID != w.ArtifactID || q.ArtifactRetiredCount != strconv.FormatUint(w.ArtifactRetiredCount, 10) || q.BindingDigest != BindingDigest(t.Binding) || q.ExpiresAt < b.ExpiresAt {
 				return ErrIntegrity
 			}
+			if b.Kind == "schedule" && (q.StartAt != b.Items[0].Request.StartAt || q.EndAt != b.Items[0].Request.EndAt || q.StartAt <= b.CreatedAt || q.StartAt-b.CreatedAt > 86400) {
+				return ErrIntegrity
+			}
 			previous = q.DeviceID
 			switch i.State {
 			case "not_dispatched":
 				pending = true
-				if i.IssuedAt != 0 || i.PermitDigest != "" || i.JobSequence != 0 {
+				if i.IssuedAt != 0 || i.PermitDigest != "" || i.ScheduleDigest != "" || i.JobSequence != 0 {
 					return ErrIntegrity
 				}
 			case "issued":
-				if pending || i.IssuedAt < b.CreatedAt || i.IssuedAt >= b.ExpiresAt || !ValidDigest(i.PermitDigest) || i.JobSequence == 0 || t.TransferID != q.TransferID || t.JobSequence != i.JobSequence {
+				if b.Kind == "schedule" || i.ScheduleDigest != "" || pending || i.IssuedAt < b.CreatedAt || i.IssuedAt >= b.ExpiresAt || !ValidDigest(i.PermitDigest) || i.JobSequence == 0 || t.TransferID != q.TransferID || t.JobSequence != i.JobSequence {
+					return ErrIntegrity
+				}
+			case "scheduled":
+				if b.Kind != "schedule" || strconv.FormatUint(i.JobSequence, 10) != q.JobSequence || pending || i.IssuedAt < b.CreatedAt || i.IssuedAt >= b.ExpiresAt || i.PermitDigest != "" || !ValidDigest(i.ScheduleDigest) || i.JobSequence == 0 || t.TransferID != q.TransferID || t.JobSequence != i.JobSequence {
 					return ErrIntegrity
 				}
 			case "rejected":
 				pending = true
-				if b.CloseReason != "rejected" || i.IssuedAt != 0 || i.PermitDigest != "" || i.JobSequence != 0 {
+				if b.CloseReason != "rejected" || i.IssuedAt != 0 || i.PermitDigest != "" || i.ScheduleDigest != "" || i.JobSequence != 0 {
 					return ErrIntegrity
 				}
 			default:
@@ -321,7 +348,7 @@ func (j *WorklistJournal) Dispatch(d WorklistDispatch, binding Binding, now int6
 			return nil, nil, nil, ErrConflict
 		}
 		for n := 0; n < d.Reference.Item; n++ {
-			if b.Items[n].State != "issued" {
+			if b.Items[n].State != "issued" && b.Items[n].State != "scheduled" {
 				return nil, nil, nil, ErrConflict
 			}
 		}
@@ -347,28 +374,37 @@ func (j *WorklistJournal) FinishDispatch(d WorklistDispatch, before, after Recor
 		if (b.Kind == "review" || b.Kind == "approve") && (before.Schedule != nil || after.Schedule != nil) {
 			return ErrConsumed
 		}
-		var raw, old []byte
-		switch b.Kind {
-		case "deliver":
-			raw, old = after.DeliveryPermit, before.DeliveryPermit
-		case "review":
-			raw, old = after.ReadinessPermit, before.ReadinessPermit
-		case "approve":
-			raw, old = after.InstallPermit, before.InstallPermit
-		case "retire":
-			raw, old = after.RetirePermit, before.RetirePermit
+		if b.Kind == "schedule" {
+			q, err := i.Request.ScheduleRequest(b.Acknowledgements)
+			s := after.Schedule
+			if err != nil || before.Schedule != nil || s == nil || before.Jobs == nil || s.State != "scheduled" || s.ReadinessIssuedAt != 0 || s.PermitIssuedAt != 0 || s.Approval.Validate() != nil || s.Approval.Request != q || s.Approval.ActorID != b.ActorID || s.Approval.ApprovedAt < b.CreatedAt || s.Approval.ApprovedAt > now || s.Approval.GrantDigest != GrantDigest(before.Grant) || s.Approval.BaselinePermitDigest != Digest(before.ReadinessPermit) || Digest(s.BaselineReport) != i.Request.ReadinessDigest || len(after.InstallPermit) != 0 || after.Jobs.Sequence != before.Jobs.Sequence {
+				return ErrIntegrity
+			}
+			i.State, i.IssuedAt, i.ScheduleDigest, i.JobSequence = "scheduled", s.Approval.ApprovedAt, s.Approval.Digest, after.Jobs.Sequence
+		} else {
+			var raw, old []byte
+			switch b.Kind {
+			case "deliver":
+				raw, old = after.DeliveryPermit, before.DeliveryPermit
+			case "review":
+				raw, old = after.ReadinessPermit, before.ReadinessPermit
+			case "approve":
+				raw, old = after.InstallPermit, before.InstallPermit
+			case "retire":
+				raw, old = after.RetirePermit, before.RetirePermit
+			}
+			p, e := VerifyPermit(raw, after.PublicKey)
+			if e != nil || len(raw) == 0 || Digest(raw) == Digest(old) || p.ActorID != b.ActorID || p.IssuedAt < b.CreatedAt || p.IssuedAt > now || p.TransferID != i.Request.TransferID || p.JobSequence != after.Jobs.Sequence {
+				return ErrIntegrity
+			}
+			if b.Kind != "deliver" && i.Request.JobSequence != strconv.FormatUint(p.JobSequence, 10) || b.Kind == "approve" && p.ReadinessDigest != i.Request.ReadinessDigest || b.Kind == "retire" && (p.Kind != "retire" || p.RetireResultDigest != i.Request.ResultDigest || Digest(after.ResultReport) != i.Request.ResultDigest) {
+				return ErrIntegrity
+			}
+			i.State = "issued"
+			i.IssuedAt = p.IssuedAt
+			i.PermitDigest = Digest(raw)
+			i.JobSequence = p.JobSequence
 		}
-		p, e := VerifyPermit(raw, after.PublicKey)
-		if e != nil || len(raw) == 0 || Digest(raw) == Digest(old) || p.ActorID != b.ActorID || p.IssuedAt < b.CreatedAt || p.IssuedAt > now || p.TransferID != i.Request.TransferID || p.JobSequence != after.Jobs.Sequence {
-			return ErrIntegrity
-		}
-		if b.Kind != "deliver" && i.Request.JobSequence != strconv.FormatUint(p.JobSequence, 10) || b.Kind == "approve" && p.ReadinessDigest != i.Request.ReadinessDigest || b.Kind == "retire" && (p.Kind != "retire" || p.RetireResultDigest != i.Request.ResultDigest || Digest(after.ResultReport) != i.Request.ResultDigest) {
-			return ErrIntegrity
-		}
-		i.State = "issued"
-		i.IssuedAt = p.IssuedAt
-		i.PermitDigest = Digest(raw)
-		i.JobSequence = p.JobSequence
 		for ti := range w.Targets {
 			t := &w.Targets[ti]
 			if t.Binding == after.Grant.Binding {
@@ -444,7 +480,7 @@ func WorklistBatchReconciled(w Worklist, b WorklistBatch, records map[string]Rec
 		return false
 	}
 	for _, item := range b.Items {
-		if item.State != "issued" {
+		if item.State != "issued" && item.State != "scheduled" {
 			continue
 		}
 		var target *WorklistTarget
@@ -467,6 +503,10 @@ func WorklistBatchReconciled(w Worklist, b WorklistBatch, records map[string]Rec
 		}
 		r, ok := records[target.Binding.DeviceID]
 		if !ok || !worklistRecordMatches(w, *target, r) {
+			return false
+		}
+		if b.Kind == "schedule" {
+			// Pending/terminal intent alone never compacts the exact job history.
 			return false
 		}
 		switch b.Kind {

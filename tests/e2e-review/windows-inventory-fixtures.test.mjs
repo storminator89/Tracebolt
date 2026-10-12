@@ -1,3 +1,4 @@
+import './windows-update-retirement-fixtures.test.mjs';
 import './windows-software-jobs-fixtures.test.mjs';
 import './windows-update-schedule-fixtures.test.mjs';
 import './windows-resource-context-fixtures.test.mjs';

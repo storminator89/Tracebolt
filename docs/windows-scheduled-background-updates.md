@@ -84,6 +84,23 @@ and saved outcome remain visible; details stay collapsed. A configured service
 or recent signed capture is not proof it is running now. Manual background v4
 continues showing manual approvals only, even for an actor who can schedule.
 
+## Shared fleet planning, independent approvals
+
+The Devices worklist can freeze one UTC start/end with the explicitly selected
+Windows devices and displayed group revision. It is temporary browser planning;
+selecting a group or window sends no request and creates no manager authority.
+Open one device at a time, select its exact cached revision, obtain fresh
+readiness and explicitly review its initially unchecked prospective approval.
+The same frozen window is displayed for each device; unsupported, revoked or
+expired scheduling authority cannot fall back to immediate installation.
+
+No automatic next-device action or bulk approval is added. Per-device summary
+rows retain the last-read job, fixed window, result/reboot truth and unconfirmed
+write state independently. Unconfirmed writes are GET-only until reconciled;
+closing or changing the selection does not cancel an already saved schedule.
+The existing registry limit of 25 independently configured device bindings,
+32 lifetime approvals per grant, original deadlines and native-edge fence remain.
+
 ## Essential native acceptance, pending
 
 With separate approval on a disposable Windows x64 non-domain-controller:
@@ -102,3 +119,10 @@ With separate approval on a disposable Windows x64 non-domain-controller:
    window extension or elapsed-time unlock may result.
 
 Synthetic fixtures and cross-builds establish source behavior only.
+
+## Separate reusable background option
+
+Fresh [reusable cached-update jobs](windows-reusable-cached-update-jobs.md) can
+independently select this scheduling scope under new v6 consent and a v4 fence.
+Reusable consent alone never enables scheduling. The v5 profile and its original
+32 lifetime approvals described here are unchanged; no existing state migrates.

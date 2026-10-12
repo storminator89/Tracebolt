@@ -31,6 +31,9 @@ func nativeUpdateProvision(ctx context.Context, in updateProvisionInput) (result
 }
 
 func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInput, result *updateProvisionResult, receipt installReceipt, lease receiptStore) (any, error) {
+	if in.reusable && !in.background {
+		return nil, job.ErrAuthority
+	}
 	profile := func() error {
 		if in.coordinated == nil {
 			if in.background {
@@ -87,6 +90,9 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 		}
 	}
 	p, e := newPlan(in.offer, in.artifact, identity, receipt.Service)
+	if in.reusable {
+		p, e = windowsupdatesetup.NewReusableBackgroundPlan(in.offer, in.artifact, identity, receipt.Service, in.schedule)
+	}
 	if e != nil {
 		return nil, e
 	}

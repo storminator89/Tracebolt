@@ -34,7 +34,7 @@ func windowsMSIWorklistRoute(r *http.Request) (string, string, bool) {
 		return p[4], "", true
 	}
 	switch p[5] {
-	case "preview", "batches", "close", "archive":
+	case "preview", "schedule-preview", "batches", "close", "archive":
 		return p[4], p[5], true
 	}
 	return "", "", false
@@ -117,6 +117,16 @@ func (h *operatorHandler) windowsMSIWorklistAPI(w http.ResponseWriter, r *http.R
 			return
 		}
 		out, e = registry.PreviewWorklist(r.Context(), actor, id, q.Revision, q.Kind)
+	case "schedule-preview":
+		var q struct {
+			Revision uint64 `json:"revision"`
+			StartAt  int64  `json:"startAt"`
+			EndAt    int64  `json:"endAt"`
+		}
+		if !readObject(w, r, 256, []string{"revision", "startAt", "endAt"}, &q) {
+			return
+		}
+		out, e = registry.PreviewWorklistSchedule(r.Context(), actor, id, q.Revision, q.StartAt, q.EndAt)
 	case "batches":
 		var q manager.ConfirmWorklistBatch
 		if !readObject(w, r, 32768, []string{"revision", "kind", "items", "acknowledgements"}, &q) {
@@ -126,11 +136,19 @@ func (h *operatorHandler) windowsMSIWorklistAPI(w http.ResponseWriter, r *http.R
 		if q.Kind == "deliver" {
 			stagecap = operatorauth.WindowsManagedMSIDeliver
 		}
-		if !h.auth.ActorHasCapability(actor, stagecap) {
+		if !h.auth.ActorHasCapability(actor, stagecap) || q.Kind == "schedule" && !h.auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSISchedule) {
 			managedMSIError(w, msi.ErrAuthority)
 			return
 		}
 		r = r.WithContext(h.managedMSIContext(r, stagecap))
+		if q.Kind == "schedule" {
+			r = r.WithContext(msi.WithFinalCheck(r.Context(), func() error {
+				if !h.auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSISchedule) {
+					return msi.ErrAuthority
+				}
+				return nil
+			}))
+		}
 		out, e = registry.ConfirmWorklist(r.Context(), worklistSession(r), id, q)
 	case "close":
 		var q struct {
@@ -166,7 +184,13 @@ func (h *operatorHandler) windowsMSIWorklistAPI(w http.ResponseWriter, r *http.R
 // Keep legacy exact body shapes. Only reusable-v3 admits one additional strict
 // batch reference; it is never inferred from a name, content hash or cookie.
 func readManagedMSIBatchObject(w http.ResponseWriter, r *http.Request, reusable bool, fields []string, out any) bool {
-	raw, e := io.ReadAll(http.MaxBytesReader(w, r.Body, 1280))
+	return readManagedMSIBatchObjectBounded(w, r, reusable, fields, out, 1280)
+}
+
+// Schedule keeps its original 4096-byte body ceiling; the older foreground
+// stages keep 1280. Adding a batch reference does not alter their other fields.
+func readManagedMSIBatchObjectBounded(w http.ResponseWriter, r *http.Request, reusable bool, fields []string, out any, limit int64) bool {
+	raw, e := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if e != nil {
 		managedMSIError(w, msi.ErrInvalid)
 		return false
@@ -185,7 +209,7 @@ func readManagedMSIBatchObject(w http.ResponseWriter, r *http.Request, reusable 
 		fields = append(append([]string{}, fields...), "batch")
 	}
 	r.Body = io.NopCloser(bytes.NewReader(raw))
-	return readObject(w, r, 1280, fields, out)
+	return readObject(w, r, limit, fields, out)
 }
 func (h *operatorHandler) managedMSIBatchContext(r *http.Request, ref *msi.WorklistDispatchReference, q msi.WorklistRequest, a msi.WorklistAcknowledgements) (context.Context, error) {
 	if ref == nil {

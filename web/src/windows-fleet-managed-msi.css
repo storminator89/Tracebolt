@@ -62,3 +62,18 @@
 @media(max-width:560px){.managed-msi-catalogue-list li{align-items:stretch;flex-direction:column}.managed-msi-catalogue-list button{align-self:flex-start}}
 .managed-msi-archived-packages>details{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
 .managed-msi-archived-packages ul{padding-left:18px;display:grid;gap:8px}
+
+.managed-msi-review-form{display:grid;gap:8px;min-width:0}
+.managed-msi-review-form>fieldset{border:0;padding:0;margin:0;display:grid;gap:10px}
+.managed-msi-review-form label{display:flex!important;flex-direction:column;gap:4px;font-size:12px;min-width:0}
+.managed-msi-review-form input,.managed-msi-review-form select{box-sizing:border-box;width:100%;min-width:0;max-width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);font:inherit}
+.managed-msi-review-basics,.managed-msi-review-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:10px}
+.managed-msi-review-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:10px}
+.managed-msi-review-form details{padding:8px 10px;border:1px solid var(--line);border-radius:6px}
+.managed-msi-review-form summary{cursor:pointer;font-weight:500}
+.managed-msi-review-form p{margin:4px 0;line-height:1.5;font-size:11px;color:var(--secondary)}
+.managed-msi-reference{font-variant-numeric:tabular-nums;min-width:0}
+.managed-msi-reference>summary{cursor:pointer;font-size:11px}
+.managed-msi-reference>span{display:block;overflow-wrap:anywhere;user-select:all;font-size:11px;margin:6px 0}
+.managed-msi-reference>.text-button{font-size:11px}
+@media(max-width:600px){.managed-msi-review-basics,.managed-msi-review-grid{grid-template-columns:minmax(0,1fr)}}

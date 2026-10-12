@@ -9,9 +9,12 @@ import {fileURLToPath} from 'node:url';
 import {createWindowsServiceActionsFixture,exerciseWindowsServiceActions,windowsServiceActionsRoute,windowsServiceActionsCaseName,windowsServiceActionsDisclosure,windowsServiceActionsFailureStage,requireWindowsServiceActionsEvidence} from './windows-service-actions-browser.mjs';
 import {createWindowsUpdateJobsFixture,windowsUpdateJobsRoute,exerciseWindowsUpdateJobs,windowsUpdateJobsCaseName,windowsUpdateJobsDisclosure,windowsUpdateJobsFailureStage,requireWindowsUpdateJobsEvidence,requireWindowsUpdateWorklistDetails,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
 import {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute,exerciseWindowsServiceActionHistory,windowsServiceActionHistoryCaseName,requireWindowsServiceActionHistoryEvidence} from './windows-service-action-history-browser.mjs';
-import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
+import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,requireWindowsFleetUpdateScheduleEvidence} from './windows-update-schedule-browser.mjs';
 import {createWindowsSoftwareJobsFixture,windowsSoftwareJobsRoute,exerciseWindowsSoftwareJobs,windowsSoftwareJobsCaseName,windowsSoftwareJobsDisclosure,windowsSoftwareJobsFailureStage,requireWindowsSoftwareJobsEvidence,requireWindowsSoftwareJobsDetails} from './windows-software-jobs-browser.mjs';
+import {createWindowsUpdateRetirementFixture,windowsUpdateRetirementRoute,exerciseWindowsUpdateRetirement,windowsUpdateRetirementCaseName,windowsUpdateRetirementDisclosure,windowsUpdateRetirementFailureStage,requireWindowsUpdateRetirementEvidence,requireWindowsUpdateRetirementDetails} from './windows-update-retirement-browser.mjs';
+const retirementScreenshots=[],retirementVariants=[];
 const softwareScreenshots=[],softwareVariants=[];
+const fleetScheduleScreenshots=[],fleetScheduleVariants=[];
 const scheduleScreenshots=[],scheduleVariants=[],backgroundScheduleScreenshots=[],backgroundScheduleVariants=[];
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
@@ -20,14 +23,16 @@ const sourceSha=process.env.TRACEBOLT_SOURCE_SHA??null,screenshots=[],historyScr
 await fs.mkdir(out,{recursive:true});
 const failure=()=>new Error('Synthetic Windows action browser gate failed; raw state withheld.');
 async function shot(page,name,fixtureDisclosure){
+ const isRetirement=/^synthetic-windows-update-retirement-review-(1440|390)-(en|de)$/.test(name);
+ const isFleetSchedule=/^synthetic-windows-fleet-update-schedule-(shared-window-review|per-device-summary)-(1440|390)-(en|de)$/.test(name);
  const isSoftware=/^synthetic-windows-software-jobs-(review|result)-(1440|390)-(en|de)$/.test(name);
  const isBackgroundSchedule=/^synthetic-windows-background-update-schedule-(status|review|pending|canceled)-(1440|390)-(en|de)$/.test(name);
  const isSchedule=/^synthetic-windows-update-schedule-(review|pending|canceled)-(1440|390)-(en|de)$/.test(name);
  const isUpdate=/^synthetic-windows-update-jobs-(review|result|worklist)-(1440|390)-(en|de)$/.test(name);
- if(isBackgroundSchedule?fixtureDisclosure!==windowsBackgroundUpdateScheduleDisclosure:isSoftware?fixtureDisclosure!==windowsSoftwareJobsDisclosure:isSchedule?fixtureDisclosure!==windowsUpdateScheduleDisclosure:isUpdate?fixtureDisclosure!==windowsUpdateJobsDisclosure:!/^synthetic-windows-service-(actions|action-history)-(1440|390)-(en|de)$/.test(name)||fixtureDisclosure!==windowsServiceActionsDisclosure)throw failure();
+ if(isRetirement?fixtureDisclosure!==windowsUpdateRetirementDisclosure:isFleetSchedule?fixtureDisclosure!==windowsFleetUpdateScheduleDisclosure:isBackgroundSchedule?fixtureDisclosure!==windowsBackgroundUpdateScheduleDisclosure:isSoftware?fixtureDisclosure!==windowsSoftwareJobsDisclosure:isSchedule?fixtureDisclosure!==windowsUpdateScheduleDisclosure:isUpdate?fixtureDisclosure!==windowsUpdateJobsDisclosure:!/^synthetic-windows-service-(actions|action-history)-(1440|390)-(en|de)$/.test(name)||fixtureDisclosure!==windowsServiceActionsDisclosure)throw failure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
  const isHistory=name.startsWith('synthetic-windows-service-action-history-');
- (isBackgroundSchedule?backgroundScheduleScreenshots:isSoftware?softwareScreenshots:isSchedule?scheduleScreenshots:isUpdate?updateScreenshots:isHistory?historyScreenshots:screenshots).push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:isBackgroundSchedule?windowsBackgroundUpdateScheduleCaseName:isSoftware?windowsSoftwareJobsCaseName:isSchedule?windowsUpdateScheduleCaseName:isUpdate?windowsUpdateJobsCaseName:isHistory?windowsServiceActionHistoryCaseName:windowsServiceActionsCaseName});
+ (isRetirement?retirementScreenshots:isFleetSchedule?fleetScheduleScreenshots:isBackgroundSchedule?backgroundScheduleScreenshots:isSoftware?softwareScreenshots:isSchedule?scheduleScreenshots:isUpdate?updateScreenshots:isHistory?historyScreenshots:screenshots).push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:isRetirement?windowsUpdateRetirementCaseName:isFleetSchedule?windowsFleetUpdateScheduleCaseName:isBackgroundSchedule?windowsBackgroundUpdateScheduleCaseName:isSoftware?windowsSoftwareJobsCaseName:isSchedule?windowsUpdateScheduleCaseName:isUpdate?windowsUpdateJobsCaseName:isHistory?windowsServiceActionHistoryCaseName:windowsServiceActionsCaseName});
 }
 async function run(){
  if(!/^[a-f0-9]{40}$/.test(sourceSha??''))throw failure();
@@ -81,6 +86,19 @@ async function run(){
   expect(updateState.blocked).toEqual([]);expect(updateState.external).toEqual([]);expect(await context.cookies()).toEqual([]);
   const updateStorage=await updatePage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [updateFixture.savedID(),updateFixture.secondSavedID,updateFixture.digest,updateFixture.session.csrfToken])expect(updateStorage.includes(value)).toBe(false);
   updateVariants.push({locale,width,...updateDetails});await context.close();context=null;
+  const retirementFixture=createWindowsUpdateRetirementFixture(),retirementState={blocked:[],external:[]};
+  context=await browser.newContext({viewport:{width,height:width===390?844:1000},locale:'en-GB'});const retirementPage=await context.newPage();retirementPage.on('pageerror',()=>errors++);
+  await retirementPage.clock.install({time:new Date(retirementFixture.now)});await retirementPage.clock.pauseAt(new Date(Date.parse(retirementFixture.now)+100));
+  await retirementPage.route('**/*',windowsUpdateRetirementRoute({base:windowsUpdateJobsOrigin,fixture:retirementFixture,state:retirementState,asset:async(route,pathname)=>{
+   const file=await fs.realpath(path.join(realDist,pathname==='/'?'index.html':decodeURIComponent(pathname)));
+   const contentTypes={'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff':'font/woff','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
+   if(!file.startsWith(realDist+path.sep)||!contentTypes[path.extname(file)])throw failure();
+   await route.fulfill({status:200,contentType:contentTypes[path.extname(file)],body:await fs.readFile(file)});
+  }}));
+  const retirementDetails=await exerciseWindowsUpdateRetirement({page:retirementPage,expect,base:windowsUpdateJobsOrigin,fixture:retirementFixture,locale,width,shot});requireWindowsUpdateRetirementDetails(retirementDetails);
+  expect(retirementState.blocked).toEqual([]);expect(retirementState.external).toEqual([]);expect(await context.cookies()).toEqual([]);
+  const retirementStorage=await retirementPage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [retirementFixture.retirementID,retirementFixture.retirementBody.resultDigest,retirementFixture.session.csrfToken])expect(retirementStorage.includes(value)).toBe(false);
+  retirementVariants.push({locale,width,...retirementDetails});await context.close();context=null;
   // Both fresh profiles use the same bounded controller; earlier cases remain.
   for(const scheduleProfile of ['standalone','background']){
   const scheduleFixture=createWindowsUpdateScheduleFixture(scheduleProfile),scheduleState={blocked:[],external:[]};
@@ -97,6 +115,21 @@ async function run(){
   const scheduleStorage=await schedulePage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [scheduleFixture.savedID(),scheduleFixture.digest,scheduleFixture.scheduleDigest,scheduleFixture.session.csrfToken])expect(scheduleStorage.includes(value)).toBe(false);
   if(scheduleProfile==='background'){expect(scheduleDetails.backgroundScheduling).toBe(true);expect(scheduleDetails.compactBackgroundStatus).toBe(true);expect(scheduleDetails.separateManualApproval).toBe(true);backgroundScheduleVariants.push({locale,width,...scheduleDetails});}else scheduleVariants.push({locale,width,...scheduleDetails});await context.close();context=null;
   }
+  // Two additive common-window scenes reuse the same intercepted controller,
+  // installed browser, original clock/session bounds and screenshot helper.
+  const fleetFixture=createWindowsFleetUpdateScheduleFixture(),fleetState={blocked:[],external:[]};
+  context=await browser.newContext({viewport:{width,height:width===390?844:1000},locale:'en-GB'});const fleetPage=await context.newPage();fleetPage.on('pageerror',()=>errors++);
+  await fleetPage.clock.install({time:new Date(fleetFixture.now)});await fleetPage.clock.pauseAt(new Date(Date.parse(fleetFixture.now)+100));
+  await fleetPage.route('**/*',windowsUpdateScheduleRoute({base:windowsUpdateJobsOrigin,fixture:fleetFixture,state:fleetState,asset:async(route,pathname)=>{
+   const file=await fs.realpath(path.join(realDist,pathname==='/'?'index.html':decodeURIComponent(pathname)));
+   const contentTypes={'.html':'text/html','.js':'text/javascript','.css':'text/css','.woff':'font/woff','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
+   if(!file.startsWith(realDist+path.sep)||!contentTypes[path.extname(file)])throw failure();
+   await route.fulfill({status:200,contentType:contentTypes[path.extname(file)],body:await fs.readFile(file)});
+  }}));
+  const fleetDetails=await exerciseWindowsFleetUpdateSchedule({page:fleetPage,expect,base:windowsUpdateJobsOrigin,fixture:fleetFixture,locale,width,shot});
+  expect(fleetState.blocked).toEqual([]);expect(fleetState.external).toEqual([]);expect(await context.cookies()).toEqual([]);
+  const fleetStorage=await fleetPage.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));for(const value of [fleetFixture.savedID(),fleetFixture.secondSavedID,fleetFixture.digest,fleetFixture.scheduleDigest,fleetFixture.session.csrfToken])expect(fleetStorage.includes(value)).toBe(false);
+  fleetScheduleVariants.push({locale,width,...fleetDetails});await context.close();context=null;
   // Additive prepared-package case; every earlier capture and behavioral gate remains.
   const softwareFixture=createWindowsSoftwareJobsFixture(),softwareState={blocked:[],external:[]};
   context=await browser.newContext({viewport:{width,height:width===390?844:1000},locale:'en-GB'});const softwarePage=await context.newPage();softwarePage.on('pageerror',()=>errors++);
@@ -115,13 +148,14 @@ async function run(){
 
 
  }
- requireWindowsServiceActionsEvidence(screenshots,sourceSha);requireWindowsServiceActionHistoryEvidence(historyScreenshots,sourceSha);if(errors||apiRequests||variants.length!==4)throw failure();if(historyVariants.length!==4)throw failure();requireWindowsUpdateJobsEvidence(updateScreenshots,sourceSha);if(updateVariants.length!==4)throw failure();requireWindowsUpdateScheduleEvidence(scheduleScreenshots,sourceSha);if(scheduleVariants.length!==4)throw failure();requireWindowsBackgroundUpdateScheduleEvidence(backgroundScheduleScreenshots,sourceSha);if(backgroundScheduleVariants.length!==4)throw failure();requireWindowsSoftwareJobsEvidence(softwareScreenshots,sourceSha);if(softwareVariants.length!==4)throw failure();
+ requireWindowsUpdateRetirementEvidence(retirementScreenshots,sourceSha);if(retirementVariants.length!==4)throw failure();
+ requireWindowsServiceActionsEvidence(screenshots,sourceSha);requireWindowsServiceActionHistoryEvidence(historyScreenshots,sourceSha);if(errors||apiRequests||variants.length!==4)throw failure();if(historyVariants.length!==4)throw failure();requireWindowsUpdateJobsEvidence(updateScreenshots,sourceSha);if(updateVariants.length!==4)throw failure();requireWindowsUpdateScheduleEvidence(scheduleScreenshots,sourceSha);if(scheduleVariants.length!==4)throw failure();requireWindowsBackgroundUpdateScheduleEvidence(backgroundScheduleScreenshots,sourceSha);if(backgroundScheduleVariants.length!==4)throw failure();requireWindowsFleetUpdateScheduleEvidence(fleetScheduleScreenshots,sourceSha);if(fleetScheduleVariants.length!==4)throw failure();requireWindowsSoftwareJobsEvidence(softwareScreenshots,sourceSha);if(softwareVariants.length!==4)throw failure();
 }
 try{await Promise.race([run(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(failure()),120000);})]);passed=true;}
 catch{console.log('FAIL: synthetic Windows action browser gate; raw diagnostics withheld.');}
 finally{
  clearTimeout(timer);try{if(context)await context.close();}catch{passed=false;}try{if(browser)await browser.close();}catch{passed=false;}
  if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
- const report={sourceSha,createdAt:new Date().toISOString(),name:windowsServiceActionsCaseName,status:passed?'PASS':'FAIL',stage:windowsServiceActionsFailureStage(),scope:windowsServiceActionsDisclosure,variants:passed?variants:[],historyVariants:passed?historyVariants:[],updateVariants:passed?updateVariants:[],updateScope:windowsUpdateJobsDisclosure,updateStage:windowsUpdateJobsFailureStage(),scheduleVariants:passed?scheduleVariants:[],scheduleScope:windowsUpdateScheduleDisclosure,scheduleStage:windowsUpdateScheduleFailureStage(),backgroundScheduleVariants:passed?backgroundScheduleVariants:[],backgroundScheduleScope:windowsBackgroundUpdateScheduleDisclosure,softwareVariants:passed?softwareVariants:[],softwareScope:windowsSoftwareJobsDisclosure,softwareStage:windowsSoftwareJobsFailureStage(),runtimeErrorCount:errors,requestsToRealAPI:apiRequests,browserAcceptance:passed,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false};
- await fs.writeFile(path.join(out,'windows-service-actions-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-service-actions-manifest.json'),JSON.stringify({sourceSha,screenshots:[...screenshots,...historyScreenshots,...updateScreenshots,...scheduleScreenshots,...softwareScreenshots,...backgroundScheduleScreenshots]},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
+ const report={sourceSha,createdAt:new Date().toISOString(),name:windowsServiceActionsCaseName,status:passed?'PASS':'FAIL',stage:windowsServiceActionsFailureStage(),scope:windowsServiceActionsDisclosure,variants:passed?variants:[],historyVariants:passed?historyVariants:[],updateVariants:passed?updateVariants:[],retirementVariants:passed?retirementVariants:[],retirementScope:windowsUpdateRetirementDisclosure,retirementStage:windowsUpdateRetirementFailureStage(),updateScope:windowsUpdateJobsDisclosure,updateStage:windowsUpdateJobsFailureStage(),scheduleVariants:passed?scheduleVariants:[],scheduleScope:windowsUpdateScheduleDisclosure,scheduleStage:windowsUpdateScheduleFailureStage(),backgroundScheduleVariants:passed?backgroundScheduleVariants:[],backgroundScheduleScope:windowsBackgroundUpdateScheduleDisclosure,fleetScheduleVariants:passed?fleetScheduleVariants:[],fleetScheduleScope:windowsFleetUpdateScheduleDisclosure,softwareVariants:passed?softwareVariants:[],softwareScope:windowsSoftwareJobsDisclosure,softwareStage:windowsSoftwareJobsFailureStage(),runtimeErrorCount:errors,requestsToRealAPI:apiRequests,browserAcceptance:passed,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false};
+ await fs.writeFile(path.join(out,'windows-service-actions-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-service-actions-manifest.json'),JSON.stringify({sourceSha,screenshots:[...screenshots,...historyScreenshots,...updateScreenshots,...retirementScreenshots,...scheduleScreenshots,...softwareScreenshots,...backgroundScheduleScreenshots,...fleetScheduleScreenshots]},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
 }

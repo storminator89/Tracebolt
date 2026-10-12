@@ -88,3 +88,39 @@ func TestBackgroundMSIActivationPreservesLegacyBytesAndDenial(t *testing.T) {
 		t.Fatal("legacy roster adopted new proof")
 	}
 }
+
+func TestReusableWUAMSIActivationRequiresFreshExactManagerProof(t *testing.T) {
+	c, a := backgroundActivationFixture(t)
+	old := a
+	registration := a.Background.Registration
+	registration.Consent.Version = job.ReusableConsentVersion
+	registration.Consent.ReusableAcknowledged = true
+	roster := *c.Mutation
+	roster.Version = fence.ReusableWUARosterVersion
+	roster.Plan.Version = fence.ReusableWUAPlanVersion
+	roster.WUA = job.MutationParticipant(registration.Consent)
+	c.Mutation = &roster
+	raw, _ := json.Marshal(c)
+	a.ConfigDigest = managed.Digest(raw)
+	manager, e := job.SignBackgroundActivation(registration, ed25519.NewKeyFromSeed(bytes.Repeat([]byte{3}, 32)))
+	if e != nil {
+		t.Fatal(e)
+	}
+	a.Background = &BackgroundRegistrationProof{Registration: registration, Manager: manager}
+	if c.Validate() != nil || a.Validate(c) != nil {
+		t.Fatal("fresh v4 pairing refused")
+	}
+	old.ConfigDigest = a.ConfigDigest
+	if old.Validate(c) == nil {
+		t.Fatal("old manager registration activated new profile")
+	}
+	for _, change := range []func(*Activation){func(a *Activation) { a.Background = nil }, func(a *Activation) { a.Version = managed.Version }, func(a *Activation) { a.Background.Manager.Signature[0] ^= 1 }} {
+		raw, _ := json.Marshal(a)
+		var bad Activation
+		json.Unmarshal(raw, &bad)
+		change(&bad)
+		if bad.Validate(c) == nil {
+			t.Fatal("missing fresh proof accepted")
+		}
+	}
+}

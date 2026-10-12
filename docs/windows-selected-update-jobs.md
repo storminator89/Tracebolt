@@ -1,4 +1,4 @@
-# Selected cached Windows update jobs: foreground source candidate
+# Selected cached Windows update jobs: source candidate
 
 This source increment connects a separate manager job domain to enrollment-owned
 storage, TLS relay ingress, named-operator request/review/approval/status and the
@@ -8,6 +8,11 @@ launched foreground executor and authenticated update-only local IPC. It opens o
 exact protected state created by the separately approved fresh post-enrollment
 setup command below. No host grant, process/SCM ACL change, update installation, reboot, native
 Windows acceptance or release is established by this source work.
+
+This guide retains the original foreground contract. Fresh
+[manual background v4](windows-background-cached-updates.md) and
+[scheduled background v5](windows-scheduled-background-updates.md) profiles have
+separate create-only consent and service activation; old profiles are not promoted.
 
 ## Authority and activation
 
@@ -424,9 +429,15 @@ The collapsed Devices worklist freezes the explicitly selected Windows device ID
 and, when applicable, the displayed group revision. Groups organize selection;
 changes to a group never add targets or grant update authority. Open one device,
 choose one exact currently cached GUID/revision, request readiness, review that
-device's fresh preview and explicitly approve it. There is no fleet approval,
-scheduled permit or automatic advance to another device. Readiness remains at
-most 120 seconds and the original install start deadline at most 60 seconds.
+device's fresh preview and explicitly approve it. An optional common UTC window
+is frozen with the chosen devices; each scheduling-capable device still requires
+its own exact review and initially unchecked prospective approval. No fleet
+approval or automatic advance is added. The temporary worklist grants no
+authority and is not a durable plan; jobs remain saved per device. Closing or
+starting a new selection does not cancel a saved schedule. Readiness remains at
+most 120 seconds and the immediate-install start deadline at most 60 seconds.
+The compact summary preserves independent schedule, result, reboot and
+unconfirmed-write states. It is last-read evidence, not a live fleet assertion.
 
 `GET /api/devices/{id}/windows-update-jobs?history=1` returns newest-first bounded
 metadata for the 32 retained approved jobs and, if present, the one unsigned
@@ -455,6 +466,19 @@ remain unchanged; existing grants are never promoted. Both named install and
 schedule capabilities, a separate local scheduling acknowledgement and a separate
 operator prospective acknowledgement are required. Approval consumes a lifetime
 slot immediately. A fresh matching readiness report at an eligible observer poll
-is required before dispatch; there is no exact-time guarantee or persistent
-elevated service. See [scheduled update jobs](windows-scheduled-update-jobs.md)
-for setup flags, bounds, cancellation/revocation, uncertainty and native gates.
+is required before dispatch; there is no exact-time guarantee. The legacy
+standalone v2 profile requires its separately launched foreground executor and
+adds no persistent elevated service; see
+[scheduled update jobs](windows-scheduled-update-jobs.md). The fresh combined
+v5 profile instead uses the separately activated background service under
+[scheduled background updates](windows-scheduled-background-updates.md). Manual
+background v4 remains manual-only. Each profile keeps its original setup, local
+consent, expiry, cancellation/revocation, uncertainty and native acceptance gates.
+
+## Separate fresh reusable background profile
+
+The [fresh reusable cached-update profile](windows-reusable-cached-update-jobs.md)
+adds explicit successful-result-bound retirement with bounded history and durable
+retired sequence floors under new v6 consent and a v4 shared fence. Only fresh
+paired background setup can select it. The earlier contracts, lifetime limits,
+byte shapes and uncertainty rules in this document remain unchanged.

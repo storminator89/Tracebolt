@@ -6,6 +6,12 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+Saved MSI worklists can review one shared UTC installation window for multiple
+exact devices and one selected catalogue package. Fresh per-device scheduled
+authority remains required; sequential approvals retain independent outcomes and
+stop on uncertainty. No installation permit follows from merely saving a schedule.
+See [scheduled MSI](docs/windows-scheduled-managed-msi.md#saved-fleet-scheduling-for-one-selected-package).
+
 Fresh manager-only [multi-package MSI catalogue](docs/windows-multi-package-msi-catalogue.md):
 four retained payloads within one 128 MiB reservation budget, exact custody/device
 selection, scoped retirement and bounded per-entry worklists. Existing endpoint
