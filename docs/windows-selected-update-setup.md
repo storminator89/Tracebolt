@@ -171,10 +171,11 @@ real permission disclosure, not permission to install any update. Each install
 still needs a fresh exact GUID/revision readiness report and a named operator's
 specific preview approval. No download, EULA acceptance or reboot is authorized.
 
-This first manager workflow supports **one fixed Windows device/update binding**.
-Its existing schema rejects a second setup domain; it is not a fleet registration
-or renewal tool. The original consent expiry and 32-approved-job lifetime bound
-remain in force. Expired, failed, uncertain and consumed history is retained.
+The default workflow remains **one fixed Windows device/update binding** and
+rejects an existing domain. The separate additional-device mode below extends a
+complete explicitly activated registry without renewing any old consent. Each
+device retains its original expiry and 32-approved-job lifetime bound. Expired,
+failed, uncertain and consumed history is retained.
 
 Any failed apply may have created protected keys, fences or reciprocal state.
 Preserve all of it and stop. Never delete a marker, substitute a new key, restore
@@ -183,3 +184,38 @@ setup look fresh. Removal/disabling on one side does not erase or reset the othe
 side's consent and history. Native Linux-manager/Windows interoperability,
 protected write/ACL acceptance, foreground launch and selected cached install
 acceptance must be separately approved and verified before release claims.
+
+
+## Additional devices: explicit create-only extension
+
+For a second or later exact activated Windows identity, add `--additional-device`
+to both the manager `prepare` and `finalize` review commands above, and to their
+approved apply commands. Supply the currently activated protected LAN config,
+which must already point to the completed first-device v1 config or a complete v2
+registry. The ordinary first-device mode still requires that setting to be absent.
+Use a new device ID and an explicitly chosen fixed expiry; endpoint provisioning
+still requires its separate local approval and independent executor key/grant.
+
+Additional preparation reuses only the existing purpose-specific manager key by
+its exact protected path and public pin. It generates no key. The v2 review binds
+all original registry/config digests and paths, exact enrolled bindings, key
+reference, named operators, original target identity and current leaf. Existing
+entries need valid original completion receipts; their exact count and bindings
+must match the enrolled update records. The new total cannot exceed either the
+enrollment record limit or 25 devices. Duplicate device, executor ID/key pin or
+grant is rejected. Partial state, including a prior registration whose new config
+was not explicitly activated, blocks a further extension.
+
+The new public offer and receipts live under the create-only directory
+`windows-update-setup-<exact-device-id>` with a distinct sibling started fence.
+Finalize stages a new v1 `manager.json` referencing the unchanged original manager
+key, a v2 `registry.json` containing every original config path plus the new one,
+`lan.json` pointing to that registry, and `complete.json` last. No previous file,
+receipt, key, expiry, grant or per-device job history is rewritten. Files or fences
+already present for that target are never adopted or resumed. Every blocking
+output is followed by fresh original-expiry/current-leaf/input checks.
+
+Review and separately approve activation of the returned staged LAN config before
+adding another device. No helper step restarts a manager, launches an endpoint,
+changes ACLs, scans WUA or installs an update. This is source behavior only;
+native setup and interoperability acceptance remain separately approved gates.

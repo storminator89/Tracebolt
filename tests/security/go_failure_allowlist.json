@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "6c268fd9ecba6a851d27eb2785ba3bef2b4020258ae35affc72348f871285077",
+  "goSourceSha256": "32cb10204542fa67dd1fb89c0b3ffea617fb550f8f7c2a4da35b331ffa4e481e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1144,12 +1144,15 @@
       "TestWindowsSetupCapabilitiesExactPublicGuardedTLSContract",
       "TestWindowsStorageIOOperatorSessionAndResponseTimeExpiry",
       "TestWindowsStorageOperatorSessionAndResponseTimeExpiry",
+      "TestWindowsUpdateHistoryAndExactQueriesAreReadOnlyAndStrict",
       "TestWindowsUpdateJobAPIBodyReadDoesNotHoldSessionGate",
       "TestWindowsUpdateJobAPICSRFOriginActorRevocation",
       "TestWindowsUpdateJobAPIDefaultOffAndNoExecutorIngress",
       "TestWindowsUpdateJobAPINoPermissionPromotionAndHTTP",
       "TestWindowsUpdateJobAPIRequestReviewApprovalAndStatus",
       "TestWindowsUpdateJobAPIUsesLiveClockAtEnrollmentCommit",
+      "TestWindowsUpdateJobFinalConfigurationWaitCannotOutliveSession",
+      "TestWindowsUpdateRegistryTwoDeviceAPIToTLSRelay",
       "TestWindowsUpdatesOperatorSessionAndResponseTimeExpiry",
       "TestWindowsUpdatesResourceRequiresExistingOperatorRoute",
       "TestWindowsUserSoftwareOperatorFinalBoundaryHidesRows",
@@ -4858,6 +4861,7 @@
       "TestExecutorUncertaintyAndCrashNeverRetry",
       "TestFreshLocalConsentAndLiveAuthorityFailClosed",
       "TestFreshStartBoundsCannotBeExtendedByOriginalLeafOrClock",
+      "TestHistoryRetainsLifetimeBoundAndExactOutcomes",
       "TestInactiveAdapterCannotInstall",
       "TestInstallStartFenceIsRequiredOriginalAndIndependentOfDuration",
       "TestKernelNativeStartHookReentersExclusiveAuthorityAndKeepsFreshBounds",
@@ -4877,8 +4881,18 @@
       "TestWorkflowExactApprovalClaimAndResult"
     ],
     "localrmm/internal/windowsupdatemanager": [
+      "TestAdditionalSetupExpiryAcrossEachBlockingWriteFails",
+      "TestAdditionalSetupFailurePreservesFencesAndNeverRetries",
+      "TestAdditionalSetupFinalizeStagesExplicitRegistryWithoutChangingOldBytes",
+      "TestAdditionalSetupInspectionRequiresExactCompleteBindings",
+      "TestAdditionalSetupPreparationReusesOnlyExistingManagerKey",
+      "TestAdditionalSetupProtectedInputsRequireCompleteBoundedUniqueRegistry",
+      "TestAdditionalSetupRejectsDuplicateIndependentExecutorAndGrant",
+      "TestAdditionalSetupRejectsRollbackBetweenBlockingOutputs",
+      "TestAdditionalSetupReviewBindsOriginalAuthorityReferences",
       "TestGeneratedSetupConfigRequiresExactCompletionAfterFinalWrite",
       "TestSelectedUpdateConfigRequiresFreshExactTLSAuthority",
+      "TestSelectedUpdateNestedConfigurationStrictness",
       "TestSetupProtectedCreationRejectsUnsafePathsWithoutRepair",
       "TestUpdateSetupExpiryAfterBlockingReadRetainsFence",
       "TestUpdateSetupFinalizeOrderAndRetainedUncertainty",

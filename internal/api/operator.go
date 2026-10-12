@@ -36,6 +36,7 @@ import (
 type LANOperatorConfig struct {
 	// Source-only injection; no CLI/config loader or native executor is supplied.
 	WindowsUpdateJobs     *windowsupdatejob.Manager
+	WindowsUpdateRegistry *windowsupdatejob.Registry
 	WindowsServiceActions *windowsactionmanager.Manager
 	PackageActions        *packagecontroller.Manager
 	AISettings            *aiconfig.Settings
@@ -63,6 +64,7 @@ type LANOperatorConfig struct {
 }
 type operatorHandler struct {
 	windowsUpdateJobs        *windowsupdatejob.Manager
+	windowsUpdateRegistry    *windowsupdatejob.Registry
 	fleetGroupSources        []fleetGroupSource
 	windowsActions           windowsServiceActionManager
 	packageUpdatesManager    packageUpdateManager
@@ -148,6 +150,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.WindowsServiceActions != nil && (c.WindowsEnrollment == nil || !c.Auth.Named() || !c.WindowsServiceActions.MatchesBinding(c.WindowsEnrollment.Binding()) || c.WindowsServiceActions.TransportProfile() != windowsactionmanager.Profile(profile)) {
 		return nil, errors.New("Windows service action authority does not match the named Windows enrollment boundary")
+	}
+	if c.WindowsUpdateRegistry != nil && (c.WindowsUpdateJobs != nil || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsUpdateRegistry.MatchesBinding(c.WindowsEnrollment.Binding())) {
+		return nil, errors.New("selected Windows update registry requires the exact TLS named Windows enrollment boundary")
 	}
 	if c.WindowsUpdateJobs != nil && (!c.WindowsUpdateJobs.EnrollmentOwned() || !c.WindowsUpdateJobs.OperatorPolicyConfigured() || c.WindowsEnrollment == nil || !c.Auth.Named() || c.InsecureHTTPTest || !c.WindowsUpdateJobs.MatchesBinding(c.WindowsEnrollment.Binding())) {
 		return nil, errors.New("selected Windows update jobs require the separate TLS named Windows enrollment boundary")
@@ -245,6 +250,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
 	h.windowsUpdateJobs = c.WindowsUpdateJobs
+	h.windowsUpdateRegistry = c.WindowsUpdateRegistry
 	if c.WindowsServiceActions != nil {
 		h.windowsActions = c.WindowsServiceActions
 	}
@@ -375,7 +381,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_framing", "Chunked request bodies are not accepted.")
 		return
 	}
-	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !windowsInboxQueryAllowed(r.URL) && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
+	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !windowsInboxQueryAllowed(r.URL) && !windowsUpdateQueryAllowed(r.URL) && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}

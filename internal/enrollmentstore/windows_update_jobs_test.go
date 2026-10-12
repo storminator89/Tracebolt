@@ -263,6 +263,9 @@ func TestWindowsUpdateJobMissingUsedStateNeverReconstructed(t *testing.T) {
 			if err := f.setup(); err == nil {
 				t.Fatal("setup reconstructed used state")
 			}
+			if err := f.store.RegisterWindowsUpdateDeviceCreateOnly(context.Background(), f.key.Public().(ed25519.PublicKey), f.executor.Public().(ed25519.PublicKey), f.consent, f.at); err == nil {
+				t.Fatal("additional registration reconstructed missing used state")
+			}
 			if out, _, err := f.transaction(context.Background(), f.at, func(*windowsupdatejob.Record, windowsupdatejob.Current, time.Time) error {
 				t.Fatal("damaged state called callback")
 				return nil

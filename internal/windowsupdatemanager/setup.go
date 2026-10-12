@@ -16,6 +16,7 @@ import (
 	"localrmm/internal/actionmanager"
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentconfig"
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/keyvalidation"
@@ -27,6 +28,7 @@ import (
 )
 
 const SetupPlanVersion = "tracebolt.windows-selected-update-manager-setup.v1"
+const AdditionalSetupPlanVersion = "tracebolt.windows-selected-update-manager-setup.v2"
 
 var ErrSetup = errors.New("windows_update_setup_blocked_preserve_all_existing_state")
 
@@ -37,6 +39,7 @@ type SetupRequest struct {
 	DeviceID         string `json:"deviceId"`
 	ExpiresAt        int64  `json:"expiresAt"`
 	RegistrationFile string `json:"registrationFile,omitempty"`
+	AdditionalDevice bool   `json:"additionalDevice,omitempty"`
 }
 type SetupOperator struct {
 	ID       string `json:"id"`
@@ -46,25 +49,32 @@ type SetupOperator struct {
 // SetupPlan is public review material. No key, password, verifier, or private
 // input hash is emitted. It authorizes only the selected create-only phase.
 type SetupPlan struct {
-	Version             string                              `json:"version"`
-	Request             SetupRequest                        `json:"request"`
-	Scope               string                              `json:"scope"`
-	ManagerID           string                              `json:"managerId"`
-	ManagerOrigin       string                              `json:"managerOrigin"`
-	IncarnationDigest   string                              `json:"incarnationDigest"`
-	CurrentLeafDigest   string                              `json:"currentLeafDigest"`
-	CurrentLeafNotAfter int64                               `json:"currentLeafNotAfter"`
-	ExpiresAt           int64                               `json:"expiresAt"`
-	StateDirectory      string                              `json:"stateDirectory"`
-	UID                 int                                 `json:"uid"`
-	GID                 int                                 `json:"gid"`
-	Operators           []SetupOperator                     `json:"operators"`
-	ConfigurationDigest string                              `json:"configurationDigest"`
-	OtherPurposeKeyIDs  []string                            `json:"otherPurposeKeyIds"`
-	Offer               *windowsupdatejob.SetupOffer        `json:"offer,omitempty"`
-	Registration        *windowsupdatejob.SetupRegistration `json:"registration,omitempty"`
-	RegistrationDigest  string                              `json:"registrationDigest,omitempty"`
-	Digest              string                              `json:"digest"`
+	Version                string                              `json:"version"`
+	Request                SetupRequest                        `json:"request"`
+	Scope                  string                              `json:"scope"`
+	ManagerID              string                              `json:"managerId"`
+	ManagerOrigin          string                              `json:"managerOrigin"`
+	IncarnationDigest      string                              `json:"incarnationDigest"`
+	CurrentLeafDigest      string                              `json:"currentLeafDigest"`
+	CurrentLeafNotAfter    int64                               `json:"currentLeafNotAfter"`
+	ExpiresAt              int64                               `json:"expiresAt"`
+	StateDirectory         string                              `json:"stateDirectory"`
+	UID                    int                                 `json:"uid"`
+	GID                    int                                 `json:"gid"`
+	Operators              []SetupOperator                     `json:"operators"`
+	ConfigurationDigest    string                              `json:"configurationDigest"`
+	OtherPurposeKeyIDs     []string                            `json:"otherPurposeKeyIds"`
+	Offer                  *windowsupdatejob.SetupOffer        `json:"offer,omitempty"`
+	Registration           *windowsupdatejob.SetupRegistration `json:"registration,omitempty"`
+	RegistrationDigest     string                              `json:"registrationDigest,omitempty"`
+	OriginalRegistryFile   string                              `json:"originalRegistryFile,omitempty"`
+	OriginalRegistryDigest string                              `json:"originalRegistryDigest,omitempty"`
+	OriginalConfigFiles    []string                            `json:"originalConfigFiles,omitempty"`
+	OriginalConfigDigests  []string                            `json:"originalConfigDigests,omitempty"`
+	ManagerKeyFile         string                              `json:"managerKeyFile,omitempty"`
+	ManagerKeyID           string                              `json:"managerKeyId,omitempty"`
+	RegisteredDevices      int                                 `json:"registeredDevices,omitempty"`
+	Digest                 string                              `json:"digest"`
 }
 
 func (p SetupPlan) digest() string {
@@ -79,12 +89,38 @@ func setupIntent(state string) string {
 func SetupLANPath(state string) string   { return setupPath(state, "lan.json") }
 func SetupOfferPath(state string) string { return setupPath(state, "offer.json") }
 
+// Additional outputs never use the first device's directory or key pathname.
+// Device IDs are validated before these helpers are used by any read or write.
+func setupPlanPath(p SetupPlan, name string) string {
+	if p.Request.AdditionalDevice {
+		return filepath.Join(p.StateDirectory, "windows-update-setup-"+p.Request.DeviceID, name)
+	}
+	return setupPath(p.StateDirectory, name)
+}
+func setupPlanIntent(p SetupPlan) string {
+	if p.Request.AdditionalDevice {
+		return filepath.Join(p.StateDirectory, "windows-update-setup-"+p.Request.DeviceID+"-started.json")
+	}
+	return setupIntent(p.StateDirectory)
+}
+func setupPlanKey(p SetupPlan) string {
+	if p.Request.AdditionalDevice {
+		return p.ManagerKeyFile
+	}
+	return setupPath(p.StateDirectory, "manager.key")
+}
+
+// SetupPlanLANPath returns only the staged output; activation is a separate step.
+func SetupPlanLANPath(p SetupPlan) string { return setupPlanPath(p, "lan.json") }
+
 type setupMaterial struct {
-	lan        lanconfig.Material
-	enrollment enrollmentconfig.Material
-	config     enrollmentstate.Config
-	plan       SetupPlan
-	forbidden  []ed25519.PublicKey
+	lan             lanconfig.Material
+	enrollment      enrollmentconfig.Material
+	config          enrollmentstate.Config
+	plan            SetupPlan
+	forbidden       []ed25519.PublicKey
+	managerPublic   ed25519.PublicKey
+	existingConfigs []Config
 }
 type setupComplete struct {
 	Version             string `json:"version"`
@@ -154,7 +190,7 @@ func loadSetupInputs(ctx context.Context, request SetupRequest, now time.Time) (
 		return fail()
 	}
 	m, e := lanconfig.Load(request.LANConfig)
-	if e != nil || m.Config.Profile != lanconfig.TLS || !m.Config.WindowsInventoryEnabled || m.Config.WindowsUpdateJobsConfigFile != "" || len(m.Operators) == 0 {
+	if e != nil || m.Config.Profile != lanconfig.TLS || !m.Config.WindowsInventoryEnabled || (m.Config.WindowsUpdateJobsConfigFile != "") != request.AdditionalDevice || len(m.Operators) == 0 {
 		return fail()
 	}
 	en, e := enrollmentconfig.Load(request.EnrollmentConfig, m, now)
@@ -166,6 +202,12 @@ func loadSetupInputs(ctx context.Context, request SetupRequest, now time.Time) (
 		return fail()
 	}
 	p := SetupPlan{Version: SetupPlanVersion, Request: request, Scope: windowsupdatejob.Scope, ManagerID: cfg.Binding.InstanceID, ManagerOrigin: m.Config.AgentOrigin, ExpiresAt: request.ExpiresAt, StateDirectory: m.Config.StateDirectory, UID: os.Geteuid(), GID: os.Getegid(), Operators: []SetupOperator{}, OtherPurposeKeyIDs: []string{}}
+	if request.AdditionalDevice {
+		if !enrollmentcrypto.ValidID(request.DeviceID, "agent_") {
+			return fail()
+		}
+		p.Version = AdditionalSetupPlanVersion
+	}
 	for _, op := range m.Operators {
 		for _, cap := range op.Capabilities {
 			if cap == operatorauth.WindowsUpdateInstall {
@@ -236,7 +278,11 @@ func loadSetupInputs(ctx context.Context, request SetupRequest, now time.Time) (
 		p.OtherPurposeKeyIDs = append(p.OtherPurposeKeyIDs, actionpermit.Digest(key))
 	}
 	sort.Strings(p.OtherPurposeKeyIDs)
-	return setupMaterial{m, en, cfg, p, forbidden}, nil
+	loaded := setupMaterial{lan: m, enrollment: en, config: cfg, plan: p, forbidden: forbidden}
+	if request.AdditionalDevice && loadAdditionalSetupInputs(&loaded) != nil {
+		return fail()
+	}
+	return loaded, nil
 }
 func loadSetup(ctx context.Context, request SetupRequest, now time.Time) (setupMaterial, error) {
 	fail := func() (setupMaterial, error) { return setupMaterial{}, ErrSetup }
@@ -244,39 +290,39 @@ func loadSetup(ctx context.Context, request SetupRequest, now time.Time) (setupM
 	if e != nil {
 		return fail()
 	}
-	m, en, cfg, p, forbidden := loaded.lan, loaded.enrollment, loaded.config, loaded.plan, loaded.forbidden
+	m, en, p, forbidden := loaded.lan, loaded.enrollment, loaded.plan, loaded.forbidden
 	inspection, e := enrollmentstore.InspectWindowsUpdateJobSetup(ctx, filepath.Join(m.Config.StateDirectory, enrollmentconfig.WindowsDatabaseFile), en.Issuer().IssuerDER(), request.DeviceID, now)
-	if e != nil || inspection.Status != "absent" || inspection.Config != cfg {
+	if e != nil || !setupInspectionMatches(loaded, inspection, false) {
 		return fail()
 	}
 	p.IncarnationDigest = "sha256:" + inspection.Identity.Issuance.CertificateHash
 	p.CurrentLeafDigest = inspection.CurrentLeafDigest
 	p.CurrentLeafNotAfter = inspection.CurrentLeafNotAfter
-	if checkSetupParent(setupIntent(p.StateDirectory)) != nil {
+	if checkSetupParent(setupPlanIntent(p)) != nil {
 		return fail()
 	}
 	if request.Phase == "prepare" {
-		if !absent(setupIntent(p.StateDirectory), setupPath(p.StateDirectory, "")) {
+		if !absent(setupPlanIntent(p), setupPlanPath(p, "")) {
 			return fail()
 		}
 	} else {
 		var started SetupPlan
-		if _, e = canonicalRead(setupIntent(p.StateDirectory), &started); e != nil || started.Version != SetupPlanVersion || started.Request.Phase != "prepare" || started.Digest != started.digest() {
+		if _, e = canonicalRead(setupPlanIntent(p), &started); e != nil || started.Version != p.Version || started.Request.AdditionalDevice != request.AdditionalDevice || started.Request.Phase != "prepare" || started.Digest != started.digest() {
 			return fail()
 		}
 		var receipt setupPrepared
-		if _, e = canonicalRead(setupPath(p.StateDirectory, "prepared.json"), &receipt); e != nil || receipt.Version != SetupPlanVersion || !sameJSON(receipt.Plan, started) {
+		if _, e = canonicalRead(setupPlanPath(p, "prepared.json"), &receipt); e != nil || receipt.Version != p.Version || !sameJSON(receipt.Plan, started) {
 			return fail()
 		}
-		offerRaw, e := lanconfig.ReadProtected(SetupOfferPath(p.StateDirectory), true, 16384)
+		offerRaw, e := lanconfig.ReadProtected(setupPlanPath(p, "offer.json"), true, 16384)
 		if e != nil {
 			return fail()
 		}
 		offer, e := windowsupdatejob.DecodeSetupOffer(offerRaw)
-		if e != nil || receipt.OfferDigest != actionpermit.Digest(offerRaw) || !offerMatchesPlan(offer, started) || !offerMatchesPlan(offer, p) || started.Request.LANConfig != request.LANConfig || started.Request.EnrollmentConfig != request.EnrollmentConfig || started.ConfigurationDigest != p.ConfigurationDigest || !sameJSON(started.Operators, p.Operators) || !sameJSON(started.OtherPurposeKeyIDs, p.OtherPurposeKeyIDs) || started.UID != p.UID || started.GID != p.GID || started.StateDirectory != p.StateDirectory {
+		if e != nil || receipt.OfferDigest != actionpermit.Digest(offerRaw) || !offerMatchesPlan(offer, started) || !offerMatchesPlan(offer, p) || started.Request.LANConfig != request.LANConfig || started.Request.EnrollmentConfig != request.EnrollmentConfig || started.ConfigurationDigest != p.ConfigurationDigest || !sameJSON(started.Operators, p.Operators) || !sameJSON(started.OtherPurposeKeyIDs, p.OtherPurposeKeyIDs) || started.UID != p.UID || started.GID != p.GID || started.StateDirectory != p.StateDirectory || !sameAdditionalSetupInputs(started, p) {
 			return fail()
 		}
-		key, e := publicFromPrivate(setupPath(p.StateDirectory, "manager.key"))
+		key, e := publicFromPrivate(setupPlanKey(p))
 		if e != nil || !bytes.Equal(key, offer.ManagerPublicKey) || !distinct(key, forbidden) {
 			return fail()
 		}
@@ -287,10 +333,10 @@ func loadSetup(ctx context.Context, request SetupRequest, now time.Time) (setupM
 		}
 		registrationRaw = bytes.TrimSuffix(registrationRaw, []byte("\n"))
 		registration, e := windowsupdatejob.DecodeSetupRegistration(registrationRaw)
-		if e != nil || !sameJSON(registration.Offer, offer) || !distinct(registration.ExecutorPublicKey, append(forbidden, key)) {
+		if e != nil || !sameJSON(registration.Offer, offer) || !distinct(registration.ExecutorPublicKey, append(forbidden, key)) || !additionalRegistrationUnique(registration, loaded.existingConfigs) {
 			return fail()
 		}
-		if !absent(setupPath(p.StateDirectory, "finalize-started.json"), setupPath(p.StateDirectory, "registration.json"), setupPath(p.StateDirectory, "manager.json"), SetupLANPath(p.StateDirectory), setupPath(p.StateDirectory, "complete.json")) {
+		if !absent(setupPlanPath(p, "finalize-started.json"), setupPlanPath(p, "registration.json"), setupPlanPath(p, "manager.json"), SetupPlanLANPath(p), setupPlanPath(p, "complete.json")) || request.AdditionalDevice && !absent(setupPlanPath(p, "registry.json")) {
 			return fail()
 		}
 		p.Offer = &offer
@@ -303,7 +349,15 @@ func loadSetup(ctx context.Context, request SetupRequest, now time.Time) (setupM
 		return fail()
 	}
 	p.Digest = p.digest()
-	return setupMaterial{m, en, cfg, p, forbidden}, nil
+	if request.AdditionalDevice {
+		raw, err := json.Marshal(p)
+		prepared, preparedErr := json.Marshal(setupPrepared{p.Version, p, actionpermit.Digest(nil)})
+		if err != nil || preparedErr != nil || len(raw) > 32768 || len(prepared) > 32768 {
+			return fail()
+		}
+	}
+	loaded.plan = p
+	return loaded, nil
 }
 func sameJSON(a, b any) bool {
 	x, _ := json.Marshal(a)
@@ -324,6 +378,7 @@ type setupEffects interface {
 	Generate() (ed25519.PublicKey, ed25519.PrivateKey, error)
 	Initialize(context.Context, setupMaterial, windowsupdatejob.SetupRegistration, func() time.Time) error
 	Recheck(context.Context, SetupPlan, time.Time) error
+	RecheckRegistered(context.Context, SetupPlan, time.Time) error
 }
 type localSetupEffects struct{}
 
@@ -345,15 +400,18 @@ func (localSetupEffects) Initialize(ctx context.Context, m setupMaterial, r wind
 			return ErrSetup
 		}
 		var started SetupPlan
-		if _, e := canonicalRead(setupPath(m.plan.StateDirectory, "finalize-started.json"), &started); e != nil || !sameJSON(started, m.plan) {
+		if _, e := canonicalRead(setupPlanPath(m.plan, "finalize-started.json"), &started); e != nil || !sameJSON(started, m.plan) {
 			return ErrSetup
 		}
 		var saved windowsupdatejob.SetupRegistration
-		if _, e := canonicalRead(setupPath(m.plan.StateDirectory, "registration.json"), &saved); e != nil || !sameJSON(saved, r) {
+		if _, e := canonicalRead(setupPlanPath(m.plan, "registration.json"), &saved); e != nil || !sameJSON(saved, r) {
 			return ErrSetup
 		}
 		return nil
 	})
+	if m.plan.Request.AdditionalDevice {
+		return s.RegisterWindowsUpdateDeviceCreateOnly(guarded, r.Offer.ManagerPublicKey, r.ExecutorPublicKey, r.Consent, clock().UTC())
+	}
 	return s.SetupWindowsUpdateJobsCreateOnly(guarded, r.Offer.ManagerPublicKey, r.ExecutorPublicKey, r.Consent, clock().UTC())
 }
 
@@ -381,10 +439,10 @@ func recheckSetupInputs(ctx context.Context, p SetupPlan, now time.Time) error {
 	}
 	if p.Request.Phase == "finalize" {
 		var offer windowsupdatejob.SetupOffer
-		if _, e = canonicalRead(SetupOfferPath(p.StateDirectory), &offer); e != nil || !sameJSON(offer, p.Offer) {
+		if _, e = canonicalRead(setupPlanPath(p, "offer.json"), &offer); e != nil || !sameJSON(offer, p.Offer) {
 			return ErrSetup
 		}
-		pub, e := publicFromPrivate(setupPath(p.StateDirectory, "manager.key"))
+		pub, e := publicFromPrivate(setupPlanKey(p))
 		if e != nil || !bytes.Equal(pub, offer.ManagerPublicKey) {
 			return ErrSetup
 		}
@@ -401,22 +459,29 @@ func recheckSetupInputs(ctx context.Context, p SetupPlan, now time.Time) error {
 	return nil
 }
 func (localSetupEffects) Recheck(ctx context.Context, p SetupPlan, now time.Time) error {
+	return recheckSetupAuthority(ctx, p, now, false)
+}
+func (localSetupEffects) RecheckRegistered(ctx context.Context, p SetupPlan, now time.Time) error {
+	return recheckSetupAuthority(ctx, p, now, true)
+}
+func recheckSetupAuthority(ctx context.Context, p SetupPlan, now time.Time, registered bool) error {
 	if recheckSetupInputs(ctx, p, now) != nil {
 		return ErrSetup
 	}
 	fresh, e := loadSetupInputs(ctx, p.Request, now)
-	if e != nil {
+	if e != nil || !sameSetupInputs(p, fresh.plan) {
 		return ErrSetup
 	}
 	inspect, e := enrollmentstore.InspectWindowsUpdateJobSetup(ctx, filepath.Join(p.StateDirectory, enrollmentconfig.WindowsDatabaseFile), fresh.enrollment.Issuer().IssuerDER(), p.Request.DeviceID, now)
-	if e != nil || inspect.Config != fresh.config || inspect.Status != "absent" || inspect.Identity.Binding.InstanceID != p.ManagerID || "sha256:"+inspect.Identity.Issuance.CertificateHash != p.IncarnationDigest || inspect.CurrentLeafDigest != p.CurrentLeafDigest || inspect.CurrentLeafNotAfter != p.CurrentLeafNotAfter {
+	if e != nil || !setupInspectionMatches(setupMaterial{config: fresh.config, plan: p, existingConfigs: fresh.existingConfigs, managerPublic: fresh.managerPublic}, inspect, registered) || inspect.Identity.Binding.InstanceID != p.ManagerID || "sha256:"+inspect.Identity.Issuance.CertificateHash != p.IncarnationDigest || inspect.CurrentLeafDigest != p.CurrentLeafDigest || inspect.CurrentLeafNotAfter != p.CurrentLeafNotAfter {
 		return ErrSetup
 	}
 	return nil
 }
 
-// ApplySetup is reachable only from explicit local apply. It generates the one
-// purpose-specific manager key only after a fresh exact plan digest approval.
+// ApplySetup is reachable only from explicit local apply. First-device setup
+// generates its purpose-specific key only after exact review; additional-device
+// setup reads that same existing key without generating or rewriting it.
 func ApplySetup(ctx context.Context, p SetupPlan, approval string, clock func() time.Time) (*windowsupdatejob.SetupOffer, error) {
 	if ctx == nil || clock == nil || approval == "" || approval != p.Digest || p.Digest != p.digest() {
 		return nil, ErrSetup
@@ -430,6 +495,25 @@ func ApplySetup(ctx context.Context, p SetupPlan, approval string, clock func() 
 }
 func applySetup(ctx context.Context, m setupMaterial, fx setupEffects, clock func() time.Time) (*windowsupdatejob.SetupOffer, error) {
 	p := m.plan
+	if p.Request.AdditionalDevice {
+		// Keep one monotonic sample across file writes, transaction waits and output
+		// reads. Once rollback is observed, every later sample remains invalid.
+		sourceClock := clock
+		var observed time.Time
+		regressed := false
+		clock = func() time.Time {
+			fresh := sourceClock().UTC()
+			if !observed.IsZero() && fresh.Before(observed) {
+				regressed = true
+			}
+			if regressed {
+				return time.Time{}
+			}
+			observed = fresh
+			return fresh
+		}
+		ctx = enrollmentstore.WithOverviewClock(ctx, clock)
+	}
 	create := func(path string, value any) error {
 		raw, e := json.Marshal(value)
 		if e != nil {
@@ -454,6 +538,9 @@ func applySetup(ctx context.Context, m setupMaterial, fx setupEffects, clock fun
 	}
 	if live() != nil {
 		return nil, ErrSetup
+	}
+	if p.Request.AdditionalDevice {
+		return applyAdditionalSetup(ctx, m, fx, clock, live)
 	}
 	if p.Request.Phase == "prepare" {
 		if create(setupIntent(p.StateDirectory), p) != nil || fx.Mkdir(setupPath(p.StateDirectory, "")) != nil {
@@ -498,5 +585,179 @@ func applySetup(ctx context.Context, m setupMaterial, fx setupEffects, clock fun
 		return nil, ErrSetup
 	}
 
+	return nil, nil
+}
+
+// loadAdditionalSetupInputs admits only a complete explicitly activated prior
+// setup. It never discovers files, opens writable state, repairs receipts, or
+// replaces the existing purpose-specific key. These public references and exact
+// input digests become part of both the review and the final commit fence.
+func loadAdditionalSetupInputs(m *setupMaterial) error {
+	p := &m.plan
+	path := m.lan.Config.WindowsUpdateJobsConfigFile
+	files, raw, err := registryConfigFilesSnapshot(path, m.config.RecordLimit)
+	if err != nil || len(files) == 0 || len(files) >= windowsupdatejob.MaxDevices || len(files) >= m.config.RecordLimit {
+		return ErrSetup
+	}
+	devices, executors, pins, grants := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	p.OriginalRegistryFile, p.OriginalRegistryDigest = path, actionpermit.Digest(raw)
+	p.OriginalConfigFiles = append([]string(nil), files...)
+	p.OriginalConfigDigests = make([]string, 0, len(files))
+	p.RegisteredDevices = len(files)
+	for _, file := range files {
+		var c Config
+		body, err := canonicalRead(file, &c)
+		if err != nil || !validConfig(c) || !hasSetupReceipt(c) || checkSetupReceipt(c) != nil || c.Binding.ManagerID != p.ManagerID {
+			return ErrSetup
+		}
+		b := c.Binding
+		if devices[b.DeviceID] || executors[b.ExecutorID] || pins[b.ExecutorKeyID] || grants[b.GrantID] || b.DeviceID == p.Request.DeviceID {
+			return ErrSetup
+		}
+		devices[b.DeviceID], executors[b.ExecutorID], pins[b.ExecutorKeyID], grants[b.GrantID] = true, true, true, true
+		pub, err := publicFromPrivate(c.PrivateKeyFile)
+		if err != nil || actionpermit.Digest(pub) != b.KeyID || !distinct(pub, m.forbidden) {
+			return ErrSetup
+		}
+		if m.managerPublic == nil {
+			m.managerPublic = pub
+			p.ManagerKeyFile, p.ManagerKeyID = c.PrivateKeyFile, b.KeyID
+		} else if !bytes.Equal(pub, m.managerPublic) || c.PrivateKeyFile != p.ManagerKeyFile || b.KeyID != p.ManagerKeyID {
+			return ErrSetup
+		}
+		p.OriginalConfigDigests = append(p.OriginalConfigDigests, actionpermit.Digest(body))
+		m.existingConfigs = append(m.existingConfigs, c)
+	}
+	// The manifest may have blocked while its entries/receipts were read.
+	again, err := lanconfig.ReadProtected(path, true, maxRegistryBytes)
+	if err != nil || !bytes.Equal(raw, again) {
+		return ErrSetup
+	}
+	return nil
+}
+
+func sameAdditionalSetupInputs(a, b SetupPlan) bool {
+	type inputs struct {
+		RegistryFile, RegistryDigest, KeyFile, KeyID string
+		ConfigFiles, ConfigDigests                   []string
+		RegisteredDevices                            int
+	}
+	take := func(p SetupPlan) inputs {
+		return inputs{p.OriginalRegistryFile, p.OriginalRegistryDigest, p.ManagerKeyFile, p.ManagerKeyID, p.OriginalConfigFiles, p.OriginalConfigDigests, p.RegisteredDevices}
+	}
+	return sameJSON(take(a), take(b))
+}
+
+func additionalRegistrationUnique(r windowsupdatejob.SetupRegistration, configs []Config) bool {
+	b := r.Consent.Binding
+	for _, c := range configs {
+		old := c.Binding
+		if old.DeviceID == b.DeviceID || old.ExecutorID == b.ExecutorID || old.ExecutorKeyID == b.ExecutorKeyID || old.GrantID == b.GrantID {
+			return false
+		}
+	}
+	return true
+}
+
+func setupInspectionMatches(m setupMaterial, in enrollmentstore.WindowsUpdateSetupInspection, registered bool) bool {
+	if in.Config != m.config {
+		return false
+	}
+	if !m.plan.Request.AdditionalDevice {
+		return !registered && in.Status == "absent"
+	}
+	count := len(m.existingConfigs)
+	if registered {
+		count++
+	}
+	if in.Status != "fenced" || in.DeviceRegistered != registered || in.RegisteredDevices != count || !bytes.Equal(in.PublicKey, m.managerPublic) || len(in.RegisteredBindings) != count {
+		return false
+	}
+	expected := make(map[string]windowsupdatejob.Binding, count)
+	for _, c := range m.existingConfigs {
+		expected[c.Binding.DeviceID] = c.Binding
+	}
+	if registered {
+		if m.plan.Registration == nil {
+			return false
+		}
+		expected[m.plan.Request.DeviceID] = m.plan.Registration.Consent.Binding
+	}
+	for _, b := range in.RegisteredBindings {
+		if old, ok := expected[b.DeviceID]; !ok || old != b {
+			return false
+		}
+		delete(expected, b.DeviceID)
+	}
+	return len(expected) == 0
+}
+
+func applyAdditionalSetup(ctx context.Context, m setupMaterial, fx setupEffects, clock func() time.Time, live func() error) (*windowsupdatejob.SetupOffer, error) {
+	p := m.plan
+	create := func(name string, value any) error {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return ErrSetup
+		}
+		return fx.Create(setupPlanPath(p, name), raw)
+	}
+	if p.Request.Phase == "prepare" {
+		raw, err := json.Marshal(p)
+		if err != nil || fx.Create(setupPlanIntent(p), raw) != nil || live() != nil || fx.Mkdir(setupPlanPath(p, "")) != nil || live() != nil {
+			return nil, ErrSetup
+		}
+		// Existing key is only read/compared. No Generate or key Create is reachable.
+		offer := windowsupdatejob.SetupOffer{Version: windowsupdatejob.SetupOfferVersion, ManagerID: p.ManagerID, DeviceID: p.Request.DeviceID, IncarnationDigest: p.IncarnationDigest, ManagerOrigin: p.ManagerOrigin, ManagerPublicKey: bytes.Clone(m.managerPublic), ExpiresAt: p.ExpiresAt}
+		if offer.Validate() != nil || create("offer.json", offer) != nil || live() != nil {
+			return nil, ErrSetup
+		}
+		raw, _ = json.Marshal(offer)
+		if create("prepared.json", setupPrepared{p.Version, p, actionpermit.Digest(raw)}) != nil || live() != nil {
+			return nil, ErrSetup
+		}
+		return &offer, nil
+	}
+	if p.Registration == nil || p.Offer == nil || p.Registration.Validate() != nil || !sameJSON(p.Offer, p.Registration.Offer) || !bytes.Equal(p.Offer.ManagerPublicKey, m.managerPublic) || !additionalRegistrationUnique(*p.Registration, m.existingConfigs) {
+		return nil, ErrSetup
+	}
+	last := clock().UTC()
+	if create("finalize-started.json", p) != nil || live() != nil || create("registration.json", p.Registration) != nil || live() != nil || fx.Initialize(ctx, m, *p.Registration, clock) != nil {
+		return nil, ErrSetup
+	}
+	// Registration is now permanent, so output fences require that exact new
+	// record alongside every original binding. A delayed write cannot refresh
+	// expiry, change the current leaf, or turn a partial result into success.
+	registeredLive := func() error {
+		now := clock().UTC()
+		if ctx.Err() != nil || now.Before(last) || now.Unix() >= p.ExpiresAt || now.Unix() >= p.CurrentLeafNotAfter || fx.RecheckRegistered(ctx, p, now) != nil {
+			return ErrSetup
+		}
+		fresh := clock().UTC()
+		if ctx.Err() != nil || fresh.Before(now) || fresh.Unix() >= p.ExpiresAt || fresh.Unix() >= p.CurrentLeafNotAfter {
+			return ErrSetup
+		}
+		last = fresh
+		return nil
+	}
+	config := Config{Version: ConfigVersion, Enabled: true, Binding: p.Registration.Consent.Binding, PrivateKeyFile: p.ManagerKeyFile, SetupReceiptFile: setupPlanPath(p, "complete.json"), SetupPlanDigest: p.Digest, SetupRegistrationDigest: p.RegistrationDigest}
+	registry := RegistryConfig{Version: RegistryVersion, Enabled: true, ManagerID: p.ManagerID, ConfigFiles: append(append([]string(nil), p.OriginalConfigFiles...), setupPlanPath(p, "manager.json"))}
+	if !validRegistry(registry, m.config.RecordLimit) {
+		return nil, ErrSetup
+	}
+	lan := m.lan.Config
+	lan.WindowsUpdateJobsConfigFile = setupPlanPath(p, "registry.json")
+	configRaw, _ := json.Marshal(config)
+	for _, output := range []struct {
+		name  string
+		value any
+	}{
+		{"manager.json", config}, {"registry.json", registry}, {"lan.json", lan},
+		// Config remains v1, so its existing completion-receipt contract is unchanged.
+		{"complete.json", setupComplete{SetupPlanVersion, p.Digest, p.RegistrationDigest, actionpermit.Digest(configRaw)}},
+	} {
+		if registeredLive() != nil || create(output.name, output.value) != nil || registeredLive() != nil {
+			return nil, ErrSetup
+		}
+	}
 	return nil, nil
 }

@@ -389,3 +389,60 @@ restricted-observer mutual proof and negative identity/ACL cases, actual bounded
 foreground lifecycle, controlled exact cached-update acceptance, disconnect/crash
 reconciliation, and operator-visible original result delivery. No native command,
 installation, process-ACL change, key grant, or WUA action was run for this source.
+
+## Explicit additional-device registry (source candidate)
+
+The first-device v1 setup/config/receipt bytes and key remain unchanged. A separate
+`--additional-device` mode on both manager `prepare` and `finalize` extends only an
+already complete, explicitly configured domain. It requires the existing protected
+v1 config or v2 registry, exact completion receipts for every entry, the same
+purpose-specific manager key path/pin, and an exact match to every enrolled update
+binding. Missing, omitted, duplicated or partial entries block setup. There is no
+adoption, migration, repair, reset, key replacement or shared executor identity.
+
+Each new device has its own original identity anchor, separately provisioned
+executor ID/key pin and grant, fixed consent expiry and 32-approved-job allowance.
+The fleet is bounded by both the enrollment record limit and 25 devices. Review
+binds the original registry/config bytes, key reference, operators and selected
+current leaf. Transaction and output fences repeat these checks after blocking
+work; expired or replaced authority cannot produce a successful fresh setup.
+
+Additional setup creates only `windows-update-setup-<exact-device-id>` and its
+sibling started fence beneath the existing protected state directory. Finalize
+stages one new v1 `manager.json`, a v2 `registry.json` listing the unchanged original
+config paths plus that new config, `lan.json`, and a final completion receipt.
+It does not copy/rewrite the first key, old configs, receipts, grants or job history.
+The registry version is `tracebolt.windows-selected-update-manager-registry.v2`
+with `enabled`, `managerId` and a bounded non-nested `configFiles` array of absolute
+protected v1 config paths. Activating the staged LAN config is a separately
+approved manager startup step. Groups and registry membership confer no update
+permission; every device's readiness and named approval remain independent.
+
+## Manual fleet worklist and saved outcomes
+
+The collapsed Devices worklist freezes the explicitly selected Windows device IDs
+and, when applicable, the displayed group revision. Groups organize selection;
+changes to a group never add targets or grant update authority. Open one device,
+choose one exact currently cached GUID/revision, request readiness, review that
+device's fresh preview and explicitly approve it. There is no fleet approval,
+scheduled permit or automatic advance to another device. Readiness remains at
+most 120 seconds and the original install start deadline at most 60 seconds.
+
+`GET /api/devices/{id}/windows-update-jobs?history=1` returns newest-first bounded
+metadata for the 32 retained approved jobs and, if present, the one unsigned
+readiness slot. It includes original request/approval/claim times and signed
+executor-derived result/reboot truth, but no preview, signature or permit.
+`?jobId=<exact-update-id>` reads that exact saved job; missing IDs never fall back
+to the latest job. Both reads retain current identity, configuration and operator
+session fences. Unavailable authority is shown as unavailable, not stale success.
+An expired/revoked registry member cannot prevent a different admitted member
+from starting; it receives no operation authority through registry membership.
+
+Closing, navigation, blur or session loss stops further UI requests. An in-flight
+POST may still commit, and a delivered permit is not canceled. Duplicate clicks
+are suppressed; an uncertain write keeps its exact job reference and permits only
+GET reconciliation. Browsing an older outcome cannot replace that reference or a
+frozen worklist selection, restore a preview, or resend a write. Saved outcomes
+remain in the enrollment-owned per-device ledger across navigation/restart;
+client-side selection/intent references grant no authority. No lifetime-capacity
+reset, pruning, automatic retry, download, EULA acceptance or reboot is added.

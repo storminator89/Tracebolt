@@ -1,0 +1,22 @@
+.windows-fleet-update-worklist{border-bottom:1px solid var(--line);padding:12px 20px;min-width:0}
+.windows-fleet-update-toggle{display:flex;align-items:center;gap:8px;min-height:32px;font-weight:600}
+.windows-fleet-update-content{padding:8px 0;max-width:100%;min-width:0}
+.windows-fleet-update-content p{font-size:12px;line-height:1.55;margin:8px 0}
+.windows-fleet-update-choices{border:1px solid var(--line);border-radius:8px;padding:12px;max-height:260px;overflow:auto;margin:10px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.windows-fleet-update-choices label{display:flex;align-items:flex-start;gap:8px;font-size:12px;min-width:0}
+.windows-fleet-update-choices span{min-width:0}
+.windows-fleet-update-content small{display:block;font-size:11px;color:var(--secondary);overflow-wrap:anywhere;margin-top:4px}
+.windows-fleet-update-heading,.windows-fleet-update-row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0}
+.windows-fleet-update-row>div{min-width:0}
+.windows-fleet-update-heading{margin-top:12px;font-size:13px}
+.windows-fleet-update-row{padding:12px 0;font-size:12px}
+.windows-fleet-update-row button{flex-shrink:0}
+.windows-fleet-update-list,.windows-update-history ul{list-style:none;margin:8px 0;padding:0}
+.windows-fleet-update-list>li,.windows-update-history li{border-top:1px solid var(--line);min-width:0}
+.windows-fleet-update-device{padding:0 0 12px;min-width:0}
+.windows-update-jobs{min-width:0;overflow-wrap:anywhere}
+.windows-update-jobs .windows-inventory-table-controls>label{min-width:0;max-width:100%}
+.windows-update-jobs select{max-width:100%}
+.windows-update-jobs .windows-inventory-section-header{flex-wrap:wrap;gap:8px}
+.windows-update-history li{padding:8px 0}.windows-update-history .text-button{text-align:left;overflow-wrap:anywhere;max-width:100%}
+@media(max-width:600px){.windows-fleet-update-worklist{padding:12px}.windows-fleet-update-row{align-items:flex-start;flex-direction:column;gap:8px}.windows-fleet-update-choices{grid-template-columns:minmax(0,1fr)}.windows-update-jobs .windows-inventory-table-controls{align-items:stretch;flex-direction:column}.windows-update-jobs select{width:100%;min-width:0}}

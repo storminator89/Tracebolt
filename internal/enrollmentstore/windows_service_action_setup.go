@@ -8,10 +8,12 @@ import (
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/windowsupdatejob"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"time"
 )
 
@@ -32,12 +34,15 @@ func InspectWindowsServiceActionSetup(ctx context.Context, path string, issuerDE
 // WindowsUpdateSetupInspection is a read-only snapshot, never setup authority.
 // The explicit apply transaction must check the current leaf and clock again.
 type WindowsUpdateSetupInspection struct {
+	RegisteredBindings  []windowsupdatejob.Binding
 	Config              enrollmentstate.Config
 	Identity            enrollmentstate.Snapshot
 	Status              string
 	PublicKey           ed25519.PublicKey
 	CurrentLeafDigest   string
 	CurrentLeafNotAfter int64
+	DeviceRegistered    bool
+	RegisteredDevices   int
 }
 
 // InspectWindowsUpdateJobSetup shares the existing protected, existing-only
@@ -158,6 +163,14 @@ func inspectWindowsSetup(ctx context.Context, path string, issuerDER []byte, dev
 				return zero, ErrStorage
 			}
 			out.Status = "fenced"
+			for _, credential := range t.credentials {
+				if credential.WindowsUpdateJobSetup != nil {
+					out.RegisteredDevices++
+					out.RegisteredBindings = append(out.RegisteredBindings, credential.WindowsUpdateJobSetup.Consent.Binding)
+				}
+			}
+			sort.Slice(out.RegisteredBindings, func(i, j int) bool { return out.RegisteredBindings[i].DeviceID < out.RegisteredBindings[j].DeviceID })
+			out.DeviceRegistered = t.credentials[snap.InvitationID].WindowsUpdateJobSetup != nil
 		}
 	} else {
 		if _, err = s.windowsFullServicesAuthority(t, snap.InvitationID, t.currentCertificateHash(snap), now); err != nil {

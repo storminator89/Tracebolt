@@ -33,20 +33,23 @@ This page describes the current source; downloadable prereleases cover less.
 - **Windows logs and updates:** Application/System event headers, separately
   approved older-event searches and selected message reads, and offline cached
   Windows Update inspection.
-- **Selected Windows updates (source):** [explicit one-device setup](docs/windows-selected-update-setup.md),
-  exact cached-update review, one-time approval and saved executor outcomes.
-  Native setup and update execution still need acceptance.
+- **Selected Windows updates (source):** [explicit endpoint setup](docs/windows-selected-update-setup.md),
+  a manual fleet worklist, per-device cached-update review, one-time approval
+  and saved executor outcomes. Native setup and update execution still need acceptance.
 - **Selected-account software:** an explicitly consented foreground capture of
   that Windows user's HKCU and Store registrations, with source filters and paging.
 - **Fleet groups:** organize devices and review one-time disk/CPU/RAM alert
   settings for selected Windows members, with individual outcomes.
+- **Windows incidents and maintenance:** a [fleet incident inbox](docs/windows-incident-inbox.md),
+  seen acknowledgements and [planned maintenance](docs/windows-maintenance.md).
+  Planning labels do not suppress alerts.
 - **Optional monitoring:** platform-specific health checks, manager-side
   application checks, webhook alarms and separately approved AI diagnostics.
 
 Collection depends on the endpoint's explicitly approved scope and accessible
 sources. Windows software covers machine HKLM registrations plus the separately
 captured account; it does not discover every user's or portable application.
-complete process inventory does not expand the separate 128-row CPU/RAM sample.
+Complete process inventory does not expand the separate 128-row CPU/RAM sample.
 Cached updates do not prove patch compliance, and security observations do not
 prove that a device is protected.
 [Windows scope and limitations](docs/windows-status.md).

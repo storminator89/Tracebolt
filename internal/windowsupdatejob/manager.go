@@ -603,6 +603,9 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 				v.Reason = "capacity_exhausted"
 			}
 		}
+		if len(ids) == 1 && len(m.record.Jobs) == 0 {
+			return ErrConflict
+		}
 		if len(m.record.Jobs) > 0 {
 			j := m.record.Jobs[len(m.record.Jobs)-1]
 			if len(ids) == 1 {

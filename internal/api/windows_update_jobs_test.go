@@ -233,3 +233,32 @@ func TestWindowsUpdateJobAPIBodyReadDoesNotHoldSessionGate(t *testing.T) {
 		})
 	}
 }
+
+func TestWindowsUpdateHistoryAndExactQueriesAreReadOnlyAndStrict(t *testing.T) {
+	f := newUpdateAPIFixture(t, []operatorauth.Capability{operatorauth.Read, operatorauth.WindowsUpdateInstall})
+	for _, query := range []string{"?jobId=", "?jobId=bad", "?jobId=bad;history=1", "?history=0", "?history=1&history=1", "?history=1&jobId=" + f.id} {
+		if code, _ := f.call(t, "GET", query, nil, nil); code != 400 {
+			t.Fatal("malformed exact query fell back", query, code)
+		}
+	}
+	if code, _ := f.call(t, "GET", "?jobId="+f.id, nil, nil); code != 409 {
+		t.Fatal("absent exact query fell back", code)
+	}
+	if code, v := f.call(t, "GET", "?history=1", nil, nil); code != 200 || len(v["jobs"].([]any)) != 0 || v["remainingCapacity"] != float64(32) {
+		t.Fatal(code, v)
+	}
+	code, v := f.call(t, "POST", "/request", map[string]any{"requestId": f.id, "updateId": f.selection.UpdateID, "revision": 3}, nil)
+	if code != 200 {
+		t.Fatal(code, v)
+	}
+	code, v = f.call(t, "GET", "?history=1", nil, nil)
+	if code != 200 || len(v["jobs"].([]any)) != 1 {
+		t.Fatal(code, v)
+	}
+	raw, _ := json.Marshal(v)
+	for _, private := range []string{"preview", "envelope", "signature", "publicKey", "actorId"} {
+		if bytes.Contains(raw, []byte(`"`+private+`":`)) {
+			t.Fatal("history leaked executable/review authority", private)
+		}
+	}
+}

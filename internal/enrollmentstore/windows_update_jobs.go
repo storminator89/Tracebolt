@@ -108,6 +108,17 @@ func (s *Store) windowsUpdateJobKeysDistinct(ctx context.Context, t *transaction
 // seam, never startup, API, or recovery. No key, executor, or host grant is made.
 // Its immutable credential marker and reciprocal row are committed together.
 func (s *Store) SetupWindowsUpdateJobsCreateOnly(ctx context.Context, key, executorKey ed25519.PublicKey, consent windowsupdatejob.Consent, now time.Time) error {
+	return s.setupWindowsUpdateJobsCreateOnly(ctx, key, executorKey, consent, now, false)
+}
+
+// RegisterWindowsUpdateDeviceCreateOnly adds one exact previously unregistered
+// endpoint under the existing purpose-specific key. It never rewrites an earlier
+// grant, marker, record, job, or clock floor, and cannot repair partial state.
+func (s *Store) RegisterWindowsUpdateDeviceCreateOnly(ctx context.Context, key, executorKey ed25519.PublicKey, consent windowsupdatejob.Consent, now time.Time) error {
+	return s.setupWindowsUpdateJobsCreateOnly(ctx, key, executorKey, consent, now, true)
+}
+
+func (s *Store) setupWindowsUpdateJobsCreateOnly(ctx context.Context, key, executorKey ed25519.PublicKey, consent windowsupdatejob.Consent, now time.Time, additional bool) error {
 	if s == nil || s.storeState == nil || ctx == nil || !validStoreTime(now) || consent.Validate() != nil || !consent.Enabled || !consent.Acknowledged || !keyvalidation.Ed25519(key) || !keyvalidation.Ed25519(executorKey) || consent.Binding.KeyID != actionpermit.Digest(key) || consent.Binding.ExecutorKeyID != actionpermit.Digest(executorKey) {
 		return windowsupdatejob.ErrInvalid
 	}
@@ -116,12 +127,29 @@ func (s *Store) SetupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return err
 		}
-		if present {
+		if present != additional {
 			return windowsupdatejob.ErrConflict
 		}
+		registered := 0
 		for _, c := range t.credentials {
-			if c.WindowsUpdateJobSetup != nil {
+			if c.WindowsUpdateJobSetup == nil {
+				continue
+			}
+			if !additional {
 				return ErrStorage
+			}
+			registered++
+			old := c.WindowsUpdateJobSetup.Consent.Binding
+			if old.DeviceID == consent.Binding.DeviceID || old.ExecutorKeyID == consent.Binding.ExecutorKeyID || old.ExecutorID == consent.Binding.ExecutorID || old.GrantID == consent.Binding.GrantID {
+				return windowsupdatejob.ErrConflict
+			}
+		}
+		if additional {
+			if registered == 0 || registered >= s.config.RecordLimit {
+				return windowsupdatejob.ErrConflict
+			}
+			if err = s.checkWindowsUpdateJobKey(ctx, t, key); err != nil {
+				return err
 			}
 		}
 		if err = s.windowsUpdateJobKeysDistinct(ctx, t, key, executorKey); err != nil {
@@ -154,13 +182,15 @@ func (s *Store) SetupWindowsUpdateJobsCreateOnly(ctx context.Context, key, execu
 		if err != nil {
 			return err
 		}
-		for _, obj := range windowsUpdateJobSchemaObjects() {
-			if _, err = t.conn.ExecContext(ctx, obj.SQL); err != nil {
+		if !additional {
+			for _, obj := range windowsUpdateJobSchemaObjects() {
+				if _, err = t.conn.ExecContext(ctx, obj.SQL); err != nil {
+					return ErrStorage
+				}
+			}
+			if _, err = t.conn.ExecContext(ctx, `INSERT INTO enrollment_windows_update_job_meta VALUES(1,?)`, []byte(key)); err != nil {
 				return ErrStorage
 			}
-		}
-		if _, err = t.conn.ExecContext(ctx, `INSERT INTO enrollment_windows_update_job_meta VALUES(1,?)`, []byte(key)); err != nil {
-			return ErrStorage
 		}
 		raw, err := windowsupdatejob.EncodeRecord(r)
 		if err != nil {
@@ -241,6 +271,7 @@ func (s *Store) loadWindowsUpdateJobRecords(ctx context.Context, t *transaction)
 		return ErrStorage
 	}
 	defer rows.Close()
+	executors, devices, grants, executorIDs := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for rows.Next() {
 		var id, fence string
 		var raw []byte
@@ -262,6 +293,11 @@ func (s *Store) loadWindowsUpdateJobRecords(ctx context.Context, t *transaction)
 		if err = s.windowsUpdateJobKeysDistinct(ctx, t, key, r.ExecutorPublicKey); err != nil {
 			return ErrStorage
 		}
+		b := r.Consent.Binding
+		if executors[b.ExecutorKeyID] || devices[b.DeviceID] || grants[b.GrantID] || executorIDs[b.ExecutorID] {
+			return ErrStorage
+		}
+		executors[b.ExecutorKeyID], devices[b.DeviceID], grants[b.GrantID], executorIDs[b.ExecutorID] = true, true, true, true
 		delete(markers, id)
 	}
 	if rows.Err() != nil || len(markers) != 0 {
@@ -504,6 +540,25 @@ func (s *Store) WindowsUpdateJobTransaction(ctx context.Context, binding windows
 			}
 			if operationErr == nil {
 				operationErr = windowsupdatejob.CheckFinal(ctx)
+				// Configuration reads and the session fence can block or reject.
+				// Retain their last observed time even on rejection.
+				last, clockErr := windowsUpdateJobNow(ctx, fresh)
+				if clockErr != nil || last.Before(fresh) {
+					operationErr = windowsupdatejob.ErrExpired
+				} else {
+					fresh = last
+					observed = max(observed, last.Unix())
+					if operationErr == nil {
+						final, authorityErr := s.windowsUpdateJobCurrent(t, snap.InvitationID, binding, original.Consent, last)
+						if authorityErr != nil {
+							operationErr = authorityErr
+						} else if final != current {
+							operationErr = windowsupdatejob.ErrAuthority
+						} else {
+							operationErr = windowsUpdateJobFinalDeadline(original, r, final, last.Unix())
+						}
+					}
+				}
 			}
 			if operationErr != nil {
 				r, err = windowsupdatejob.DecodeRecord(raw)
@@ -558,4 +613,37 @@ func (s *Store) WindowsUpdateJobTransaction(ctx context.Context, binding windows
 
 func (s *Store) WindowsUpdateEnrollmentBinding() enrollmentstate.Binding {
 	return s.Config().Binding
+}
+
+// ReadRegisteredWindowsUpdateJob is a trusted startup snapshot only. It opens
+// validated reciprocal state even for a now-retired/expired member so that one
+// unavailable device cannot prevent other devices from starting. It grants no
+// operation authority; every Manager operation still uses the live transaction.
+func (s *Store) ReadRegisteredWindowsUpdateJob(ctx context.Context, binding windowsupdatejob.Binding, key ed25519.PublicKey) (windowsupdatejob.Record, error) {
+	var out windowsupdatejob.Record
+	if s == nil || ctx == nil || !windowsupdatejob.ValidBinding(binding) || !keyvalidation.Ed25519(key) {
+		return out, windowsupdatejob.ErrInvalid
+	}
+	err := s.transact(ctx, func(t *transaction) error {
+		if err := s.checkWindowsUpdateJobKey(ctx, t, key); err != nil {
+			return err
+		}
+		snap, err := systemDevice(t, binding.DeviceID)
+		if err != nil {
+			return windowsupdatejob.ErrAuthority
+		}
+		var raw []byte
+		if err = t.conn.QueryRowContext(ctx, `SELECT body FROM enrollment_windows_update_job_records WHERE invitation_id=?`, snap.InvitationID).Scan(&raw); err != nil {
+			return windowsupdatejob.ErrUnavailable
+		}
+		out, err = windowsupdatejob.DecodeRecord(raw)
+		if err != nil || out.Consent.Binding != binding || !bytes.Equal(out.PublicKey, key) {
+			return windowsupdatejob.ErrIntegrity
+		}
+		return windowsupdatejob.CheckFinal(ctx)
+	})
+	if err != nil {
+		return windowsupdatejob.Record{}, err
+	}
+	return out, nil
 }

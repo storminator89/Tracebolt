@@ -31,3 +31,19 @@ export function validUpdateJobView(v:unknown,device:string,actor:string):v is Up
  if(j.result!==null&&(j.state!=='complete'||!validResult(j.result,j.id,v.serverNow)))return false;
  return j.state!=='complete'||j.result!==null;
 }
+
+/** Saved summaries contain evidence only. They never carry a preview or permit. */
+export type UpdateJobSummary = Omit<NonNullable<UpdateJobView['job']>, 'preview'> & { requestedAt: number; approvedAt: number; claimedAt: number };
+export type UpdateJobHistory = { version: 'tracebolt.windows-selected-update-history.v1'; deviceId: string; serverNow: number; available: boolean; reason: string; remainingCapacity: number; jobs: UpdateJobSummary[] };
+export function validUpdateJobHistory(v: unknown, device: string, actor: string): v is UpdateJobHistory {
+ if (!exact(v, ['version','deviceId','serverNow','available','reason','remainingCapacity','jobs']) || v.version !== 'tracebolt.windows-selected-update-history.v1' || !integer(v.remainingCapacity,0,32) || !Array.isArray(v.jobs) || v.jobs.length > 33) return false;
+ const base = {version:'tracebolt.windows-selected-update-job.v1',deviceId:v.deviceId,serverNow:v.serverNow,available:v.available,reason:v.reason,job:null};
+ if (!validUpdateJobView(base,device,actor)) return false;
+ const ids = new Set<string>();
+ return v.jobs.every(j => {
+  if (!exact(j,['id','selection','state','reason','result','requestedAt','approvedAt','claimedAt']) || !integer(j.requestedAt) || !integer(j.approvedAt,0) || !integer(j.claimedAt,0) || j.requestedAt > base.serverNow || j.approvedAt > base.serverNow || j.claimedAt > base.serverNow || j.approvedAt !== 0 && j.approvedAt < j.requestedAt || j.claimedAt !== 0 && (j.approvedAt === 0 || j.claimedAt < j.approvedAt)) return false;
+  const job = {id:j.id,selection:j.selection,state:j.state,reason:j.reason,result:j.result,preview:null};
+  if (!validUpdateJobView({...base,job},device,actor) || ids.has(job.id as string)) return false;
+  ids.add(job.id as string); return true;
+ });
+}
