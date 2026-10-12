@@ -38,6 +38,7 @@ type Artifact struct {
 // Record contains bounded metadata and signed evidence only, never MSI chunks.
 // Upload intent is permanent even if its exact body never arrived or fsync failed.
 type Record struct {
+	MutationReport     []byte            `json:"mutationReport,omitempty"`
 	Version            string            `json:"version"`
 	Grant              Grant             `json:"grant"`
 	PublicKey          ed25519.PublicKey `json:"publicKey"`
@@ -61,6 +62,9 @@ func NewRecord(g Grant, key, executor ed25519.PublicKey, at int64) (Record, erro
 	return r, r.Validate()
 }
 func (r Record) Validate() error {
+	if r.validateMutationReport() != nil {
+		return ErrIntegrity
+	}
 	if r.Version != RecordVersion || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
 		return ErrIntegrity
 	}
@@ -157,6 +161,9 @@ func DecodeRecord(raw []byte) (Record, error) {
 	return r, nil
 }
 func Transition(before, after Record) error {
+	if !validMutationReportAdvance(before.MutationReport, after.MutationReport, after.ExecutorPublicKey) {
+		return ErrIntegrity
+	}
 	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}

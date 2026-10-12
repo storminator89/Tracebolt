@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "485f881b8399e7c0c6e958816ca3e90e38e35be7b3d00023cf09ad77514d7400",
+  "goSourceSha256": "03ac53c1dc96eafd4807ed67d78334fed201738f50dc91ce253e43a224760e48",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -259,6 +259,7 @@
       "TestConcurrentStopDoesNotHidePendingAuthorityFailures",
       "TestConcurrentStopPreservesInvalidHandoffAndMarkerFailure",
       "TestCooperativePendingOutcomeRejectsMixedAndDiagnosedFailures",
+      "TestCoordinatedMutationSetupRequiresEveryDistinctApproval",
       "TestCurrentPackagedSetupGUINative",
       "TestCurrentSetupCanonicalSenderRequiresAllUsedMarkersAndOriginalFloor",
       "TestCurrentSetupGrantSpecsExactOrderedTwentyAndHistoryProof",
@@ -1702,6 +1703,8 @@
       "TestCompleteUpdatesTrustedClockSuppressesExpiredReadResults",
       "TestCompleteUpdatesUnknownComparisonsAndEmptyKnownSet",
       "TestCompleteUpdatesUnsupportedFailureRetainsReceiptAcrossRestart",
+      "TestCoordinatedWindowsMutationPairRequiresFreshReciprocalIdentity",
+      "TestCoordinatedWindowsMutationPairSetupAndReload",
       "TestCurrentCredentialAuthorityKeepsAnchorAndRejectsRetiredLeaf",
       "TestDeliveryFreshProofExpiryAndStoredCertificateLookup",
       "TestDeliveryRejectsCrossOriginAndWrongApprovedKeyProofs",
@@ -3033,6 +3036,7 @@
       "TestWindowsUserSoftwareV6PreservesAllPriorBytes"
     ],
     "localrmm/internal/lanconfig": [
+      "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
       "TestNamedApplicationCheckCapabilityStrictLoading",
       "TestNamedAuthStrictVersionProfileAndNestedParsing",
       "TestNamedProtectedConfigLoadAndSnapshotIsolation",
@@ -4422,6 +4426,7 @@
       "TestManagedRuntimeNativeSourceBoundaries"
     ],
     "localrmm/internal/windowsmanagedmsimanager": [
+      "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
       "TestManagedManagerExactLifecycleAndOneAttempt",
       "TestManagedManagerExpiredReadinessNeedsFreshExplicitReview",
       "TestManagedManagerFinalPermissionAndExpiry",
@@ -4432,6 +4437,30 @@
       "TestSpoolSingleLinkExactChunksAndSameByteRecovery"
     ],
     "localrmm/internal/windowsmanagedmsiservice": [],
+    "localrmm/internal/windowsmutationfence": [
+      "TestActualDomainCompletionIsDurableBeforeSharedRelease",
+      "TestActualKernelsExcludeBothDirections",
+      "TestActualKernelsRecoverOnlySavedLostRelease",
+      "TestActualNoStartAndCleanupUncertaintyRemainFenced",
+      "TestBoundedRetainedOwnersAndNoCrossDomainReceipt",
+      "TestDomainDurabilityRequiredBeforeRelease",
+      "TestExactSavedReceiptFinishesLostRelease",
+      "TestFinalAuthorityAfterOpenWaitAndOutsideTransaction",
+      "TestFinalAuthorityPublicationDoesNotWaitForConcurrentStatus",
+      "TestFreshSetupStagesAndImmutableRoster",
+      "TestInstallerOnlySchemaCannotNameObserver",
+      "TestMissingReplacedPendingAndRollbackRemainBlocked",
+      "TestNominalAdapterSuccessWithoutFinalGateCannotRelease",
+      "TestOldReleasedReceiptCannotReleaseNewOwner",
+      "TestParticipantActivationPinsAndStagedGuard",
+      "TestProductionSchemaAndPublicRedaction",
+      "TestPublicCoordinatedConstructorsRejectWrongSession",
+      "TestRestartAndCopiedCapabilityCannotDispatch",
+      "TestSavedDomainReceiptAfterCrashBeforeFenceCompletion",
+      "TestTwoDomainsHaveOneOwner",
+      "TestUncertainFinalStartWriteNeverCallsNativeGuard",
+      "TestUncertainReserveAndDispatchNeverYieldRunnableCapability"
+    ],
     "localrmm/internal/windowsnetwork": [
       "TestAddressAndScopeCanonical",
       "TestBoundedCountsStableRowsAndBudget",
@@ -4494,6 +4523,7 @@
       "TestProvisionEveryFailureRetainsAndNeverContinues",
       "TestProvisionOrderingAndPinLifetime",
       "TestProvisionRejectsInputsWithoutNativeCalls",
+      "TestSynchronousCustomActionEligibility",
       "TestUnsupportedHasNoNativeFallback",
       "TestUpdateExecutorImageBadProofAndCancelledOrClosedSession",
       "TestUpdateExecutorImageChangedIdentityDigestLinkOrProtectionRejected",
@@ -5035,6 +5065,7 @@
       "TestApprovedCapacityRetainsEveryEnvelope",
       "TestCloseDuringInstallNeverSignsOrReplaysLateCompletion",
       "TestCompleteSignedHistoryFitsCapacity",
+      "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
       "TestCurrentLeafRenewalDoesNotExtendOriginalPreview",
       "TestExecutorCaptureMustFollowFreshPreSourceCheck",
       "TestExecutorCarriesExactOriginalStartFence",
@@ -5127,6 +5158,8 @@
       "TestSourceNilAndFailureOwnership"
     ],
     "localrmm/internal/windowsupdatesetup": [
+      "TestFreshCoordinatedUpdateSetupPinsRosterAndPreservesStandalone",
+      "TestFreshCoordinatedUpdateSetupRejectsPairDriftAndKeepsPartialFence",
       "TestFreshScheduledSetupNeverPromotesManualPlan",
       "TestFreshUpdateSetupCoreSuccess",
       "TestFreshUpdateSetupRejectsIdentityExpiryAndExisting",

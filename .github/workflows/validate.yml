@@ -622,6 +622,7 @@ jobs:
           node --test tests/e2e-review/windows-incident-inbox-fixtures.test.mjs
           node --test tests/e2e-review/windows-maintenance-fixtures.test.mjs
           node --test tests/e2e-review/windows-managed-msi-fixtures.test.mjs
+          node --test tests/e2e-review/windows-mutation-coexistence-fixtures.test.mjs
       - name: Production build
         run: npm run build
 
@@ -673,6 +674,24 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-managed-msi-runner.mjs
+      - name: Synthetic coordinated MSI-WUA read-only status in both EN-DE desktop-mobile views
+        if: ${{ !cancelled() }}
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node tests/e2e-review/windows-mutation-coexistence-runner.mjs
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {requireWindowsMutationCoexistenceReport} from './tests/e2e-review/windows-mutation-coexistence-browser.mjs';
+          const read=name=>{const raw=fs.readFileSync('artifacts/review/'+name);assert.ok(raw.length>0&&raw.length<=131072);return JSON.parse(raw);};
+          const report=read('windows-mutation-coexistence-results.json'),manifest=read('windows-mutation-coexistence-manifest.json');
+          requireWindowsMutationCoexistenceReport(report,manifest,process.env.TRACEBOLT_SOURCE_SHA);
+          for(const row of manifest.screenshots)assert.equal(createHash('sha256').update(fs.readFileSync('artifacts/review/'+row.file)).digest('hex'),row.sha256);
+          console.log('PASS: both coordinated views, blocked/released snapshots, four exact-source EN-DE viewport variants and 16 verified screenshots; read-only invented metadata.');
+          JS
       - name: Complete Windows services real-store browser gate
         if: ${{ !cancelled() }}
         env:
@@ -968,6 +987,8 @@ jobs:
             artifacts/review/windows-service-actions-manifest.json
             artifacts/review/windows-managed-msi-results.json
             artifacts/review/windows-managed-msi-manifest.json
+            artifacts/review/windows-mutation-coexistence-results.json
+            artifacts/review/windows-mutation-coexistence-manifest.json
             artifacts/review/enrollment-browser-results.json
             artifacts/review/enrollment-browser-manifest.json
             artifacts/review/conditional-browser-results.json

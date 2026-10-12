@@ -18,7 +18,7 @@ func TestManagedPipeFreshDomainAndBoundedPayload(t *testing.T) {
 	}
 }
 func TestManagedRuntimeNativeSourceBoundaries(t *testing.T) {
-	for file, required := range map[string][]string{"ipc_windows.go": {"windows.SC_MANAGER_CONNECT", "windows.SERVICE_QUERY_CONFIG|windows.SERVICE_QUERY_STATUS", "CheckServiceDescriptor", "SECURITY_IDENTIFICATION", "PIPE_REJECT_REMOTE_CLIENTS"}, "observer_windows.go": {"OpenObservationPeer", "observerPipeIdentity", "RevertToSelf"}, "../windowsmanagedmsiservice/runtime_windows.go": {"VerifyServiceToken", "ProductType == 2", "OpenWindowsManagedMSIPublicAuthority", "x.Wait()"}, "../windowsmanagedmsiexecutor/native_windows.go": {"MsiInstallProductW", "REBOOT=ReallySuppress", "CheckInstallStart"}} {
+	for file, required := range map[string][]string{"ipc_windows.go": {"windows.SC_MANAGER_CONNECT", "windows.SERVICE_QUERY_CONFIG|windows.SERVICE_QUERY_STATUS", "CheckServiceDescriptor", "SECURITY_IDENTIFICATION", "PIPE_REJECT_REMOTE_CLIENTS"}, "observer_windows.go": {"OpenObservationPeer", "observerPipeIdentity", "RevertToSelf"}, "../windowsmanagedmsiservice/runtime_windows.go": {"VerifyServiceToken", "ProductType == 2", "OpenWindowsManagedMSIPublicAuthority", "x.Wait()"}, "../windowsmanagedmsiexecutor/native_windows.go": {"MsiInstallProductW", "REBOOT=ReallySuppress", "CheckNativeInstallStart"}} {
 		raw, e := os.ReadFile(file)
 		if e != nil {
 			t.Fatal(e)

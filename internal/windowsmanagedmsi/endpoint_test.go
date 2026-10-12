@@ -134,7 +134,7 @@ func fixture(t *testing.T) *endpointFixture {
 	f.manager = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{1}, 32))
 	f.executor = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{2}, 32))
 	b := Binding{ManagerID: "manager_" + strings.Repeat("1", 32), DeviceID: "agent_" + strings.Repeat("2", 32), IncarnationDigest: Digest([]byte("anchor")), ExecutorID: "executor_" + strings.Repeat("3", 32), ExecutorKeyID: Digest(f.executor.Public().(ed25519.PublicKey)), KeyID: Digest(f.manager.Public().(ed25519.PublicKey)), DeliveryGrantID: "grant_" + strings.Repeat("4", 32), InstallGrantID: "grant_" + strings.Repeat("5", 32)}
-	f.g = Grant{GrantVersion, b, true, true, true, true, true, f.at.Unix() + 3600}
+	f.g = Grant{Version: GrantVersion, Binding: b, DeliveryEnabled: true, InstallEnabled: true, DeliveryAcknowledged: true, InstallAcknowledged: true, ServiceRiskAcknowledged: true, ExpiresAt: f.at.Unix() + 3600}
 	f.current = Current{Binding: b, LeafDigest: Digest([]byte("leaf")), LeafGeneration: 1, LeafNotBefore: f.at.Unix() - 10, LeafNotAfter: f.at.Unix() + 7200, Enabled: true}
 	f.data = bytes.Repeat([]byte{7}, MaxChunkBytes+512)
 	copy(f.data, []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1})

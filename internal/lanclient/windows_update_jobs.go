@@ -126,6 +126,18 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 	if e != nil || !validWindowsUpdateRelayStatus(status, s.now()) {
 		return "unavailable"
 	}
+	if len(status.MutationReport) > 0 {
+		report, err := windowsupdatejob.VerifyStatement(status.MutationReport, g.ExecutorPublicKey)
+		if err != nil || report.Kind != "mutation" || report.Binding != g.Binding || report.IssuedAt > s.now().Unix() || s.now().Unix() >= report.ExpiresAt {
+			return "denied"
+		}
+		reportCtx, cancel := context.WithDeadline(ctx, time.Unix(min(report.ExpiresAt, g.ExpiresAt), 0))
+		_, code, err := s.exchange(reportCtx, windowsUpdateJobsRelayPrefix+"report", status.MutationReport)
+		cancel()
+		if err != nil || code != http.StatusOK || !s.recheck(ctx, g) {
+			return "unavailable"
+		}
+	}
 	if result := s.reconcile(ctx, g, status); result != "" {
 		return result
 	}

@@ -81,6 +81,17 @@ func (s *windowsManagedMSISender) Run(ctx context.Context) string {
 	if e != nil || status.Version != managed.Version || !s.recheck(ctx, g) {
 		return "unavailable"
 	}
+	if len(status.MutationReport) > 0 {
+		report, e := managed.VerifyReport(status.MutationReport, g.ExecutorPublicKey)
+		if e != nil || report.Kind != "mutation" || report.Binding != g.Binding || report.CapturedAt > s.now().Unix() || s.now().Unix()-report.CapturedAt > 60 {
+			return "denied"
+		}
+		raw, _ := json.Marshal(managed.ReportRequest{Report: status.MutationReport})
+		_, e = s.exchange(ctx, managedMSIPrefix+"report", raw)
+		if e != nil || !s.recheck(ctx, g) {
+			return "pending"
+		}
+	}
 	if len(status.Report) > 0 {
 		report, e := managed.VerifyReport(status.Report, g.ExecutorPublicKey)
 		if e != nil || report.Binding != g.Binding {

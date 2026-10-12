@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/keyvalidation"
+	fence "localrmm/internal/windowsmutationfence"
 )
 
 // Storage must provide protected, exclusively locked, atomic durable writes.
@@ -111,6 +112,7 @@ type Job struct {
 	Schedule           *ScheduledIntent `json:"schedule,omitempty"`
 }
 type Record struct {
+	MutationReport      []byte  `json:"mutationReport,omitempty"`
 	Version             string  `json:"version"`
 	Consent             Consent `json:"consent"`
 	PublicKey           []byte  `json:"publicKey"`
@@ -134,6 +136,9 @@ func NewRecordWithExecutor(c Consent, key, executorKey ed25519.PublicKey, now in
 	return r, r.Validate()
 }
 func (r Record) Validate() error {
+	if r.validateMutationReport() != nil {
+		return ErrIntegrity
+	}
 	if r.Version != Version || r.Consent.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || actionpermit.Digest(r.ExecutorPublicKey) != r.Consent.Binding.ExecutorKeyID || actionpermit.Digest(r.PublicKey) != r.Consent.Binding.KeyID || !validTime(r.ClockFloor) || r.Jobs == nil || len(r.Jobs) > MaxJobs+1 {
 		return ErrIntegrity
 	}
@@ -503,6 +508,14 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 			if j.State != "preview" || n >= j.Preview.ExpiresAt || m.blocked(n, j.ID) {
 				return ErrExpired
 			}
+			// This observation protects the one-use approval from a known busy
+			// peer; only the durable endpoint fence can admit native execution.
+			if m.record.Consent.MutationPlanDigest != "" {
+				shared, err := VerifyStatement(m.record.MutationReport, m.record.ExecutorPublicKey)
+				if err != nil || shared.Kind != "mutation" || shared.Mutation == nil || !shared.Mutation.Active || shared.Mutation.Blocked || shared.Mutation.Phase != "idle" || shared.IssuedAt > n || n-shared.IssuedAt >= 60 || n >= shared.ExpiresAt {
+					return ErrUnavailable
+				}
+			}
 			if m.record.Sequence == ^uint64(0) {
 				return ErrConflict
 			}
@@ -597,14 +610,17 @@ func (m *Manager) Submit(ctx context.Context, r Result) error {
 }
 
 type View struct {
-	Version             string     `json:"version"`
-	DeviceID            string     `json:"deviceId"`
-	ServerNow           int64      `json:"serverNow"`
-	Available           bool       `json:"available"`
-	Reason              string     `json:"reason"`
-	Job                 *PublicJob `json:"job"`
-	SchedulingAvailable bool       `json:"schedulingAvailable,omitempty"`
-	SchedulingRevoked   bool       `json:"schedulingRevoked,omitempty"`
+	Coordinated         bool          `json:"coordinated,omitempty"`
+	Mutation            *fence.Status `json:"mutation,omitempty"`
+	MutationCapturedAt  int64         `json:"mutationCapturedAt,omitempty"`
+	Version             string        `json:"version"`
+	DeviceID            string        `json:"deviceId"`
+	ServerNow           int64         `json:"serverNow"`
+	Available           bool          `json:"available"`
+	Reason              string        `json:"reason"`
+	Job                 *PublicJob    `json:"job"`
+	SchedulingAvailable bool          `json:"schedulingAvailable,omitempty"`
+	SchedulingRevoked   bool          `json:"schedulingRevoked,omitempty"`
 }
 type PublicJob struct {
 	ID        string        `json:"id"`
@@ -625,6 +641,12 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 	}
 	e := m.transaction(ctx, func(_ Current, n int64) error {
 		v.ServerNow = n
+		v.Coordinated = m.record.Consent.MutationPlanDigest != ""
+		if len(m.record.MutationReport) > 0 {
+			report, _ := VerifyStatement(m.record.MutationReport, m.record.ExecutorPublicKey)
+			v.Mutation = report.Mutation
+			v.MutationCapturedAt = report.IssuedAt
+		}
 		v.SchedulingAvailable = m.schedulingAvailable(actor)
 		v.SchedulingRevoked = m.record.ScheduleRevokedAt != 0
 		v.Available = !m.blocked(n, "")

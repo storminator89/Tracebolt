@@ -32,7 +32,8 @@
     "fleet-groups-fixtures.test.mjs",
     "windows-incident-inbox-fixtures.test.mjs",
     "windows-maintenance-fixtures.test.mjs",
-    "windows-managed-msi-fixtures.test.mjs"
+    "windows-managed-msi-fixtures.test.mjs",
+    "windows-mutation-coexistence-fixtures.test.mjs"
   ],
   "imported": [
     "device-inventory-browser-contracts.test.mjs",

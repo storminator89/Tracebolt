@@ -8,7 +8,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"localrmm/internal/actionpermit"
 	"localrmm/internal/lanclient"
+	fence "localrmm/internal/windowsmutationfence"
+	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsstate"
 	"localrmm/internal/windowsupdateexecutor"
 	"localrmm/internal/windowsupdateipc"
@@ -50,6 +53,30 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 	if windowsupdatesetup.VerifyInstalled(store, config) != nil {
 		return job.ErrAuthority
 	}
+	var mutation *fence.Session
+	if config.Mutation != nil {
+		mutation, e = fence.Open(ctx, *config.Mutation, fence.CachedWUA, time.Now)
+		if e != nil {
+			return e
+		}
+		defer mutation.Close()
+	}
+	profile := func(ctx context.Context) error {
+		if mutation == nil {
+			return windowspackage.CheckManagedMSIAbsent(ctx)
+		}
+		if e := windowspackage.CheckCoordinatedMutationExclusive(ctx); e != nil {
+			return e
+		}
+		receipt, re := store.Read("progress.json")
+		if re != nil {
+			return re
+		}
+		return mutation.VerifyParticipant(ctx, actionpermit.Digest(raw), actionpermit.Digest(receipt))
+	}
+	if e = profile(ctx); e != nil {
+		return e
+	}
 	peer, e := config.Peer()
 	if e != nil {
 		return e
@@ -60,7 +87,7 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 	}
 	defer guard.Close()
 	check := func(c context.Context) error {
-		if c == nil || c.Err() != nil || windowsupdateexecutor.VerifyForegroundContext() != nil || guard.Check(c) != nil || store.Verify() != nil || windowsupdatesetup.VerifyInstalled(store, config) != nil {
+		if c == nil || c.Err() != nil || windowsupdateexecutor.VerifyForegroundContext() != nil || guard.Check(c) != nil || profile(c) != nil || store.Verify() != nil || windowsupdatesetup.VerifyInstalled(store, config) != nil {
 			return job.ErrAuthority
 		}
 		current, e := store.Read("config.json")
@@ -98,7 +125,12 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 		return job.ErrIntegrity
 	}
 	clear(canonical)
-	x, e := job.OpenExecutor(store, authority, windowsupdateexecutor.New(), ed25519.PrivateKey(material.Key), time.Now)
+	var x *job.Executor
+	if mutation == nil {
+		x, e = job.OpenExecutor(store, authority, windowsupdateexecutor.New(), ed25519.PrivateKey(material.Key), time.Now)
+	} else {
+		x, e = job.OpenCoordinatedExecutor(store, authority, windowsupdateexecutor.New(), ed25519.PrivateKey(material.Key), time.Now, mutation)
+	}
 	if e != nil {
 		return e
 	}
@@ -109,7 +141,7 @@ func Run(ctx context.Context, allowObserverProcessQuery bool) error {
 		return e
 	}
 	var record job.ExecutorRecord
-	if json.Unmarshal(recordRaw, &record) != nil || record.Consent != config.Consent || !bytes.Equal(record.PublicKey, config.ManagerPublicKey) || !bytes.Equal(record.ExecutorPublicKey, config.ExecutorPublicKey) {
+	if json.Unmarshal(recordRaw, &record) != nil || record.Consent != config.Consent || config.Mutation != nil && (record.Mutation == nil || *record.Mutation != *config.Mutation) || !bytes.Equal(record.PublicKey, config.ManagerPublicKey) || !bytes.Equal(record.ExecutorPublicKey, config.ExecutorPublicKey) {
 		return job.ErrIntegrity
 	}
 	server, e := windowsupdateipc.NewServer(ctx, x, peer, ed25519.PrivateKey(material.Key), check)

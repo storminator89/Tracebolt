@@ -186,6 +186,17 @@ func verifyMSIDatabase(ctx context.Context, path string, want job.Selection) (er
 	}); e != nil {
 		return e
 	}
+	if synchronousMSIRequired(ctx) && tables["CustomAction"] {
+		if e = query("SELECT `Type` FROM `CustomAction`", 4096, func(row uint32) error {
+			value, _, _ := msiRecordInteger.Call(uintptr(row), 1)
+			if !synchronousCustomActionType(int32(value)) {
+				return failure("msi-asynchronous-custom-action")
+			}
+			return nil
+		}); e != nil {
+			return e
+		}
+	}
 	if tables["Upgrade"] {
 		if e = query("SELECT `UpgradeCode` FROM `Upgrade`", 1, func(uint32) error { return failure("msi-upgrade") }); e != nil {
 			return e
@@ -241,6 +252,9 @@ func verifyMSIDatabase(ctx context.Context, path string, want job.Selection) (er
 	if cancelled(ctx) {
 		return failure("cancelled")
 	}
+	if synchronousMSIRequired(ctx) {
+		return verifyCoordinatedRebootClear(ctx)
+	}
 	return nil
 }
 func msiString(row uint32, column uint32, limit int) (string, error) {
@@ -251,4 +265,37 @@ func msiString(row uint32, column uint32, limit int) (string, error) {
 		return "", failure("msi-string")
 	}
 	return windows.UTF16ToString(buffer[:n]), nil
+}
+
+// Fresh fixed-key evidence is required for each coordinated MSI preparation and
+// final package recheck. Read value presence/size only, never path-bearing data.
+func verifyCoordinatedRebootClear(ctx context.Context) error {
+	for _, path := range []string{`SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending`, `SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired`} {
+		if cancelled(ctx) {
+			return failure("cancelled")
+		}
+		var key windows.Handle
+		err := windows.RegOpenKeyEx(windows.HKEY_LOCAL_MACHINE, windows.StringToUTF16Ptr(path), 0, windows.KEY_QUERY_VALUE|windows.KEY_WOW64_64KEY, &key)
+		if err == nil {
+			_ = windows.RegCloseKey(key)
+			return failure("msi-reboot-pending")
+		}
+		if err != windows.ERROR_FILE_NOT_FOUND && err != windows.ERROR_PATH_NOT_FOUND {
+			return failure("msi-reboot-unknown")
+		}
+	}
+	var key windows.Handle
+	if windows.RegOpenKeyEx(windows.HKEY_LOCAL_MACHINE, windows.StringToUTF16Ptr(`SYSTEM\CurrentControlSet\Control\Session Manager`), 0, windows.KEY_QUERY_VALUE|windows.KEY_WOW64_64KEY, &key) != nil {
+		return failure("msi-reboot-unknown")
+	}
+	var kind, size uint32
+	err := windows.RegQueryValueEx(key, windows.StringToUTF16Ptr("PendingFileRenameOperations"), nil, &kind, nil, &size)
+	closeErr := windows.RegCloseKey(key)
+	if closeErr != nil || err != windows.ERROR_FILE_NOT_FOUND && (err != nil || kind != windows.REG_MULTI_SZ || size > 4) {
+		return failure("msi-reboot-pending-or-unknown")
+	}
+	if cancelled(ctx) {
+		return failure("cancelled")
+	}
+	return nil
 }

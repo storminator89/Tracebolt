@@ -180,3 +180,13 @@ it('validates triggered history without conflating original approval with later 
  expect(validUpdateJobHistory({...h,jobs:[{...h.jobs[0],approvedAt:seconds+1}]},device,actor)).toBe(false);
  const bad=scheduled(id);bad.job!.state='claimed';expect(validUpdateJobView(bad,device,actor)).toBe(false);
 });
+
+it.each(['en','de'] as const)('mounts compact coordinated owner and preserves the original update result in %s',async locale=>{
+ setLocale(locale,false);const id=`update_${'7'.repeat(32)}`,owner=`transfer_${'8'.repeat(32)}`;
+ let coordinated:UpdateJobView={...approved(id),coordinated:true,mutationCapturedAt:seconds,mutation:{active:true,blocked:true,domain:'managed_msi',jobId:owner,phase:'dispatch_intent',recovery:'intervention_required',revision:'7',retained:1},job:{...approved(id).job!,state:'complete',result:{jobId:id,envelopeDigest:digest,attempted:true,outcome:'uncertain',operationResult:3,hresult:0,rebootRequired:'unknown',completedAt:seconds}}};
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:coordinated) as never);await open();const shared=document.querySelector('.windows-mutation-status')!;expect(shared).toHaveTextContent(locale==='de'?'Blockiert durch MSI':'Blocked by MSI');expect(shared.querySelector('[role=status]')).not.toHaveTextContent(owner);expect(shared.querySelector('details')).not.toHaveAttribute('open');expect(screen.getByText(locale==='de'?/Die Antwort ist unbestätigt/:/The response is unconfirmed/)).toBeVisible();
+ coordinated={...coordinated,mutation:{active:true,blocked:false,phase:'idle',revision:'9',retained:1}};fireEvent.click(screen.getByRole('button',{name:locale==='de'?'Gespeicherten Status lesen':'Read saved status'}));await flush();expect(document.querySelector('.windows-mutation-status')).toHaveTextContent(locale==='de'?'Kein Besitzer gespeichert':'No owner saved');expect(screen.getByText(locale==='de'?/Die Antwort ist unbestätigt/:/The response is unconfirmed/)).toBeVisible();expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('does not invite coordinated update approval without fresh idle evidence',async()=>{
+ vi.mocked(mutateRaw).mockImplementation(async(_path,body)=>({...previewView(JSON.parse(body).requestId),coordinated:true}) as never);await open();await review();fireEvent.click(screen.getByRole('checkbox'));expect(screen.getByRole('button',{name:'Approve this update once'})).toBeDisabled();expect(document.body).toHaveTextContent('Shared status awaits the executor.');expect(mutateRaw).toHaveBeenCalledTimes(1);
+});

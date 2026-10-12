@@ -128,7 +128,7 @@ func (n *nativeMSI) install(ctx context.Context) (uint32, error) {
 	if err := installProduct.Find(); err != nil {
 		return 0, ErrUnavailable
 	}
-	if err := job.CheckInstallStart(ctx, time.Now().UTC()); err != nil {
+	if err := job.CheckNativeInstallStart(ctx, time.Now().UTC()); err != nil {
 		return 0, err
 	}
 	code, _, _ := installProduct.Call(uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(path))), uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(fixedInstallProperties))))

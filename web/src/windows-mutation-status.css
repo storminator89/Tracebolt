@@ -1,0 +1,4 @@
+.windows-mutation-status { margin-block: .6rem; font-size: .875rem; }
+.windows-mutation-status p { margin-block: .35rem; }
+.windows-mutation-status details { color: var(--secondary); }
+.windows-mutation-owner { overflow-wrap: anywhere; }

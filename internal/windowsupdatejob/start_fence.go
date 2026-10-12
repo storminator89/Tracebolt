@@ -70,3 +70,15 @@ func CheckInstallStart(ctx context.Context, now time.Time) error {
 	}
 	return nil
 }
+
+// CheckNativeInstallStart is the one-use final gate after COM name resolution,
+// token and volatile installer checks. Preliminary kernel checks remain reusable.
+type nativeInstallStartKey struct{}
+
+func nativeInstallStart(ctx context.Context) bool { return ctx.Value(nativeInstallStartKey{}) == true }
+func CheckNativeInstallStart(ctx context.Context, now time.Time) error {
+	if ctx == nil {
+		return ErrAuthority
+	}
+	return CheckInstallStart(context.WithValue(ctx, nativeInstallStartKey{}, true), now)
+}

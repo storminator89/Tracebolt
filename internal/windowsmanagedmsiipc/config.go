@@ -6,6 +6,7 @@ import (
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/keyvalidation"
 	job "localrmm/internal/windowsmanagedmsi"
+	fence "localrmm/internal/windowsmutationfence"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsstate"
 	"strings"
@@ -13,9 +14,12 @@ import (
 
 const ConfigVersion = "tracebolt.windows-managed-msi-service-config.v1"
 
+const CoordinatedConfigVersion = "tracebolt.windows-managed-msi-service-config.v2"
+
 // Config is entirely public. The private signing key and used executor ledger
 // have separate protected files and are NEVER included in this digest.
 type Config struct {
+	Mutation                         *fence.Roster          `json:"mutation,omitempty"`
 	ObserverConfigDigest             string                 `json:"observerConfigDigest"`
 	SenderBinding                    string                 `json:"senderBinding"`
 	ManagerOrigin                    string                 `json:"managerOrigin"`
@@ -30,7 +34,7 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if !job.ValidDigest(c.ObserverConfigDigest) || c.SenderBinding == "" || c.ManagerOrigin == "" || c.Version != ConfigVersion || c.Grant.Validate() != nil || !c.Grant.DeliveryEnabled || !c.Grant.DeliveryAcknowledged || !c.Grant.ServiceRiskAcknowledged || !keyvalidation.Ed25519(c.ManagerPublicKey) || !keyvalidation.Ed25519(c.ExecutorPublicKey) || actionpermit.Digest(c.ManagerPublicKey) != c.Grant.Binding.KeyID || actionpermit.Digest(c.ExecutorPublicKey) != c.Grant.Binding.ExecutorKeyID || !c.ObserverReceipt.Complete || c.ObserverReceipt.Version != 1 || c.ObserverReceipt.InstallationID == "" || c.ObserverReceipt.ServiceSID == "" {
+	if !job.ValidDigest(c.ObserverConfigDigest) || c.SenderBinding == "" || c.ManagerOrigin == "" || !(c.Version == ConfigVersion && c.Mutation == nil && c.Grant.MutationPlanDigest == "" || c.Version == CoordinatedConfigVersion && job.ValidMutationRoster(c.Mutation, c.Grant)) || c.Grant.Validate() != nil || !c.Grant.DeliveryEnabled || !c.Grant.DeliveryAcknowledged || !c.Grant.ServiceRiskAcknowledged || !keyvalidation.Ed25519(c.ManagerPublicKey) || !keyvalidation.Ed25519(c.ExecutorPublicKey) || actionpermit.Digest(c.ManagerPublicKey) != c.Grant.Binding.KeyID || actionpermit.Digest(c.ExecutorPublicKey) != c.Grant.Binding.ExecutorKeyID || !c.ObserverReceipt.Complete || c.ObserverReceipt.Version != 1 || c.ObserverReceipt.InstallationID == "" || c.ObserverReceipt.ServiceSID == "" {
 		return job.ErrInvalid
 	}
 	return c.peerUnchecked().Validate()

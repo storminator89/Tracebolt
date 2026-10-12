@@ -237,7 +237,10 @@ missing material rather than inventing credentials or weakening protection.
   `docs/windows-managed-msi-delivery.md` before changes. Keep chunked private custody,
   separate delivery/install consent and keys, dedicated LocalSystem risk disclosure,
   original leaf/expiry checks, exact package/native review and one-attempt no-replay.
-  Observation remains available; other Tracebolt mutators are excluded in this slice.
+  Observation remains available; standalone deployment excludes other mutators.
+  For fresh paired MSI/cached-WUA setup, read `docs/windows-coordinated-mutations.md`.
+  Preserve the shared durable owner, exact participant roster and one-use native
+  admission; no migration, TTL unlock, native retry or observer privilege follows.
   Never promote prepared-v1 or read permissions. Native setup/install acceptance
   remains separately approved and pending; see its manual acceptance plan.
 - Prepared MSI installation is a separate fresh default-off one-attempt source

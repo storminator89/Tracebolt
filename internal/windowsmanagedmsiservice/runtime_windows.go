@@ -13,6 +13,7 @@ import (
 	managed "localrmm/internal/windowsmanagedmsi"
 	"localrmm/internal/windowsmanagedmsiexecutor"
 	"localrmm/internal/windowsmanagedmsiipc"
+	fence "localrmm/internal/windowsmutationfence"
 	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsstate"
 	"time"
@@ -97,7 +98,7 @@ func (h *handler) Execute(_ []string, requests <-chan svc.ChangeRequest, status 
 	}
 }
 func run(ctx context.Context, ready func()) error {
-	if windowsmanagedmsiexecutor.VerifyServiceToken() != nil || CheckExclusive(ctx) != nil {
+	if windowsmanagedmsiexecutor.VerifyServiceToken() != nil {
 		return managed.ErrAuthority
 	}
 	root, e := windowsmanagedmsiipc.RootPath()
@@ -116,6 +117,17 @@ func run(ctx context.Context, ready func()) error {
 	config, e := windowsmanagedmsiipc.DecodeConfig(raw)
 	if e != nil {
 		return e
+	}
+	if e = CheckProfile(ctx, config); e != nil {
+		return e
+	}
+	var mutation *fence.Session
+	if config.Mutation != nil {
+		mutation, e = fence.Open(ctx, *config.Mutation, fence.ManagedMSI, time.Now)
+		if e != nil {
+			return e
+		}
+		defer mutation.Close()
 	}
 	receipt, e := VerifySetup(store, config)
 	if e != nil {
@@ -139,7 +151,7 @@ func run(ctx context.Context, ready func()) error {
 	}
 	defer guard.Close()
 	check := func(c context.Context) error {
-		if ctx.Err() != nil || c == nil || c.Err() != nil || windowsmanagedmsiexecutor.VerifyServiceToken() != nil || guard.Check(c) != nil || CheckInstalled(c, config, true) != nil || CheckExclusive(c) != nil || store.Verify() != nil {
+		if ctx.Err() != nil || c == nil || c.Err() != nil || windowsmanagedmsiexecutor.VerifyServiceToken() != nil || guard.Check(c) != nil || CheckInstalled(c, config, true) != nil || CheckProfile(c, config) != nil || store.Verify() != nil {
 			return managed.ErrAuthority
 		}
 		current, e := store.Read("config.json")
@@ -147,6 +159,13 @@ func run(ctx context.Context, ready func()) error {
 			return managed.ErrIntegrity
 		}
 		_, e = VerifySetup(store, config)
+		if e == nil && mutation != nil {
+			receiptRaw, re := store.Read("setup-receipt.json")
+			if re != nil {
+				return re
+			}
+			e = mutation.VerifyParticipant(c, managed.Digest(raw), managed.Digest(receiptRaw))
+		}
 		return e
 	}
 	authority, e := lanclient.OpenWindowsManagedMSIPublicAuthority(config, check)
@@ -167,7 +186,12 @@ func run(ctx context.Context, ready func()) error {
 	}
 	defer clear(material.Key)
 	payload := windowspackage.NewManagedMSIPayload()
-	x, e := managed.OpenEndpoint(store, payload, windowsmanagedmsiexecutor.NewInstaller(), authority, ed25519.PrivateKey(material.Key), time.Now)
+	var x *managed.Endpoint
+	if mutation == nil {
+		x, e = managed.OpenEndpoint(store, payload, windowsmanagedmsiexecutor.NewInstaller(), authority, ed25519.PrivateKey(material.Key), time.Now)
+	} else {
+		x, e = managed.OpenCoordinatedEndpoint(store, payload, windowsmanagedmsiexecutor.NewCoordinatedInstaller(), authority, ed25519.PrivateKey(material.Key), time.Now, mutation)
+	}
 	if e != nil {
 		return e
 	}

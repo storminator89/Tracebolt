@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"localrmm/internal/keyvalidation"
+	fence "localrmm/internal/windowsmutationfence"
 	prepared "localrmm/internal/windowssoftwarejob"
 )
 
@@ -46,6 +47,8 @@ type ChunkIntent struct {
 	Size   int    `json:"size"`
 }
 type EndpointRecord struct {
+	Mutation            *fence.Roster   `json:"mutation,omitempty"`
+	MutationCompletion  *fence.Receipt  `json:"mutationCompletion,omitempty"`
 	Version             string          `json:"version"`
 	Grant               Grant           `json:"grant"`
 	ManagerPublicKey    []byte          `json:"managerPublicKey"`
@@ -73,7 +76,10 @@ func NewEndpointRecord(g Grant, manager, executor []byte, at int64) (EndpointRec
 	return r, r.Validate()
 }
 func (r EndpointRecord) Validate() error {
-	if r.Version != Version || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.ManagerPublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) || !ValidDigest(r.PrefixDigest) || len(r.Custody) > 4096 || len(r.ImportReceipt) > 4096 {
+	if r.validateMutationCompletion() != nil {
+		return ErrIntegrity
+	}
+	if !(r.Version == Version && r.Mutation == nil && r.Grant.MutationPlanDigest == "" || r.Version == CoordinatedEndpointVersion && ValidMutationRoster(r.Mutation, r.Grant)) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.ManagerPublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.ManagerPublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) || !ValidDigest(r.PrefixDigest) || len(r.Custody) > 4096 || len(r.ImportReceipt) > 4096 {
 		return ErrIntegrity
 	}
 	if len(r.Delivery) == 0 {
@@ -142,20 +148,31 @@ func samePackage(a, b Permit) bool {
 }
 
 type Endpoint struct {
-	mu              sync.Mutex
-	store           Storage
-	payload         Payload
-	installer       Installer
-	current         CurrentCheck
-	now             func() time.Time
-	key             ed25519.PrivateKey
-	record          EndpointRecord
-	raw             []byte
-	failed, running bool
-	done            chan struct{}
+	mutation           *fence.Session
+	mutationCapability *fence.Capability
+	mu                 sync.Mutex
+	store              Storage
+	payload            Payload
+	installer          Installer
+	current            CurrentCheck
+	now                func() time.Time
+	key                ed25519.PrivateKey
+	record             EndpointRecord
+	raw                []byte
+	failed, running    bool
+	done               chan struct{}
 }
 
 func OpenEndpoint(store Storage, payload Payload, installer Installer, current CurrentCheck, key ed25519.PrivateKey, now func() time.Time) (*Endpoint, error) {
+	return openEndpoint(store, payload, installer, current, key, now, nil)
+}
+func OpenCoordinatedEndpoint(store Storage, payload Payload, installer Installer, current CurrentCheck, key ed25519.PrivateKey, now func() time.Time, mutation *fence.Session) (*Endpoint, error) {
+	if mutation == nil {
+		return nil, ErrAuthority
+	}
+	return openEndpoint(store, payload, installer, current, key, now, mutation)
+}
+func openEndpoint(store Storage, payload Payload, installer Installer, current CurrentCheck, key ed25519.PrivateKey, now func() time.Time, mutation *fence.Session) (*Endpoint, error) {
 	if store == nil || payload == nil || installer == nil || current == nil || now == nil || !validPrivate(key) {
 		return nil, ErrInvalid
 	}
@@ -164,10 +181,19 @@ func OpenEndpoint(store Storage, payload Payload, installer Installer, current C
 	if e != nil || Canonical(raw, &r, MaxRecordBytes) != nil || r.Validate() != nil || !bytes.Equal(key.Public().(ed25519.PublicKey), r.ExecutorPublicKey) {
 		return nil, ErrIntegrity
 	}
-	x := &Endpoint{store: store, payload: payload, installer: installer, current: current, key: bytes.Clone(key), now: now, record: r, raw: bytes.Clone(raw)}
+	if r.Mutation == nil && mutation != nil || r.Mutation != nil && (mutation == nil || !mutation.Matches(*r.Mutation, fence.ManagedMSI)) {
+		return nil, ErrAuthority
+	}
+	x := &Endpoint{mutation: mutation, store: store, payload: payload, installer: installer, current: current, key: bytes.Clone(key), now: now, record: r, raw: bytes.Clone(raw)}
 	if e = x.check(context.Background(), nil); e != nil {
 		x.Close()
 		return nil, e
+	}
+	if r.MutationCompletion != nil {
+		if e = x.mutation.Recover(context.Background(), *r.MutationCompletion, x.verifyMutationCompletion); e != nil {
+			x.Close()
+			return nil, e
+		}
 	}
 	if len(r.Delivery) > 0 {
 		if len(r.InterventionReport) > 0 {
@@ -265,6 +291,9 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 	if e = x.check(ctx, &p); e != nil {
 		return e
 	}
+	if x.mutation != nil && p.Kind != "deliver" && p.SynchronousReviewDigest != SynchronousReviewDigest(p.Package, p.NativeAcceptanceDigest) {
+		return ErrAuthority
+	}
 	if len(x.record.InterventionReport) > 0 {
 		return ErrConsumed
 	}
@@ -343,7 +372,7 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 		}
 		q, _ := VerifyPermit(x.record.ReadinessPermit, x.record.ManagerPublicKey)
 		ready, e := VerifyReport(x.record.ReadinessReport, x.record.ExecutorPublicKey)
-		if e != nil || !samePackage(p, q) || p.Sequence != q.Sequence || p.MaintenanceUntil != q.MaintenanceUntil || p.ExpiresAt > q.ExpiresAt || ready.Readiness == nil || ready.State != "ready" {
+		if e != nil || !samePackage(p, q) || p.Sequence != q.Sequence || p.MaintenanceUntil != q.MaintenanceUntil || p.ExpiresAt > q.ExpiresAt || p.SynchronousReviewDigest != q.SynchronousReviewDigest || ready.Readiness == nil || ready.State != "ready" {
 			return ErrAuthority
 		}
 		x.record.InstallPermit = bytes.Clone(raw)
@@ -353,6 +382,17 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 		if e = x.check(ctx, &p); e != nil {
 			return e
 		}
+		if x.mutation != nil {
+			capability, err := x.mutation.Reserve(ctx, mutationOwner(p, raw))
+			if err != nil {
+				return x.finishBlocked(p, raw)
+			}
+			x.mutationCapability = capability
+			// Reserve is a protected transaction; recheck authority after it closes.
+			if err = x.check(ctx, &p); err != nil {
+				return err
+			}
+		}
 		// Admission and attempted markers are separate durable writes. Neither can
 		// be resumed on restart. A live goroutine alone owns the native capability.
 		x.record.Attempted = true
@@ -361,6 +401,14 @@ func (x *Endpoint) Accept(ctx context.Context, raw []byte) error {
 		}
 		if e = x.check(ctx, &p); e != nil {
 			return e
+		}
+		if x.mutation != nil {
+			if e = x.mutation.Dispatch(ctx, x.mutationCapability); e != nil {
+				return e
+			}
+			if e = x.check(ctx, &p); e != nil {
+				return e
+			}
 		}
 		x.running = true
 		x.done = make(chan struct{})
@@ -439,6 +487,9 @@ func (x *Endpoint) install(p Permit, raw []byte, ready Readiness) {
 		if !x.running || !x.record.Attempted || !bytes.Equal(raw, x.record.InstallPermit) {
 			return ErrAuthority
 		}
+		if x.mutation != nil && nativeInstallStart(c) {
+			return x.mutation.CheckStart(c, x.mutationCapability, func() error { return x.check(c, &p) })
+		}
 		return x.check(c, &p)
 	})
 	native, e := x.installer.Install(ctx, x.record.ImportReceipt, ready)
@@ -479,7 +530,20 @@ func (x *Endpoint) install(p Permit, raw []byte, ready Readiness) {
 		return
 	}
 	x.record.ResultReport = report
-	_ = x.save()
+	if x.mutation != nil && e == nil && r.ReturnCodeKnown && r.Outcome != "uncertain" && r.Outcome != "unexpected_restart" && (r.ReturnCode != 3010 || r.RegistrationVerified == Yes) {
+		receipt, err := x.mutationCapability.Completion(Digest(report), "completed", r.CompletedAt)
+		if err != nil {
+			x.failed = true
+			return
+		}
+		x.record.MutationCompletion = &receipt
+	}
+	if x.save() != nil {
+		return
+	}
+	if x.record.MutationCompletion != nil {
+		_ = x.mutation.Complete(context.Background(), x.mutationCapability, *x.record.MutationCompletion, x.verifyMutationCompletion)
+	}
 }
 func (x *Endpoint) Status(ctx context.Context) (Status, error) {
 	s := Status{Version: Version, State: "awaiting_delivery"}
@@ -501,6 +565,21 @@ func (x *Endpoint) Status(ctx context.Context) (Status, error) {
 		return s, nil
 	}
 	p, _ := VerifyPermit(r.Delivery, r.ManagerPublicKey)
+	if x.mutation != nil {
+		snapshot, e := x.mutation.Status(ctx)
+		if e != nil {
+			return s, e
+		}
+		captured := x.now().UTC().Unix()
+		if e = x.check(ctx, nil); e != nil {
+			return s, e
+		}
+		report := Report{Version: Version, Kind: "mutation", Binding: p.Binding, TransferID: p.TransferID, PermitDigest: Digest(r.Delivery), Package: p.Package, NativeAcceptanceDigest: p.NativeAcceptanceDigest, CapturedAt: captured, Offset: r.Offset, State: snapshot.Phase, Mutation: &snapshot}
+		s.MutationReport, e = SignReport(report, x.key)
+		if e != nil {
+			return s, e
+		}
+	}
 	s.TransferID = p.TransferID
 	s.PermitDigest = Digest(r.Delivery)
 	s.NextChunk = uint32((r.Offset + MaxChunkBytes - 1) / MaxChunkBytes)
@@ -627,4 +706,17 @@ func (x *Endpoint) markIntervention() error {
 		return e
 	}
 	return ErrUncertain
+}
+
+// CheckNativeInstallStart is the one final native-dispatch gate. Adapters may
+// call CheckInstallStart during preparation; only the call immediately before
+// MsiInstallProduct consumes coordinated native admission.
+type nativeInstallStartKey struct{}
+
+func nativeInstallStart(ctx context.Context) bool { return ctx.Value(nativeInstallStartKey{}) == true }
+func CheckNativeInstallStart(ctx context.Context, at time.Time) error {
+	if ctx == nil {
+		return ErrAuthority
+	}
+	return CheckInstallStart(context.WithValue(ctx, nativeInstallStartKey{}, true), at)
 }

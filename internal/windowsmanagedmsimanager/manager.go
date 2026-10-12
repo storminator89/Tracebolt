@@ -7,6 +7,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	msi "localrmm/internal/windowsmanagedmsi"
+	fence "localrmm/internal/windowsmutationfence"
 	"reflect"
 	"strings"
 	"sync"
@@ -272,10 +273,10 @@ func (m *Manager) Deliver(ctx context.Context, actor, id string, ack bool) error
 	})
 	return e
 }
-func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms, maintenance bool) error {
+func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms, maintenance bool, synchronous ...bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !packageReview || !terms || !maintenance {
+	if !packageReview || !terms || !maintenance || len(synchronous) > 1 {
 		return msi.ErrInvalid
 	}
 	_, e := m.transaction(ctx, actor, "install", func(r *msi.Record, c msi.Current, n int64) error {
@@ -293,11 +294,17 @@ func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms
 			}
 			sequence = old.Sequence + 1
 		}
+		if r.Grant.MutationPlanDigest != "" && (len(synchronous) != 1 || !synchronous[0]) {
+			return msi.ErrAuthority
+		}
 		d, e := msi.VerifyReport(r.DeliveryReport, r.ExecutorPublicKey)
 		if e != nil || d.State != "imported" {
 			return msi.ErrUnavailable
 		}
 		p := msi.Permit{Version: msi.Version, Kind: "readiness", TransferID: r.TransferID, Binding: m.binding, LeafDigest: c.LeafDigest, Package: r.Artifact.Package, NativeAcceptanceDigest: r.Artifact.NativeAcceptanceDigest, ActorID: actor, IssuedAt: n, ExpiresAt: min(n+60, r.Grant.ExpiresAt, c.LeafNotAfter), Sequence: sequence, MaintenanceUntil: min(n+600, r.Grant.ExpiresAt, c.LeafNotAfter), PackageReviewAccepted: true, TermsAccepted: true}
+		if len(synchronous) == 1 && synchronous[0] {
+			p.SynchronousReviewDigest = msi.SynchronousReviewDigest(p.Package, p.NativeAcceptanceDigest)
+		}
 		r.ReadinessPermit, e = msi.SignPermit(p, m.key)
 		if e == nil {
 			r.ReadinessClaimedAt = 0
@@ -327,6 +334,14 @@ func (m *Manager) Approve(ctx context.Context, actor, readinessDigest string, ac
 		}
 		if n >= rp.ExpiresAt || n < ready.CapturedAt || n-ready.CapturedAt > 60 {
 			return msi.ErrExpired
+		}
+		// A saved idle observation avoids consuming the only approval while the
+		// other domain is already known busy. It never authorizes native entry.
+		if r.Grant.MutationPlanDigest != "" {
+			shared, err := msi.VerifyReport(r.MutationReport, r.ExecutorPublicKey)
+			if err != nil || shared.Kind != "mutation" || shared.Mutation == nil || !shared.Mutation.Active || shared.Mutation.Blocked || shared.Mutation.Phase != "idle" || shared.CapturedAt > n || n-shared.CapturedAt >= 60 {
+				return msi.ErrUnavailable
+			}
 		}
 		p := rp
 		p.Kind = "install"
@@ -447,6 +462,19 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 		if e != nil || report.Binding != m.binding || report.TransferID != r.TransferID || r.Artifact == nil || report.Package != r.Artifact.Package || report.NativeAcceptanceDigest != r.Artifact.NativeAcceptanceDigest || report.CapturedAt > n {
 			return msi.ErrAuthority
 		}
+		if report.Kind == "mutation" {
+			if r.Grant.MutationPlanDigest == "" || report.PermitDigest != msi.Digest(r.DeliveryPermit) || report.CapturedAt < n-60 {
+				return msi.ErrAuthority
+			}
+			if len(r.MutationReport) > 0 {
+				old, e := msi.VerifyReport(r.MutationReport, r.ExecutorPublicKey)
+				if e != nil || report.CapturedAt < old.CapturedAt || report.Mutation.Revision < old.Mutation.Revision || report.Mutation.Revision == old.Mutation.Revision && *report.Mutation != *old.Mutation {
+					return msi.ErrConflict
+				}
+			}
+			r.MutationReport = bytes.Clone(raw)
+			return nil
+		}
 		var dest *[]byte
 		var permit []byte
 		var claim int64
@@ -489,6 +517,9 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 }
 
 type View struct {
+	Coordinated            bool           `json:"coordinated,omitempty"`
+	Mutation               *fence.Status  `json:"mutation,omitempty"`
+	MutationCapturedAt     int64          `json:"mutationCapturedAt,omitempty"`
 	Version                string         `json:"version"`
 	DeviceID               string         `json:"deviceId"`
 	ServerNow              int64          `json:"serverNow"`
@@ -511,6 +542,12 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 	var v View
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
 		v = View{Version: msi.Version, DeviceID: m.binding.DeviceID, ServerNow: n, State: "empty", TransferID: r.TransferID}
+		v.Coordinated = r.Grant.MutationPlanDigest != ""
+		if len(r.MutationReport) > 0 {
+			report, _ := msi.VerifyReport(r.MutationReport, r.ExecutorPublicKey)
+			v.Mutation = report.Mutation
+			v.MutationCapturedAt = report.CapturedAt
+		}
 		if r.Artifact != nil {
 			p := r.Artifact.Package
 			v.Package = &p

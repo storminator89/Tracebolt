@@ -102,7 +102,7 @@ func CheckInstalled(ctx context.Context, c windowsmanagedmsiipc.Config, active b
 // Activate is a separately approved one-time service action, after complete
 // setup and manager registration. Failed/uncertain calls are never retried.
 func Activate(ctx context.Context, c windowsmanagedmsiipc.Config) error {
-	if CheckInstalled(ctx, c, false) != nil || CheckExclusive(ctx) != nil {
+	if CheckInstalled(ctx, c, false) != nil || CheckProfile(ctx, c) != nil {
 		return managed.ErrAuthority
 	}
 	m, e := mgr.Connect()

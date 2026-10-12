@@ -14,23 +14,25 @@ import (
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/keyvalidation"
+	fence "localrmm/internal/windowsmutationfence"
 	prepared "localrmm/internal/windowssoftwarejob"
 )
 
 const (
-	Version             = "tracebolt.windows-managed-msi.v1"
-	GrantVersion        = "tracebolt.windows-managed-msi-grant.v1"
-	MaxChunkBytes       = 32 << 10
-	MaxFrameBytes       = 64 << 10
-	MaxArtifactBytes    = 128 << 20
-	MaxChunks           = MaxArtifactBytes / MaxChunkBytes
-	MaxRecordBytes      = 256 << 10
-	DeliveryLifetime    = 24 * time.Hour
-	PreviewLifetime     = 60 * time.Second
-	MaintenanceLifetime = 10 * time.Minute
-	DeliveryDisclosure  = "Allow one exact centrally selected x64 machine MSI to be delivered and imported in the background by a separate deployment service. Upload and delivery do not approve package terms or installation. No arbitrary path, URL, EXE, shell, transform, patch, repair, upgrade, uninstall or caller-supplied MSI property is supported."
-	InstallDisclosure   = "Allow one separately reviewed and explicitly approved install of the delivered exact MSI during a bounded maintenance window. Every package requires its own terms, custom-action and native-acceptance review. A hash proves bytes, not safety or offline behavior. No automatic retry or reboot is provided."
-	ServiceDisclosure   = "The dedicated deployment service runs as LocalSystem with an unrestricted elevated token and extensive local authority, including machine-account network access. MSI custom actions can run arbitrary code, contact the network, change services and disrupt applications. This service and installer are not sandboxed. Stopping the service does not prove installation stopped or rolled back."
+	Version                 = "tracebolt.windows-managed-msi.v1"
+	GrantVersion            = "tracebolt.windows-managed-msi-grant.v1"
+	CoordinatedGrantVersion = "tracebolt.windows-managed-msi-grant.v2"
+	MaxChunkBytes           = 32 << 10
+	MaxFrameBytes           = 64 << 10
+	MaxArtifactBytes        = 128 << 20
+	MaxChunks               = MaxArtifactBytes / MaxChunkBytes
+	MaxRecordBytes          = 256 << 10
+	DeliveryLifetime        = 24 * time.Hour
+	PreviewLifetime         = 60 * time.Second
+	MaintenanceLifetime     = 10 * time.Minute
+	DeliveryDisclosure      = "Allow one exact centrally selected x64 machine MSI to be delivered and imported in the background by a separate deployment service. Upload and delivery do not approve package terms or installation. No arbitrary path, URL, EXE, shell, transform, patch, repair, upgrade, uninstall or caller-supplied MSI property is supported."
+	InstallDisclosure       = "Allow one separately reviewed and explicitly approved install of the delivered exact MSI during a bounded maintenance window. Every package requires its own terms, custom-action and native-acceptance review. A hash proves bytes, not safety or offline behavior. No automatic retry or reboot is provided."
+	ServiceDisclosure       = "The dedicated deployment service runs as LocalSystem with an unrestricted elevated token and extensive local authority, including machine-account network access. MSI custom actions can run arbitrary code, contact the network, change services and disrupt applications. This service and installer are not sandboxed. Stopping the service does not prove installation stopped or rolled back."
 )
 
 var (
@@ -82,6 +84,8 @@ func (b Binding) Validate() error {
 func ValidBinding(b Binding) bool { return b.Validate() == nil }
 
 type Grant struct {
+	MutationPlanDigest      string  `json:"mutationPlanDigest,omitempty"`
+	PeerBindingDigest       string  `json:"peerBindingDigest,omitempty"`
 	Version                 string  `json:"version"`
 	Binding                 Binding `json:"binding"`
 	DeliveryEnabled         bool    `json:"deliveryEnabled"`
@@ -93,7 +97,7 @@ type Grant struct {
 }
 
 func (g Grant) Validate() error {
-	if g.Version != GrantVersion || g.Binding.Validate() != nil || !ValidTime(g.ExpiresAt) || g.DeliveryEnabled && (!g.DeliveryAcknowledged || !g.ServiceRiskAcknowledged) || g.InstallEnabled && (!g.InstallAcknowledged || !g.ServiceRiskAcknowledged) {
+	if !(g.Version == GrantVersion && g.MutationPlanDigest == "" && g.PeerBindingDigest == "" || g.Version == CoordinatedGrantVersion && ValidDigest(g.MutationPlanDigest) && ValidDigest(g.PeerBindingDigest)) || g.Binding.Validate() != nil || !ValidTime(g.ExpiresAt) || g.DeliveryEnabled && (!g.DeliveryAcknowledged || !g.ServiceRiskAcknowledged) || g.InstallEnabled && (!g.InstallAcknowledged || !g.ServiceRiskAcknowledged) {
 		return ErrInvalid
 	}
 	return nil
@@ -103,30 +107,34 @@ func (g Grant) Validate() error {
 // can transport only a still-valid same-identity permit; it never extends expiry.
 // The endpoint requires the current signed leaf attestation on each relay call.
 type Permit struct {
-	Version                string    `json:"version"`
-	Kind                   string    `json:"kind"`
-	TransferID             string    `json:"transferId"`
-	Binding                Binding   `json:"binding"`
-	LeafDigest             string    `json:"leafDigest"`
-	Package                Selection `json:"package"`
-	NativeAcceptanceDigest string    `json:"nativeAcceptanceDigest"`
-	ActorID                string    `json:"actorId"`
-	IssuedAt               int64     `json:"issuedAt"`
-	ExpiresAt              int64     `json:"expiresAt"`
-	Sequence               uint64    `json:"sequence,string"`
-	MaintenanceUntil       int64     `json:"maintenanceUntil"`
-	ReadinessDigest        string    `json:"readinessDigest"`
-	PackageReviewAccepted  bool      `json:"packageReviewAccepted"`
-	TermsAccepted          bool      `json:"termsAccepted"`
+	SynchronousReviewDigest string    `json:"synchronousReviewDigest,omitempty"`
+	Version                 string    `json:"version"`
+	Kind                    string    `json:"kind"`
+	TransferID              string    `json:"transferId"`
+	Binding                 Binding   `json:"binding"`
+	LeafDigest              string    `json:"leafDigest"`
+	Package                 Selection `json:"package"`
+	NativeAcceptanceDigest  string    `json:"nativeAcceptanceDigest"`
+	ActorID                 string    `json:"actorId"`
+	IssuedAt                int64     `json:"issuedAt"`
+	ExpiresAt               int64     `json:"expiresAt"`
+	Sequence                uint64    `json:"sequence,string"`
+	MaintenanceUntil        int64     `json:"maintenanceUntil"`
+	ReadinessDigest         string    `json:"readinessDigest"`
+	PackageReviewAccepted   bool      `json:"packageReviewAccepted"`
+	TermsAccepted           bool      `json:"termsAccepted"`
 }
 
 func (p Permit) Validate() error {
 	if p.Version != Version || !ValidTransferID(p.TransferID) || p.Binding.Validate() != nil || !ValidDigest(p.LeafDigest) || !ValidSelection(p.Package) || !ValidDigest(p.NativeAcceptanceDigest) || !enrollmentcrypto.ValidID(p.ActorID, "operator_") || !ValidTime(p.IssuedAt) || !ValidTime(p.ExpiresAt) || p.ExpiresAt <= p.IssuedAt {
 		return ErrInvalid
 	}
+	if p.SynchronousReviewDigest != "" && p.SynchronousReviewDigest != SynchronousReviewDigest(p.Package, p.NativeAcceptanceDigest) {
+		return ErrInvalid
+	}
 	switch p.Kind {
 	case "deliver":
-		if p.ExpiresAt-p.IssuedAt > int64(DeliveryLifetime/time.Second) || p.Sequence != 0 || p.MaintenanceUntil != 0 || p.ReadinessDigest != "" || p.PackageReviewAccepted || p.TermsAccepted {
+		if p.SynchronousReviewDigest != "" || p.ExpiresAt-p.IssuedAt > int64(DeliveryLifetime/time.Second) || p.Sequence != 0 || p.MaintenanceUntil != 0 || p.ReadinessDigest != "" || p.PackageReviewAccepted || p.TermsAccepted {
 			return ErrInvalid
 		}
 	case "readiness":
@@ -144,25 +152,33 @@ func (p Permit) Validate() error {
 }
 
 type Report struct {
-	Version                string     `json:"version"`
-	Kind                   string     `json:"kind"`
-	Binding                Binding    `json:"binding"`
-	TransferID             string     `json:"transferId"`
-	PermitDigest           string     `json:"permitDigest"`
-	Package                Selection  `json:"package"`
-	NativeAcceptanceDigest string     `json:"nativeAcceptanceDigest"`
-	CapturedAt             int64      `json:"capturedAt"`
-	Offset                 int64      `json:"offset"`
-	State                  string     `json:"state"`
-	Readiness              *Readiness `json:"readiness,omitempty"`
-	Result                 *Result    `json:"result,omitempty"`
+	Mutation               *fence.Status `json:"mutation,omitempty"`
+	Version                string        `json:"version"`
+	Kind                   string        `json:"kind"`
+	Binding                Binding       `json:"binding"`
+	TransferID             string        `json:"transferId"`
+	PermitDigest           string        `json:"permitDigest"`
+	Package                Selection     `json:"package"`
+	NativeAcceptanceDigest string        `json:"nativeAcceptanceDigest"`
+	CapturedAt             int64         `json:"capturedAt"`
+	Offset                 int64         `json:"offset"`
+	State                  string        `json:"state"`
+	Readiness              *Readiness    `json:"readiness,omitempty"`
+	Result                 *Result       `json:"result,omitempty"`
 }
 
 func (r Report) Validate() error {
 	if r.Version != Version || r.Binding.Validate() != nil || !ValidTransferID(r.TransferID) || !ValidDigest(r.PermitDigest) || !ValidSelection(r.Package) || !ValidDigest(r.NativeAcceptanceDigest) || !ValidTime(r.CapturedAt) || r.Offset < 0 || r.Offset > r.Package.Size {
 		return ErrInvalid
 	}
+	if r.Kind != "mutation" && r.Mutation != nil {
+		return ErrInvalid
+	}
 	switch r.Kind {
+	case "mutation":
+		if r.Mutation == nil || r.Mutation.Validate() != nil || r.State != r.Mutation.Phase || r.Readiness != nil || r.Result != nil {
+			return ErrInvalid
+		}
 	case "delivery":
 		if r.Readiness != nil || r.Result != nil || (r.State != "imported" && r.State != "intervention_required") || r.State == "imported" && r.Offset != r.Package.Size {
 			return ErrInvalid
@@ -267,13 +283,14 @@ type ReportRequest struct {
 	Report []byte `json:"report"`
 }
 type Status struct {
-	Version      string `json:"version"`
-	TransferID   string `json:"transferId"`
-	PermitDigest string `json:"permitDigest"`
-	NextChunk    uint32 `json:"nextChunk"`
-	State        string `json:"state"`
-	Attempted    bool   `json:"attempted"`
-	Report       []byte `json:"report,omitempty"`
+	MutationReport []byte `json:"mutationReport,omitempty"`
+	Version        string `json:"version"`
+	TransferID     string `json:"transferId"`
+	PermitDigest   string `json:"permitDigest"`
+	NextChunk      uint32 `json:"nextChunk"`
+	State          string `json:"state"`
+	Attempted      bool   `json:"attempted"`
+	Report         []byte `json:"report,omitempty"`
 }
 
 type PreparedPackage interface {
@@ -283,4 +300,18 @@ type PreparedPackage interface {
 }
 type ExecutorAdapter interface {
 	PrepareExact(context.Context, Selection) (PreparedPackage, error)
+}
+
+// SynchronousReviewDigest binds explicit package/native review of synchronous,
+// no-detached deployment and rollback work. It proves review identity, not safety.
+func SynchronousReviewDigest(s Selection, native string) string {
+	if !ValidSelection(s) || !ValidDigest(native) {
+		return ""
+	}
+	b, _ := json.Marshal(struct {
+		Package     Selection `json:"package"`
+		Native      string    `json:"nativeAcceptanceDigest"`
+		Attestation string    `json:"attestation"`
+	}{s, native, "reviewed synchronous custom actions; no detached deployment or rollback work after native return"})
+	return Digest(append([]byte("Tracebolt coordinated MSI review v1\x00"), b...))
 }

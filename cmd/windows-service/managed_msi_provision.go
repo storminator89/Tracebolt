@@ -14,6 +14,7 @@ import (
 )
 
 type managedMSIPlan struct {
+	MutationPlanDigest string                                   `json:"mutationPlanDigest,omitempty"`
 	Version            string                                   `json:"version"`
 	Offer              managed.SetupOffer                       `json:"offer"`
 	Artifact           windowspackage.Manifest                  `json:"artifact"`
@@ -31,11 +32,12 @@ func (p managedMSIPlan) Digest() string {
 }
 
 type managedMSIInput struct {
-	offer    managed.SetupOffer
-	artifact windowspackage.Manifest
-	payload  []byte
-	apply    bool
-	digest   string
+	coordinated *coordinatedMSIMaterial
+	offer       managed.SetupOffer
+	artifact    windowspackage.Manifest
+	payload     []byte
+	apply       bool
+	digest      string
 }
 type managedMSIResult struct {
 	plan         managedMSIPlan
@@ -81,7 +83,7 @@ func runManagedMSIProvision(ctx context.Context, args []string, out, stderr io.W
 		return 1
 	}
 	fmt.Fprintln(stderr, managed.DeliveryDisclosure+"\n"+managed.InstallDisclosure+"\n"+managed.ServiceDisclosure+"\n"+lanclient.WindowsManagedMSIRelayDisclosure)
-	r, e := perform(ctx, managedMSIInput{offer, artifact, payload, *apply, *digest})
+	r, e := perform(ctx, managedMSIInput{offer: offer, artifact: artifact, payload: payload, apply: *apply, digest: *digest})
 	if e != nil {
 		fmt.Fprintln(stderr, "Managed MSI setup blocked. Preserve partial state; do not retry, adopt or reset it. No completion is claimed.")
 		return 1

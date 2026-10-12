@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/keyvalidation"
+	fence "localrmm/internal/windowsmutationfence"
 	"localrmm/internal/windowsservice"
 	"localrmm/internal/windowsstate"
 	job "localrmm/internal/windowsupdatejob"
@@ -13,9 +14,12 @@ import (
 
 const ConfigVersion = "tracebolt.windows-update-foreground.v1"
 
+const CoordinatedConfigVersion = "tracebolt.windows-update-foreground.v2"
+
 // Config is entirely public. The private signing key and used executor ledger
 // have separate protected files and are NEVER included in this digest.
 type Config struct {
+	Mutation                         *fence.Roster          `json:"mutation,omitempty"`
 	Version                          string                 `json:"version"`
 	Consent                          job.Consent            `json:"consent"`
 	ManagerPublicKey                 []byte                 `json:"managerPublicKey"`
@@ -27,7 +31,7 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if c.Version != ConfigVersion || c.Consent.Validate() != nil || !c.Consent.Enabled || !c.Consent.Acknowledged || !keyvalidation.Ed25519(c.ManagerPublicKey) || !keyvalidation.Ed25519(c.ExecutorPublicKey) || actionpermit.Digest(c.ManagerPublicKey) != c.Consent.Binding.KeyID || actionpermit.Digest(c.ExecutorPublicKey) != c.Consent.Binding.ExecutorKeyID || !c.ObserverReceipt.Complete || c.ObserverReceipt.Version != 1 || c.ObserverReceipt.InstallationID == "" || c.ObserverReceipt.ServiceSID == "" {
+	if !(c.Version == ConfigVersion && c.Mutation == nil && c.Consent.MutationPlanDigest == "" || c.Version == CoordinatedConfigVersion && job.ValidMutationRoster(c.Mutation, c.Consent)) || c.Consent.Validate() != nil || !c.Consent.Enabled || !c.Consent.Acknowledged || !keyvalidation.Ed25519(c.ManagerPublicKey) || !keyvalidation.Ed25519(c.ExecutorPublicKey) || actionpermit.Digest(c.ManagerPublicKey) != c.Consent.Binding.KeyID || actionpermit.Digest(c.ExecutorPublicKey) != c.Consent.Binding.ExecutorKeyID || !c.ObserverReceipt.Complete || c.ObserverReceipt.Version != 1 || c.ObserverReceipt.InstallationID == "" || c.ObserverReceipt.ServiceSID == "" {
 		return job.ErrInvalid
 	}
 	return c.peerUnchecked().Validate()
