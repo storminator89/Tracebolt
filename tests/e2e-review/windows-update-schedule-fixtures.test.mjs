@@ -2,8 +2,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
 import {createWindowsUpdateJobsFixture,requireWindowsUpdateJobsEvidence,windowsUpdateJobsOrigin} from './windows-update-jobs-browser.mjs';
-import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,requireWindowsFleetUpdateScheduleEvidence,requireWindowsFleetUpdateScheduleDetails} from './windows-update-schedule-browser.mjs';
+import {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,windowsFleetUpdateTriageRow,requireWindowsFleetUpdateScheduleEvidence,requireWindowsFleetUpdateScheduleDetails} from './windows-update-schedule-browser.mjs';
 const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8'),id='update_'+'9'.repeat(32);
 function setup(profile='standalone',fixture=createWindowsUpdateScheduleFixture(profile)){
  const base=windowsUpdateJobsOrigin,state={blocked:[],external:[]},prefix='/api/devices/'+fixture.device.id+'/windows-update-jobs';
@@ -196,4 +199,52 @@ test('fleet behavioral gate rejects omitted or altered triage boundaries even wi
   const altered=fleetDetails();altered[key]=typeof altered[key]==='boolean'?!altered[key]:altered[key]+1;assert.throws(()=>requireWindowsFleetUpdateScheduleDetails(altered),key);
  }
  for(const invalid of [null,undefined,false,[],{}])assert.throws(()=>requireWindowsFleetUpdateScheduleDetails(invalid));
+});
+
+// Inert actual production DOM and installed Playwright locator/selector semantics.
+// No browser, layout, screenshot, listener, network or native acceptance claim.
+test('fleet triage exact-pair row selectors stay relative to each row in EN/DE',async()=>{
+ const require=createRequire(new URL('../../web/package.json',import.meta.url)),{JSDOM}=require('jsdom');
+ const playwrightRoot=path.dirname(require.resolve('playwright-core/package.json'));
+ const {source}=require(path.join(playwrightRoot,'lib/generated/injectedScriptSource.js'));
+ const {Locator}=require(path.join(playwrightRoot,'lib/client/locator.js'));
+ const {getByRoleSelector}=require(path.join(playwrightRoot,'lib/utils/isomorphic/locatorUtils.js'));
+ const built=await require('esbuild').build({stdin:{contents:`
+  import {createRoot} from 'react-dom/client';
+  import {WindowsFleetUpdateTriage} from './windows-fleet-update-triage';
+  import {groupFleetUpdates} from './windows-fleet-update-triage-resource';
+  import {setLocale} from './i18n';
+  window.mount=(fixture,locale)=>{
+   setLocale(locale,false);
+   const reports=[fixture.inventory,fixture.secondInventory].map(value=>({...value,started:{mono:performance.now(),wall:Date.now()},accepted:{mono:performance.now(),wall:Date.now()}}));
+   createRoot(document.getElementById('root')).render(<WindowsFleetUpdateTriage devices={[fixture.device,fixture.secondDevice]} selected={null} onSelect={()=>{}} triage={{reports,groups:groupFleetUpdates(reports),hasRead:true,loading:false,read:()=>{},clear:()=>{}}}/>);
+  };`,resolveDir:fileURLToPath(new URL('../../web/src/',import.meta.url)),loader:'tsx'},outdir:'inert-memory-only',bundle:true,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},write:false,logLevel:'silent'});
+ assert.ok(exerciseWindowsFleetUpdateSchedule.toString().includes('windowsFleetUpdateTriageRow(triageRows,page,selection,locale)'));
+ for(const locale of ['en','de']){
+  const fixture=createWindowsFleetUpdateScheduleFixture();
+  const dom=new JSDOM('<!doctype html><html><body><section class="windows-fleet-update-worklist"><div id="root"></div></section></body></html>',{url:'https://synthetic.invalid',runScripts:'outside-only',pretendToBeVisual:true});
+  try{
+   const window=dom.window;window.fetch=()=>{throw new Error('Inert selector regression forbids requests')};Object.assign(window,{TextEncoder,TextDecoder,structuredClone});
+   window.eval(built.outputFiles.find(file=>file.path.endsWith('.js')).text);window.mount(fixture,locale);
+   for(let attempt=0;attempt<100&&!window.document.querySelector('.windows-fleet-update-triage-list>li');attempt++)await new Promise(resolve=>setTimeout(resolve,10));
+   // JSDOM lacks pseudo-element styles; this fixture defines no pseudo content.
+   const computed=window.getComputedStyle.bind(window);window.getComputedStyle=element=>computed(element);
+   window.module={exports:{}};window.eval(source+'\nthis.injected=new InjectedScript(window,{isUnderTest:true,sdkLanguage:"javascript",testIdAttributeName:"data-testid",stableRafCount:1,browserName:"chromium",customEngines:[]});');
+   const frame={_platform:{}},page={getByRole:(role,options)=>new Locator(frame,getByRoleSelector(role,options))};
+   const triage=new Locator(frame,'.windows-fleet-update-worklist').locator('.windows-fleet-update-triage'),rows=triage.locator('.windows-fleet-update-triage-list > li');
+   const query=locator=>window.injected.querySelectorAll(window.injected.parseSelector(locator._selector),window.document);
+   assert.equal(query(rows).length,2);
+   const matched=[];
+   for(const selection of [fixture.selection,fixture.secondSelection]){
+    const options={name:(locale==='de'?'Meldende Geräte prüfen':'Review reporting devices')+`: ${selection.updateId} · rev. ${selection.revision}`,exact:true};
+    assert.equal(query(triage.getByRole('button',options)).length,1);
+    assert.equal(query(rows.filter({has:triage.getByRole('button',options)})).length,0,'Original ancestor-scoped locator must reproduce zero rows');
+    const found=query(windowsFleetUpdateTriageRow(rows,page,selection,locale));assert.equal(found.length,1);
+    assert.equal(found[0].querySelector('button').getAttribute('aria-label'),options.name);
+    assert.ok(found[0].textContent.includes('KB1000000'));assert.equal(found[0].querySelector('details').open,false);matched.push(found[0]);
+    const absent={...selection,revision:selection.revision+100};assert.equal(query(windowsFleetUpdateTriageRow(rows,page,absent,locale)).length,0);
+   }
+   assert.notEqual(matched[0],matched[1],'Same display metadata must retain two exact-pair rows');
+  }finally{dom.window.close();}
+ }
 });

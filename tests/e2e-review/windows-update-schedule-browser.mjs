@@ -139,6 +139,12 @@ export const windowsFleetUpdateScheduleCaseName='Synthetic Windows fleet shared 
 export const windowsFleetUpdateScheduleDisclosure=windowsBackgroundUpdateScheduleDisclosure+' Temporary fleet window with separate per-device approval. Explicit cached inventory GETs group exact GUID/revision pairs; shared KB labels never merge them or grant readiness. The second device has an independently invented saved revoked schedule and receives GETs only; no real API request or mutation.';
 export const windowsFleetUpdateScheduleScenes=Object.freeze(['cached-triage','shared-window-review','per-device-summary']);
 
+// Playwright evaluates `has` from each candidate row. Keep the inner locator
+// relative to that row rather than including its ancestor triage section.
+export function windowsFleetUpdateTriageRow(rows,page,selection,locale){
+ return rows.filter({has:page.getByRole('button',{name:(locale==='de'?'Meldende Geräte prüfen':'Review reporting devices')+`: ${selection.updateId} · rev. ${selection.revision}`,exact:true})});
+}
+
 /** Reuse exact first-device scheduling. The other device is read-only saved
  * evidence with separate ID/revision/digest, never an automatically approved peer. */
 export function createWindowsFleetUpdateScheduleFixture(){
@@ -185,7 +191,7 @@ export async function exerciseWindowsFleetUpdateSchedule({page,expect,base,fixtu
  await expect(triage.getByRole('status')).toHaveText(de?'Gelesene Berichte: 2/2 · Teilweise / gekürzt: 0 · Veraltet: 0 · Nicht verfügbar: 0':'Reports read: 2/2 · Partial / truncated: 0 · Stale: 0 · Unavailable: 0');
  await expect(triage).toContainText(de?'Leere Ergebnisse belegen keine Konformität':'Empty results do not prove compliance');
  for(const selection of [fixture.selection,fixture.secondSelection]){
-  const row=triageRows.filter({has:reviewPair(selection)});await expect(row).toContainText(de?'Gemeldet: 1 · Heruntergeladen: 1 · Herstellerschweregrad: Kritisch':'Reported: 1 · Downloaded: 1 · Vendor severity: Critical');await expect(row).toContainText('KB1000000');await expect(row.locator('details')).not.toHaveAttribute('open');
+  const row=windowsFleetUpdateTriageRow(triageRows,page,selection,locale);await expect(row).toContainText(de?'Gemeldet: 1 · Heruntergeladen: 1 · Herstellerschweregrad: Kritisch':'Reported: 1 · Downloaded: 1 · Vendor severity: Critical');await expect(row).toContainText('KB1000000');await expect(row.locator('details')).not.toHaveAttribute('open');
  }
  await expect(triage.locator('.windows-inventory-scope')).not.toHaveAttribute('open');
  expect(fixture.fleetInventoryReads).toEqual({first:1,second:1});expect(fixture.updateReads).toEqual({current:0,history:0,exact:0});expect(fixture.secondUpdateReads).toEqual({current:0,history:0,exact:0});
