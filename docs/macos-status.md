@@ -136,6 +136,14 @@ and [protected sender](macos-read-inventory-sender.md) remain separate reviewed
 contracts. Their earlier inactive-slice notes are superseded only by this explicit
 runtime composition, not by broader collection or authority.
 
+## Inactive bounded log contract
+
+The [bounded log-window contract](macos-log-window-contract.md) prepares canonical
+internal requests and projections with synthetic fixtures only. It adds no Apple
+raw-format parser, native provider, content grant, runtime route or UI. Actual
+Apple flags/schema and visibility under the intended non-admin identity remain
+unverified; log collection remains unavailable.
+
 ## Remaining scopes and native gates
 
 Log content, service actions, package changes, unattended installation and software
