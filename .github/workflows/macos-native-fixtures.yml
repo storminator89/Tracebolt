@@ -56,8 +56,6 @@ jobs:
       GOWORK: 'off'
       CGO_ENABLED: '0'
       TRACEBOLT_RUNNER_LABEL: ${{ matrix.runner }}
-      TRACEBOLT_RUNNER_OS: ${{ runner.os }}
-      TRACEBOLT_RUNNER_ARCH: ${{ runner.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,6 +69,9 @@ jobs:
       - name: Verify locked Go dependencies
         run: go mod download && go mod verify
       - name: Execute temporary-file and synthetic fixtures only
+        env:
+          TRACEBOLT_RUNNER_OS: ${{ runner.os }}
+          TRACEBOLT_RUNNER_ARCH: ${{ runner.arch }}
         run: python3 tests/macosfixtures/run.py
       - name: Keep fixture result metadata only
         if: ${{ always() && !cancelled() }}
