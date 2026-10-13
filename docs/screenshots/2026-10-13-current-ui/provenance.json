@@ -1,0 +1,166 @@
+{
+  "sourceCommit": "992b8d8c9d9693a97bd63301a3c147e1b2681357",
+  "sourceTree": "7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c",
+  "captureDate": "2026-10-13",
+  "workflowRun": "https://github.com/storminator89/Tracebolt/actions/runs/38369024941",
+  "workflowAttempt": 1,
+  "workflowConclusion": "success",
+  "artifactId": 11799552272,
+  "artifactName": "ui-review-992b8d8c9d9693a97bd63301a3c147e1b2681357",
+  "artifactSha256": "4ea291fd8d364e1c2e8fafd949303a5b9fc285e8b47c01771c7efbb4f628c6f0",
+  "images": [
+    {
+      "file": "resource-history-dark.png",
+      "sha256": "985c669cd59dbeba15205c91259b45cc579f6afe71ea15d7b710fe181d334bac",
+      "originalFile": "synthetic-resource-history-desktop-dark-en.png",
+      "manifestFile": "lan-browser-manifest.json",
+      "manifestSha256": "6e9057fe33558772681f6f2c43b89f70c73cc4750592c270756f8b5b4b061274",
+      "resultsFile": "lan-browser-results.json",
+      "resultsSha256": "b13ad647a7c9093ddf0f34ce7e23d6cbd7978b3f3c9df622b60c7d0327fa86ec",
+      "originalManifestEntry": {
+        "file": "synthetic-resource-history-desktop-dark-en.png",
+        "sourceSha": "992b8d8c9d9693a97bd63301a3c147e1b2681357",
+        "publicSafe": true,
+        "fullPage": false,
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fixtureDisclosure": "Real loopback HTTP-test fixture login and production compiled UI with intercepted invented CPU, memory and root-filesystem history. UI-only evidence; no native telemetry, user VM, collection, external requests, or deployment.",
+        "test": "Synthetic 24-hour resource charts preserve real sample times, missing intervals and protected access"
+      },
+      "testResults": [
+        {
+          "name": "Synthetic 24-hour resource charts preserve real sample times, missing intervals and protected access",
+          "status": "PASS",
+          "durationMs": 8507
+        }
+      ],
+      "pixelReview": {
+        "inspected": true,
+        "originalDimensions": {
+          "width": 1440,
+          "height": 1000
+        },
+        "modified": false,
+        "notes": "Invented fixture names/measurements only; the HTTP-test warning and original observation times remain visible."
+      }
+    },
+    {
+      "file": "log-workspace.png",
+      "sha256": "30223a571b76dc3a98858ef80b1d23353fad83fd98e02427a89a29b5303b5ce1",
+      "originalFile": "synthetic-journal-workspace-desktop-en.png",
+      "manifestFile": "journal-browser-manifest.json",
+      "manifestSha256": "454607741470d45ffe4d5667d36d886287246de714d1791544fa2cb36401b292",
+      "resultsFile": "journal-browser-results.json",
+      "resultsSha256": "fbbc12eca0d7cb41986b51b81e6d72552cd3102701c8cd44404b23ae46a90b45",
+      "originalManifestEntry": {
+        "file": "synthetic-journal-workspace-desktop-en.png",
+        "sourceSha": "992b8d8c9d9693a97bd63301a3c147e1b2681357",
+        "sha256": "30223a571b76dc3a98858ef80b1d23353fad83fd98e02427a89a29b5303b5ce1",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fullPage": false,
+        "publicSafe": true,
+        "fixtureDisclosure": "Entirely invented journal messages admitted through typed cache/store calls and the real operator HTTP-test handler. No host log read, helper, local grant or native journal transport.",
+        "test": "Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state"
+      },
+      "testResults": [
+        {
+          "name": "Explicit content and HTTP acknowledgements gate one lazy journal request and honest pending state",
+          "status": "PASS",
+          "durationMs": 5337
+        }
+      ],
+      "pixelReview": {
+        "inspected": true,
+        "originalDimensions": {
+          "width": 1440,
+          "height": 1000
+        },
+        "modified": false,
+        "notes": "Invented fixture names/measurements only; the HTTP-test warning and original observation times remain visible."
+      }
+    },
+    {
+      "file": "windows-inventory.png",
+      "sha256": "0d8cb54443b5c860fab52b233745a55031c2c44b67d2b4f2e91e0dad17e1b569",
+      "originalFile": "synthetic-windows-inventory-1440-en.png",
+      "manifestFile": "lan-browser-manifest.json",
+      "manifestSha256": "6e9057fe33558772681f6f2c43b89f70c73cc4750592c270756f8b5b4b061274",
+      "resultsFile": "lan-browser-results.json",
+      "resultsSha256": "b13ad647a7c9093ddf0f34ce7e23d6cbd7978b3f3c9df622b60c7d0327fa86ec",
+      "originalManifestEntry": {
+        "file": "synthetic-windows-inventory-1440-en.png",
+        "sourceSha": "992b8d8c9d9693a97bd63301a3c147e1b2681357",
+        "publicSafe": true,
+        "fullPage": false,
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fixtureDisclosure": "Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.",
+        "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads"
+      },
+      "testResults": [
+        {
+          "name": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+          "status": "PASS",
+          "durationMs": 149795
+        }
+      ],
+      "pixelReview": {
+        "inspected": true,
+        "originalDimensions": {
+          "width": 1440,
+          "height": 1000
+        },
+        "modified": false,
+        "notes": "Invented fixture names/measurements only; the HTTP-test warning and original observation times remain visible."
+      }
+    },
+    {
+      "file": "windows-mobile-de.png",
+      "sha256": "3cec27ab58b2bfa22bc1f13a3bcd1379d3e6edbeed78935d9b906acc798ae7b1",
+      "originalFile": "synthetic-windows-overview-390-de.png",
+      "manifestFile": "lan-browser-manifest.json",
+      "manifestSha256": "6e9057fe33558772681f6f2c43b89f70c73cc4750592c270756f8b5b4b061274",
+      "resultsFile": "lan-browser-results.json",
+      "resultsSha256": "b13ad647a7c9093ddf0f34ce7e23d6cbd7978b3f3c9df622b60c7d0327fa86ec",
+      "originalManifestEntry": {
+        "file": "synthetic-windows-overview-390-de.png",
+        "sourceSha": "992b8d8c9d9693a97bd63301a3c147e1b2681357",
+        "publicSafe": true,
+        "fullPage": false,
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "locale": "de",
+        "fixtureDisclosure": "Real loopback HTTP-test fixture login with intercepted invented Windows inventory and resource history in the production UI. UI-only evidence; no native endpoint acceptance, collection, invitation, service installation or external request.",
+        "test": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads"
+      },
+      "testResults": [
+        {
+          "name": "Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads",
+          "status": "PASS",
+          "durationMs": 149795
+        }
+      ],
+      "pixelReview": {
+        "inspected": true,
+        "originalDimensions": {
+          "width": 390,
+          "height": 844
+        },
+        "modified": false,
+        "notes": "Invented fixture names/measurements only; the HTTP-test warning and original observation times remain visible."
+      }
+    }
+  ]
+}
