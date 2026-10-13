@@ -173,6 +173,10 @@ func (s *Store) WindowsMaintenance(ctx context.Context) ([]WindowsMaintenanceSta
 // A confirmed replacement may replace only that device/scope's old identity
 // metadata. Unavailable other identities are never pruned on unrelated writes.
 func (s *Store) ChangeWindowsMaintenance(ctx context.Context, target WindowsMaintenanceTarget, expected uint64, endsAt time.Time, intent string, endID uint64, clock func() time.Time, guard func(time.Time, time.Time) error) (WindowsMaintenanceState, error) {
+	return s.changeWindowsMaintenance(ctx, target, expected, endsAt, intent, endID, clock, guard, nil)
+}
+
+func (s *Store) changeWindowsMaintenance(ctx context.Context, target WindowsMaintenanceTarget, expected uint64, endsAt time.Time, intent string, endID uint64, clock func() time.Time, guard func(time.Time, time.Time) error, group *FleetGroupMaintenanceSelection) (WindowsMaintenanceState, error) {
 	start := endID == 0
 	if !target.Valid() || expected >= MaxWindowsMaintenanceRevision || clock == nil || guard == nil || start && (!validMaintenanceTime(endsAt) || !ValidWindowsMaintenanceIntent(intent)) || !start && (!endsAt.IsZero() || intent != "") {
 		return WindowsMaintenanceState{}, ErrWindowsMaintenance
@@ -187,6 +191,9 @@ func (s *Store) ChangeWindowsMaintenance(ctx context.Context, target WindowsMain
 		return WindowsMaintenanceState{}, ErrWindowsMaintenanceConflict
 	}
 	if err = runPolicyGuards(ctx, []func() error{func() error { return guard(admitted, endsAt) }}); err != nil {
+		return WindowsMaintenanceState{}, err
+	}
+	if err = checkFleetGroupMaintenance(ctx, tx, group, target); err != nil {
 		return WindowsMaintenanceState{}, err
 	}
 	states, err := readWindowsMaintenance(ctx, tx)
@@ -258,6 +265,9 @@ func (s *Store) ChangeWindowsMaintenance(ctx context.Context, target WindowsMain
 	final := clock().UTC()
 	if !validMaintenanceTime(final) || final.Before(now) || !final.Before(next.Windows[0].EndsAt) {
 		return WindowsMaintenanceState{}, ErrWindowsMaintenanceConflict
+	}
+	if err = checkFleetGroupMaintenance(ctx, tx, group, target); err != nil {
+		return WindowsMaintenanceState{}, err
 	}
 	if err = runPolicyGuards(ctx, []func() error{func() error { return guard(final, next.Windows[0].EndsAt) }}); err != nil {
 		return WindowsMaintenanceState{}, err

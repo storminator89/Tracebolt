@@ -15,11 +15,11 @@ function elapsed(anchor: Anchor): number {
 }
 type Data = { view: CompleteUpdateView | null; page: CompleteUpdatePage | null; scanned: number; matches: number };
 const empty = (): Data => ({ view: null, page: null, scanned: 0, matches: 0 });
-export function useCompleteUpdates(deviceId: string, metadataOnly = false, autoResume = true) {
-    const [data, setData] = useState<Data>(empty), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<CompleteFailure | null>(null), [search, setSearch] = useState(''), [, tick] = useState(0);
+export function useCompleteUpdates(deviceId: string, metadataOnly = false, autoResume = true, initialSearch = '') {
+    const [data, setData] = useState<Data>(empty), [loading, setLoading] = useState(false), [recovering, setRecovering] = useState(false), [error, setError] = useState<CompleteFailure | null>(null), [search, setSearch] = useState(initialSearch), [, tick] = useState(0);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), state = useRef<Data>(empty());
     const anchor = useRef<Anchor | null>(null), pageAnchor = useRef<Anchor | null>(null), lastRow = useRef<CachedUpdateRow | null>(null);
-    const query = useRef(''), retryCursor = useRef(''), seenCursors = useRef(new Set<string>());
+    const query = useRef(initialSearch), retryCursor = useRef(''), seenCursors = useRef(new Set<string>());
     const latestServerTime = useRef<string | null>(null);
     const poll = useRef(new InventoryPollClock()), draft = useRef(false);
     const pending = useRef<{ controller: AbortController; timeout: number; started: Anchor } | null>(null);

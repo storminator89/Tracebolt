@@ -161,6 +161,9 @@ func (s *Store) SaveFleetGroup(ctx context.Context, manager, id, name string, me
 	if err != nil {
 		return FleetGroup{}, err
 	}
+	if err = disarmFleetMonitoring(ctx, tx, next, remove); err != nil {
+		return FleetGroup{}, err
+	}
 	if err = guard(); err != nil {
 		return FleetGroup{}, err
 	}

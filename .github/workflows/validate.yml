@@ -641,6 +641,11 @@ jobs:
           node web/scripts/capture-windows-reusable-msi-fixtures.mjs --check
           node web/scripts/capture-windows-software-catalogue-fixtures.mjs --check
           node web/scripts/capture-windows-msi-catalogue-fixtures.mjs --check
+      - name: Linux CVE cached-update review source contracts
+        working-directory: .
+        run: |
+          node web/scripts/capture-linux-cve-update-review.mjs --check
+          node --test web/scripts/linux-cve-update-review-contract.node.mjs
       - name: Production build
         run: npm run build
 
@@ -682,6 +687,14 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/lan-browser.mjs
+      - name: Synthetic Linux CVE cached-update review canonical captures
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node web/scripts/run-linux-cve-update-review-ci.mjs
+          node web/scripts/check-linux-cve-update-review-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic Windows actions, selected updates and exact retirement browser gate
         if: ${{ !cancelled() }}
         env:
@@ -750,7 +763,7 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-event-history-runner.mjs
-      - name: Manual fleet groups and reviewed health apply (16 required screenshots)
+      - name: Fleet groups, reviewed monitoring apply and inheritance (canonical capture matrix)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         env:
@@ -1011,6 +1024,12 @@ jobs:
             artifacts/review/managed-preview-result.json
             artifacts/review/lan-browser-results.json
             artifacts/review/lan-browser-manifest.json
+            artifacts/review/linux-cve-update-review-results.json
+            artifacts/review/linux-cve-update-review-manifest.json
+            artifacts/review/synthetic-linux-cve-update-review-exact-binary-cached-candidate-1440-en.png
+            artifacts/review/synthetic-linux-cve-update-review-exact-binary-cached-candidate-390-en.png
+            artifacts/review/synthetic-linux-cve-update-review-exact-binary-cached-candidate-1440-de.png
+            artifacts/review/synthetic-linux-cve-update-review-exact-binary-cached-candidate-390-de.png
             artifacts/review/windows-full-services-results.json
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json

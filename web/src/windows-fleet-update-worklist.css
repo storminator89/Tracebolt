@@ -29,3 +29,13 @@
 .windows-fleet-update-window-frozen p,.windows-update-fixed-window{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .windows-fleet-update-summary{color:var(--secondary)}
 .windows-fleet-update-outcome{font-weight:500}
+.windows-fleet-update-triage{border-top:1px solid var(--line);padding-top:8px;margin-top:12px;min-width:0;font-size:12px}
+.windows-fleet-update-triage .windows-fleet-update-heading{flex-wrap:wrap;gap:8px}
+.windows-fleet-update-search{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0}
+.windows-fleet-update-search input{min-width:0;max-width:100%;box-sizing:border-box;font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px}
+.windows-fleet-update-triage-list{list-style:none;padding:0;margin:8px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:8px}
+.windows-fleet-update-triage-list>li{border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0;overflow-wrap:anywhere}
+.windows-fleet-update-triage-list button{margin:8px 0;max-width:100%;white-space:normal}
+.windows-fleet-update-triage details{color:var(--secondary);overflow-wrap:anywhere}
+.windows-fleet-update-triage summary{cursor:pointer}
+.windows-fleet-update-triage-list button[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px}

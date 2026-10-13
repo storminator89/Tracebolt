@@ -1,3 +1,5 @@
+import { linuxCVEReviewAuthority } from './linux-cve-update-review';
+import type { LinuxCVEUpdateReview } from './linux-cve-update-review';
 import { useId } from 'react';
 import { Database, Download, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useOperator } from './auth';
@@ -49,12 +51,12 @@ function LinuxCVECoverageDetails({ report, rows, locale }: { report: LinuxCVERes
     </>;
 }
 /** Mounted by the selected device's Security or CVE tab, never both. */
-export function LinuxCVEPanel({ deviceId, sessionKey }: { deviceId: string; sessionKey?: string | number }) {
+export function LinuxCVEPanel({ deviceId, sessionKey, onReviewUpdates }: { deviceId: string; sessionKey?: string | number; onReviewUpdates?: (value: LinuxCVEUpdateReview) => void }) {
     const operator = useOperator(), [locale] = useLocale();
     if (!operator || operator.mode !== 'lan' || !operator.authenticated) return <p>{copy[locale].access}</p>;
-    return <LinuxCVESession key={`${deviceId}:${String(sessionKey ?? '')}:${operator.expiresAt ?? ''}`} deviceId={deviceId} sessionExpiresAt={operator.expiresAt} authorityKey={JSON.stringify([operator.loginMode ?? 'shared', operator.actorId ?? null, operator.capabilities ?? ['read'], operator.hasExplicitMetadata === true])} canWrite={operator.hasExplicitMetadata === true && operator.loginMode === 'shared' && operator.actorId === null && operator.capabilities?.length === 1 && operator.capabilities[0] === 'read'}/>;
+    return <LinuxCVESession key={`${deviceId}:${String(sessionKey ?? '')}:${operator.expiresAt ?? ''}`} deviceId={deviceId} onReviewUpdates={onReviewUpdates} sessionExpiresAt={operator.expiresAt} authorityKey={linuxCVEReviewAuthority(operator)} canWrite={operator.hasExplicitMetadata === true && operator.loginMode === 'shared' && operator.actorId === null && operator.capabilities?.length === 1 && operator.capabilities[0] === 'read'}/>;
 }
-function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt, authorityKey }: { deviceId: string; canWrite: boolean; sessionExpiresAt: string | null; authorityKey: string }) {
+function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt, authorityKey, onReviewUpdates }: { deviceId: string; canWrite: boolean; sessionExpiresAt: string | null; authorityKey: string; onReviewUpdates?: (value: LinuxCVEUpdateReview) => void }) {
     const [locale] = useLocale(), labels = copy[locale], resource = useLinuxCVE(deviceId, canWrite, sessionExpiresAt, authorityKey), heading = useId(), fileId = useId();
     const view = resource.view, report = view?.report, activeReport = view?.status === 'evaluated' && report;
     const disabled = resource.loading || resource.detailLoading !== null || resource.writing !== null || resource.error === 'session';
@@ -97,7 +99,7 @@ function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt, authorityKey }:
                         const page = selected ? binaryPage : null;
                         return <div key={row.installedSourceVersion}>
                             {group.length > 1 && <p>{labels.installed}: {row.installedSourceVersion}</p>}
-                            <ul className="linux-cve-binaries">{(page ? page.page.items : row.binaries).map(binary => <li key={`${binary.name}:${binary.architecture}`}><span>{binary.name}:{binary.architecture}</span><span>{binary.version}</span></li>)}</ul>
+                            <ul className="linux-cve-binaries">{(page ? page.page.items : row.binaries).map(binary => <li key={`${binary.name}:${binary.architecture}`}><span>{binary.name}:{binary.architecture}</span><span>{binary.version}</span>{onReviewUpdates && <button type="button" className="button small" disabled={disabled || Boolean(stale)} title={stale ? (locale === 'de' ? 'Zuerst aktuelle Warnungsbelege laden.' : 'Refresh warning evidence first.') : undefined} onClick={() => { const context = resource.reviewBinary(row, binary); if (context) onReviewUpdates(context); }}>{locale === 'de' ? 'Paketupdates prüfen' : 'Review package updates'}<span className="sr-only">: {binary.name}:{binary.architecture} {binary.version}</span></button>}</li>)}</ul>
                             {item && (page ? <div className="linux-cve-binary-pages"><p aria-live="polite">{labels.binaryRange}: {format(page.page.fromBinary + (page.page.items.length ? 1 : 0))}–{format(page.page.nextBinary)} / {format(page.page.binaryCount)}</p><nav aria-label={`${labels.binaryPages}: ${row.cveId} ${row.sourcePackage} ${row.installedSourceVersion}`}><button type="button" className="button small" disabled={disabled || page.number === 1} onClick={() => void resource.readBinaries(undefined, 'first')}>{labels.firstPage}</button><button type="button" className="button small" disabled={disabled || page.history.length === 0} onClick={() => void resource.readBinaries(undefined, 'previous')}>{labels.previousPage}</button><button type="button" className="button small" disabled={disabled || page.page.exhausted} onClick={() => void resource.readBinaries(undefined, 'next')}>{labels.nextPage}</button></nav></div> : <button type="button" className="button small" disabled={disabled} onClick={() => void resource.readBinaries(item.checkIndex)}>{labels.allBinaries.replace('{count}', format(item.binaryCount))}</button>)}
                         </div>;
                     })}{!findingsPage && group.some(row => row.binariesTruncated) && <p>{labels.binariesOmitted}</p>}</details>

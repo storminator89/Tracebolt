@@ -3,9 +3,10 @@
 The immediate goal is useful daily administration: finish the current inventory
 and fleet workflows, then expand job results, monitoring and controlled
 software/update management. Close remaining Admin data gaps alongside that work.
-Validate fresh native installation before publishing compatible Windows artifacts.
-Current development and the older downloadable
-preview are described in [Windows status](windows-status.md).
+Unsigned [Windows preview.2](windows-status.md#published-preview) is available
+for fresh x64 Read admin setup, with narrow hosted acceptance. Current source
+features and their separate release limits are described in
+[Windows status](windows-status.md).
 
 There are no existing user installations. Migration, binary upgrade and
 reconsent are not delivery gates for this fresh-install target. Integrated
@@ -16,8 +17,8 @@ remote desktop is deferred.
 - [Complete caller-visible process snapshots](windows-full-processes-contract.md),
   Win32 services and HKLM 32/64 machine software
   generations, with bounded search/paging
-- Fleet hostname/IP search, resource observations and independent optional
-  disk/CPU/RAM/selected-service checks
+- Fleet hostname/IP search, attention-first filtering, resource observations and
+  independent optional disk/CPU/RAM/selected-service checks
 - [Manual fleet groups and reviewed one-time Windows disk/CPU/RAM settings](fleet-groups-health.md)
 - [Selected-account HKCU and Store software capture](windows-selected-user-software.md),
   with separate consent and an explicit normal-user foreground helper
@@ -34,19 +35,35 @@ remote desktop is deferred.
   remains separately optional
 - [Selected cached Windows update jobs](windows-selected-update-jobs.md), with
   independently configured device bindings, exact per-device reviews and named
-  approvals, saved outcomes, and [fresh background UTC scheduling](windows-scheduled-background-updates.md); native acceptance pending
+  approvals, saved outcomes and [fresh background UTC scheduling](windows-scheduled-background-updates.md)
+- [Reusable cached-update jobs](windows-reusable-cached-update-jobs.md) in a fresh
+  paired MSI/WUA profile: explicit retirement of a successfully settled result
+  permits a later independently reviewed job; failed or uncertain outcomes stay blocked
 - [Windows incident acknowledgement](windows-incident-inbox.md),
   [planned maintenance](windows-maintenance.md) and separately approved
   [notifications](windows-notifications.md)
 - [Managed MSI fleet delivery](windows-fleet-managed-msi.md),
-  [saved exact worklists](windows-saved-msi-worklists.md), and
-  [bounded scheduled installation](windows-scheduled-managed-msi.md)
+  [saved exact worklists](windows-saved-msi-worklists.md) with staged approvals and
+  per-device results, and [bounded scheduled installation](windows-scheduled-managed-msi.md)
+- [Fresh multi-package MSI catalogue and guided package review](windows-multi-package-msi-catalogue.md):
+  up to four retained packages within one shared 128 MiB budget; package identity,
+  terms, native and publisher evidence still need explicit review
 - [Selected-service action receipts and explicit fresh broker setup](windows-action-provisioning.md),
   with separate authority; native activation and action acceptance remain pending
 
-Implementation is not a release or native provider-access result. The
+These workflows require matching source and their own explicit setup/consent.
+Optional MSI, WUA and service-action native acceptance remains pending. Source
+implementation does not establish release or native provider-access coverage. The
 [individual scope guides](windows-read-admin-setup.md) define the coverage and
 exclusions; do not treat a complete registration list as every installed app.
+
+## Ongoing group monitoring
+
+[Ongoing group monitoring](fleet-group-monitoring.md) adds explicitly reviewed
+disk/CPU/RAM assignments for exact existing Windows members. Only opted-in
+assignments follow future definition changes. New or re-added members need fresh
+opt-in; a per-device policy Save detaches that metric. This is implemented in
+source and is not part of published Windows preview.2.
 
 ## Missing Admin data
 
@@ -77,15 +94,20 @@ The remaining data areas below can progress independently.
 
 ## Native acceptance and release
 
-Before a Windows release, validate the exact matching Setup, service,
-manager and dashboard on fresh Windows targets. The
-[Windows 11 checklist](windows11-acceptance-matrix.md) covers real installation,
-human UAC, hidden invitation/identity approval, service-token reads and actual
-manager/browser data. A hosted Server 2025 result is not Windows 11 evidence.
+Preview.2 passed three TLS-loopback Server 2025 x64 packaged-GUI cases:
+install/service removal, hidden-input cancellation and pending-transport
+interruption. Service removal retains files, keys and state. Use its
+[attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+for the exact artifacts and matching manager/frontend source.
 
-Keep source CI, browser fixtures and native results distinct. Reboot/sleep,
-signing, ARM64 and complete removal need explicit evidence. Do not reuse the
-published five-scope approval as consent for the current Read admin profile.
+Next, validate the matching Setup, service, real Linux manager and shared
+dashboard on fresh Windows targets. The
+[Windows 11 checklist](windows11-acceptance-matrix.md) covers human UAC, hidden
+invitation/identity approval, service-token reads and actual manager/browser data.
+Windows 11, complete providers and optional actions are not covered by the hosted
+Server subset. Reboot/sleep, signing, ARM64 and complete removal remain separate
+gates. Keep source CI, browser fixtures and native results distinct; fresh Read
+admin consent does not authorize optional execution scopes.
 
 ## Next management workflows
 
@@ -98,11 +120,17 @@ fresh review, separate unchecked approval and independently saved outcome.
 Current fresh background profiles and legacy foreground profiles keep their
 separate consent and activation requirements.
 
-Broader update policies, automatic responses and exact-target actions still need
-their own bounded design, reviewed authority, explicit approval, least-privilege
-execution and durable one-use records. Neither groups nor monitoring grant
-permissions. Local Tracebolt restart is not arbitrary remote control. Remote
-desktop remains deferred.
+For reusable WUA, finish native validation of fresh paired setup, successful-result
+retirement and later independently approved jobs. Unresolved or failed outcomes
+still block replacement; retirement never refreshes grant expiry or retries a job.
+Validate ongoing group monitoring and the guided MSI/fleet workflows on exact
+native artifacts before release.
+
+Broader update policies and automatic responses still need their own bounded
+design, reviewed authority, explicit approval, least-privilege execution and
+durable one-use records. Groups and monitoring do not grant endpoint permissions.
+Local Tracebolt restart is not arbitrary remote control. Remote desktop remains
+deferred.
 
 ## Rules for every feature
 

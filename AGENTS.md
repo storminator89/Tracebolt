@@ -274,7 +274,7 @@ missing material rather than inventing credentials or weakening protection.
 - Manual fleet groups and reviewed one-setting Windows health apply are manager-side
   organizational source features. Read `docs/fleet-groups-health.md`. Preserve
   private stable original identity bindings, current admission and exact revisions.
-  Groups never grant scope or automatic inheritance; sequential writes stop on
+  Groups never grant scope or inheritance by membership alone. Separate explicit ongoing monitoring uses `docs/fleet-group-monitoring.md`; preserve exact opt-ins, original identity, atomic manual override and enrollment-to-operator leases. One-shot sequential writes stop on
   conflict/uncertainty and never retry an unconfirmed POST.
 - Windows system-volume capacity health is a separate default-off manager policy.
   Read `docs/windows-capacity-health.md` before changing its thresholds or lifecycle.
@@ -291,7 +291,10 @@ missing material rather than inventing credentials or weakening protection.
   separately approved Windows notification dispatch, never incidents/evidence,
   source policies/history or host activity. Preserve in-flight result truth and
   consume queued/retry work without end-of-window backlog. Never join independent
-  snapshots by mutable device ID.
+  snapshots by mutable device ID. For the one-time exact group workflow read
+  `docs/fleet-group-maintenance.md`; preserve the additive group revision/member
+  guard inside each existing maintenance transaction, fixed common end, explicit
+  unchecked review consent, partial outcomes and GET-only uncertain reconciliation.
 - Windows incident notifications are separate default-off source policies. Read
   `docs/windows-notifications.md` before changing exact identity/domain keys,
   recipient-bound approval, atomic transition capture or the Windows claim adapter.

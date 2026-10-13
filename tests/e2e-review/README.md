@@ -395,20 +395,27 @@ part of this source-only scenario.
 
 ## Shared Windows Update fleet window
 
-The existing `windows-service-actions-runner.mjs` also requires two common-window
+The existing `windows-service-actions-runner.mjs` also requires three cached-triage/common-window
 scenes from `windows-update-schedule-browser.mjs`, each in English/German at
-1440×1000 and 390×844. The first shows the frozen exact UTC window in an
-initially unchecked per-device prospective review. The second shows a scheduled
+1440×1000 and 390×844. The first reads existing cached inventory explicitly,
+keeps matching KB/title metadata in two distinct GUID/revision pairs, then
+filters the frozen list to reporting devices without readiness or approval.
+Opening one device rereads inventory and keeps that exact pair fixed. The second
+shows the frozen exact UTC window in an initially unchecked per-device
+prospective review. After explicitly showing all frozen devices, the third shows a scheduled
 first device and a separately saved revoked/blocked second device. Opening the
 second device is deliberate and GET-only; selecting the window and approving
 the first device cannot advance it. Reopening the first device reads its exact
 saved job, with no replay.
 
-The eight `synthetic-windows-fleet-update-schedule-*.png` captures use the same
+The twelve `synthetic-windows-fleet-update-schedule-*.png` captures use the same
 viewport-only screenshot helper and exact source-SHA manifest. They are required
 in addition to all existing foreground/background scheduling and service-action
 checks, under the unchanged 120-second runner budget. Existing CI artifact paths
-already include them; there is no new workflow or browser-launch route. All new
+already include them; there is no new workflow or browser-launch route. The
+shared scene manifest drives the runner allowlist and exact evidence checker;
+the behavioral checker additionally requires GET-only triage, exact pair
+selection, fresh selected-device inventory and unchanged per-device approval. All new
 scene requests are intercepted. The single synthetic scheduling POST changes
 only the in-memory fixture; no real API mutation, grant, native installation or
 release is established. Inert source checks do not produce screenshots or prove

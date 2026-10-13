@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 import subprocess
 import tempfile
@@ -44,6 +45,7 @@ UI_SHARED = ('web/src/App.tsx', 'web/src/api.ts', 'web/src/types.ts', 'web/src/a
 # Longest prefixes first avoid software/history, MSI and service/action ambiguity.
 FLOWS = {
     'lan': 'tests/e2e-review/lan-browser.mjs',
+    'linux-cve-update-review': 'web/scripts/run-linux-cve-update-review-ci.mjs',
     'shell': 'tests/e2e-review/run.mjs',
     'windows-mutation-coexistence': 'tests/e2e-review/windows-mutation-coexistence-runner.mjs',
     'windows-software-history': 'tests/e2e-review/windows-software-history-runner.mjs',
@@ -77,6 +79,13 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'web/scripts/check-linux-cve-update-review-evidence.mjs': {'linux-cve-update-review'},
+    'web/scripts/capture-linux-cve-update-review.mjs': {'linux-cve-update-review'},
+    'web/scripts/run-linux-cve-update-review-ci.mjs': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-contract.mjs': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-scenes.json': {'linux-cve-update-review'},
+    'web/scripts/linux-cve-update-review-contract.node.mjs': {'linux-cve-update-review'},
+
     'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
     'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi'},
@@ -117,7 +126,7 @@ ALIASES = {'windowsmanagedmsiworklist': ['windows-fleet-msi'],
            'windowshardware': ['lan'], 'windowssession': ['lan'], 'windowsadapter': ['lan'],
            'windowsserviceaction': ['windows-service-actions'], 'windowsservicehealth': ['lan'], 'windowsservice': ['lan'], 'proactive': ['lan'],
            'applicationcheck': ['lan'], 'alarm': ['lan'], 'certificate': ['lan'], 'resourcehistory': ['lan'],
-           'linuxcve': ['lan'], 'investigation': ['lan'],'windowsmanagedmsi': ['windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
+           'linuxcve': ['lan', 'linux-cve-update-review'], 'investigation': ['lan'],'windowsmanagedmsi': ['windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
            'windowsmutationfence': ['windows-mutation-coexistence'],
            'windowsaction': ['windows-service-actions'], 'windowssoftware': ['windows-service-actions'],
            'windowsuser': ['windows-user-software'], 'windowshistory': ['windows-event-history'],
@@ -313,6 +322,63 @@ def run(args, cwd=ROOT, stage='selected-check', env=None):
         raise ValueError('selected check failed; raw fixture output withheld')
 
 
+
+def vitest_failure_location(path):
+    """Only source-known file coordinates and numeric assertion positions leave CI."""
+    try:
+        allowed = {str(file.resolve()): file.relative_to(ROOT).as_posix()
+                   for directory in ['web/src', 'web/scripts', 'tests/e2e-review']
+                   for file in (ROOT / directory).rglob('*.test.*')
+                   if file.is_file() and not file.is_symlink()
+                   and PATH.fullmatch(file.relative_to(ROOT).as_posix())}
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            if os.fstat(stream.fileno()).st_size > 16 << 20:
+                return None
+            raw = stream.read((16 << 20) + 1)
+        if len(raw) > 16 << 20:
+            return None
+        value = reporter.decode(raw)
+        rows = value.get('testResults') if type(value) is dict else None
+        if type(rows) is not list or not 0 < len(rows) <= 2048:
+            return None
+        seen, failed = set(), []
+        for row in rows:
+            if (type(row) is not dict or row.get('name') not in allowed
+                    or row['name'] in seen or row.get('status') not in ['passed', 'failed']
+                    or type(row.get('assertionResults')) is not list
+                    or len(row['assertionResults']) > 50000):
+                return None
+            seen.add(row['name'])
+            indices = []
+            for i, assertion in enumerate(row['assertionResults'], 1):
+                if type(assertion) is not dict or assertion.get('status') not in ['passed', 'failed', 'pending', 'todo', 'skipped', 'disabled']:
+                    return None
+                if assertion['status'] == 'failed':
+                    indices.append(i)
+            if row['status'] == 'failed':
+                coordinates = ','.join(map(str, indices[:10])) or 'runner-or-hook'
+                failed.append(allowed[row['name']] + ' assertions=' + coordinates)
+            elif indices:
+                return None
+        return '; '.join(sorted(failed)[:20]) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_vitest(args, cwd=ROOT, stage='selected-ui-check'):
+    # Reporter output may contain raw values. Keep it outside artifact directories
+    # and never upload/print it. Existing process exit status remains authoritative.
+    with tempfile.TemporaryDirectory(prefix='tracebolt-private-vitest-') as private:
+        report = Path(private) / 'results.json'
+        try:
+            run([*args, '--reporter=json', '--outputFile=' + str(report)], cwd, stage=stage)
+        except ValueError:
+            location = vitest_failure_location(report)
+            if location is not None:
+                print('FAIL UI location: ' + location, flush=True)
+            raise
+
+
 def go_checks(plan):
     allowed = reporter.load_allowlist()
     for package, roots in CRITICAL.items():
@@ -351,25 +417,28 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'linux-cve-update-review' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
+        run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
     if 'windows-service-actions' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-windows-msi-catalogue-fixtures.mjs', '--check'], stage='ui-msi-catalogue-contract')
     run(['npm', 'run', 'test:environments'], ROOT / 'web', stage='ui-environment-contract')
     if plan['broadWeb']:
-        run(['./node_modules/.bin/vitest', 'run', '--maxWorkers=1'], ROOT / 'web', stage='ui-all-interactions')
-        run(['./web/node_modules/.bin/vitest', 'run', '--config', 'tests/e2e-review/vitest.config.mts'], stage='ui-independent-interactions')
-        run(['./web/node_modules/.bin/vitest', 'run', '--config', 'tests/e2e-review/v3-dom.config.mts'], stage='ui-v3-dom')
+        run_vitest(['./node_modules/.bin/vitest', 'run', '--maxWorkers=1'], ROOT / 'web', stage='ui-all-interactions')
+        run_vitest(['./web/node_modules/.bin/vitest', 'run', '--config', 'tests/e2e-review/vitest.config.mts'], stage='ui-independent-interactions')
+        run_vitest(['./web/node_modules/.bin/vitest', 'run', '--config', 'tests/e2e-review/v3-dom.config.mts'], stage='ui-v3-dom')
     else:
-        run(['./node_modules/.bin/vitest', 'run', 'src/auth.test.tsx', '--maxWorkers=1'], ROOT / 'web', stage='ui-authorization')
+        run_vitest(['./node_modules/.bin/vitest', 'run', 'src/auth.test.tsx', '--maxWorkers=1'], ROOT / 'web', stage='ui-authorization')
         if plan['web']:
             changed_tests = [path for path in plan['web'] if '.test.' in path]
             if changed_tests:
-                run(['./node_modules/.bin/vitest', 'run', '--maxWorkers=1', *changed_tests], ROOT / 'web', stage='ui-changed-tests')
+                run_vitest(['./node_modules/.bin/vitest', 'run', '--maxWorkers=1', *changed_tests], ROOT / 'web', stage='ui-changed-tests')
             # Vite resolves actual imports and dependent tests (not filename guesses).
-            run(['./node_modules/.bin/vitest', 'related', '--run', '--passWithNoTests', '--maxWorkers=1', *plan['web']], ROOT / 'web', stage='ui-related-interactions')
+            run_vitest(['./node_modules/.bin/vitest', 'related', '--run', '--passWithNoTests', '--maxWorkers=1', *plan['web']], ROOT / 'web', stage='ui-related-interactions')
             for config, stage in [('vitest.config.mts', 'ui-related-independent'), ('v3-dom.config.mts', 'ui-related-v3-dom')]:
-                run(['./web/node_modules/.bin/vitest', 'related', '--run', '--passWithNoTests',
+                run_vitest(['./web/node_modules/.bin/vitest', 'related', '--run', '--passWithNoTests',
                      '--config', 'tests/e2e-review/' + config, *['web/' + path for path in plan['web']]], stage=stage)
     print('PASS: UI authorization and affected interaction checks; not full browser evidence.')
 
@@ -377,7 +446,7 @@ def web_checks(plan):
 # Existing full gate validators are reused where available. Other executable
 # runners enforce exact captures internally; require their positive report too.
 BROWSER_REPORTS = {name: name + '-results.json' for name in FLOWS if name.startswith('windows-') or name == 'fleet-groups'}
-BROWSER_REPORTS.update({'lan': 'lan-browser-results.json', 'shell': 'results.json',
+BROWSER_REPORTS.update({'linux-cve-update-review': 'linux-cve-update-review-results.json', 'lan': 'lan-browser-results.json', 'shell': 'results.json',
     'managed': 'managed-preview-result.json', 'enrollment': 'enrollment-browser-results.json',
     'conditional': 'conditional-browser-results.json', 'v3': 'v3-mvp-browser-results.json',
     'fleet-identity': 'fleet-identity-browser-results.json', 'endpoint-identity': 'endpoint-browser-results.json',
@@ -460,6 +529,8 @@ def browser_report(flow, sha):
         raise ValueError('invalid browser report')
     value = reporter.decode(path.read_bytes())
     validate_browser_report(flow, value, sha)
+    if flow == 'linux-cve-update-review':
+        run(['node', 'web/scripts/check-linux-cve-update-review-evidence.mjs', sha], stage='browser-cve-review-evidence')
     if flow == 'windows-fleet-msi':
         catalogue = ROOT / 'artifacts/review/windows-msi-catalogue-results.json'
         if catalogue.is_symlink() or catalogue.stat().st_size > 2 << 20:
@@ -521,6 +592,246 @@ def fleet_msi_failure_location(sha):
         return None
 
 
+# Closed coordinates from lan-browser.mjs and its reviewed case modules. These
+# literals, never report prose or nested diagnostics, are the only output labels.
+LAN_FAILURE_CASES = {
+    'Automatic certificate renewal metadata remains explicit and bounded': 'certificate-renewal',
+    'Synthetic presentation-only service actions show exact review and uncertain outcomes without approval or execution': 'service-action-display',
+    'Real HTTP-test login defaults to English, blocks protected data and retains a localized transport warning': 'login-warning',
+    'Malformed or unavailable bootstrap fails closed and explicit retry recovers without fake access': 'bootstrap',
+    'Actual password rejection and repeated login clear the draft, use one request and keep session cookies out of script storage': 'password-rejection',
+    'Authenticated LAN contract shows unknown awaiting-agent data with no demo fleet or healthy empty-state claim': 'awaiting-agent',
+    'Visible device tabs refresh synthetic metadata without remounts, preserve sample time and stop at access loss': 'live-metadata',
+    'Read-only application status separates retained HTTP and verified-leaf expiry, ages samples and clears access loss': 'application-status',
+    'Synthetic read-only alarm status preserves snapshot meaning and clears interrupted access without replay': 'alarm-status',
+    'Synthetic alarm setup renders explicit configuration and test consent with intercepted fake sender states': 'alarm-settings',
+    'Synthetic application check setup saves inert drafts and requires exact manager-origin enable consent': 'application-settings',
+    'Synthetic Windows inventory shares device charts and explicit enrollment consent without Linux reads': 'windows-inventory',
+    'Synthetic 24-hour resource charts preserve real sample times, missing intervals and protected access': 'resource-history',
+    'Synthetic capability source states preserve denied, failed and stale reads without profile-only warnings': 'capabilities',
+    'Synthetic retained journal browsing opens approved services directly and pages sparse searches without export': 'journal-browse',
+    'Synthetic service-log AI requires independent capture/export scope and expires cited findings without real collection': 'journal-ai',
+    'Synthetic selected package updates retain unavailable scope, exact simulation review and unknown outcomes without host changes': 'package-updates',
+    'Synthetic proactive AI setup requires scoped approval and reads durable unconfirmed results without running a provider': 'proactive-ai',
+    'Synthetic read-only Investigations distinguish retained warnings, unknown assessment and expired current evidence': 'investigations',
+    'Synthetic CVE continuation retains bounded warnings, stops changed or blocked work and rejects late scope responses': 'cve-continuation',
+    'Synthetic CVE detail pages reach omitted warnings and exact binaries, preserve bindings and reject late scope responses': 'cve-detail-pages',
+    'Real CSRF-protected logout removes private content and rejects later protected API reads': 'logout',
+    'Actual short session expiry locks the browser and backend using server-relative TTL': 'session-expiry',
+    'Protected 401 unmounts provider drafts and a fresh login never replays the interrupted write': 'provider-access-loss',
+    'Unconfirmed logout stays locked across reload and explicit retry performs real logout': 'logout-retry',
+    'Logout from another tab clears its private view and prevents authenticated restoration': 'cross-tab-logout',
+    'Mobile HTTP-test login and shell keep the warning visible with no horizontal overflow': 'mobile-login',
+}
+# Other existing cases may report stages, but only the detail-page coordinates
+# needed for this failure investigation are promoted to public output here.
+LAN_STAGE_CASES = {
+    'service-action-display', 'application-status', 'application-settings', 'windows-inventory',
+    'resource-history', 'capabilities', 'journal-browse', 'journal-ai', 'package-updates',
+    'proactive-ai', 'investigations', 'cve-detail-pages',
+}
+LAN_FAILURE_STAGES = {
+    'cve-detail-pages': {stage: stage.replace(' ', '-') for stage in (
+        'advancing empty scan', 'changed binding', 'desktop layout', 'device navigation isolation',
+        'expired retained input', 'final guards', 'fixture setup', 'fresh login isolation',
+        'initial summary', 'initial warning navigation', 'mapped binary navigation', 'mobile layout',
+        'omitted warning navigation', 'real login', 'session loss isolation', 'warning return navigation',
+    )},
+}
+
+
+def lan_failure_location(sha):
+    """Decode the existing failed report; emit only closed source case/stage codes."""
+    try:
+        path = ROOT / 'artifacts/review/lan-browser-results.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 64 << 10:
+                return None
+            raw = stream.read((64 << 10) + 1)
+        if len(raw) > 64 << 10:
+            return None
+        value = reporter.decode(raw)
+        prose = {'createdAt', 'scope', 'faultInjection', 'credentialMaterial', 'screenshots'}
+        if (not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != prose | {'sourceSha', 'runtimeErrorCount', 'results', 'summary'}
+                or value['sourceSha'] != sha or any(type(value[key]) is not str for key in prose)
+                or type(value['runtimeErrorCount']) is not int or not 0 <= value['runtimeErrorCount'] <= 1000000
+                or type(value['results']) is not list or len(value['results']) > len(LAN_FAILURE_CASES)):
+            return None
+        summary, rows = value['summary'], value['results']
+        if (type(summary) is not dict or set(summary) != {'passed', 'failed', 'setupFailure'}
+                or type(summary['setupFailure']) is not bool
+                or any(type(summary[key]) is not int or not 0 <= summary[key] <= len(LAN_FAILURE_CASES)
+                       for key in ['passed', 'failed'])
+                or (not summary['setupFailure'] and len(rows) != len(LAN_FAILURE_CASES))):
+            return None
+        failed, locations = 0, []
+        # The producer runs in a fixed order, possibly stopping on a fatal setup
+        # or cleanup failure. Exact prefix matching also rejects duplicate cases.
+        for row, name in zip(rows, LAN_FAILURE_CASES):
+            if (type(row) is not dict or row.get('name') != name or row.get('status') not in ['PASS', 'FAIL']
+                    or type(row.get('durationMs')) is not int or not 0 <= row['durationMs'] <= 9007199254740991):
+                return None
+            keys = {'name', 'status', 'durationMs'}
+            if row['status'] == 'FAIL':
+                failed += 1
+                code, stage = LAN_FAILURE_CASES[name], 'unavailable'
+                keys.add('error')
+                if row.get('error') != 'Assertion failed; raw state and credential-bearing diagnostics intentionally withheld.':
+                    return None
+                if code in LAN_STAGE_CASES:
+                    keys.add('stage')
+                    if type(row.get('stage')) is not str or len(row['stage']) > 128:
+                        return None
+                    if code in LAN_FAILURE_STAGES:
+                        if row['stage'] not in LAN_FAILURE_STAGES[code]:
+                            return None
+                        stage = LAN_FAILURE_STAGES[code][row['stage']]
+                diagnostic = ('journalDiagnostics' if code == 'journal-browse' else
+                              'alarmDiagnostics' if code in ['alarm-status', 'alarm-settings'] else None)
+                if diagnostic:
+                    keys.add(diagnostic)
+                    if diagnostic not in row or (row[diagnostic] is not None and type(row[diagnostic]) is not dict):
+                        return None
+                locations.append('case=' + code + ' stage=' + stage)
+            if set(row) != keys:
+                return None
+        if summary['failed'] != failed or summary['passed'] != len(rows) - failed:
+            return None
+        if summary['setupFailure']:
+            locations.append('setup-failure')
+        if value['runtimeErrorCount']:
+            locations.append('runtime-errors')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+# Finite recipe steps; failed reports never admit exception text or runtime values.
+CVE_CAPTURE_STAGES = {
+    'fixture', 'context', 'navigate', 'open-warning', 'open-binaries', 'review-focus',
+    'review-enter', 'candidate', 'updates-focus', 'matched-row', 'unchecked-row',
+    'capture-times', 'layout', 'screenshot', 'final-guards',
+}
+CVE_RUNNER_STAGES = {'launch', 'compile', 'manifest', 'close', 'evidence'}
+
+
+def cve_review_failure_location(sha):
+    try:
+        path = ROOT / 'artifacts/review/linux-cve-update-review-results.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        keys = {'sourceSha', 'status', 'browserAcceptance', 'sceneManifestSHA256', 'scenes', 'screenshots',
+                'requestsToRealAPI', 'actualMutationRequests', 'nativeAcceptance', 'disclosure', 'failure'}
+        if (not HEX.fullmatch(sha) or type(value) is not dict or set(value) != keys
+                or value['sourceSha'] != sha or value['status'] != 'FAIL'
+                or value['browserAcceptance'] is not False or value['nativeAcceptance'] is not False
+                or type(value['sceneManifestSHA256']) is not str
+                or not re.fullmatch(r'[a-f0-9]{64}', value['sceneManifestSHA256'])
+                or type(value['disclosure']) is not str or len(value['disclosure']) > 1024
+                or any(type(value[key]) is not int or value[key] != 0
+                       for key in ['scenes', 'screenshots', 'requestsToRealAPI', 'actualMutationRequests'])):
+            return None
+        failure = value['failure']
+        if type(failure) is not dict or set(failure) != {'stage', 'captureIndex'}:
+            return None
+        stage, index = failure['stage'], failure['captureIndex']
+        if type(stage) is not str:
+            return None
+        if stage in CVE_RUNNER_STAGES and index is None:
+            return 'stage=' + stage
+        if stage in CVE_CAPTURE_STAGES and type(index) is int and 0 <= index < 4:
+            locale, width = [('en', 1440), ('en', 390), ('de', 1440), ('de', 390)][index]
+            return 'stage=%s locale=%s width=%d' % (stage, locale, width)
+        return None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+
+# This source vocabulary is shared with the Windows producer, never loaded from
+# the runtime report directory (including when ROOT points at captured artifacts).
+WINDOWS_ACTION_DIAGNOSTICS_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/windows-service-actions-diagnostics.json'
+WINDOWS_ACTION_DIAGNOSTICS_SCHEMA = 'tracebolt.windows-action-browser-failure.v1'
+WINDOWS_ACTION_INVOCATION = re.compile(r'[0-9a-f]{32}\Z')
+
+
+def windows_action_diagnostic_contract():
+    """Admit only bounded source-owned labels, shared with the runner."""
+    with os.fdopen(reporter.open_log(WINDOWS_ACTION_DIAGNOSTICS_SOURCE), 'rb') as stream:
+        metadata = os.fstat(stream.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 16384:
+            raise ValueError('invalid Windows action diagnostic contract')
+        raw = stream.read(16385)
+    if len(raw) > 16384:
+        raise ValueError('invalid Windows action diagnostic contract')
+    value = reporter.decode(raw)
+    if (type(value) is not dict or set(value) != {'schemaVersion', 'cases'}
+            or value['schemaVersion'] != WINDOWS_ACTION_DIAGNOSTICS_SCHEMA
+            or type(value['cases']) is not dict or not 1 <= len(value['cases']) <= 32
+            or 'runner' not in value['cases']):
+        raise ValueError('invalid Windows action diagnostic contract')
+    for case, steps in value['cases'].items():
+        if (type(case) is not str or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', case)
+                or type(steps) is not list or not 1 <= len(steps) <= 128
+                or any(type(step) is not str or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', step)
+                       for step in steps) or len(set(steps)) != len(steps)):
+            raise ValueError('invalid Windows action diagnostic contract')
+    return value['cases']
+
+
+def windows_action_failure_location(sha, invocation):
+    """Project only finite labels from this exact source and runner invocation."""
+    try:
+        if (type(sha) is not str or not HEX.fullmatch(sha)
+                or type(invocation) is not str or not WINDOWS_ACTION_INVOCATION.fullmatch(invocation)):
+            return None
+        path = ROOT / 'artifacts/review/windows-service-actions-failure.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4096:
+                return None
+            raw = stream.read(4097)
+        if len(raw) > 4096:
+            return None
+        value = reporter.decode(raw)
+        keys = {'schemaVersion', 'sourceSha', 'invocation', 'status', 'browserAcceptance',
+                'nativeAcceptance', 'case', 'locale', 'width', 'step'}
+        if (type(value) is not dict or set(value) != keys
+                or value['schemaVersion'] != WINDOWS_ACTION_DIAGNOSTICS_SCHEMA
+                or type(value['sourceSha']) is not str or value['sourceSha'] != sha
+                or type(value['invocation']) is not str or value['invocation'] != invocation
+                or value['status'] != 'FAIL' or value['browserAcceptance'] is not False
+                or value['nativeAcceptance'] is not False
+                or type(value['case']) is not str or type(value['step']) is not str):
+            return None
+        cases = windows_action_diagnostic_contract()
+        if value['case'] not in cases or value['step'] not in cases[value['case']]:
+            return None
+        # Select the emitted strings from source, not from report values.
+        case = next(name for name in cases if name == value['case'])
+        step = next(name for name in cases[case] if name == value['step'])
+        locale, width = value['locale'], value['width']
+        if case == 'runner':
+            if locale is not None or width is not None:
+                return None
+            return 'case=runner step=%s locale=- width=-' % step
+        if type(locale) is not str or locale not in ['en', 'de'] or type(width) is not int or width not in [1440, 390]:
+            return None
+        locale = next(name for name in ['en', 'de'] if name == locale)
+        width = next(size for size in [1440, 390] if size == width)
+        return 'case=%s step=%s locale=%s width=%d' % (case, step, locale, width)
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -528,6 +839,11 @@ def browser_checks(plan):
     for flow in sorted(plan['flows'], key=lambda value: (value != 'shell', value)):
         print('Running selected browser flow: ' + flow, flush=True)
         env = {**os.environ, 'TRACEBOLT_REVIEW_QUARANTINED': '1', 'TRACEBOLT_REVIEW_LIFECYCLE_REPEATS': '5', 'TRACEBOLT_REVIEW_AI': '1'}
+        # A same-head report from an earlier run must never describe this run.
+        env.pop('TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN', None)
+        if flow == 'windows-service-actions':
+            invocation = secrets.token_hex(16)
+            env['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'] = invocation
         if flow == 'fleet-identity':
             # This legacy runner otherwise guesses /usr/bin/chromium. Bind only
             # this invocation to the locked Playwright browser installed by CI.
@@ -538,10 +854,22 @@ def browser_checks(plan):
         try:
             run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
         except ValueError:
+            if flow == 'linux-cve-update-review':
+                location = cve_review_failure_location(plan['sha'])
+                if location is not None:
+                    print('FAIL CVE review location: ' + location, flush=True)
+            if flow == 'lan':
+                location = lan_failure_location(plan['sha'])
+                if location is not None:
+                    print('FAIL LAN location: ' + location, flush=True)
             if flow == 'windows-fleet-msi':
                 location = fleet_msi_failure_location(plan['sha'])
                 if location is not None:
                     print('FAIL fleet MSI location: ' + location, flush=True)
+            if flow == 'windows-service-actions':
+                location = windows_action_failure_location(plan['sha'], invocation)
+                if location is not None:
+                    print('FAIL Windows action location: ' + location, flush=True)
             raise  # Diagnostics never turn a failed browser flow into success.
         if flow == 'windows-fleet-msi':
             # Three bounded changed flows accompany the existing MSI selection;

@@ -37,10 +37,16 @@ have their own installation guides and narrower feature sets.
   and [Linux CVE coverage](linux-cve-warnings.md), or Windows
   [build/history/reboot context](windows-patch-context.md),
   [cached updates](windows-update-runtime.md) and [Defender/Firewall posture](windows-security-posture.md).
+  The [Linux CVE-to-Updates source workflow](linux-cve-warnings.md#review-an-exact-binary-in-cached-updates)
+  carries an exact binary into cached Updates for manual review. It is not part
+  of published Linux rc.3.
 - **Health:** [Linux checks](health-dashboard.md); Windows
   [disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
   [selected-service](windows-service-health.md) policies. Use [fleet groups](fleet-groups-health.md)
-  to organize devices and review one-time Windows disk/CPU/RAM settings.
+  to organize devices and review one-time Windows disk/CPU/RAM settings. The
+  separate [ongoing group-monitoring source feature](fleet-group-monitoring.md) adds
+  reviewed opt-ins for exact existing members and metrics. It is not part of
+  published Windows preview.2. Group membership alone never enables a policy.
 - **Optional settings:** [application checks](application-checks.md),
   [DNS/TCP checks](application-network-checks.md), [webhook alarms](alarm-delivery.md),
   [Health AI](proactive-ai-diagnostics.md) and [service-log AI](proactive-service-log-ai.md).
@@ -57,7 +63,11 @@ and stale results retain their original meaning.
 - [Support bundle and review before sharing](support-bundle.md)
 - Separate controlled-action scope: [Linux services](guided-service-action-setup.md),
   [Windows services](windows-service-actions.md), [selected APT updates](selected-package-updates-native.md),
-  [selected Windows update setup](windows-selected-update-setup.md)
+  [selected Windows update setup](windows-selected-update-setup.md),
+  [fresh reusable cached-update jobs](windows-reusable-cached-update-jobs.md) and
+  [guided MSI catalogue review](windows-multi-package-msi-catalogue.md#guided-package-review).
+  These source workflows require separate consent and native acceptance;
+  preview.2's packaged-Setup results do not validate optional actions.
 - Existing development interfaces: [Linux read-admin update](read-admin-upgrade.md)
   and [inventory opt-in](guided-inventory-setup.md)
 - [Frontend development](../web/README.md), [LAN runtime](lan-runtime.md),

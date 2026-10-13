@@ -1,27 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {fleetGroupsBrowserFixture,fleetGroupsPolicyFixture,fleetGroupIds,fleetGroupsCaseName,fleetGroupsDisclosure,requireFleetGroupsEvidence,guardFleetGroupsRoute,fleetGroupsRouteState} from './fleet-groups-browser.mjs';
+import {fleetGroupsBrowserFixture,fleetGroupsPolicyFixture,fleetGroupsMonitoringFixture,fleetGroupsMaintenanceFixture,fleetGroupsCaptureMatrix,fleetGroupsScenes,fleetGroupsCaptureName,fleetGroupIds,fleetGroupsCaseName,fleetGroupsDisclosure,requireFleetGroupsEvidence,guardFleetGroupsRoute,fleetGroupsRouteState} from './fleet-groups-browser.mjs';
 const now='2026-10-11T12:00:10Z',expiry='2026-10-11T13:00:00Z';
 test('invented group fixture projects only public names and exact admitted IDs',()=>{
  const fixture=fleetGroupsBrowserFixture(now,expiry);assert.equal(fixture.view.groups[0].unavailableMembers,1);assert.equal(fixture.view.devices.length,3);assert.deepEqual(Object.keys(fixture.view.groups[0]).sort(),['id','memberIds','name','revision','unavailableMembers']);assert.ok(fixture.metadata.every(d=>d.agentCertificate.checkedAt===now));
  for(const metric of ['disk','cpu','memory'])for(const enabled of [false,true]){const policy={enabled,thresholdPercent:90,revision:enabled?1:0},view=fleetGroupsPolicyFixture(now,expiry,fleetGroupIds.first,metric,policy);assert.deepEqual(view.policy,policy);assert.equal(view.status,enabled?'unknown':'disabled');assert.equal(view.observation,null);assert.equal(view.metric,metric==='disk'?undefined:metric);}
 });
-test('completion requires exactly sixteen source-bound EN/DE desktop/mobile screenshots',()=>{
- const source='a'.repeat(40),rows=[];for(const kind of ['groups','draft','review','results'])for(const locale of ['en','de'])for(const width of [1440,390])rows.push({file:`synthetic-fleet-groups-${kind}-${width}-${locale}.png`,sourceSha:source,test:fleetGroupsCaseName,viewport:{width,height:width===390?844:1000},locale,fullPage:false,publicSafe:true,fixtureDisclosure:fleetGroupsDisclosure});
- assert.deepEqual(requireFleetGroupsEvidence(rows,source),{groups:4,draft:4,review:4,results:4});
+test('completion requires every canonical source-bound EN/DE desktop/mobile screenshot',()=>{
+ const source='a'.repeat(40),rows=fleetGroupsCaptureMatrix.map(({file,width,height,locale})=>({file,sourceSha:source,test:fleetGroupsCaseName,viewport:{width,height},locale,fullPage:false,publicSafe:true,fixtureDisclosure:fleetGroupsDisclosure}));
+ assert.deepEqual(requireFleetGroupsEvidence(rows,source),Object.fromEntries(fleetGroupsScenes.map(scene=>[scene,fleetGroupsCaptureMatrix.filter(row=>row.scene===scene).length])));
  for(let index=0;index<rows.length;index++)for(const changed of [null,{sourceSha:'b'.repeat(40)},{fullPage:true},{publicSafe:false},{fixtureDisclosure:'native'},{test:'other'},{viewport:{width:800,height:600}}])assert.throws(()=>requireFleetGroupsEvidence(changed?rows.map((r,i)=>i===index?{...r,...changed}:r):rows.filter((_,i)=>i!==index),source));
  assert.throws(()=>requireFleetGroupsEvidence([...rows,rows[0]],source));
 });
 test('hosted capture admission includes every required image and rejects noncontract names',()=>{
  const runner=fs.readFileSync(new URL('./fleet-groups-runner.mjs',import.meta.url),'utf8');
- const literals=[...runner.matchAll(/const match=(\/[^\n]+\/)\.exec\(name\);/g)];
- assert.equal(literals.length,1);const admission=new RegExp(literals[0][1].slice(1,-1));
- for(const kind of ['groups','draft','review','results'])for(const locale of ['en','de'])for(const width of [1440,390]){
-  const match=admission.exec(`synthetic-fleet-groups-${kind}-${width}-${locale}`);
-  assert.ok(match,`required ${kind}/${width}/${locale} capture rejected`);assert.deepEqual(match.slice(1),[String(width),locale]);
- }
- for(const invalid of ['synthetic-fleet-groups-other-1440-en','synthetic-fleet-groups-draft-800-en','synthetic-fleet-groups-draft-1440-fr','../synthetic-fleet-groups-draft-1440-en','synthetic-fleet-groups-draft-1440-en.png','synthetic-fleet-groups-draft-1440-en-extra'])assert.equal(admission.test(invalid),false);
+ assert.match(runner,/fleetGroupsCaptureMatrix.find\(row=>row.name===name\)/);
+ for(const row of fleetGroupsCaptureMatrix)assert.equal(fleetGroupsCaptureName(row.scene,row.width,row.locale),row.name);
+ for(const invalid of [['other',1440,'en'],['draft',800,'en'],['draft',1440,'fr']])assert.throws(()=>fleetGroupsCaptureName(...invalid));
 });
 test('route assertion failures remain failures and cannot disappear in detached callbacks',async()=>{
  const before=fleetGroupsRouteState(),route={abort:async()=>{}};await guardFleetGroupsRoute(route,async()=>{throw new Error('inert failure');});assert.deepEqual(fleetGroupsRouteState(),{failures:before.failures+1,pending:0});
@@ -68,5 +64,20 @@ test('compact mobile rows keep all policy cells in the viewport without losing t
  assert.match(helper,/expect\(layout.overflow\)\.toBeLessThanOrEqual\(1\)/);
  assert.match(helper,/expect\(cell.right\)\.toBeGreaterThanOrEqual\(-1\)/);
  assert.match(helper,/expect\(cell.overflow\)\.toBeLessThanOrEqual\(1\)/);
- for(const kind of ['review','results'])assert.ok(helper.includes('await verifyPolicyLayout();await shot(page,`synthetic-fleet-groups-'+kind+'-${width}-${locale}`'));
+ for(const kind of ['review','results'])assert.ok(helper.includes("await verifyPolicyLayout();await shot(page,fleetGroupsCaptureName('"+kind+"',width,locale)"));
+});
+
+test('inheritance fixture and capture contract stay exact, unchecked and source-bound',()=>{
+ const fixture=fleetGroupsMonitoringFixture(now,expiry);assert.equal(fixture.targets.length,6);assert.equal(fixture.unavailableAssignments,1);assert.deepEqual(new Set(fixture.targets.map(t=>t.metric)),new Set(['disk','cpu','memory']));assert.equal(fixture.targets[4].status,'manual-override');assert.equal(fixture.targets[4].owned,false);
+ const helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8'),runner=fs.readFileSync(new URL('./fleet-groups-runner.mjs',import.meta.url),'utf8');
+ for(const scene of fleetGroupsScenes.filter(scene=>scene.startsWith('inheritance-')))assert.ok(helper.includes(`fleetGroupsCaptureName('${scene}',width,locale)`));
+ assert.match(helper,/expect\(consent\)\.not\.toBeChecked\(\)/);assert.match(helper,/expect\(monitoringPosts\)\.toBe\(inheritanceBefore\+2\)/);assert.match(helper,/policy\)\.toEqual\(previousPolicy\)/);
+ assert.match(helper,/screens:fleetGroupsCaptureMatrix.length/);assert.match(runner,/requireFleetGroupsEvidence\(screenshots,sourceSha\)/);assert.match(helper,/getByRole\('combobox',\{name:de\?'Flottengruppen':'Fleet groups',exact:true\}\)/);
+});
+
+
+test('group maintenance adds exactly four canonical views and original-identity synthetic target keys',()=>{
+ const fixture=fleetGroupsMaintenanceFixture(now);assert.equal(fixture.members.length,2);assert.equal(fixture.excludedLinuxMembers,1);assert.equal(fixture.unavailableMembers,1);assert.equal(new Set(fixture.members.flatMap(m=>m.targets.map(t=>t.key))).size,12);
+ const scenes=fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('maintenance-'));assert.equal(scenes.length,4);assert.deepEqual(new Set(scenes.map(row=>row.locale)),new Set(['en','de']));assert.deepEqual(new Set(scenes.map(row=>row.width)),new Set([1440,390]));
+ const helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8');assert.match(helper,/expect\(maintenanceConsent\)\.not\.toBeChecked\(\)/);assert.match(helper,/expect\(maintenancePosts\)\.toBe\(maintenanceBefore\+2\)/);assert.match(helper,/maintenanceBodies\[0\]\.endsAt\)\.toBe\(maintenanceBodies\[1\]\.endsAt\)/);assert.match(helper,/validGroupMaintenanceView/);
 });
