@@ -118,20 +118,23 @@ func ParseProcesses(raw []byte) (Processes, error) {
 	}
 	return p, nil
 }
-func parseHeader(line string) (Interface, error) {
+
+// parseHeader retains the original admission checks; the extra return value is
+// a fixed diagnostic code, never text derived from the header.
+func parseHeader(line string) (Interface, InterfaceParseCode, error) {
 	fields := strings.Fields(line)
 	if len(fields) < 4 || !strings.HasSuffix(fields[0], ":") || !strings.HasPrefix(fields[1], "flags=") {
-		return Interface{}, ErrMetadata
+		return Interface{}, interfaceHeaderShape, ErrMetadata
 	}
 	name := strings.TrimSuffix(fields[0], ":")
 	flagText := strings.TrimPrefix(fields[1], "flags=")
 	open := strings.IndexByte(flagText, '<')
 	if open < 1 || !strings.HasSuffix(flagText, ">") {
-		return Interface{}, ErrMetadata
+		return Interface{}, interfaceHeaderFlags, ErrMetadata
 	}
 	flags, e := strconv.ParseUint(flagText[:open], 16, 32)
 	if e != nil {
-		return Interface{}, ErrMetadata
+		return Interface{}, interfaceHeaderFlags, ErrMetadata
 	}
 	var mtu uint64
 	count := 0
@@ -139,23 +142,32 @@ func parseHeader(line string) (Interface, error) {
 		if s == "mtu" {
 			count++
 			if i+1 >= len(fields) {
-				return Interface{}, ErrMetadata
+				return Interface{}, interfaceMTUValue, ErrMetadata
 			}
 			mtu, e = decimal(fields[i+1], 32)
 			if e != nil {
-				return Interface{}, e
+				return Interface{}, interfaceMTUValue, e
 			}
 		}
 	}
-	if count != 1 || !token(name, 15, "._-") || mtu == 0 || mtu > 1<<20 {
-		return Interface{}, ErrMetadata
+	if count == 0 {
+		return Interface{}, interfaceMTUMissing, ErrMetadata
 	}
-	return Interface{Name: name, MTU: uint32(mtu), Up: flags&1 != 0, Running: flags&0x40 != 0, Addresses: []Address{}}, nil
+	if count != 1 {
+		return Interface{}, interfaceMTUDuplicate, ErrMetadata
+	}
+	if !token(name, 15, "._-") {
+		return Interface{}, interfaceHeaderName, ErrMetadata
+	}
+	if mtu == 0 || mtu > 1<<20 {
+		return Interface{}, interfaceMTUValue, ErrMetadata
+	}
+	return Interface{Name: name, MTU: uint32(mtu), Up: flags&1 != 0, Running: flags&0x40 != 0, Addresses: []Address{}}, InterfaceParseOK, nil
 }
-func parseAddress(line, name string, ipv6 bool) (Address, error) {
+func parseAddress(line, name string, ipv6 bool) (Address, InterfaceParseCode, error) {
 	fields := strings.Fields(line)
 	if len(fields) < 4 {
-		return Address{}, ErrMetadata
+		return Address{}, interfaceAddressShape, ErrMetadata
 	}
 	want := "inet"
 	prefixKey := "netmask"
@@ -164,14 +176,17 @@ func parseAddress(line, name string, ipv6 bool) (Address, error) {
 		prefixKey = "prefixlen"
 	}
 	if fields[0] != want {
-		return Address{}, ErrMetadata
+		return Address{}, interfaceAddressShape, ErrMetadata
 	}
 	ip, e := netip.ParseAddr(fields[1])
-	if e != nil || ip.Is6() != ipv6 || ip.Is4In6() {
-		return Address{}, ErrMetadata
+	if e != nil {
+		return Address{}, interfaceAddressNumeric, ErrMetadata
+	}
+	if ip.Is6() != ipv6 || ip.Is4In6() {
+		return Address{}, interfaceAddressFamily, ErrMetadata
 	}
 	if ip.Zone() != "" && ip.Zone() != name {
-		return Address{}, ErrMetadata
+		return Address{}, interfaceAddressZone, ErrMetadata
 	}
 	ip = ip.WithZone("")
 	count := 0
@@ -182,35 +197,38 @@ func parseAddress(line, name string, ipv6 bool) (Address, error) {
 		}
 		count++
 		if i+1 >= len(fields) {
-			return Address{}, ErrMetadata
+			return Address{}, interfacePrefixValue, ErrMetadata
 		}
 		if ipv6 {
 			bits, e = decimal(fields[i+1], 8)
 			if e != nil || bits > 128 {
-				return Address{}, ErrMetadata
+				return Address{}, interfacePrefixValue, ErrMetadata
 			}
 		} else {
 			mask := fields[i+1]
 			if len(mask) < 3 || len(mask) > 10 || !strings.HasPrefix(mask, "0x") {
-				return Address{}, ErrMetadata
+				return Address{}, interfacePrefixValue, ErrMetadata
 			}
 			n, e := strconv.ParseUint(mask[2:], 16, 32)
 			if e != nil {
-				return Address{}, ErrMetadata
+				return Address{}, interfacePrefixValue, ErrMetadata
 			}
 			var b [4]byte
 			binary.BigEndian.PutUint32(b[:], uint32(n))
 			ones, width := net.IPMask(b[:]).Size()
 			if width != 32 {
-				return Address{}, ErrMetadata
+				return Address{}, interfacePrefixValue, ErrMetadata
 			}
 			bits = uint64(ones)
 		}
 	}
-	if count != 1 {
-		return Address{}, ErrMetadata
+	if count == 0 {
+		return Address{}, interfacePrefixMissing, ErrMetadata
 	}
-	return Address{ip.String(), uint8(bits)}, nil
+	if count != 1 {
+		return Address{}, interfacePrefixDuplicate, ErrMetadata
+	}
+	return Address{ip.String(), uint8(bits)}, InterfaceParseOK, nil
 }
 
 // ParseInterfaces projects only the requested family. Well-formed address
@@ -218,46 +236,55 @@ func parseAddress(line, name string, ipv6 bool) (Address, error) {
 // without being copied into the result. Unknown top-level records, malformed
 // address records and duplicate selected identities fail the source.
 func ParseInterfaces(raw []byte, ipv6 bool) (Interfaces, error) {
+	v, _, err := ParseInterfacesWithDiagnostic(raw, ipv6)
+	return v, err
+}
+
+// ParseInterfacesWithDiagnostic runs the same parser once and also returns a
+// content-free first-rejection code. It invokes no source and does not change
+// product results, canonical error identity, source status, or wire bytes.
+// A caller must not publish input bytes or use a code to turn failure into pass.
+func ParseInterfacesWithDiagnostic(raw []byte, ipv6 bool) (Interfaces, InterfaceParseCode, error) {
 	source := IPv4Source
 	if ipv6 {
 		source = IPv6Source
 	}
 	lines, e := sourceLines(raw)
 	if e != nil {
-		return Interfaces{}, e
+		return Interfaces{}, interfaceSourceFailure(raw), e
 	}
 	rows := []Interface{}
 	for _, line := range lines {
 		if line == "" {
-			return Interfaces{}, ErrMetadata
+			return Interfaces{}, interfaceEmptyRecord, ErrMetadata
 		}
 		if line[0] != ' ' && line[0] != '\t' {
 			if len(rows) >= MaxInterfaces {
-				return Interfaces{}, ErrBounds
+				return Interfaces{}, interfaceRowLimit, ErrBounds
 			}
-			r, e := parseHeader(line)
+			r, code, e := parseHeader(line)
 			if e != nil {
-				return Interfaces{}, e
+				return Interfaces{}, code, e
 			}
 			rows = append(rows, r)
 			continue
 		}
 		if len(rows) == 0 {
-			return Interfaces{}, ErrMetadata
+			return Interfaces{}, interfaceOrphanRecord, ErrMetadata
 		}
 		trimmed := strings.TrimSpace(line)
 		fields := strings.Fields(trimmed)
 		if len(fields) == 0 {
-			return Interfaces{}, ErrMetadata
+			return Interfaces{}, interfaceBlankRecord, ErrMetadata
 		}
 		if fields[0] != "inet" && fields[0] != "inet6" {
 			continue
 		}
 		row := &rows[len(rows)-1]
 		lineIPv6 := fields[0] == "inet6"
-		a, e := parseAddress(trimmed, row.Name, lineIPv6)
+		a, code, e := parseAddress(trimmed, row.Name, lineIPv6)
 		if e != nil {
-			return Interfaces{}, e
+			return Interfaces{}, code, e
 		}
 		// ifconfig emits CLAT46 inet6 metadata even when inet was selected.
 		// Validate but discard the other family: it is not evidence for this
@@ -266,14 +293,14 @@ func ParseInterfaces(raw []byte, ipv6 bool) (Interfaces, error) {
 			continue
 		}
 		if len(row.Addresses) >= MaxAddresses {
-			return Interfaces{}, ErrBounds
+			return Interfaces{}, interfaceAddressLimit, ErrBounds
 		}
 		row.Addresses = append(row.Addresses, a)
 	}
 	v := Interfaces{Status{source, "observed", ""}, rows}
 	sortInterfaces(&v)
 	if !validInterfaces(v, source, ipv6) {
-		return Interfaces{}, ErrMetadata
+		return Interfaces{}, interfaceResultFailure(v), ErrMetadata
 	}
-	return v, nil
+	return v, InterfaceParseOK, nil
 }

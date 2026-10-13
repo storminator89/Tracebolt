@@ -14,6 +14,11 @@ on:
         type: boolean
         default: false
         required: true
+      gate_i:
+        description: 'Approved narrow interface diagnostics once; cannot combine with Gate A'
+        type: boolean
+        default: false
+        required: true
       reviewed_commit:
         description: 'Exact independently reviewed current commit (40 lowercase hex)'
         type: string
@@ -36,7 +41,8 @@ jobs:
       ${{ github.event_name == 'workflow_dispatch' &&
           github.repository == 'storminator89/Tracebolt' &&
           github.event.repository.private == false &&
-          github.run_attempt == 1 && (inputs.gate_a || inputs.gate_b) }}
+          github.run_attempt == 1 && (inputs.gate_a || inputs.gate_b || inputs.gate_i) &&
+          !(inputs.gate_a && inputs.gate_i) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -53,6 +59,7 @@ jobs:
       TRACEBOLT_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
       TRACEBOLT_SELECT_GATE_A: ${{ inputs.gate_a }}
       TRACEBOLT_SELECT_GATE_B: ${{ inputs.gate_b }}
+      TRACEBOLT_SELECT_GATE_I: ${{ inputs.gate_i }}
       TRACEBOLT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
       TRACEBOLT_REVIEWED_SOURCE_SHA256: ${{ inputs.reviewed_source_sha256 }}
     steps:
@@ -62,7 +69,7 @@ jobs:
           persist-credentials: false
       - name: Check exact manual source selection before toolchain preparation
         run: python3 -I -B tests/macosnativeacceptance/run.py --verify-dispatch
-      - if: ${{ inputs.gate_a }}
+      - if: ${{ inputs.gate_a || inputs.gate_i }}
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.27.1'

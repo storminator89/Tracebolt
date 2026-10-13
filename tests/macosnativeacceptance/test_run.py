@@ -23,7 +23,7 @@ SPEC.loader.exec_module(r)
 
 
 def source_fixture(root):
-    files = set(r.SOURCE_FIXED) | {"tests/macosnativeacceptance/" + name for name in r.HARNESS_REQUIRED} | {"tests/macosnativeacceptance/inventoryprobe/" + name for name in ("main.go", "main_test.go", "probe.go", "probe_test.go", "README.md")} | {"internal/sample/fixture.go"}
+    files = set(r.SOURCE_PUBLIC) | {"internal/sample/fixture.go"}
     for name in files:
         p = root / name
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -31,8 +31,8 @@ def source_fixture(root):
     return r.source_manifest(root)
 
 
-def admitted_env(digest="b" * 64, gate_a="true", gate_b="false"):
-    return dict(GITHUB_ACTIONS="true", GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REPOSITORY="storminator89/Tracebolt", RUNNER_ENVIRONMENT="github-hosted", RUNNER_OS="macOS", RUNNER_ARCH="ARM64", TRACEBOLT_RUNNER_LABEL="macos-15", TRACEBOLT_REPOSITORY_VISIBILITY="public", GITHUB_RUN_ATTEMPT="1", TRACEBOLT_REVIEWED_COMMIT="a" * 40, GITHUB_SHA="a" * 40, GITHUB_WORKFLOW_SHA="a" * 40, TRACEBOLT_REVIEWED_SOURCE_SHA256=digest, TRACEBOLT_SELECT_GATE_A=gate_a, TRACEBOLT_SELECT_GATE_B=gate_b)
+def admitted_env(digest="b" * 64, gate_a="true", gate_b="false", gate_i="false"):
+    return dict(GITHUB_ACTIONS="true", GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REPOSITORY="storminator89/Tracebolt", RUNNER_ENVIRONMENT="github-hosted", RUNNER_OS="macOS", RUNNER_ARCH="ARM64", TRACEBOLT_RUNNER_LABEL="macos-15", TRACEBOLT_REPOSITORY_VISIBILITY="public", GITHUB_RUN_ATTEMPT="1", TRACEBOLT_REVIEWED_COMMIT="a" * 40, GITHUB_SHA="a" * 40, GITHUB_WORKFLOW_SHA="a" * 40, TRACEBOLT_REVIEWED_SOURCE_SHA256=digest, TRACEBOLT_SELECT_GATE_A=gate_a, TRACEBOLT_SELECT_GATE_B=gate_b, TRACEBOLT_SELECT_GATE_I=gate_i)
 
 
 def inventory_fixture(passed=True):
@@ -103,7 +103,7 @@ class SourceTests(unittest.TestCase):
         self.assertIn("  workflow_dispatch:", text)
         self.assertNotIn("  push:", text)
         self.assertNotIn("  pull_request:", text)
-        self.assertEqual(text.count("default: false"), 2)
+        self.assertEqual(text.count("default: false"), 3)
         self.assertIn("runner: [macos-15, macos-15-intel]", text)
         self.assertIn("contents: read", text)
         self.assertNotIn("id-token:", text)
@@ -593,7 +593,7 @@ class InjectedExecuteTests(unittest.TestCase):
                 failed = argv[0].endswith("inventory-probe") and not inventory_passed
                 return r.Capture(output, dict(reason="nonzero_exit" if failed else "ok", started=True, reaped=True, exitCode=1 if failed else 0, stdoutBytes=len(output), stderrBytes=0, elapsedMilliseconds=1))
             owner.capture = fake_capture
-            build = dict(goVersion="go1.27.1", goSHA256="c" * 64, inventorySHA256="d" * 64, emitterSHA256="e" * 64 if both else None, clangSHA256="f" * 64 if both else None, clangVersion="17.0.0" if both else None, sdkVersion="15.5" if both else None, sdkSettingsSHA256="f" * 64 if both else None)
+            build = dict(goVersion="go1.27.1", goSHA256="c" * 64, inventorySHA256="d" * 64, interfaceSHA256=None, emitterSHA256="e" * 64 if both else None, clangSHA256="f" * 64 if both else None, clangVersion="17.0.0" if both else None, sdkVersion="15.5" if both else None, sdkSettingsSHA256="f" * 64 if both else None)
             log_result = dict(status="failed" if unreaped_log else "passed", emitter=dict(started=True, reaped=not unreaped_log), queries=[dict(started=True, reaped=True)] * 3)
             log_module = types.SimpleNamespace(configure_admission=mock.Mock(return_value=contextlib.nullcontext()), run_log_gate=mock.Mock(return_value=log_result), validate_result=lambda _: True)
             identity = dict(uid=501, euid=501, gid=20, egid=20, groups=[20], adminMembership=None, adminMembershipReason="not_queried")
