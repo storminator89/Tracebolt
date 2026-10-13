@@ -217,16 +217,17 @@ func TestRenewalClientLostLocalManifestCommitReconcilesWithoutNetwork(t *testing
 	if e := s.renewOncePrepared(context.Background(), m, &tx, false); !errors.Is(e, errRenewalCutover) {
 		t.Fatal("candidate not prepared", e)
 	}
-	originalSync, originalRename := s.store.ops.sync, s.store.ops.rename
+	store := s.store.(*localStore)
+	originalSync, originalRename := store.ops.sync, store.ops.rename
 	published := false
-	s.store.ops.rename = func(oldFD int, old string, newFD int, name string, flags uint) error {
+	store.ops.rename = func(oldFD int, old string, newFD int, name string, flags uint) error {
 		e := originalRename(oldFD, old, newFD, name, flags)
 		if e == nil && name == renewalidentity.ManifestName {
 			published = true
 		}
 		return e
 	}
-	s.store.ops.sync = func(fd int) error {
+	store.ops.sync = func(fd int) error {
 		if published {
 			return errors.New("synthetic directory flush interruption")
 		}

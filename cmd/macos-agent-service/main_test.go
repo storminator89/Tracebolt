@@ -38,7 +38,7 @@ func TestRenderOnlyCLIAndHelpDoNotReadHost(t *testing.T) {
 	}
 }
 func TestCLIRefusesMutationAndSecretsBeforeInspection(t *testing.T) {
-	for _, bad := range []string{"--apply", "--action=install", "--action=uninstall", "--launchctl", "--insecure-http-test", "--invitation-secret=DO-NOT-PRINT", "--config=/Users/me/agent.json", "--agent-binary=/bin/sh"} {
+	for _, bad := range []string{"--apply", "--action=uninstall", "--launchctl", "--insecure-http-test", "--invitation-secret=DO-NOT-PRINT", "--config=/Users/me/agent.json", "--agent-binary=/bin/sh"} {
 		b := &fakeBackend{}
 		var out, errOut bytes.Buffer
 		if run(context.Background(), append(args(), bad), &out, &errOut, b) != 2 || b.calls != 0 || out.Len() != 0 || strings.Contains(errOut.String(), "DO-NOT-PRINT") {
@@ -58,5 +58,37 @@ func TestDefaultCLIInspectsAndReportsBlocker(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "blocked") {
 		t.Fatal("missing failure guidance")
+	}
+}
+
+func TestInstallNativeUnavailableWithoutAnyHostInspection(t *testing.T) {
+	for _, extra := range [][]string{{"--action", "install"}, {"--action", "install", "--apply"}} {
+		b := &fakeBackend{}
+		var out, errOut bytes.Buffer
+		if run(context.Background(), append(args(), extra...), &out, &errOut, b) != 1 || b.calls != 0 {
+			t.Fatal("unavailable inspected host")
+		}
+		var result macosservice.InstallResult
+		if json.Unmarshal(out.Bytes(), &result) != nil || result.Status != "unavailable" || result.AdapterAvailable || result.MutationAttempted || result.NativeAcceptanceVerified || !strings.Contains(errOut.String(), "unavailable") {
+			t.Fatal("misleading availability")
+		}
+	}
+}
+func TestProfileSelectionAndInvalidCombinations(t *testing.T) {
+	for _, extra := range [][]string{{"--profile", "read-admin"}, {"--action", "install", "--render-only"}, {"--apply", "--render-only"}, {"--action", "restart"}} {
+		b := &fakeBackend{}
+		var out, errOut bytes.Buffer
+		if run(context.Background(), append(args(), extra...), &out, &errOut, b) != 2 || b.calls != 0 {
+			t.Fatal("invalid selection inspected")
+		}
+	}
+	b := &fakeBackend{}
+	var out, errOut bytes.Buffer
+	if run(context.Background(), append(args(), "--profile", macosservice.InventoryProfile, "--render-only"), &out, &errOut, b) != 0 || b.calls != 0 {
+		t.Fatal("inventory render")
+	}
+	var result macosservice.Result
+	if json.Unmarshal(out.Bytes(), &result) != nil || result.CollectionProfile != macosservice.InventoryProfile || !strings.Contains(result.Plist, "1m0s") {
+		t.Fatal("inventory cadence")
 	}
 }

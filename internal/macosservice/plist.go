@@ -8,8 +8,12 @@ import "strings"
 // InitGroups=false prevents launchd from adding supplementary account groups.
 // Do not infer Linux sandboxing or a bounded restart budget from this plist:
 // launchd's ThrottleInterval only spaces retries; KeepAlive may retry indefinitely.
-func plistForIdentity(id string) string {
-	return strings.Replace(plistTemplate, "SERVICE_IDENTITY", id, 1)
+func plistForRequest(r Request) string {
+	plist := strings.Replace(plistTemplate, "SERVICE_IDENTITY", r.ServiceIdentity, 1)
+	if selectedProfile(r) == InventoryProfile {
+		plist = strings.Replace(plist, "<string>30s</string>", "<string>1m0s</string>", 1)
+	}
+	return plist
 }
 
 const plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>

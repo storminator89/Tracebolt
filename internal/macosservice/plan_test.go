@@ -173,3 +173,22 @@ func TestSourceHashIsBoundedExactAndCancelable(t *testing.T) {
 		t.Fatal("canceled hash")
 	}
 }
+
+func TestInventoryPlanIsExplicitAndHasFixedMinuteCadence(t *testing.T) {
+	r := fixtureRequest()
+	basic, _ := Plan(r)
+	r.Profile = BasicProfile
+	explicit, _ := Plan(r)
+	if basic.Plist != explicit.Plist || basic.PlistSHA256 != explicit.PlistSHA256 {
+		t.Fatal("basic plist changed")
+	}
+	r.Profile = InventoryProfile
+	p, e := Plan(r)
+	if e != nil || p.CollectionProfile != InventoryProfile || !strings.Contains(p.Plist, "<string>1m0s</string>") || strings.Contains(p.Plist, "<string>30s</string>") || p.PlistSHA256 == basic.PlistSHA256 {
+		t.Fatal("inventory plan mismatch")
+	}
+	r.Profile = "read-admin"
+	if _, e = Plan(r); e != ErrRequest {
+		t.Fatal("unsupported profile")
+	}
+}

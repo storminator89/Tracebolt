@@ -76,7 +76,11 @@ protected configuration, selected Mach-O binary/source hashes and activated
 existing handoff. It does not install, bootstrap, unload, restart or uninstall a
 service. Both `installationAvailable` and `readyForInstallation` stay false.
 A generated plist is preparation, not evidence that launchd accepts or runs it.
-See [macOS launchd source](macos-agent-service.md).
+Explicit profile selection also prepares the separate fresh inventory handoff. A
+fake-backed create-only lifecycle coordinator covers ownership, phase receipts
+and read-only reconciliation; its native mutation adapter is unavailable.
+`--action install`, including `--apply`, therefore stops before host inspection.
+See [macOS launchd source](macos-agent-service.md) for the exact source boundary.
 
 ## Protected state and renewal
 

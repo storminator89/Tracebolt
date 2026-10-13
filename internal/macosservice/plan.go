@@ -1,5 +1,6 @@
 // Package macosservice prepares an inert launchd candidate and performs explicit,
-// local read-only checks. It has no installer or service mutation.
+// local read-only checks. Its create-only lifecycle coordinator has no native
+// mutation adapter; fake backends exercise ownership and phase ordering only.
 package macosservice
 
 import (
@@ -13,6 +14,8 @@ import (
 )
 
 const (
+	BasicProfile        = "basic-readonly-v1"
+	InventoryProfile    = "macos-read-inventory-v1"
 	Account             = "_traceboltagent"
 	Label               = "com.tracebolt.agent"
 	InstallDirectory    = "/Library/Application Support/TraceboltAgent"
@@ -27,6 +30,8 @@ var ErrRequest = errors.New("invalid macOS service planning request")
 var ErrPreflight = errors.New("macOS service read-only preflight blocked")
 
 type Request struct {
+	// Empty retains the historical basic-only default. Inventory must be explicit.
+	Profile         string
 	ServiceIdentity string
 	AgentSHA256     string
 	SourceArchive   string
@@ -48,6 +53,7 @@ type Result struct {
 	InstallationAvailable bool     `json:"installationAvailable"`
 	ReadyForInstallation  bool     `json:"readyForInstallation"`
 	ServiceIdentity       string   `json:"serviceIdentity"`
+	CollectionProfile     string   `json:"collectionProfile"`
 	ServiceAccount        string   `json:"serviceAccount"`
 	AgentPath             string   `json:"agentPath"`
 	AgentSHA256           string   `json:"agentSHA256"`
@@ -96,15 +102,22 @@ func validSourcePath(s string) bool {
 	}
 	return true
 }
+func selectedProfile(r Request) string {
+	if r.Profile == "" {
+		return BasicProfile
+	}
+	return r.Profile
+}
+
 func Plan(r Request) (Result, error) {
-	if _, _, ok := identity(r.ServiceIdentity); !ok || !validDigest(r.AgentSHA256) || !validDigest(r.SourceSHA256) || !validSourcePath(r.SourceArchive) {
+	if _, _, ok := identity(r.ServiceIdentity); !ok || (selectedProfile(r) != BasicProfile && selectedProfile(r) != InventoryProfile) || !validDigest(r.AgentSHA256) || !validDigest(r.SourceSHA256) || !validSourcePath(r.SourceArchive) {
 		return Result{}, ErrRequest
 	}
-	plist := plistForIdentity(r.ServiceIdentity)
+	plist := plistForRequest(r)
 	sum := sha256.Sum256([]byte(plist))
 	return Result{
 		SchemaVersion: "tracebolt.macos-service-plan.v1", ReadOnly: true,
-		ServiceIdentity: r.ServiceIdentity, ServiceAccount: Account, AgentPath: AgentPath,
+		CollectionProfile: selectedProfile(r), ServiceIdentity: r.ServiceIdentity, ServiceAccount: Account, AgentPath: AgentPath,
 		AgentSHA256: r.AgentSHA256, SourceArchive: r.SourceArchive, SourceSHA256: r.SourceSHA256,
 		ConfigPath: ConfigPath, PlistPath: PlistPath, Plist: plist, PlistSHA256: hex.EncodeToString(sum[:]),
 		Checks: []Check{}, RemainingGates: []string{
