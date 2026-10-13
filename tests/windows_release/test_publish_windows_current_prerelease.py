@@ -1,7 +1,7 @@
 """Current-profile synthetic fixtures only: no native execution or network writes.
 
 Reuse the existing finite API/ZIP fixture. Synthetic pin and PE inspection are
-injected only in tests; production uses the reviewed native-subset tree.
+injected only in tests; production uses the exact reviewed native-subset tree.
 """
 import copy
 import importlib.util
@@ -65,7 +65,22 @@ class CurrentPublisherTests(unittest.TestCase):
             call(*args, **kwargs)
 
     def test_reviewed_native_source_tree_is_pinned(self):
-        self.assertEqual(adapter.ACCEPTED_SOURCE_TREE, "b66e8a8eaa8cfdb0a5b7108254c930ae244b6763")
+        self.assertEqual(adapter.ACCEPTED_SOURCE_TREE, "7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c")
+
+    def test_reviewed_pin_rejects_old_or_claimed_tree_and_has_no_environment_override(self):
+        with mock.patch.dict(p.os.environ, TRACEBOLT_ACCEPTED_SOURCE_TREE="b66e8a8eaa8cfdb0a5b7108254c930ae244b6763"):
+            accepted = load("_accepted_current_publisher_test", ROOT / "deploy/release/publish-windows-current-prerelease.py").publisher
+        self.assertEqual(accepted.ACCEPTED_SOURCE_TREE, adapter.ACCEPTED_SOURCE_TREE)
+        accepted.require_accepted_tree()
+        commit = self.api.routes[f.P + "/git/commits/" + f.SOURCE]
+        commit["tree"]["sha"] = adapter.ACCEPTED_SOURCE_TREE
+        accepted.publisher_lease(self.api, self.request)
+        for wrong_tree in ("b66e8a8eaa8cfdb0a5b7108254c930ae244b6763", "c87f72b7a2461a99df32dc5f9b715ea9d1ead3c8", TREE):
+            commit["tree"]["sha"] = wrong_tree
+            with self.assertRaisesRegex(accepted.Rejected, "exact reviewed Setup tree"):
+                accepted.publisher_lease(self.api, self.request)
+        self.assertEqual(self.api.mutations, [])
+        self.assertEqual(self.api.downloads, [])
 
     def test_unset_pin_rejects_prepare_plan_publish_before_api_or_writes(self):
         plan, files = self.prepare()
@@ -242,6 +257,7 @@ class CurrentPublisherTests(unittest.TestCase):
         self.assertIn("publish-windows-current-prerelease.py --verify", source)
         self.assertIn("publish-windows-current-prerelease.py --publish", source)
         self.assertNotIn("expected_tree", source)
+        self.assertEqual(source.count('check_full_validation.py --source-sha "$FULL_SOURCE_SHA" --run-id "$FULL_RUN_ID"'), 2)
         for event in ("push:", "pull_request:", "schedule:", "workflow_run:"):
             self.assertNotIn("\n  " + event, source)
         old = load("_historical_unchanged_profile", ROOT / "deploy/release/publish-windows-prerelease.py")

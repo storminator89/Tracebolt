@@ -1,17 +1,22 @@
 # Current21 hosted packaged Setup gate (source candidate)
 
 This separate gate targets fresh GitHub-hosted Windows Server 2025 x64 only.
-Source `62435ef7e605df0b102e030bf1d68cb255829a90`, tree
-`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763`, passed all three cases and aggregation
-in first-attempt [run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
-This bounded packaged-GUI result does not authorize another dispatch, installation
-or release, or prove Windows 11, real Linux-manager/shared-dashboard use, complete
-providers, renewal cutover, native restart or reboot. The historical
-`run_setup_gui.py`, `setupgate`, four-case workflow and accepted-tree pin remain
-unchanged and cannot validate current artifacts. The current adapter pins only
-the accepted tree above; current publication remains gated on successful full
-Validate of that exact source, a reviewed later publisher revision, live original
-artifacts and explicit approval. The old preview remains the published download.
+The preview.3 source pinned in the
+[installation guide](../../docs/windows-prerelease-install.md) passed all three
+cases and aggregation in first-attempt
+[run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
+The later publisher candidate pins that accepted tree. Exact-source
+[full Validate 38369024941](https://github.com/storminator89/Tracebolt/actions/runs/38369024941)
+must succeed before publication; its live conclusion is authoritative.
+Publisher review/CI, live originals and explicit publication approval are also
+required. Preview.2 retains its own published download and evidence.
+
+This bounded packaged-GUI result does not authorize another dispatch,
+installation or release, or prove Windows 11, real Linux-manager/shared-dashboard
+use, complete providers, renewal cutover, native restart or reboot. The historical
+five-scope `run_setup_gui.py`, `setupgate`, four-case workflow and accepted-tree
+pin remain unchanged and cannot validate current artifacts. See the
+[publication contract](../../docs/windows-prerelease-publication.md).
 
 ## Exact profile and actions
 

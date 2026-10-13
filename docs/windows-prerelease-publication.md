@@ -1,32 +1,37 @@
 # Exact accepted Windows prerelease promotion
 
-## Current21 adapter: exact native subset pinned, publication still gated
+## Preview.3: native subset accepted, publication requirements
 
-The intended label is **unsigned Windows Server 2025 x64 current21 Read admin
-preview; three-case packaged GUI subset**. The current adapter pins tree
-`b66e8a8eaa8cfdb0a5b7108254c930ae244b6763` from source
-`62435ef7e605df0b102e030bf1d68cb255829a90`, accepted by first-attempt
-[native run 38303755541](https://github.com/storminator89/Tracebolt/actions/runs/38303755541).
-All three cases and the aggregator passed. This is bounded native evidence,
-not a published current release or permission for another host installation.
+The next intended tag is `v0.1.0-windows-preview.3`, an **unsigned Windows Server
+2025 x64 fresh Read admin preview; three-case packaged GUI subset**. Use the
+exact Windows and manager/frontend source pinned in the
+[installation guide](windows-prerelease-install.md). It passed the three packaged
+GUI cases and aggregation in first-attempt
+[native run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
+The later publisher candidate now pins that exact accepted tree. This is bounded
+Server 2025 x64 evidence, not Windows 11 or full Windows/Linux acceptance.
 
-Publication still requires successful **full Validate for that exact source**,
-explicit publication approval and a distinct, later, independently reviewed
-publisher commit. The selected source validation is
-[run 38303779043](https://github.com/storminator89/Tracebolt/actions/runs/38303779043);
-its live successful conclusion is mandatory, never inferred from focused PR
-checks or the native result. Never substitute the publisher revision for the
-accepted source, rebuild accepted assets or take the tree pin from an input or
-environment variable. The historical preview remains the published download
-until a fresh current release is actually verified.
+[Full Validate 38369024941](https://github.com/storminator89/Tracebolt/actions/runs/38369024941)
+must succeed for the exact accepted source. The linked run’s live conclusion
+is authoritative and mandatory in both publisher jobs; ordinary green workflows and native
+success cannot replace it. The distinct later publisher revision also requires
+independent review/CI and explicit publication approval. Keep the accepted source
+frozen; never use a runtime/environment pin override or rebuild accepted files.
 
-The historical `publish-windows-prerelease.py`, `run_setup_gui.py` and
-`windows-prerelease.yml` retain their historical four-case contract and accepted
-tree. The old publisher attaches the byte-preserved guides under
-`docs/windows-prerelease-historical/`. Historical evidence cannot satisfy the
-current adapter. Current guides are `windows-prerelease-install.md` and
-`windows-prerelease-changelog.md`; they describe the accepted subset without
-announcing an available current release.
+The six original artifact IDs, ZIP digests, canonical reports and unchanged
+six-file tested/accepted package were checked against live native-run metadata.
+Original report/input retention starts expiring **2026-10-16 at 08:28 UTC**.
+Publication must reverify the live originals at every existing boundary; this
+source review is not publication-time verification or permission to publish.
+
+[Preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+has its own published download, attached guides and accepted source.
+Its native/full Validate results cannot validate preview.3. Existing releases
+remain untouched. The historical five-scope publisher/parser/workflow and guides
+under `docs/windows-prerelease-historical/` retain their original contract.
+The current publisher attaches `windows-prerelease-install.md` and
+`windows-prerelease-changelog.md`; neither native acceptance nor a prepared publisher
+is a public release.
 
 ## Required native result and practical timing
 

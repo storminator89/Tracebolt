@@ -28,21 +28,24 @@ four retained payloads within one 128 MiB reservation budget, exact custody/devi
 selection, scoped retirement and bounded per-entry worklists. Existing endpoint
 grants and signed wire formats remain unchanged; source verification only.
 
-Windows development adds complete service/machine-software browsing, richer
-network/update/security/session/hardware/storage context and fresh fifteen-scope Read
-admin setup. Selected event messages, cached update inspection, health policies
-and service control retain their separate scope and acceptance requirements.
-These additions are not in the older Windows preview. Missing Admin data comes
-before current-source native acceptance and the next release.
+Fresh Windows Read admin has twenty-one explicitly disclosed scopes. The next
+[preview.3 candidate](docs/windows-prerelease-install.md) targets current source
+with a matching manager/frontend build. Its bounded native Setup gate passed;
+publication requires successful exact-source full Validate and publisher
+review/CI. Optional features keep separate setup, consent
+and acceptance requirements. Source changes are not a published release.
 
 ## Published endpoint prereleases
 
 - [Linux v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3):
   verified Linux amd64 read-admin download selected by the dashboard.
   [Setup, scope and platform limits](docs/read-admin-onboarding.md).
+- [Windows v0.1.0-windows-preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2):
+  unsigned x64 fresh 21-scope Read admin preview; three-case hosted Server 2025
+  packaged-Setup subset. [Attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
 - [Windows v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1):
   unsigned x64 five-scope read-only preview, with a limited hosted Server 2025
-  acceptance result. [Installation and exact artifact evidence](docs/windows-prerelease-install.md).
+  acceptance result. [Historical installation and exact artifact evidence](docs/windows-prerelease-historical/windows-prerelease-install.md).
 
 Manager deployment is separate from endpoint releases. The existing tags and
 published assets are unchanged.

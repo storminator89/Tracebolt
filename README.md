@@ -92,6 +92,9 @@ install a service. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
    Fresh Setup offers [Read admin](docs/windows-read-admin-setup.md) with unchecked
    consent. Prepare the matching reviewed manager/frontend source separately;
    native acceptance covers only a bounded Server 2025 x64 packaged-Setup subset.
+   The [preview.3 candidate](docs/windows-prerelease-install.md) passed its bounded
+   native Setup gate. Publication requires successful exact-source full Validate
+   and publisher review/CI; verify release availability before installation.
 4. Check the first accepted report, observation time and actual source coverage.
    Choosing a profile does not prove that every provider returned data.
 
