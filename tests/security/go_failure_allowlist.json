@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "092c817c106b6da5361d838e6cf4434db60fb01f789bfc70c1192407bd1531d9",
+  "goSourceSha256": "8c983f205fda8ad3709f914a12b695e1f660c9ae3e83477a843be360769eae28",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1078,6 +1078,8 @@
       "TestMacOSInventoryClientRoutesReservedWhenDisabled",
       "TestMacOSInventoryFourthFleetDomainKeepsOriginalIdentity",
       "TestMacOSInventoryInvitationRequiresFreshAcknowledgement",
+      "TestMacOSInventoryLookupExactRequestShapeAndBounds",
+      "TestMacOSInventoryLookupFinalOutputGuards",
       "TestMacOSInventoryPlatformAdvertisementStaysTLSOnly",
       "TestMacOSInventoryPrivateQueryFinalGuards",
       "TestMacOSInventoryQueryStrictBoundary",
@@ -1932,6 +1934,12 @@
       "TestMacOSInventoryEnableAcknowledgementPrecedesCapture",
       "TestMacOSInventoryFinalClockSessionAndRollback",
       "TestMacOSInventoryFractionalAuthorityBudgetAtBoundary",
+      "TestMacOSInventoryLookupEmptyAndUnavailableStayDistinct",
+      "TestMacOSInventoryLookupExportInteropVectors",
+      "TestMacOSInventoryLookupFilteredPaginationAndBounds",
+      "TestMacOSInventoryLookupLiteralSourceOrderAndCounts",
+      "TestMacOSInventoryLookupOriginalAndFinalAuthority",
+      "TestMacOSInventoryLookupQueryAndLegacyBytes",
       "TestMacOSInventoryLostUsedStateBlocksReopen",
       "TestMacOSInventoryPrivateAdmissionExpiryAndMaintenance",
       "TestMacOSInventoryRecheckFinalSessionExpiryAndHighWater",

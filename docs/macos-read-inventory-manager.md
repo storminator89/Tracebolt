@@ -102,7 +102,25 @@ body fields `section`, `generationId`, `offset`, `limit`. Sections are `summary`
 and zero offset; detail reads pin the returned generation. Limits are 1–100 rows
 and 32 KiB per response. Whole rows are reduced to fit the byte budget and
 `nextOffset` continues the same generation; identifiers/addresses are never
-truncated. No arbitrary searches or filters are introduced.
+truncated. Legacy four-field queries and v1 response bytes are unchanged.
+
+Receipts and processes also accept one explicit six-field lookup shape:
+`schemaVersion: "tracebolt.macos-read-inventory-query.v2"`, `section`,
+`generationId`, `offset`, `limit`, `search`. Summary, hardware and network retain
+v1. Search is canonical lowercase printable ASCII, at most 256 bytes, without
+outer ASCII spaces; noncanonical input is rejected. Matching is a literal
+case-insensitive substring of a receipt identifier, or independently of an
+observed process accounting label, decimal PID or decimal PPID. Unavailable-name
+placeholders never match. Empty search matches every captured row.
+
+The v2 page adds the exact `search` and `matchingCount`; `total` remains the
+captured source-row count. Offsets address the matching sequence in original
+source order, with the same 100-row/32-KiB whole-row bounds and 1-KiB request cap.
+Observed processes may have zero matches despite a positive captured total;
+denied/unavailable sources retain their unknown status and zero row counts.
+Only the bounded, already-retained latest report is scanned in memory. This
+lookup adds no native read, grant, index, storage, SQL search or export, and never
+changes capture age, source coverage or the pinned generation.
 
 Every read requires the live authenticated operator session, CSRF admission,
 current credential, original enrollment/sender/grant and generation. Unexported
@@ -111,7 +129,7 @@ final transaction. `authorityUntil` is clipped by session, current credential an
 original report lifetime. Expiry, logout, revocation, disable or replacement
 cannot return a prepared stale private page. Device-list projections expose only
 platform and scope capability, with no process/receipt/address rows. There is no
-AI, search, health, action, external-provider or log export of inventory data.
+AI, global search, health, action, external-provider or log export of inventory data.
 
 The manager performs logical expiry cleanup before serving on startup, then
 once per minute. An existing fenced inventory database remains open solely for

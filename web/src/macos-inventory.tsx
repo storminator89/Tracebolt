@@ -4,7 +4,7 @@ import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import { DeviceTabs } from './device-tabs';
 import { useMacInventory } from './macos-inventory-resource';
-import { macInventorySections } from './macos-inventory-types';
+import { isMacLookupSection, macInventoryMatchingCount, macInventorySections } from './macos-inventory-types';
 import type { MacInventoryPage, MacInventorySection, MacInventorySource } from './macos-inventory-types';
 import './macos-inventory.css';
 
@@ -16,6 +16,7 @@ const copy = {
   basic: 'This Mac has basic read-only scope. Hardware detail, receipt identifiers, process labels and interface metadata require a fresh, explicitly approved macOS inventory identity.',
   access: 'Private inventory access is unavailable. Sign in with a current operator session and recheck this device.',
   refresh: 'Refresh inventory', checking: 'Checking current authority…', previous: 'Previous page', next: 'Next page', empty: 'No receipt identifiers returned by this source.', noaddresses: 'No addresses returned',
+  findReceipts: 'Find receipts', findProcesses: 'Find processes', apply: 'Apply', clear: 'Clear', matches: 'matches', noMatches: 'No matches in this captured source.', applied: 'Applied', allRows: 'All rows', draftPending: 'Draft not applied.', searchHelp: 'Literal text, ignoring case. Receipt ID, or process label / PID / PPID. Up to 256 printable ASCII characters.', searchInvalid: 'Use up to 256 printable ASCII characters.',
   captured: 'Captured', reason: 'Provider reason', scope: 'Source & collection limits', noData: 'No current inventory generation is available.', selected: 'Only the selected sources are covered. Source coverage and capture age are separate.',
   hardwareLimit: 'Fixed sysctl fields: model identifier, CPU counts and RAM capacity. Capacity is not utilization, pressure or machine identity.',
   receiptLimit: 'Installer receipt IDs on the root volume. Receipts may outlive removed files. This is not a complete installed-software inventory; App Store, portable apps and Homebrew need separate coverage.',
@@ -33,6 +34,7 @@ const copy = {
   basic: 'Dieser Mac hat nur den Basis-Leseumfang. Hardwaredetails, Belegkennungen, Prozessbezeichnungen und Schnittstellenmetadaten brauchen eine neue, explizit freigegebene macOS-Inventaridentität.',
   access: 'Privater Inventarzugriff ist nicht verfügbar. Mit aktueller Operator-Sitzung anmelden und dieses Gerät erneut prüfen.',
   refresh: 'Inventar aktualisieren', checking: 'Aktuelle Berechtigung wird geprüft …', previous: 'Vorherige Seite', next: 'Nächste Seite', empty: 'Diese Quelle hat keine Belegkennungen geliefert.', noaddresses: 'Keine Adressen geliefert',
+  findReceipts: 'Belege suchen', findProcesses: 'Prozesse suchen', apply: 'Anwenden', clear: 'Leeren', matches: 'Treffer', noMatches: 'Keine Treffer in dieser erfassten Quelle.', applied: 'Angewendet', allRows: 'Alle Zeilen', draftPending: 'Entwurf nicht angewendet.', searchHelp: 'Wörtlicher Text, ohne Groß-/Kleinschreibung. Belegkennung oder Prozessbezeichnung / PID / PPID. Bis zu 256 druckbare ASCII-Zeichen.', searchInvalid: 'Bis zu 256 druckbare ASCII-Zeichen verwenden.',
   captured: 'Erfasst', reason: 'Quellgrund', scope: 'Quelle & Erfassungsgrenzen', noData: 'Keine aktuelle Inventargeneration verfügbar.', selected: 'Nur die ausgewählten Quellen sind abgedeckt. Quellenabdeckung und Erfassungsalter bleiben getrennt.',
   hardwareLimit: 'Feste sysctl-Felder: Modellkennung, CPU-Anzahlen und RAM-Kapazität. Kapazität ist keine Auslastung, kein Speicherdruck und keine Geräteidentität.',
   receiptLimit: 'Installer-Belegkennungen auf dem Root-Volume. Belege können entfernte Dateien überdauern. Dies ist kein vollständiges Inventar installierter Software; App Store, portable Apps und Homebrew brauchen eigene Quellen.',
@@ -52,6 +54,7 @@ function Rows({ page, section, c, locale }: { page: MacInventoryPage; section: M
  const source = page.sources![section];
  if (source.quality !== 'observed') return <p className="mac-inventory-empty">{c.rowsUnknown} · {c.reasons[source.reason as keyof Copy['reasons']]}</p>;
  if (section === 'hardware') { const h = page.hardware!; return <dl className="mac-hardware-grid">{[[c.model, h.modelIdentifier], [c.physical, h.physicalCPUs], [c.logical, h.logicalCPUs], [c.memory, `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(h.memoryCapacityBytes / 1073741824)} GiB`]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>; }
+ if (page.schemaVersion === 'tracebolt.macos-read-inventory-page.v2' && page.search !== '' && page.matchingCount === 0) return <p className="mac-inventory-empty">{c.noMatches}</p>;
  if (section === 'receipts') return page.receiptIds.length ? <table><thead><tr><th>{c.receipt}</th></tr></thead><tbody>{page.receiptIds.map(row => <tr key={row}><td className="mono">{row}</td></tr>)}</tbody></table> : <p className="mac-inventory-empty">{c.empty}</p>;
  if (section === 'processes') return <table><thead><tr><th>PID</th><th>PPID</th><th>{c.label}</th></tr></thead><tbody>{page.processes.map(row => <tr key={row.pid}><td>{row.pid}</td><td>{row.parentPid}</td><td className="mono">{row.nameQuality === 'observed' ? row.accountingName : <span className="mac-muted">{c.unavailable}</span>}</td></tr>)}</tbody></table>;
  return <table><thead><tr><th>{c.interface}</th><th>{c.addresses}</th><th>MTU</th><th>{c.flags}</th></tr></thead><tbody>{page.interfaces.map(row => <tr key={row.name}><td className="mono">{row.name}</td><td className="mono">{row.addresses.length ? row.addresses.map(address => <span className="mac-address" key={`${address.ip}/${address.prefixBits}`}>{address.ip}/{address.prefixBits}</span>) : <span className="mac-muted">{c.noaddresses}</span>}</td><td>{row.mtu}</td><td>{row.up ? c.up : c.down} · {row.running ? c.running : c.notRunning}</td></tr>)}</tbody></table>;
@@ -61,6 +64,7 @@ export function MacInventoryWorkspace({ deviceId, enabled, configured, sessionKe
  const resource = useMacInventory(deviceId, enabled && configured, sessionKey, identityKey, section), { summary, page, loading, error } = resource;
  const icons = { hardware: Cpu, receipts: Package, processes: Terminal, ipv4: Network, ipv6: Network };
  const freshness = summary?.status === 'fresh' && summary.collectedAt && Date.parse(summary.serverNow) - Date.parse(summary.collectedAt) + resource.age >= 60000 ? 'stale' : summary?.status;
+ const lookup = isMacLookupSection(section), count = page ? macInventoryMatchingCount(page) : 0;
  const limits = section === 'hardware' ? c.hardwareLimit : section === 'receipts' ? c.receiptLimit : section === 'processes' ? c.processLimit : c.networkLimit;
  return <section className="mac-inventory" aria-label={c.title}>
   <header className="mac-inventory-header"><div><h2><Database size={18}/>{c.title}</h2><p>{c.private}</p></div><button type="button" className="button small" disabled={!enabled || !configured || loading || error === 'session'} onClick={resource.refresh}><RefreshCw size={14} className={loading ? 'spin' : undefined}/>{c.refresh}</button></header>
@@ -72,10 +76,16 @@ export function MacInventoryWorkspace({ deviceId, enabled, configured, sessionKe
    {summary?.sources && <div className="mac-source-strip" aria-label={c.coverage}>{macInventorySections.map(key => <div key={key}><strong>{c[key]}</strong><SourceStatus source={summary.sources![key]} c={c}/></div>)}</div>}
    <DeviceTabs tabs={macInventorySections.map(id => ({ id: `mac-${id}`, name: c[id], icon: icons[id] }))} selected={`mac-${section}`} onSelect={id => setSection(id.slice(4) as MacInventorySection)}/>
    <div role="tabpanel" id={`device-mac-${section}`} aria-labelledby={`tab-mac-${section}`} className="mac-inventory-panel">
-    <div className="mac-table-heading"><h3>{c[section]}</h3><span>{page && page.sources?.[section].quality === 'observed' && section !== 'hardware' ? `${page.total} ${c.rows}` : section === 'hardware' ? '' : c.rowsUnknown}</span></div>
+    <div className="mac-table-heading"><h3>{c[section]}</h3><span data-testid="mac-lookup-count" aria-live="polite">{page && page.sources?.[section].quality === 'observed' && section !== 'hardware' ? `${lookup ? `${count} ${c.matches} · ` : ''}${page.total} ${c.rows}` : section === 'hardware' ? '' : c.rowsUnknown}</span></div>
     <p className="mac-scope-line">{limits}</p>
+    {lookup && <form className="mac-lookup" data-testid="mac-lookup-controls" onSubmit={event => { event.preventDefault(); resource.applySearch(); }}>
+     <label htmlFor={`mac-${section}-search`}>{section === 'receipts' ? c.findReceipts : c.findProcesses}</label>
+     <div className="mac-lookup-inputs"><input id={`mac-${section}-search`} type="text" value={resource.draft} onChange={event => resource.setDraft(event.target.value)} maxLength={256} autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={error === 'session'} aria-describedby={`mac-${section}-search-help`} aria-invalid={resource.searchInvalid}/><button type="submit" className="button small" disabled={error === 'session'}>{c.apply}</button><button type="button" className="button small" disabled={error === 'session' || !resource.draft && !resource.search} onClick={() => resource.applySearch('')}>{c.clear}</button></div>
+     <p id={`mac-${section}-search-help`} className="mac-lookup-help">{resource.searchInvalid ? <span role="alert">{c.searchInvalid}</span> : c.searchHelp}</p>
+     <p className="mac-lookup-applied">{c.applied}: <span>{resource.search || c.allRows}</span>{resource.draft !== resource.search && <span> · {c.draftPending}</span>}</p>
+    </form>}
     <div className="mac-inventory-table" data-testid="mac-inventory-scroll">{page ? <Rows page={page} section={section} c={c} locale={locale}/> : !loading && !error ? <p className="mac-inventory-empty">{c.noData}</p> : null}</div>
-    {page && section !== 'hardware' && page.sources?.[section].quality === 'observed' && page.total > 0 && <nav className="mac-pagination" aria-label={locale === 'de' ? 'Inventarseiten' : 'Inventory pages'}><button type="button" className="button small" disabled={loading || page.offset === 0} onClick={resource.previous}>{c.previous}</button><span>{page.offset + 1}–{page.offset + (section === 'receipts' ? page.receiptIds.length : section === 'processes' ? page.processes.length : page.interfaces.length)} / {page.total}</span><button type="button" className="button small" disabled={loading || page.nextOffset === null} onClick={resource.next}>{c.next}</button></nav>}
+    {page && section !== 'hardware' && page.sources?.[section].quality === 'observed' && count > 0 && <nav className="mac-pagination" aria-label={locale === 'de' ? 'Inventarseiten' : 'Inventory pages'}><button type="button" className="button small" disabled={loading || page.offset === 0} onClick={resource.previous}>{c.previous}</button><span>{page.offset + 1}–{page.offset + (section === 'receipts' ? page.receiptIds.length : section === 'processes' ? page.processes.length : page.interfaces.length)} / {count}</span><button type="button" className="button small" disabled={loading || page.nextOffset === null} onClick={resource.next}>{c.next}</button></nav>}
     <details className="mac-inventory-notes"><summary>{c.scope}<ChevronDown size={14}/></summary><p>{c.selected}</p><p>{c.retention}</p>{summary?.sources && <code>{summary.sources[section].source}</code>}</details>
    </div>
   </>}

@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
@@ -57,7 +59,7 @@ func (h *operatorHandler) writeMacOSInventoryQuery(w http.ResponseWriter, r *htt
 		return
 	}
 	var q enrollmentstore.MacOSInventoryQuery
-	if !readObject(w, r, 1024, []string{"section", "generationId", "offset", "limit"}, &q) {
+	if !readMacOSInventoryQuery(w, r, &q) {
 		return
 	}
 	if enrollmentstore.ValidateMacOSInventoryQuery(q) != nil {
@@ -90,6 +92,32 @@ func (h *operatorHandler) writeMacOSInventoryQuery(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
+}
+
+func readMacOSInventoryQuery(w http.ResponseWriter, r *http.Request, q *enrollmentstore.MacOSInventoryQuery) bool {
+	// Select the explicit versioned shape from bounded bytes, then retain the
+	// shared exact-key, duplicate, null and typed-field checks over those bytes.
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1024))
+	if err != nil {
+		var maximum *http.MaxBytesError
+		if errors.As(err, &maximum) {
+			fail(w, 413, "body_too_large", "Request body exceeds this endpoint's byte limit.")
+		} else {
+			fail(w, 400, "invalid_body", "Request body could not be read.")
+		}
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		fail(w, 400, "invalid_json", "Exactly the expected typed fields are required.")
+		return false
+	}
+	keys := []string{"section", "generationId", "offset", "limit"}
+	if _, exists := fields["schemaVersion"]; exists {
+		keys = append(keys, "schemaVersion", "search")
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	return readObject(w, r, 1024, keys, q)
 }
 
 func macosInventoryError(w http.ResponseWriter, err error) {

@@ -41,3 +41,16 @@
  .mac-inventory-table th, .mac-inventory-table td { padding: 9px 8px; }
  .mac-pagination { flex-wrap: wrap; }
 }
+
+.mac-lookup { margin-bottom: 14px; min-width: 0; }
+.mac-lookup > label { display: block; font-size: 12px; margin-bottom: 6px; }
+.mac-lookup-inputs { display: flex; gap: 8px; align-items: center; }
+.mac-lookup-inputs input { width: 280px; max-width: 100%; min-width: 0; flex: 0 1 280px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); color: inherit; font: inherit; font-size: 12px; }
+.mac-lookup-inputs input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mac-lookup-help, .mac-lookup-applied { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: var(--secondary); overflow-wrap: anywhere; max-width: 85ch; }
+.mac-lookup-help [role=alert] { color: var(--warning, #aa6e0a); }
+@media(max-width:650px) {
+ .mac-table-heading { flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+ .mac-lookup-inputs { flex-wrap: wrap; }
+ .mac-lookup-inputs input { flex-basis: 100%; }
+}

@@ -3,6 +3,8 @@ package enrollmentstore
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
@@ -11,13 +13,20 @@ import (
 	"localrmm/internal/macosinventorywire"
 )
 
-const MacOSInventoryMaxPageBytes = 32 * 1024
+const (
+	MacOSInventoryMaxPageBytes       = 32 * 1024
+	MacOSInventoryLookupQueryVersion = "tracebolt.macos-read-inventory-query.v2"
+	MacOSInventoryLookupPageVersion  = "tracebolt.macos-read-inventory-page.v2"
+	MacOSInventoryMaxSearchBytes     = 256
+)
 
 type MacOSInventoryQuery struct {
-	Section      string `json:"section"`
-	GenerationID string `json:"generationId"`
-	Offset       int    `json:"offset"`
-	Limit        int    `json:"limit"`
+	Section       string  `json:"section"`
+	GenerationID  string  `json:"generationId"`
+	Offset        int     `json:"offset"`
+	Limit         int     `json:"limit"`
+	SchemaVersion string  `json:"schemaVersion,omitempty"`
+	Search        *string `json:"search,omitempty"`
 }
 
 type MacOSInventorySources struct {
@@ -49,7 +58,10 @@ type MacOSInventoryPage struct {
 	Offset         int                        `json:"offset"`
 	Total          int                        `json:"total"`
 	NextOffset     *int                       `json:"nextOffset"`
-	guard          macOSInventoryReadGuard
+	// Pointers retain the exact v1 bytes while emitting empty/zero v2 values.
+	Search        *string `json:"search,omitempty"`
+	MatchingCount *int    `json:"matchingCount,omitempty"`
+	guard         macOSInventoryReadGuard
 }
 
 type macOSInventoryReadGuard struct {
@@ -76,6 +88,13 @@ func macOSSession(ctx context.Context, at time.Time) (macOSInventorySession, err
 	return s, nil
 }
 func ValidateMacOSInventoryQuery(q MacOSInventoryQuery) error {
+	if q.SchemaVersion == "" {
+		if q.Search != nil {
+			return macosinventorywire.ErrInvalid
+		}
+	} else if q.SchemaVersion != MacOSInventoryLookupQueryVersion || q.Section != "receipts" && q.Section != "processes" || q.Search == nil || !validMacOSInventorySearch(*q.Search) {
+		return macosinventorywire.ErrInvalid
+	}
 	if q.Limit < 1 || q.Limit > 100 || q.Offset < 0 || q.Offset > macosinventory.MaxProcesses {
 		return macosinventorywire.ErrInvalid
 	}
@@ -93,6 +112,28 @@ func ValidateMacOSInventoryQuery(q MacOSInventoryQuery) error {
 	}
 	return nil
 }
+
+// Search is canonical printable ASCII, not a regular expression or a query
+// language. Numeric fields are matched separately, never joined with labels.
+func validMacOSInventorySearch(search string) bool {
+	if len(search) > MacOSInventoryMaxSearchBytes || strings.Trim(search, " ") != search {
+		return false
+	}
+	for i := 0; i < len(search); i++ {
+		if search[i] < ' ' || search[i] > '~' || search[i] >= 'A' && search[i] <= 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+func macOSInventoryProcessMatches(row macosinventory.Process, search string) bool {
+	return search == "" ||
+		row.NameQuality == "observed" && strings.Contains(strings.ToLower(row.AccountingName), search) ||
+		strings.Contains(strconv.FormatUint(uint64(row.PID), 10), search) ||
+		strings.Contains(strconv.FormatUint(uint64(row.ParentPID), 10), search)
+}
+
 func (s *Store) MacOSInventoryPage(ctx context.Context, device string, q MacOSInventoryQuery, now time.Time) (MacOSInventoryPage, error) {
 	zero := MacOSInventoryPage{}
 	if ValidateMacOSInventoryQuery(q) != nil || !enrollmentcrypto.ValidID(device, "agent_") {
@@ -138,6 +179,11 @@ func (s *Store) MacOSInventoryPage(ctx context.Context, device string, q MacOSIn
 			return err
 		}
 		out = MacOSInventoryPage{SchemaVersion: "tracebolt.macos-read-inventory-page.v1", DeviceID: device, Section: q.Section, Status: "not-enabled", ServerNow: now, SourceQuality: "unknown", ReceiptIDs: []string{}, Processes: []macosinventory.Process{}, Interfaces: []macosinventory.Interface{}, Offset: q.Offset}
+		if q.SchemaVersion == MacOSInventoryLookupQueryVersion {
+			search, matches := *q.Search, 0
+			out.SchemaVersion = MacOSInventoryLookupPageVersion
+			out.Search, out.MatchingCount = &search, &matches
+		}
 		out.guard = macOSInventoryReadGuard{invitation: snap.InvitationID, certificate: cert, session: owner.id, checked: now, until: time.Unix(t.currentCredentialNotAfter(snap), 0).UTC()}
 		if owner.until.Before(out.guard.until) {
 			out.guard.until = owner.until
@@ -193,10 +239,36 @@ func (s *Store) MacOSInventoryPage(ctx context.Context, device string, q MacOSIn
 						case "ipv6":
 							out.Total = len(report.Snapshot.Network.IPv6.Rows)
 						}
-						if q.Offset > out.Total && q.Section != "hardware" {
+						pageTotal := out.Total
+						if out.Search != nil {
+							// Compact only this bounded decoded report in source order. No
+							// persistent index, SQL search, collection or source mutation.
+							switch q.Section {
+							case "receipts":
+								rows := report.Snapshot.Receipts.Identifiers
+								report.Snapshot.Receipts.Identifiers = rows[:0]
+								for _, row := range rows {
+									if strings.Contains(strings.ToLower(row), *out.Search) {
+										report.Snapshot.Receipts.Identifiers = append(report.Snapshot.Receipts.Identifiers, row)
+									}
+								}
+								pageTotal = len(report.Snapshot.Receipts.Identifiers)
+							case "processes":
+								rows := report.Snapshot.Processes.Rows
+								report.Snapshot.Processes.Rows = rows[:0]
+								for _, row := range rows {
+									if macOSInventoryProcessMatches(row, *out.Search) {
+										report.Snapshot.Processes.Rows = append(report.Snapshot.Processes.Rows, row)
+									}
+								}
+								pageTotal = len(report.Snapshot.Processes.Rows)
+							}
+							*out.MatchingCount = pageTotal
+						}
+						if q.Offset > pageTotal && q.Section != "hardware" {
 							return macosinventorywire.ErrInvalid
 						}
-						for i := q.Offset; i < out.Total && i < q.Offset+q.Limit; i++ {
+						for i := q.Offset; i < pageTotal && i < q.Offset+q.Limit; i++ {
 							switch q.Section {
 							case "receipts":
 								out.ReceiptIDs = append(out.ReceiptIDs, report.Snapshot.Receipts.Identifiers[i])
@@ -208,7 +280,7 @@ func (s *Store) MacOSInventoryPage(ctx context.Context, device string, q MacOSIn
 								out.Interfaces = append(out.Interfaces, report.Snapshot.Network.IPv6.Rows[i])
 							}
 							next := i + 1
-							if next < out.Total {
+							if next < pageTotal {
 								out.NextOffset = &next
 							} else {
 								out.NextOffset = nil

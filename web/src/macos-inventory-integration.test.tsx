@@ -3,10 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mutateRaw, request } from './api';
 import { DeviceDetail } from './details';
 import { setLocale } from './i18n';
-import { macInventoryDevice, macInventoryDeviceId, macInventoryFixture } from './macos-inventory-fixture';
+import { macInventoryDevice, macInventoryDeviceId, macInventoryFixtureClock } from './macos-inventory-fixture';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutateRaw: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: () => ({ mode: 'lan', authenticated: true, insecureTestMode: false, expiresAt: '2026-10-13T10:30:00Z' }) }));
-beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset().mockImplementation(async path => { if (path === `/devices/${macInventoryDeviceId}`) return macInventoryDevice(); throw new Error(`Unexpected route ${path}`); }); vi.mocked(mutateRaw).mockReset().mockImplementation(async (_path, raw) => macInventoryFixture(JSON.parse(raw))); });
+let macInventoryFixture: ReturnType<typeof macInventoryFixtureClock>;
+beforeEach(() => { macInventoryFixture = macInventoryFixtureClock(); setLocale('en', false); vi.mocked(request).mockReset().mockImplementation(async path => { if (path === `/devices/${macInventoryDeviceId}`) return macInventoryDevice(); throw new Error(`Unexpected route ${path}`); }); vi.mocked(mutateRaw).mockReset().mockImplementation(async (_path, raw) => macInventoryFixture(JSON.parse(raw))); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('Mac DeviceDetail integration', () => {
  it('adds the inventory workspace in the shared device page without Linux-only overview cards or reads', async () => {

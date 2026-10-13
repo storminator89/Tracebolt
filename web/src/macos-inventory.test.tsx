@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, mutateRaw } from './api';
 import { setLocale } from './i18n';
 import { MacInventoryWorkspace } from './macos-inventory';
-import { macInventoryDeviceId, macInventoryFixture } from './macos-inventory-fixture';
+import { macInventoryDeviceId, macInventoryFixtureClock } from './macos-inventory-fixture';
 import type { MacInventoryPage, MacInventoryQuery } from './macos-inventory-types';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), mutateRaw: vi.fn() }));
 const props = { deviceId: macInventoryDeviceId, enabled: true, configured: true, sessionKey: '2026-10-13T10:30:00Z', identityKey: 'original-identity' };
 let amend: (value: MacInventoryPage) => MacInventoryPage;
-beforeEach(() => { setLocale('en', false); amend = value => value; vi.mocked(mutateRaw).mockReset().mockImplementation(async (_path, raw) => amend(macInventoryFixture(JSON.parse(raw) as MacInventoryQuery))); });
+let macInventoryFixture: ReturnType<typeof macInventoryFixtureClock>;
+beforeEach(() => { macInventoryFixture = macInventoryFixtureClock(); setLocale('en', false); amend = value => value; vi.mocked(mutateRaw).mockReset().mockImplementation(async (_path, raw) => amend(macInventoryFixture(JSON.parse(raw) as MacInventoryQuery))); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 async function open() { const result = render(<MacInventoryWorkspace {...props}/>); await screen.findByText('Mac14,12'); return result; }
 async function select(name: string) { fireEvent.click(screen.getByRole('tab', { name })); await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh inventory' })).toBeEnabled()); }
@@ -22,7 +23,7 @@ describe('compact private Mac workspace', () => {
   await open(); await select('Package receipts'); expect(screen.getByText('com.example.fixture.editor')).toBeVisible(); expect(screen.getByText(/not a complete installed-software inventory/)).toBeVisible(); expect(screen.queryByText('Installed software', { exact: true })).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: /install|delete|export/i })).not.toBeInTheDocument();
  });
  it('shows provider denial and unknown count without replacing it by zero', async () => {
-  amend = page => { page.sources!.receipts = { ...page.sources!.receipts, quality: 'denied', reason: 'macos_inventory_access_denied' }; page.sourceQuality = 'partial'; if (page.section === 'receipts') { page.receiptIds = []; page.total = 0; } return page; };
+  amend = page => { page.sources!.receipts = { ...page.sources!.receipts, quality: 'denied', reason: 'macos_inventory_access_denied' }; page.sourceQuality = 'partial'; if (page.section === 'receipts') { page.receiptIds = []; page.total = 0; if (page.schemaVersion === 'tracebolt.macos-read-inventory-page.v2') page.matchingCount = 0; } return page; };
   await open(); await select('Package receipts'); expect(screen.getByText('Partial', { exact: true })).toBeVisible(); expect(screen.getAllByText('Provider access denied').length).toBeGreaterThan(0); expect(screen.queryByText(/0 source rows/)).not.toBeInTheDocument(); expect(screen.getByText('Count unknown', { exact: true })).toBeVisible(); expect(screen.queryByText('No receipt identifiers returned by this source.')).not.toBeInTheDocument();
  });
  it('shows safe process columns and explicit absent accounting labels', async () => {
@@ -72,11 +73,20 @@ describe('private result lifecycle', () => {
 
 describe('generation-pinned whole-row paging', () => {
  it('keeps only the current bounded page and binds next/previous offsets', async () => {
-  amend = page => { if (page.section === 'receipts') { page.total = 53; page.receiptIds = Array.from({length:Math.min(50,53-page.offset)}, (_,i)=>`com.fixture.item${String(page.offset+i).padStart(3,'0')}`); page.nextOffset = page.offset===0?50:null; } return page; };
+  amend = page => { if (page.section === 'receipts') { page.total = 53; if (page.schemaVersion === 'tracebolt.macos-read-inventory-page.v2') page.matchingCount = 53; page.receiptIds = Array.from({length:Math.min(50,53-page.offset)}, (_,i)=>`com.fixture.item${String(page.offset+i).padStart(3,'0')}`); page.nextOffset = page.offset===0?50:null; } return page; };
   await open(); await select('Package receipts'); expect(screen.getByText('com.fixture.item000')).toBeVisible(); expect(screen.queryByText('com.fixture.item050')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button',{name:'Next page'})); await screen.findByText('com.fixture.item050'); expect(screen.queryByText('com.fixture.item000')).not.toBeInTheDocument(); expect(screen.getByRole('button',{name:'Next page'})).toBeDisabled();
-  expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toEqual({section:'receipts',generationId:`sample_${'a'.repeat(32)}`,offset:50,limit:50}); fireEvent.click(screen.getByRole('button',{name:'Previous page'})); await screen.findByText('com.fixture.item000'); expect(screen.queryByText('com.fixture.item050')).not.toBeInTheDocument();
+  expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toEqual({schemaVersion:'tracebolt.macos-read-inventory-query.v2',search:'',section:'receipts',generationId:`sample_${'a'.repeat(32)}`,offset:50,limit:50}); fireEvent.click(screen.getByRole('button',{name:'Previous page'})); await screen.findByText('com.fixture.item000'); expect(screen.queryByText('com.fixture.item050')).not.toBeInTheDocument();
  });
  it('stops paging when the summary generation changes rather than mixing pages', async () => {
-  amend = page => { if(page.section==='receipts'){page.total=4;page.nextOffset=3;}return page;}; await open(); await select('Package receipts'); amend=page=>({...page,generationId:`sample_${'b'.repeat(32)}`}); const before=vi.mocked(mutateRaw).mock.calls.length; fireEvent.click(screen.getByRole('button',{name:'Next page'})); await screen.findByRole('alert'); expect(mutateRaw).toHaveBeenCalledTimes(before+1); expect(screen.queryByText('com.example.fixture.editor')).not.toBeInTheDocument();
+  amend = page => { if(page.section==='receipts'){page.total=4;if(page.schemaVersion==='tracebolt.macos-read-inventory-page.v2')page.matchingCount=4;page.nextOffset=3;}return page;}; await open(); await select('Package receipts'); amend=page=>({...page,generationId:`sample_${'b'.repeat(32)}`}); const before=vi.mocked(mutateRaw).mock.calls.length; fireEvent.click(screen.getByRole('button',{name:'Next page'})); await screen.findByRole('alert'); expect(mutateRaw).toHaveBeenCalledTimes(before+1); expect(screen.queryByText('com.example.fixture.editor')).not.toBeInTheDocument();
  });
+});
+
+it.each(['ipv4', 'ipv6'] as const)('preserves the legacy v1 %s page during delayed manual refresh', async section => {
+ amend = page => { if (page.section === section) { const row = page.interfaces[0] ?? macInventoryFixture({ section, generationId: `sample_${'a'.repeat(32)}`, offset: 0, limit: 50 }).interfaces[0]; page.total = 53; page.interfaces = Array.from({ length: Math.min(50, 53 - page.offset) }, (_, i) => ({ ...row, name: `en${String(page.offset + i).padStart(3, '0')}` })); page.nextOffset = page.offset === 0 ? 50 : null; } return page; };
+ await open(); await select(section === 'ipv4' ? 'IPv4 interfaces' : 'IPv6 interfaces'); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); await screen.findByText('en050');
+ let finish!: () => void;
+ vi.mocked(mutateRaw).mockImplementationOnce(async (_path, raw) => new Promise(resolve => { finish = () => resolve(amend(macInventoryFixture(JSON.parse(raw)))); }));
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh inventory' })); expect(screen.getByText('en050')).toBeVisible(); expect(screen.getByRole('button', { name: 'Refresh inventory' })).toBeDisabled();
+ await act(async () => finish()); await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh inventory' })).toBeEnabled()); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toEqual({ section, generationId: `sample_${'a'.repeat(32)}`, offset: 50, limit: 50 }); expect(screen.getByText('en050')).toBeVisible(); expect(screen.queryByText('en000')).not.toBeInTheDocument();
 });
