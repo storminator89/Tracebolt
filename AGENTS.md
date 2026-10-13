@@ -364,7 +364,10 @@ missing material rather than inventing credentials or weakening protection.
   Read `docs/windows-service-health.md` before changing exact-name selection,
   discrete state evaluation, source admission, API or UI. Keep native
   `internal/windowsservice` lifecycle code separate from the manager-only
-  `internal/windowsservicehealth` package. Missing/duplicate rows never prove down;
+  `internal/windowsservicehealth` package. The one-time exact group configuration
+  workflow uses `docs/fleet-group-service-checks.md`; keep its original member keys,
+  explicit confirmation, transaction-time group checks and bounded 128-row preview.
+  It grants no complete-generation monitoring or inheritance. Missing/duplicate rows never prove down;
   preserve positive partial-row scope, original capture, authority and durable floors.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped

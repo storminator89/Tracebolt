@@ -6,12 +6,12 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
-const built=await require('esbuild').build({stdin:{contents:"export {windowsCapacityDevice,windowsCapacityView} from './windows-capacity-fixture'; export {windowsResourceView} from './windows-resource-fixture'; export {validFleetGroupsView} from './fleet-groups-types'; export {validWindowsPercentageView} from './windows-capacity-types'; export {validGroupMonitoringView} from './fleet-group-monitoring-types'; export {validGroupMaintenanceView} from './fleet-group-maintenance-workflow';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
-const {windowsCapacityDevice,windowsCapacityView,windowsResourceView,validFleetGroupsView,validWindowsPercentageView,validGroupMonitoringView,validGroupMaintenanceView}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+const built=await require('esbuild').build({stdin:{contents:"export {windowsCapacityDevice,windowsCapacityView} from './windows-capacity-fixture'; export {windowsResourceView} from './windows-resource-fixture'; export {validFleetGroupsView} from './fleet-groups-types'; export {validWindowsPercentageView} from './windows-capacity-types'; export {validGroupMonitoringView} from './fleet-group-monitoring-types'; export {validGroupMaintenanceView} from './fleet-group-maintenance-workflow'; export {validGroupServiceChecksView,validGroupServiceChoiceView} from './fleet-group-service-checks-workflow'; export {windowsServiceHealthInventory} from './windows-service-health-fixture';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {windowsCapacityDevice,windowsCapacityView,windowsResourceView,validFleetGroupsView,validWindowsPercentageView,validGroupMonitoringView,validGroupMaintenanceView,validGroupServiceChecksView,validGroupServiceChoiceView,windowsServiceHealthInventory}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 export const fleetGroupIds={first:`agent_${'7'.repeat(32)}`,second:`agent_${'2'.repeat(32)}`,linux:`agent_${'3'.repeat(32)}`,group:`group_${'4'.repeat(32)}`,created:`group_${'5'.repeat(32)}`};
 let stage='setup',failures=0,pending=0;
 export const fleetGroupsRouteState=()=>({failures,pending});
-export const fleetGroupsFailureStage=()=>new Set(['setup','login','groups','review','apply','conflict','uncertain','uncertain-review','uncertain-apply','uncertain-result','uncertain-remaining','uncertain-count','uncertain-close','stop','layout','inheritance','maintenance','maintenance-end','complete']).has(stage)?stage:'setup';
+export const fleetGroupsFailureStage=()=>new Set(['setup','login','groups','review','apply','conflict','uncertain','uncertain-review','uncertain-apply','uncertain-result','uncertain-remaining','uncertain-count','uncertain-close','stop','layout','inheritance','maintenance','maintenance-end','service-checks','complete']).has(stage)?stage:'setup';
 export function guardFleetGroupsRoute(route,handler){pending++;return Promise.resolve().then(()=>handler(route)).catch(async()=>{failures++;try{await route.abort('failed');}catch{/* Teardown already ended the request. */}}).finally(()=>{pending--;});}
 export function fleetGroupsBrowserFixture(serverNow,expiresAt){
  const source=windowsCapacityDevice(),devices=[{id:fleetGroupIds.first,name:'Synthetic Desk One',platform:'windows'},{id:fleetGroupIds.second,name:'Synthetic Desk Two',platform:'windows'},{id:fleetGroupIds.linux,name:'Synthetic Linux',platform:'linux'}];
@@ -222,5 +222,97 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
    stage='stop';mode='hold';await prepare('disk');const stoppedBefore=policyPosts;await apply();await expect.poll(()=>held).toBe(true);await page.getByRole('button',{name:'Stop remaining writes',exact:true}).click();assert.ok(release);release();release=null;await expect(page.getByText('Unconfirmed · write may have happened',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(stoppedBefore+1);await close();mode='normal';
   }
  }
- await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);expect(external).toEqual([]);expect(unexpected).toEqual([]);expect(failures).toBe(0);stage='complete';return{screens:fleetGroupsCaptureMatrix.length,groupWrites:groupPosts,policyWrites:policyPosts,monitoringWrites:monitoringPosts,maintenanceWrites:maintenancePosts,maintenanceEndWrites:maintenanceEndPosts,nativeAcceptance:false,liveStoreAcceptance:false};
+ const serviceChecksCases=[];
+ // Changed views use a separate fully intercepted App startup. No API falls
+ // through to the disposable manager during these synthetic service checks.
+ for(const [locale,width]of [['en',1440],['de',390]]){
+  stage='service-checks';const fixture=fleetGroupsServiceChecksFixture(await getSession());
+  await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);await page.unroute('**/*');
+  const serviceHandle=fleetGroupsServiceChecksRoute({base,fixture,external,unexpected});
+  await page.route('**/*',route=>guardFleetGroupsRoute(route,serviceHandle));
+  await page.setViewportSize({width,height:width===390?844:1000});await page.reload();await expect(page.locator('.app-shell')).toBeVisible();
+  await page.getByRole('combobox',{name:/Language|Sprache/}).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);
+  await exerciseFleetGroupsServiceChecks({page,expect,fixture,locale,width,shot,verifyLayout:verifyPolicyLayout});
+  serviceChecksCases.push({locale,width,policyWrites:fixture.writes.length,reviewApprovalInitiallyUnchecked:true,partialResults:['changed','conflict','not-attempted']});
+ }
+ await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);expect(external).toEqual([]);expect(unexpected).toEqual([]);expect(failures).toBe(0);stage='complete';return{screens:fleetGroupsCaptureMatrix.length,groupWrites:groupPosts,policyWrites:policyPosts,monitoringWrites:monitoringPosts,maintenanceWrites:maintenancePosts,maintenanceEndWrites:maintenanceEndPosts,serviceChecksCases,nativeAcceptance:false,liveStoreAcceptance:false};
+}
+
+/** Synthetic bounded, already-consented preview. Source and authority times are
+ * fixed once; fixture GETs never refresh the source or extend its first lease. */
+export function fleetGroupsServiceChecksFixture(source){
+ assert.equal(source.mode,'lan');assert.equal(source.authenticated,true);assert.equal(source.loginMode,'shared');assert.equal(source.actorId,null);assert.deepEqual(source.capabilities,['read']);assert.ok(Date.parse(source.expiresAt)>Date.parse(source.serverNow));
+ const session=structuredClone(source),{serverNow}=session,at=offset=>new Date(Date.parse(serverNow)+offset).toISOString().replace(/\.000Z$/,'Z');
+ const base=fleetGroupsBrowserFixture(serverNow,session.expiresAt),third={id:`agent_${'9'.repeat(32)}`,name:'Synthetic Desk Three',platform:'windows'};
+ const devices=[...base.view.devices,third],group={...base.view.groups[0],memberIds:devices.map(d=>d.id)};
+ const view={schemaVersion:'tracebolt.fleet-group-service-checks.v1',serverNow,authorityExpiresAt:new Date(Math.min(Date.parse(session.expiresAt),Date.parse(serverNow)+110000)).toISOString().replace(/\.000Z$/,'Z'),groupId:group.id,groupName:group.name,groupRevision:group.revision,excludedLinuxMembers:1,unavailableMembers:1,members:devices.filter(d=>d.platform==='windows').sort((a,b)=>a.id.localeCompare(b.id)).map((d,i)=>({key:(i+1).toString(16).padStart(64,'0'),deviceId:d.id,name:d.name,policy:{enabled:false,services:[],revision:i*2}}))};
+ assert.ok(validGroupServiceChecksView(view,group.id));
+ const {authorityExpiresAt,groupId,groupName,groupRevision}=view;
+ const choices=new Map(view.members.map(member=>{
+  const inventory={...windowsServiceHealthInventory(),collectedAt:at(-10000),receivedAt:at(-9000),quality:'partial',complete:false,truncated:true,countExact:false,observedCount:128};
+  const choice={schemaVersion:'tracebolt.fleet-group-service-choice.v1',serverNow,authorityExpiresAt,groupId,groupName,groupRevision,member:{...structuredClone(member),inventory}};assert.ok(validGroupServiceChoiceView(choice,group.id,member.key));return[member.key,choice];
+ }));
+ const metadata=[...base.metadata,{...base.metadata[0],...third}],overview={product:'Tracebolt',mode:'lan',generatedAt:serverNow,stats:{totalDevices:devices.length,healthyDevices:0,attentionDevices:0,unknownDevices:devices.length,openCases:0,criticalCases:0},devices:metadata,cases:[],activity:[]};
+ return{session,view,choices,overview,groups:{...base.view,groups:[group],devices},reads:[],writes:[]};
+}
+/** Every App API request is answered or rejected here. Only built UI assets may
+ * continue; a deliberate policy POST changes in-memory fixture state alone. */
+export function fleetGroupsServiceChecksRoute({base,fixture,external,unexpected}){
+ const origin=new URL(base);assert.equal(origin.origin,base);assert.equal(origin.hostname,'127.0.0.1');assert.equal(origin.protocol,'http:');
+ const servicePath=`/api/fleet/groups/${fixture.view.groupId}/service-checks`;
+ return async route=>{
+  const req=route.request(),url=new URL(req.url()),method=req.method(),raw=req.postData();
+  if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
+  const block=()=>{unexpected.push('unexpected-group-service-route');return route.abort('blockedbyclient');},reply=(value,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(value)});
+  if(url.search)return block();
+  const key=url.pathname.startsWith(servicePath+'/')?url.pathname.slice(servicePath.length+1):null,choice=fixture.choices.get(key);
+  if(method==='POST'&&choice){
+   assert.equal(req.headers()['origin'],base);assert.equal(req.headers()['x-csrf-token'],fixture.session.csrfToken);assert.equal(req.headers()['content-type'],'application/json');
+   const index=fixture.writes.length,member=fixture.view.members[index];assert.ok(index<2&&member);assert.equal(key,member.key);
+   const body=JSON.parse(raw);assert.deepEqual(body,{groupRevision:fixture.view.groupRevision,expectedRevision:member.policy.revision,enabled:true,services:[index===1?'spooler':'Spooler'],consent:true});
+   fixture.writes.push({key,body});
+   if(index===1)return reply({error:{code:'group_service_conflict'}},409);
+   choice.member.policy={enabled:body.enabled,services:[...body.services],revision:body.expectedRevision+1};member.policy=structuredClone(choice.member.policy);
+   assert.ok(validGroupServiceChoiceView(choice,fixture.view.groupId,key));return reply(choice);
+  }
+  if(method!=='GET'||raw!==null)return block();
+  fixture.reads.push(url.pathname);
+  if(url.pathname==='/api/auth/session')return reply(fixture.session);
+  if(url.pathname==='/api/session')return reply({csrfToken:fixture.session.csrfToken});
+  if(url.pathname==='/api/overview')return reply(fixture.overview);
+  if(url.pathname==='/api/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:fixture.session.serverNow,enabled:false,platforms:[],recordLimit:25,items:[]});
+  if(url.pathname==='/api/fleet/identities')return reply({schemaVersion:'tracebolt.fleet-identities.v2',serverNow:fixture.session.serverNow,items:[]});
+  if(url.pathname==='/api/fleet/groups'||url.pathname===`/api/fleet/groups/${fixture.view.groupId}`)return reply(fixture.groups);
+  if(url.pathname===servicePath)return reply(fixture.view);
+  if(choice)return reply(choice);
+  if(url.pathname==='/'||url.pathname==='/favicon.svg'||url.pathname.startsWith('/assets/'))return route.continue();
+  return block();
+ };
+}
+/** The same semantic selectors exercise the compiled production App in the
+ * hosted gate and in the inert DOM test. Only hosted execution renders pixels. */
+export async function exerciseFleetGroupsServiceChecks({page,expect,fixture,locale,width,shot,verifyLayout}){
+ assert.ok(locale==='en'&&width===1440||locale==='de'&&width===390);const de=locale==='de',original=structuredClone(fixture.view);
+ const c=de?{groups:'Flottengruppen',open:'Dienstprüfungen anwenden',load:'Dienstoptionen der Auswahl laden',enable:'Dienstprüfungen aktivieren',review:'Exakte Dienstprüfungen prüfen',apply:'Geprüfte Dienstprüfungen anwenden',consent:'Diese exakten Dienstprüfungsrichtlinien einmal auf diese gewählten Mitglieder anwenden.',results:'Dienstprüfungsergebnisse je Gerät',close:'Abbrechen'}:{groups:'Fleet groups',open:'Apply service checks',load:'Load selected service choices',enable:'Enable service checks',review:'Review exact service checks',apply:'Apply reviewed service checks',consent:'Apply these exact service-check policies to these selected members once.',results:'Per-device service-check results',close:'Cancel'};
+ await page.getByRole('button',{name:c.groups,exact:true}).click();await page.getByRole('combobox',{name:c.groups,exact:true}).selectOption(fixture.view.groupId);
+ await page.getByRole('button',{name:c.open,exact:true}).click();const dialog=page.getByRole('dialog',{name:c.open,exact:true});
+ await expect(dialog.getByRole('button',{name:c.load,exact:true})).toBeDisabled();
+ for(const member of original.members){const select=dialog.getByRole('checkbox',{name:`${member.name} ${member.deviceId}`,exact:true});await expect(select).not.toBeChecked();await select.check();}
+ await dialog.getByRole('button',{name:c.load,exact:true}).click();await expect(dialog).toContainText(de?'Vorhandene begrenzte Vorschau: bis zu 128':'Existing bounded preview: up to 128');await expect(dialog).toContainText(de?'bleiben unbekannt und gelten nie als gesund':'stay unknown and are never assumed healthy');
+ for(const [index,member]of original.members.entries()){
+  const details=dialog.locator('.fleet-service-device').nth(index);if(index>0)await details.locator('summary').first().click();
+  const enable=details.getByRole('checkbox',{name:`${c.enable} · ${member.name}`,exact:true});await expect(enable).not.toBeChecked();await enable.check();
+  await details.getByRole('checkbox',{name:index===1?/Separate case-sensitive selector/:/Print Spooler/}).check();
+ }
+ await dialog.getByRole('button',{name:c.review,exact:true}).click();const table=dialog.getByRole('table',{name:c.review,exact:true}),consent=dialog.getByRole('checkbox',{name:c.consent,exact:true}),apply=dialog.getByRole('button',{name:c.apply,exact:true});
+ await expect(table.getByRole('row')).toHaveCount(4);await expect(consent).not.toBeChecked();await expect(apply).toBeDisabled();expect(fixture.writes.length).toBe(0);
+ for(const [index,member]of original.members.entries()){const row=table.getByRole('row').nth(index+1);await expect(row).toContainText(member.deviceId);await expect(row.getByRole('cell').nth(1)).toContainText(String(member.policy.revision));await expect(row.getByRole('cell').nth(2)).toContainText(index===1?'spooler':'Spooler');}
+ await verifyLayout();await consent.scrollIntoViewIfNeeded();await shot(page,fleetGroupsCaptureName('service-checks-review-unchecked',width,locale),fleetGroupsDisclosure);
+ await consent.check();await apply.click();const results=dialog.getByRole('table',{name:c.results,exact:true});
+ const outcomes=de?['Geändert · bestätigte Antwort','Konflikt · erneut prüfen','Nicht versucht']:['Changed · confirmed response','Conflict · review again','Not attempted'];
+ for(const [index,status]of outcomes.entries())await expect(results.getByRole('row').nth(index+1).getByRole('cell').last()).toHaveText(status);
+ expect(fixture.writes.length).toBe(2);expect(fixture.writes.map(write=>write.key)).toEqual(original.members.slice(0,2).map(member=>member.key));
+ expect(fixture.view.members[0].policy).toEqual({enabled:true,services:['Spooler'],revision:original.members[0].policy.revision+1});expect(fixture.view.members.slice(1)).toEqual(original.members.slice(1));expect(fixture.view.authorityExpiresAt).toBe(original.authorityExpiresAt);await expect(apply).toHaveCount(0);
+ await verifyLayout();await results.getByRole('row').nth(1).scrollIntoViewIfNeeded();await shot(page,fleetGroupsCaptureName('service-checks-partial-results',width,locale),fleetGroupsDisclosure);
+ await dialog.getByRole('button',{name:c.close,exact:true}).click();await expect(dialog).toHaveCount(0);
 }
