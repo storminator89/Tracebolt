@@ -80,6 +80,14 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'tests/e2e-review/fleet-groups-browser.mjs': {'fleet-groups'},
+    'tests/e2e-review/fleet-groups-evidence.mjs': {'fleet-groups'},
+    'tests/e2e-review/fleet-groups-fixtures.test.mjs': {'fleet-groups'},
+    'web/scripts/capture-windows-complete-service-health.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-service-health-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-health-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-health-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-health-scenes.json': {'windows-service-actions'},
     'web/scripts/check-windows-fleet-software-evidence.mjs': {'windows-fleet-software'},
     'web/scripts/capture-windows-fleet-software.mjs': {'windows-fleet-software'},
     'web/scripts/run-windows-fleet-software-ci.mjs': {'windows-fleet-software'},
@@ -113,7 +121,9 @@ DOMAIN_UI = {
     'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
     'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
 }
-ALIASES = {'windowsfullsoftware': ['windows-full-software', 'windows-fleet-software'],
+ALIASES = {'windowsfullservices': ['windows-full-services', 'windows-service-actions'],
+           'fleetgroups': ['fleet-groups', 'windows-service-actions'],
+           'windowsfullsoftware': ['windows-full-software', 'windows-fleet-software'],
            'windowsmanagedmsiworklist': ['windows-fleet-msi'],
            'windowsmanagedmsireusable': ['windows-fleet-msi'],
            'windowsmanagedmsisaved': ['windows-fleet-msi'],
@@ -134,7 +144,12 @@ ALIASES = {'windowsfullsoftware': ['windows-full-software', 'windows-fleet-softw
            'windowshealth': ['lan'], 'windowsnetwork': ['lan'], 'windowsinventory': ['lan'],
            'windowssecurity': ['lan'], 'windowspatch': ['lan'], 'windowsstorage': ['lan'],
            'windowshardware': ['lan'], 'windowssession': ['lan'], 'windowsadapter': ['lan'],
-           'windowsserviceaction': ['windows-service-actions'], 'windowsservicehealth': ['lan'], 'windowsservice': ['lan'], 'proactive': ['lan'],
+           'windowsserviceaction': ['windows-service-actions'],
+           'windowsservicehealthcomplete': ['lan', 'windows-service-actions'],
+           'windowscompleteservice': ['lan', 'windows-service-actions'],
+           'windowscompletegroupservice': ['fleet-groups', 'windows-service-actions'],
+           'fleetgroupservicecheckscomplete': ['fleet-groups', 'windows-service-actions'],
+           'windowsservicehealth': ['lan', 'windows-service-actions'], 'windowsservice': ['lan'], 'proactive': ['lan'],
            'applicationcheck': ['lan'], 'alarm': ['lan'], 'certificate': ['lan'], 'resourcehistory': ['lan'],
            'linuxcve': ['lan', 'linux-cve-update-review'], 'investigation': ['lan'],'windowsmanagedmsi': ['windows-managed-msi', 'windows-fleet-msi', 'windows-mutation-coexistence'],
            'windowsmutationfence': ['windows-mutation-coexistence'],
@@ -427,6 +442,8 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'fleet-groups' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/fleet-groups-fixtures.test.mjs'], stage='ui-fleet-groups-contract')
     if 'windows-fleet-software' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-windows-fleet-software.mjs', '--check'], stage='ui-fleet-software-contract')
         run(['node', '--test', 'web/scripts/windows-fleet-software-contract.node.mjs'], stage='ui-fleet-software-evidence-contract')
@@ -434,6 +451,8 @@ def web_checks(plan):
         run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
         run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
     if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-windows-complete-service-health.mjs', '--check'], stage='ui-complete-service-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-service-health-contract.node.mjs'], stage='ui-complete-service-evidence-contract')
         run(['node', '--test', 'tests/e2e-review/windows-update-download-fixtures.test.mjs'], stage='ui-windows-update-download-contract')
         run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
@@ -647,6 +666,10 @@ LAN_STAGE_CASES = {
     'proactive-ai', 'investigations', 'cve-detail-pages',
 }
 LAN_FAILURE_STAGES = {
+    'windows-inventory': {stage: stage for stage in (
+        'services-source', 'services-disabled', 'services-pending', 'services-attention',
+        'services-unknown', 'services-recovered', 'services-policy-changed',
+    )},
     'cve-detail-pages': {stage: stage.replace(' ', '-') for stage in (
         'advancing empty scan', 'changed binding', 'desktop layout', 'device navigation isolation',
         'expired retained input', 'final guards', 'fixture setup', 'fresh login isolation',
@@ -896,6 +919,8 @@ def browser_checks(plan):
                 stage='browser-update-retirement-evidence', env=env)
             run(['node', 'tests/e2e-review/windows-update-download-browser.mjs', '--check-evidence', plan['sha']],
                 stage='browser-update-download-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-service-health-evidence.mjs', plan['sha']],
+                stage='browser-complete-service-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

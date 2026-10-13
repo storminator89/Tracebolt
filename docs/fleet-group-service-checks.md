@@ -1,5 +1,9 @@
 # Reviewed one-time group service checks
 
+This page describes the retained preview-v1 group path. The separate explicit
+[complete-source v2 group workflow](windows-complete-service-health.md) provides
+paged choices beyond the preview without promoting v1 authority.
+
 The Fleet groups toolbar offers **Apply service checks** after a shared
 administrator selects a manual group. Choose 1–25 exact currently admitted Windows
 members, load the existing choices for those members, then select up to eight

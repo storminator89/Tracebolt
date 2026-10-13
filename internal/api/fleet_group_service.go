@@ -49,8 +49,14 @@ type fleetGroupServiceChoiceView struct {
 // Original membership is resolved server-side. A mutable device ID or name alone
 // never joins a replacement identity to either the chooser or the policy write.
 func projectFleetGroupService(read fleetGroupMaintenanceRead, authority map[string]windowscapacity.Input, states map[string]windowsservicehealth.State, now time.Time) (fleetGroupServiceView, map[string]windowscapacity.Input, error) {
+	return projectFleetGroupServiceMode(read, authority, states, now, false)
+}
+func projectFleetGroupServiceMode(read fleetGroupMaintenanceRead, authority map[string]windowscapacity.Input, states map[string]windowsservicehealth.State, now time.Time, complete bool) (fleetGroupServiceView, map[string]windowscapacity.Input, error) {
 	g := read.group
 	v := fleetGroupServiceView{SchemaVersion: "tracebolt.fleet-group-service-checks.v1", ServerNow: now, AuthorityExpiresAt: now.Add(120 * time.Second), GroupID: g.ID, GroupName: g.Name, GroupRevision: g.Revision, Members: []fleetGroupServiceMember{}}
+	if complete {
+		v.SchemaVersion = "tracebolt.fleet-group-service-checks.v2"
+	}
 	selected := map[string]windowscapacity.Input{}
 	seen := map[string]bool{}
 	if len(g.Members) > store.MaxFleetGroupMembers || g.Manager != monitoringManager(read.binding) {
@@ -88,8 +94,11 @@ func projectFleetGroupService(read fleetGroupMaintenanceRead, authority map[stri
 			v.AuthorityExpiresAt = in.AuthorityUntil
 		}
 		state := windowsservicehealth.New()
+		if complete {
+			state = windowsservicehealth.NewComplete()
+		}
 		if retained, ok := states[member.DeviceID]; ok {
-			if retained.InvitationID != in.InvitationID || retained.CertificateHash != in.CertificateHash {
+			if (retained.SchemaVersion == windowsservicehealth.CompleteStateSchema) != complete || retained.InvitationID != in.InvitationID || retained.CertificateHash != in.CertificateHash {
 				v.UnavailableMembers++
 				continue
 			}
@@ -108,10 +117,11 @@ func projectFleetGroupService(read fleetGroupMaintenanceRead, authority map[stri
 
 func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Request) {
 	p := strings.Split(r.URL.Path, "/")
-	if (len(p) != 6 && len(p) != 7) || p[1] != "api" || p[2] != "fleet" || p[3] != "groups" || !enrollmentcrypto.ValidID(p[4], "group_") || p[5] != "service-checks" || len(p) == 7 && !enrollmentcrypto.ValidHash(p[6]) {
+	if (len(p) != 6 && len(p) != 7) || p[1] != "api" || p[2] != "fleet" || p[3] != "groups" || !enrollmentcrypto.ValidID(p[4], "group_") || (p[5] != "service-checks" && p[5] != "service-checks-complete") || len(p) == 7 && !enrollmentcrypto.ValidHash(p[6]) {
 		fail(w, 404, "not_found", "Group service checks are unavailable.")
 		return
 	}
+	complete := p[5] == "service-checks-complete"
 	detail := len(p) == 7
 	mutation := r.Method == http.MethodPost && detail
 	if r.Method != http.MethodGet && !mutation {
@@ -135,11 +145,12 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 	defer cancel()
 	r = r.WithContext(ctx)
 	var body struct {
-		GroupRevision    uint64   `json:"groupRevision"`
-		ExpectedRevision uint64   `json:"expectedRevision"`
-		Enabled          bool     `json:"enabled"`
-		Services         []string `json:"services"`
-		Consent          bool     `json:"consent"`
+		GroupRevision    uint64                           `json:"groupRevision"`
+		ExpectedRevision uint64                           `json:"expectedRevision"`
+		Enabled          bool                             `json:"enabled"`
+		Services         []string                         `json:"services"`
+		Consent          bool                             `json:"consent"`
+		Source           *windowsservicehealth.Provenance `json:"source"`
 	}
 	if mutation {
 		operator, ok := operatorContext(r)
@@ -150,14 +161,22 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 		if !h.app.authorizeJSONMutation(w, r) {
 			return
 		}
-		if !readObject(w, r, 16<<10, []string{"groupRevision", "expectedRevision", "enabled", "services", "consent"}, &body) {
+		fields := []string{"groupRevision", "expectedRevision", "enabled", "services", "consent"}
+		if complete {
+			fields = append(fields, "source")
+		}
+		if !readObject(w, r, 32<<10, fields, &body) {
 			return
 		}
 		if !body.Consent || body.GroupRevision < 1 || body.GroupRevision > store.MaxFleetGroupRevision || body.ExpectedRevision >= windowsservicehealth.MaxCounter {
 			fail(w, 400, "invalid_group_service", "Review the exact settings and explicitly confirm them.")
 			return
 		}
-		if _, err := windowsservicehealth.Services(body.Services); err != nil || body.Enabled && len(body.Services) == 0 {
+		validateNames := windowsservicehealth.Services
+		if complete {
+			validateNames = windowsservicehealth.CompleteServices
+		}
+		if _, err := validateNames(body.Services); err != nil || body.Enabled && len(body.Services) == 0 {
 			fail(w, 400, "invalid_group_service", "Choose up to eight exact reported service names.")
 			return
 		}
@@ -173,6 +192,7 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 	var read *fleetGroupMaintenanceRead
 	var view fleetGroupServiceView
 	var selected map[string]windowscapacity.Input
+	var expected windowscapacity.Input
 	refresh := func() error {
 		var err error
 		read, err = h.readFleetGroupMaintenance(ctx, p[4], started)
@@ -187,7 +207,18 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 		if !contactReadTime(started, at) {
 			return store.ErrWindowsMaintenanceConflict
 		}
-		rows, err := m.source.WindowsCapacityInputs(ctx, at)
+		sourceCtx := ctx
+		if complete && detail && expected.DeviceID != "" {
+			names := []string{}
+			if state, ok := states[expected.DeviceID]; ok {
+				names = state.Policy.Services
+			}
+			if mutation {
+				names = body.Services
+			}
+			sourceCtx = windowsservicehealth.WithCompleteSelections(ctx, map[string][]string{expected.DeviceID: names})
+		}
+		rows, err := m.source.WindowsCapacityInputs(sourceCtx, at)
 		if err != nil {
 			return err
 		}
@@ -199,7 +230,7 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 		if !contactReadTime(started, now) || now.Before(at) {
 			return store.ErrWindowsMaintenanceConflict
 		}
-		view, selected, err = projectFleetGroupService(*read, authority, states, now)
+		view, selected, err = projectFleetGroupServiceMode(*read, authority, states, now, complete)
 		return err
 	}
 	if err := refresh(); err != nil {
@@ -209,7 +240,6 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 	if !operatorStillActive(w, r) {
 		return
 	}
-	var expected windowscapacity.Input
 	if detail {
 		var ok bool
 		expected, ok = selected[p[6]]
@@ -218,15 +248,33 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
+	if complete && detail {
+		if err := refresh(); err != nil {
+			fleetGroupServiceError(w, err)
+			return
+		}
+		current, ok := selected[p[6]]
+		if !ok || current.InvitationID != expected.InvitationID || current.CertificateHash != expected.CertificateHash || !current.AuthorityUntil.Equal(expected.AuthorityUntil) || complete && current.CurrentLeaf != expected.CurrentLeaf {
+			fleetGroupServiceError(w, store.ErrWindowsMaintenanceConflict)
+			return
+		}
+		expected = current
+	}
 	if mutation {
 		if body.GroupRevision != view.GroupRevision {
 			fail(w, 409, "group_service_conflict", "Group membership changed. Review again.")
 			return
 		}
 		selection := store.FleetGroupMaintenanceSelection{Manager: read.group.Manager, GroupID: p[4], GroupRevision: body.GroupRevision, Identity: monitoringIdentity(read.binding, expected.Input)}
-		_, err := h.withWindowsServicePolicyAuthority(r, expected, started, func(guard func(time.Time) error) (windowsservicehealth.State, error) {
-			return m.store.ConfigureFleetGroupService(ctx, selection, windowsservicehealth.Input{Input: expected.Input, Sample: expected.Services}, body.Enabled, body.Services, body.ExpectedRevision, m.source.Now, guard)
-		})
+		configure := func(guard func(time.Time) error) (windowsservicehealth.State, error) {
+			return m.store.ConfigureFleetGroupService(ctx, selection, windowsservicehealth.Input{Input: expected.Input, Sample: expected.Services, Complete: complete, Selection: body.Source}, body.Enabled, body.Services, body.ExpectedRevision, m.source.Now, guard)
+		}
+		var err error
+		if complete {
+			_, err = h.withWindowsCompleteServicePolicyAuthority(r, expected, body.Source, started, configure)
+		} else {
+			_, err = h.withWindowsServicePolicyAuthority(r, expected, started, configure)
+		}
 		if err != nil {
 			fleetGroupServiceError(w, err)
 			return
@@ -248,13 +296,29 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 	var response any = view
 	if detail {
 		current, ok := selected[p[6]]
-		if !ok || current.InvitationID != expected.InvitationID || current.CertificateHash != expected.CertificateHash || !current.AuthorityUntil.Equal(expected.AuthorityUntil) {
+		if !ok || current.InvitationID != expected.InvitationID || current.CertificateHash != expected.CertificateHash || !current.AuthorityUntil.Equal(expected.AuthorityUntil) || complete && current.CurrentLeaf != expected.CurrentLeaf {
 			fail(w, 409, "group_service_conflict", "Device authority changed. Review again.")
 			return
 		}
 		for _, member := range view.Members {
 			if member.Key == p[6] {
-				response = fleetGroupServiceChoiceView{SchemaVersion: "tracebolt.fleet-group-service-choice.v1", ServerNow: view.ServerNow, AuthorityExpiresAt: view.AuthorityExpiresAt, GroupID: view.GroupID, GroupName: view.GroupName, GroupRevision: view.GroupRevision, Member: fleetGroupServiceChoice{member, (windowsservicehealth.Input{Input: current.Input, Sample: current.Services}).Inventory(view.ServerNow)}}
+				schema := "tracebolt.fleet-group-service-choice.v1"
+				if complete {
+					schema = "tracebolt.fleet-group-service-choice.v2"
+				}
+				inventory := (windowsservicehealth.Input{Input: current.Input, Sample: current.Services, Complete: complete}).Inventory(view.ServerNow)
+				if complete && inventory != nil {
+					rows := []windowsservicehealth.Choice{}
+					for _, row := range inventory.Services {
+						for _, name := range member.Policy.Services {
+							if row.Name == name {
+								rows = append(rows, row)
+							}
+						}
+					}
+					inventory.Services = rows
+				}
+				response = fleetGroupServiceChoiceView{SchemaVersion: schema, ServerNow: view.ServerNow, AuthorityExpiresAt: view.AuthorityExpiresAt, GroupID: view.GroupID, GroupName: view.GroupName, GroupRevision: view.GroupRevision, Member: fleetGroupServiceChoice{member, inventory}}
 			}
 		}
 	}
@@ -268,6 +332,12 @@ func (h *operatorHandler) fleetGroupServiceAPI(w http.ResponseWriter, r *http.Re
 	if !contactReadTime(started, final) || final.Before(view.ServerNow) || !final.Before(view.AuthorityExpiresAt) {
 		fail(w, 409, "group_service_conflict", "Authority or time changed. Review again.")
 		return
+	}
+	if complete && detail {
+		if choice, ok := response.(fleetGroupServiceChoiceView); ok && choice.Member.Inventory != nil && (choice.Member.Inventory.Source == nil || !choice.Member.Inventory.Source.Fresh(final)) {
+			fleetGroupServiceError(w, windowsservicehealth.ErrInvalid)
+			return
+		}
 	}
 	if !operatorStillActive(w, r) {
 		return

@@ -1,0 +1,31 @@
+import { windowsServiceHealthCopy } from './windows-service-health-copy';
+export const windowsServiceHealthCompleteCopy = {
+    en: { ...windowsServiceHealthCopy.en,
+        title: 'Complete-generation service checks',
+        scopeLimit: windowsServiceHealthCopy.en.scopeLimit + ' These episodes appear in this complete-source history; the legacy fleet incident inbox, acknowledgements and service-action review remain separate.',
+        scope: 'Choose up to 8 services from a complete caller-visible Win32 generation. The policy follows newer generations of this explicitly reviewed local grant.',
+        limits: 'Capture and final receipt must be at most 5 minutes old; manager evaluation must be at most 2 minutes old. Missing, unavailable or transitional states are unknown and never close an incident.',
+        sourceLimit: 'Search covers the whole captured generation, with up to 100 rows per page. Drivers and permission-hidden services are excluded. Missing names never prove that a service is stopped or absent.',
+        choose: 'Choose from the complete service generation', search: 'Search all captured services', choices: 'Services on this page',
+        selectionNeedsReport: 'New, re-enabled or renewed selections need reviewed rows from one fresh complete generation. Select the exact names again if the generation or local grant changed.',
+        unavailable: 'Complete-generation policy unavailable or incompatible. A previously used bounded-preview policy is not converted automatically.',
+        uncertain: 'The write was not confirmed. Readback shows only the current policy, not whether this attempt succeeded. No write is retried automatically.',
+        observedScope: 'Selected evidence from a complete caller-visible generation', reportedList: 'Selected evidence rows',
+    },
+    de: { ...windowsServiceHealthCopy.de,
+        title: 'Dienstprüfungen aus vollständiger Generation',
+        scopeLimit: windowsServiceHealthCopy.de.scopeLimit + ' Diese Vorfälle erscheinen in diesem Verlauf aus vollständiger Quelle; bisheriger Flottenvorfall-Eingang, Bestätigungen und Dienstaktionsprüfung bleiben getrennt.',
+        scope: 'Wähle bis zu 8 Dienste aus einer vollständigen sichtbaren Win32-Generation. Die Richtlinie folgt neueren Generationen dieser ausdrücklich geprüften lokalen Freigabe.',
+        limits: 'Erfassung und endgültiger Empfang dürfen höchstens 5 Minuten, die Manager-Bewertung höchstens 2 Minuten alt sein. Fehlende, nicht verfügbare oder Übergangszustände sind unbekannt und schließen keinen Vorfall.',
+        sourceLimit: 'Die Suche erfasst die gesamte Generation mit bis zu 100 Zeilen je Seite. Treiber und durch Berechtigungen verborgene Dienste sind ausgeschlossen. Fehlende Namen belegen weder einen Stopp noch ein Fehlen.',
+        choose: 'Aus der vollständigen Dienstgeneration auswählen', search: 'Alle erfassten Dienste durchsuchen', choices: 'Dienste auf dieser Seite',
+        selectionNeedsReport: 'Neue, erneut aktivierte oder erneuerte Auswahlen benötigen geprüfte Zeilen einer aktuellen vollständigen Generation. Bei geänderter Generation oder lokaler Freigabe die exakten Namen erneut auswählen.',
+        unavailable: 'Die Richtlinie aus vollständiger Generation ist nicht verfügbar oder inkompatibel. Eine bereits verwendete Vorschau-Richtlinie wird nicht automatisch umgewandelt.',
+        uncertain: 'Der Schreibvorgang wurde nicht bestätigt. Erneutes Lesen zeigt nur die aktuelle Richtlinie, nicht den Erfolg dieses Versuchs. Es wird nie automatisch erneut geschrieben.',
+        observedScope: 'Ausgewählte Belegzeilen einer vollständigen sichtbaren Generation', reportedList: 'Ausgewählte Belegzeilen',
+    },
+};
+export const completeServicePickerCopy = {
+    en: { load: 'Review complete generation', apply: 'Search generation', previous: 'Previous service page', next: 'Next service page', restart: 'Review latest generation', unavailable: 'No fresh complete generation is available for selection.', changed: 'Generation or access changed. Review the latest generation before adding services.', stale: 'This generation is too old for a new policy selection. A fresh capture is needed.', captured: 'Original capture', received: 'Final manager receipt', generation: 'Generation', total: 'captured services', matching: 'matching', source: 'Reviewed source', expiry: 'Original source expiry', renew: 'Review these exact selections for this local grant', grant: 'Local grant', legacy: 'Bounded preview (legacy)', full: 'Complete generation', sourceLabel: 'Service-check source' },
+    de: { load: 'Vollständige Generation prüfen', apply: 'Generation durchsuchen', previous: 'Vorherige Dienstseite', next: 'Nächste Dienstseite', restart: 'Neueste Generation prüfen', unavailable: 'Keine aktuelle vollständige Generation für die Auswahl verfügbar.', changed: 'Generation oder Zugriff geändert. Vor neuen Auswahlen die neueste Generation prüfen.', stale: 'Diese Generation ist für eine neue Richtlinienauswahl zu alt. Eine neue Erfassung ist nötig.', captured: 'Ursprüngliche Erfassung', received: 'Endgültiger Manager-Empfang', generation: 'Generation', total: 'erfasste Dienste', matching: 'Treffer', source: 'Geprüfte Quelle', expiry: 'Ursprünglicher Quellenablauf', renew: 'Diese exakten Auswahlen für diese lokale Freigabe prüfen', grant: 'Lokale Freigabe', legacy: 'Begrenzte Vorschau (bisherig)', full: 'Vollständige Generation', sourceLabel: 'Quelle der Dienstprüfungen' },
+};

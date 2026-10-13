@@ -9,6 +9,7 @@
       "dist",
       "server",
       "launch",
+      "complete-service-health",
       "evidence",
       "close-context",
       "close-browser",

@@ -121,7 +121,13 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 		return nil
 	}
 	now := m.source.Now().UTC()
-	inputs, err := m.source.WindowsCapacityInputs(ctx, now)
+	selections := map[string][]string{}
+	for id, state := range services {
+		if state.Policy.Enabled && state.SchemaVersion == windowsservicehealth.CompleteStateSchema {
+			selections[id] = state.Policy.Services
+		}
+	}
+	inputs, err := m.source.WindowsCapacityInputs(windowsservicehealth.WithCompleteSelections(ctx, selections), now)
 	if err != nil {
 		return err
 	}
@@ -176,7 +182,15 @@ func (m *windowsCapacityMonitor) evaluate(ctx context.Context) (err error) {
 		if !exists {
 			in = windowscapacity.Input{Input: windowscontact.Input{DeviceID: id, InvitationID: state.InvitationID, CertificateHash: state.CertificateHash}}
 		}
-		if _, err = m.store.EvaluateWindowsService(ctx, windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, now, m.epoch); err != nil {
+		if state.SchemaVersion == windowsservicehealth.CompleteStateSchema {
+			if in.InvitationID != state.InvitationID || in.CertificateHash != state.CertificateHash {
+				in = windowscapacity.Input{Input: windowscontact.Input{DeviceID: id, InvitationID: state.InvitationID, CertificateHash: state.CertificateHash}}
+			}
+			err = m.evaluateCompleteService(ctx, in, now)
+		} else {
+			_, err = m.store.EvaluateWindowsService(ctx, windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, now, m.epoch)
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -460,4 +474,40 @@ func (m *windowsCapacityMonitor) configurePolicy(ctx context.Context, in windows
 	}
 	state, err := m.store.ConfigureWindowsResource(ctx, in, kind, enabled, threshold, expected, at, guard...)
 	return state.Assessment, err
+}
+
+func (m *windowsCapacityMonitor) evaluateCompleteService(ctx context.Context, in windowscapacity.Input, readAt time.Time) error {
+	if !in.Authorized {
+		// Unavailable/replaced/revoked identities can only remove confidence.
+		// Do not let one permanently unavailable enabled policy block the fleet.
+		input := windowsservicehealth.Input{Input: in.Input, Complete: true}
+		_, err := m.store.EvaluateWindowsService(ctx, input, m.source.Now().UTC(), m.epoch)
+		return err
+	}
+	lease, ok := m.source.(windowsCompleteServiceAuthoritySource)
+	if !ok {
+		return windowsservicehealth.ErrInvalid
+	}
+	input := windowsservicehealth.Input{Input: in.Input, Sample: in.Services, Complete: true, CurrentLeaf: in.CurrentLeaf}
+	if in.Services.Complete != nil {
+		source := in.Services.Complete.Source
+		input.Selection = &source
+	}
+	return lease.WithWindowsCompleteServiceAuthority(ctx, input, func(authority func(time.Time) error) error {
+		guard := func(at time.Time) error {
+			if !contactReadTime(readAt, at) || !at.Before(in.AuthorityUntil) {
+				return windowsservicehealth.ErrInvalid
+			}
+			if err := authority(at); err != nil {
+				return err
+			}
+			end := m.source.Now().UTC()
+			if !contactReadTime(readAt, end) || end.Before(at) || !end.Before(in.AuthorityUntil) || ctx.Err() != nil {
+				return windowsservicehealth.ErrInvalid
+			}
+			return nil
+		}
+		_, err := m.store.EvaluateWindowsCompleteServiceGuarded(ctx, input, m.source.Now, m.epoch, guard)
+		return err
+	})
 }

@@ -79,6 +79,30 @@ describe('compact incident-to-exact-service handoff', () => {
         fireEvent.click(within(region).getByRole('button', { name: locale === 'de' ? 'Dienstprüfung schließen' : 'Close service review' }));
         expect(screen.queryByRole('region', { name: locale === 'de' ? 'Vorfallsdienst prüfen' : 'Review incident service' })).toBeNull();
     });
+    it.each(['en', 'de'] as const)('keeps current state visible and reveals original evidence without requesting an action in %s', async locale => {
+        setLocale(locale, false); renderReview(); await flush(); const de = locale === 'de';
+        expect(screen.getByText('Fixture Service')).toBeVisible();
+        const scope = screen.getByText(de ? 'Belege & Steuerung' : 'Evidence & control', { selector: 'summary' });
+        const limit = screen.getByText(de ? /kein Nachweis derselben Dienstinstanz/ : /not proof that the same service instance/);
+        expect(scope.closest('details')).not.toHaveAttribute('open'); expect(limit).not.toBeVisible();
+        expect(screen.getByText(de ? /Nur das ursprüngliche Gerät/ : /Only this incident’s original device/)).toBeVisible();
+        const reads = vi.mocked(request).mock.calls.length;
+        fireEvent.click(scope); expect(limit).toBeVisible();
+        const times = scope.closest('details')!.querySelectorAll('time'); expect(times).toHaveLength(2);
+        expect(times[0]).toHaveAttribute('datetime', response.observation!.collectedAt); expect(times[1]).toHaveAttribute('datetime', response.observation!.receivedAt);
+        fireEvent.click(scope); expect(limit).not.toBeVisible(); expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).not.toHaveBeenCalled();
+        expect(screen.queryByRole('combobox')).toBeNull(); expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+    it('keeps partial coverage visible and retains evidence when service control is blocked', async () => {
+        response.observation = { ...response.observation!, quality: 'partial', complete: false, truncated: true, countExact: false };
+        response.control = { status: 'not_configured', binding: null, bindingDigest: null };
+        renderReview(); await flush();
+        expect(screen.getAllByText('Caller-visible, partial source coverage').some(node => !node.closest('details'))).toBe(true);
+        expect(screen.getByText('No separate service-control grant is configured.')).toBeVisible();
+        const evidence = screen.getByText('Evidence & limits', { selector: 'summary' }); expect(evidence.closest('details')).not.toHaveAttribute('open');
+        fireEvent.click(evidence); expect(screen.getByText(/not proof that the same service instance/)).toBeVisible(); expect(evidence.closest('details')!.querySelectorAll('time')).toHaveLength(2);
+        expect(screen.queryByRole('button', { name: /Select service:/ })).toBeNull(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
     it('requires a deliberate operation and preserves the original guard through every status/preview', async () => {
         renderReview(); await flush();
         fireEvent.click(screen.getByRole('button', { name: /Select service:/ }));

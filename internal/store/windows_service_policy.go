@@ -62,3 +62,42 @@ func (s *Store) configureWindowsServiceGuarded(ctx context.Context, input window
 func (s *Store) ConfigureWindowsServiceGuarded(ctx context.Context, input windowsservicehealth.Input, enabled bool, names []string, expected uint64, clock func() time.Time, guard func(time.Time) error) (windowsservicehealth.State, error) {
 	return s.configureWindowsServiceGuarded(ctx, input, enabled, names, expected, clock, guard, nil)
 }
+
+// EvaluateWindowsCompleteServiceGuarded is the complete-source-only commit seam.
+// Its caller holds the live enrollment lease; source time is never borrowed from
+// the monitor's earlier read or the telemetry frame. V1 evaluation is unchanged.
+func (s *Store) EvaluateWindowsCompleteServiceGuarded(ctx context.Context, input windowsservicehealth.Input, clock func() time.Time, epoch string, guard func(time.Time) error) (windowsservicehealth.State, error) {
+	if !input.Complete || clock == nil || guard == nil {
+		return windowsservicehealth.State{}, windowsservicehealth.ErrInvalid
+	}
+	var appliedAt time.Time
+	check := func(*sql.Tx) error {
+		at := clock().UTC()
+		if !appliedAt.IsZero() && at.Before(appliedAt) {
+			return windowsservicehealth.ErrInvalid
+		}
+		if e := guard(at); e != nil {
+			return e
+		}
+		end := clock().UTC()
+		if end.Before(at) || input.Sample.Complete != nil && !input.Sample.Complete.Source.Fresh(end) {
+			return windowsservicehealth.ErrInvalid
+		}
+		return ctx.Err()
+	}
+	return s.updateWindowsService(ctx, input.DeviceID, func(state *windowsservicehealth.State) error {
+		if state.SchemaVersion != windowsservicehealth.CompleteStateSchema {
+			return windowsservicehealth.ErrInvalid
+		}
+		appliedAt = clock().UTC()
+		if e := guard(appliedAt); e != nil {
+			return e
+		}
+		at := clock().UTC()
+		if at.Before(appliedAt) {
+			return windowsservicehealth.ErrInvalid
+		}
+		appliedAt = at
+		return state.Evaluate(input, at, epoch)
+	}, check)
+}

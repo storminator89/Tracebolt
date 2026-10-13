@@ -253,6 +253,11 @@ func projectWindowsInbox(snapshot store.WindowsIncidentSnapshot, authority map[s
 			countStatus("unknown")
 			continue
 		}
+		// Complete-source history has an explicit v2 Health contract. Do not
+		// project it into preview-v1 notification/review authority or names.
+		if ss.SchemaVersion == windowsservicehealth.CompleteStateSchema {
+			continue
+		}
 		sv := ss.View(windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, now, capacityEpoch)
 		if !sv.Policy.Enabled {
 			countStatus("disabled")

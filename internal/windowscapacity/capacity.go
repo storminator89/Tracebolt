@@ -38,7 +38,8 @@ var incidentPattern = regexp.MustCompile(`^wcapacity_[0-9a-f]{16}$`)
 // Input is deliberately separate from Linux HealthInputs and provider admission.
 type Input struct {
 	windowscontact.Input
-	Disk model.Metric
+	CurrentLeaf string
+	Disk        model.Metric
 	// Already-consented basic samples, selected only by the resource policy adapter.
 	CPU    model.Metric
 	Memory model.Metric

@@ -200,6 +200,9 @@ func (v WindowsIncidentSnapshot) Targets() map[string]WindowsIncidentTarget {
 		}
 	}
 	for id, s := range v.Services {
+		if s.SchemaVersion == windowsservicehealth.CompleteStateSchema {
+			continue
+		}
 		for _, i := range s.Incidents {
 			add(id, s.InvitationID, s.CertificateHash, "service", i.ID, i.OpenedAt)
 		}

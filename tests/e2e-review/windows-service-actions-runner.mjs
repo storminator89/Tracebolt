@@ -27,9 +27,11 @@ const {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWin
 const {createWindowsSoftwareJobsFixture,windowsSoftwareJobsRoute,exerciseWindowsSoftwareJobs,windowsSoftwareJobsCaseName,windowsSoftwareJobsDisclosure,windowsSoftwareJobsFailureStage,requireWindowsSoftwareJobsEvidence,requireWindowsSoftwareJobsDetails}=await bootstrap('imports',()=>import('./windows-software-jobs-browser.mjs'));
 const {createWindowsUpdateRetirementFixture,windowsUpdateRetirementRoute,exerciseWindowsUpdateRetirement,windowsUpdateRetirementCaseName,windowsUpdateRetirementDisclosure,windowsUpdateRetirementFailureStage,requireWindowsUpdateRetirementEvidence,requireWindowsUpdateRetirementDetails}=await bootstrap('imports',()=>import('./windows-update-retirement-browser.mjs'));
 const {createWindowsUpdateDownloadFixture,windowsUpdateDownloadRoute,exerciseWindowsUpdateDownload,windowsUpdateDownloadCaseName,windowsUpdateDownloadDisclosure,windowsUpdateDownloadScenes,windowsUpdateDownloadFailureStage,requireWindowsUpdateDownloadEvidence,requireWindowsUpdateDownloadDetails}=await bootstrap('imports',()=>import('./windows-update-download-browser.mjs'));
+const {capture:captureCompleteServiceHealth}=await bootstrap('imports',()=>import('../../web/scripts/capture-windows-complete-service-health.mjs'));
+const {sceneManifestSHA256:completeServiceSceneDigest,evidenceSummary:completeServiceEvidenceSummary,assertHostedSource,validateManifest:validateCompleteServiceManifest}=await bootstrap('imports',()=>import('../../web/scripts/windows-complete-service-health-contract.mjs'));
 const {chromium,expect}=await bootstrap('dependencies',()=>require('@playwright/test'));
 const temporary=await bootstrap('temporary',()=>fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-windows-actions-browser-')));
-const screenshots=[],historyScreenshots=[],updateScreenshots=[],variants=[],historyVariants=[],updateVariants=[];let browser,context,server,timer,errors=0,apiRequests=0,passed=false;
+const screenshots=[],historyScreenshots=[],updateScreenshots=[],variants=[],historyVariants=[],updateVariants=[];let browser,context,server,timer,errors=0,apiRequests=0,passed=false,completeServiceHealthManifest=null;
 await fs.mkdir(out,{recursive:true});
 
 async function shot(page,name,fixtureDisclosure){
@@ -50,6 +52,7 @@ async function shot(page,name,fixtureDisclosure){
 async function run(){
  diagnostic.begin('runner',null,null,'dist');
  if(!/^[a-f0-9]{40}$/.test(sourceSha??''))throw failure();
+ await assertHostedSource(sourceSha);
  const realDist=await fs.realpath(dist);await fs.access(path.join(realDist,'index.html'));
  diagnostic.set('server');server=createServer(async(request,response)=>{
   try{
@@ -191,6 +194,14 @@ async function run(){
 
 
  }
+ diagnostic.begin('runner',null,null,'complete-service-health');
+ // Additive component/hook evidence, not a whole-App scenario; reuse this browser.
+ completeServiceHealthManifest=await captureCompleteServiceHealth({browser,expect,output:out});
+ Object.assign(completeServiceHealthManifest,{sourceSha,sceneManifestSHA256:completeServiceSceneDigest});
+ for(const row of completeServiceHealthManifest.captures)Object.assign(row,{sourceSha,publicSafe:true,fullPage:false});
+ await assertHostedSource(sourceSha,completeServiceHealthManifest.sourceInputs);
+ await validateCompleteServiceManifest(out,sourceSha,completeServiceHealthManifest);
+ await fs.writeFile(path.join(out,'windows-complete-service-health-manifest.json'),JSON.stringify(completeServiceHealthManifest,null,2)+'\n');
  diagnostic.begin('runner',null,null,'evidence');
  requireWindowsUpdateDownloadEvidence(downloadScreenshots,sourceSha);if(downloadVariants.length!==4)throw failure();
  requireWindowsUpdateRetirementEvidence(retirementScreenshots,sourceSha);if(retirementVariants.length!==4)throw failure();
@@ -202,7 +213,7 @@ finally{
  clearTimeout(timer);try{if(context)await context.close();}catch{if(passed)diagnostic.begin('runner',null,null,'close-context');passed=false;}try{if(browser)await browser.close();}catch{if(passed)diagnostic.begin('runner',null,null,'close-browser');passed=false;}
  if(server){try{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}catch{if(passed)diagnostic.begin('runner',null,null,'close-server');passed=false;}}
  if(!passed)await writeFailure();
- const report={sourceSha,createdAt:new Date().toISOString(),name:windowsServiceActionsCaseName,status:passed?'PASS':'FAIL',stage:windowsServiceActionsFailureStage(),scope:windowsServiceActionsDisclosure,variants:passed?variants:[],historyVariants:passed?historyVariants:[],updateVariants:passed?updateVariants:[],downloadVariants:passed?downloadVariants:[],downloadScope:windowsUpdateDownloadDisclosure,downloadStage:windowsUpdateDownloadFailureStage(),retirementVariants:passed?retirementVariants:[],retirementScope:windowsUpdateRetirementDisclosure,retirementStage:windowsUpdateRetirementFailureStage(),updateScope:windowsUpdateJobsDisclosure,updateStage:windowsUpdateJobsFailureStage(),scheduleVariants:passed?scheduleVariants:[],scheduleScope:windowsUpdateScheduleDisclosure,scheduleStage:windowsUpdateScheduleFailureStage(),backgroundScheduleVariants:passed?backgroundScheduleVariants:[],backgroundScheduleScope:windowsBackgroundUpdateScheduleDisclosure,fleetScheduleVariants:passed?fleetScheduleVariants:[],fleetScheduleScope:windowsFleetUpdateScheduleDisclosure,softwareVariants:passed?softwareVariants:[],softwareScope:windowsSoftwareJobsDisclosure,softwareStage:windowsSoftwareJobsFailureStage(),runtimeErrorCount:errors,requestsToRealAPI:apiRequests,browserAcceptance:passed,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false};
+ const report={sourceSha,createdAt:new Date().toISOString(),name:windowsServiceActionsCaseName,status:passed?'PASS':'FAIL',stage:windowsServiceActionsFailureStage(),scope:windowsServiceActionsDisclosure,variants:passed?variants:[],historyVariants:passed?historyVariants:[],updateVariants:passed?updateVariants:[],downloadVariants:passed?downloadVariants:[],downloadScope:windowsUpdateDownloadDisclosure,downloadStage:windowsUpdateDownloadFailureStage(),retirementVariants:passed?retirementVariants:[],retirementScope:windowsUpdateRetirementDisclosure,retirementStage:windowsUpdateRetirementFailureStage(),updateScope:windowsUpdateJobsDisclosure,updateStage:windowsUpdateJobsFailureStage(),scheduleVariants:passed?scheduleVariants:[],scheduleScope:windowsUpdateScheduleDisclosure,scheduleStage:windowsUpdateScheduleFailureStage(),backgroundScheduleVariants:passed?backgroundScheduleVariants:[],backgroundScheduleScope:windowsBackgroundUpdateScheduleDisclosure,fleetScheduleVariants:passed?fleetScheduleVariants:[],fleetScheduleScope:windowsFleetUpdateScheduleDisclosure,softwareVariants:passed?softwareVariants:[],softwareScope:windowsSoftwareJobsDisclosure,softwareStage:windowsSoftwareJobsFailureStage(),completeServiceHealth:passed?completeServiceEvidenceSummary():null,runtimeErrorCount:errors,requestsToRealAPI:apiRequests,browserAcceptance:passed,durableStoreAcceptance:false,nativeAcceptance:false,secretsExported:false,realTelemetryExported:false};
  try{await fs.writeFile(path.join(out,'windows-service-actions-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-service-actions-manifest.json'),JSON.stringify({sourceSha,screenshots:[...screenshots,...historyScreenshots,...updateScreenshots,...retirementScreenshots,...downloadScreenshots,...scheduleScreenshots,...softwareScreenshots,...backgroundScheduleScreenshots,...fleetScheduleScreenshots]},null,2));}catch{if(passed)diagnostic.begin('runner',null,null,'report');passed=false;await writeFailure();throw failure();}
  await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
 }

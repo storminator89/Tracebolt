@@ -3,6 +3,7 @@ package enrollmentservice
 import (
 	"context"
 	"localrmm/internal/windowscapacity"
+	"localrmm/internal/windowsservicehealth"
 	"time"
 )
 
@@ -12,4 +13,11 @@ func (s *Service) WindowsCapacityInputs(ctx context.Context, now time.Time) ([]w
 		return nil, ErrConfiguration
 	}
 	return s.store.WindowsCapacityInputs(ctx, now)
+}
+
+func (s *Service) WithWindowsCompleteServiceAuthority(ctx context.Context, expected windowsservicehealth.Input, fn func(func(time.Time) error) error) error {
+	if s == nil || s.serviceState == nil || s.store == nil {
+		return ErrConfiguration
+	}
+	return s.store.WithWindowsCompleteServiceAuthority(ctx, expected, s.Now, fn)
 }

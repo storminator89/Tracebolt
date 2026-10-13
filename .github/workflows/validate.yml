@@ -651,6 +651,11 @@ jobs:
         run: |
           node web/scripts/capture-windows-fleet-software.mjs --check
           node --test web/scripts/windows-fleet-software-contract.node.mjs
+      - name: Complete-service component source and evidence contracts
+        working-directory: .
+        run: |
+          node web/scripts/capture-windows-complete-service-health.mjs --check
+          node --test web/scripts/windows-complete-service-health-contract.node.mjs
       - name: Production build
         run: npm run build
 
@@ -716,6 +721,7 @@ jobs:
           node tests/e2e-review/windows-service-actions-runner.mjs
           node tests/e2e-review/windows-update-retirement-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
           node tests/e2e-review/windows-update-download-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
+          node web/scripts/check-windows-complete-service-health-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic central MSI separate-stage browser gate (16 captures)
         if: ${{ !cancelled() }}
         env:
@@ -1051,6 +1057,15 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-complete-service-health-manifest.json
+            artifacts/review/complete-service-single-beyond-preview-en-1440.png
+            artifacts/review/complete-service-group-exact-review-en-1440.png
+            artifacts/review/complete-service-single-beyond-preview-en-390.png
+            artifacts/review/complete-service-group-exact-review-en-390.png
+            artifacts/review/complete-service-single-beyond-preview-de-1440.png
+            artifacts/review/complete-service-group-exact-review-de-1440.png
+            artifacts/review/complete-service-single-beyond-preview-de-390.png
+            artifacts/review/complete-service-group-exact-review-de-390.png
             artifacts/review/windows-managed-msi-results.json
             artifacts/review/windows-managed-msi-manifest.json
             artifacts/review/windows-fleet-msi-results.json
