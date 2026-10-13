@@ -1,0 +1,43 @@
+.mac-inventory { min-width: 0; }
+.mac-inventory-header { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
+.mac-inventory-header h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; margin: 0 0 5px; }
+.mac-inventory-header p, .mac-scope-line, .mac-inventory-notes p { font-size: 12px; line-height: 1.5; color: var(--secondary); margin: 0; }
+.mac-inventory-summary { display: grid; grid-template-columns: 1fr .65fr 1.3fr; gap: 14px; padding: 14px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; }
+.mac-inventory-summary > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.mac-inventory-summary span { font-size: 11px; color: var(--secondary); }
+.mac-inventory-summary strong { font-size: 13px; overflow-wrap: anywhere; }
+.mac-source-strip { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 10px; margin: 14px 0; }
+.mac-source-strip > div { border-left: 2px solid var(--line); padding-left: 9px; font-size: 11px; }
+.mac-source-strip strong, .mac-source-status, .mac-source-reason { display: block; }
+.mac-source-status { margin-top: 4px; color: var(--secondary); }
+.mac-source-status.denied, .mac-source-status.unavailable { color: var(--warning, #aa6e0a); }
+.mac-source-reason { margin-top: 3px; font-size: 10px; line-height: 1.4; }
+.mac-inventory-panel { padding-top: 16px; }
+.mac-table-heading { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
+.mac-table-heading h3 { font-size: 14px; margin: 0 0 6px; }
+.mac-table-heading > span, .mac-muted, .mac-read-status { color: var(--secondary); font-size: 12px; }
+.mac-read-status { margin: 8px 0; }
+.mac-scope-line { max-width: 85ch; margin-bottom: 14px; }
+.mac-inventory-table { overflow: auto; max-height: 430px; border: 1px solid var(--line); border-radius: 8px; }
+.mac-inventory-table table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.mac-inventory-table th { text-align: left; color: var(--secondary); font-weight: 500; background: var(--panel-soft); }
+.mac-inventory-table th, .mac-inventory-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.mac-inventory-table tr:last-child td { border-bottom: 0; }
+.mac-address { display: block; white-space: nowrap; }
+.mac-hardware-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin: 0; padding: 18px; }
+.mac-hardware-grid dt { color: var(--secondary); font-size: 11px; margin-bottom: 7px; }
+.mac-hardware-grid dd { margin: 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.mac-inventory-empty { padding: 16px; font-size: 13px; line-height: 1.6; color: var(--secondary); margin: 0; }
+.mac-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; font-size: 12px; }
+.mac-inventory-notes { margin-top: 12px; font-size: 12px; }
+.mac-inventory-notes summary { display: flex; gap: 6px; align-items: center; cursor: pointer; color: var(--secondary); }
+.mac-inventory-notes p, .mac-inventory-notes code { display: block; margin-top: 10px; overflow-wrap: anywhere; }
+@media(max-width:650px) {
+ .mac-inventory-header { align-items: flex-start; flex-direction: column; }
+ .mac-inventory-summary { grid-template-columns: 1fr 1fr; gap: 12px; }
+ .mac-inventory-summary > div:last-child { grid-column: 1 / -1; }
+ .mac-source-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .mac-hardware-grid { grid-template-columns: 1fr 1fr; }
+ .mac-inventory-table th, .mac-inventory-table td { padding: 9px 8px; }
+ .mac-pagination { flex-wrap: wrap; }
+}

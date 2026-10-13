@@ -19,7 +19,7 @@ on:
       - 'internal/api/**'
       - 'internal/model/**'
       - 'internal/store/**'
-      - 'web/src/enrollment*'
+      - 'web/src/**'
       - 'web/src/verified-download-command.ts'
       - 'web/src/api.ts'
       - 'web/src/auth.tsx'
@@ -28,6 +28,7 @@ on:
       - 'web/src/styles.css'
       - 'web/src/utils.ts'
       - 'web/scripts/*macos-enrollment*'
+      - 'web/scripts/*macos-inventory*'
       - 'web/package.json'
       - 'web/package-lock.json'
       - 'web/tsconfig.json'
@@ -52,7 +53,7 @@ on:
       - 'internal/api/**'
       - 'internal/model/**'
       - 'internal/store/**'
-      - 'web/src/enrollment*'
+      - 'web/src/**'
       - 'web/src/verified-download-command.ts'
       - 'web/src/api.ts'
       - 'web/src/auth.tsx'
@@ -61,6 +62,7 @@ on:
       - 'web/src/styles.css'
       - 'web/src/utils.ts'
       - 'web/scripts/*macos-enrollment*'
+      - 'web/scripts/*macos-inventory*'
       - 'web/package.json'
       - 'web/package-lock.json'
       - 'web/tsconfig.json'
@@ -109,7 +111,7 @@ jobs:
           done
 
   ui-source:
-    name: macOS synthetic enrollment UI
+    name: macOS synthetic enrollment and inventory UI
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -129,16 +131,19 @@ jobs:
         working-directory: web
         run: |
           npm run test:environments
-          npx --no-install vitest run src/enrollment-macos.test.tsx src/enrollment-windows.test.tsx src/enrollment-progressive.test.tsx src/enrollment.test.tsx src/enrollment-package.test.tsx src/enrollment-security-review.test.ts --maxWorkers=2
+          npx --no-install vitest run src/enrollment-macos.test.tsx src/enrollment-windows.test.tsx src/enrollment-progressive.test.tsx src/enrollment.test.tsx src/enrollment-package.test.tsx src/enrollment-security-review.test.ts src/enrollment-macos-inventory.test.tsx src/macos-inventory*.test.* src/fleet-groups-workflow.test.ts src/fleet-groups.test.tsx --maxWorkers=2
       - name: Inert capture and route contract
         run: |
           node web/scripts/capture-macos-enrollment.mjs --check
           node --test web/scripts/macos-enrollment-capture.node.mjs
+          node web/scripts/capture-macos-inventory.mjs --check
       - name: Install locked Playwright Chromium runtime
         working-directory: web
         run: npx --no-install playwright install --with-deps chromium
       - name: Capture 16 EN/DE source-only views and verify exact source
         run: node web/scripts/run-macos-enrollment-ci.mjs
+      - name: Capture 40 EN/DE source-only inventory views and verify exact source
+        run: node web/scripts/run-macos-inventory-ci.mjs
       - name: Keep verified synthetic UI captures only
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -150,3 +155,6 @@ jobs:
             artifacts/review/macos-enrollment-results.json
             artifacts/review/macos-enrollment-manifest.json
             artifacts/review/macos-enrollment-*.png
+            artifacts/review/macos-inventory-results.json
+            artifacts/review/macos-inventory-manifest.json
+            artifacts/review/macos-inventory-*.png

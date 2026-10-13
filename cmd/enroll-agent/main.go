@@ -24,6 +24,7 @@ func main() {
 func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	f := flag.NewFlagSet("enroll-agent", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
+	inventory := f.Bool("macos-read-inventory", false, "Select fresh macOS inventory; requires separate typed local approval before private state or keys")
 	bootstrap := f.String("bootstrap", "", "Absolute public bootstrap JSON path")
 	state := f.String("state-directory", "", "Absolute dedicated private enrollment directory")
 	automaticRenewal := f.Bool("automatic-certificate-renewal", false, enrollmentclient.AutomaticRenewalPrivacy)
@@ -38,6 +39,10 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		fmt.Fprintln(errOut, "Guided enrollment requires Linux or macOS.")
+		return 2
+	}
+	if *inventory && (runtime.GOOS != "darwin" || *claimOnly || *validateService || *insecure || *serviceIdentity != "") {
+		fmt.Fprintln(errOut, "Fresh macOS inventory requires a distinct TLS bootstrap and foreground local approval.")
 		return 2
 	}
 	if runtime.GOOS == "darwin" && os.Geteuid() <= 0 {
@@ -65,8 +70,29 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "Retained service enrollment validated locally; no network, collection or initialization performed.")
 		return 0
 	}
+	if *inventory != (b.CollectionProfile == "macos-read-inventory-v1") {
+		fmt.Fprintln(errOut, "Expanded macOS inventory needs its explicit fresh selection and matching bootstrap.")
+		return 2
+	}
+	enroll := enrollmentclient.Run
+	var approve func(string) (bool, error)
+	if *inventory {
+		enroll = enrollmentclient.RunFreshMacOSInventory
+		approve = func(disclosure string) (bool, error) {
+			if _, e := fmt.Fprintln(out, "MACOS INVENTORY PRIVACY: "+disclosure); e != nil {
+				return false, e
+			}
+			answer, e := readInventoryApproval(ctx, func() error {
+				_, e := fmt.Fprint(errOut, "Type ALLOW MACOS INVENTORY to approve this fresh scope (hidden; empty cancels): ")
+				return e
+			})
+			defer clear(answer)
+			fmt.Fprintln(errOut)
+			return string(answer) == "ALLOW MACOS INVENTORY", e
+		}
+	}
 	lastPhase := ""
-	result, e := enrollmentclient.Run(ctx, b, enrollmentclient.Options{AutomaticRenewalAcknowledged: *automaticRenewal, ClaimOnly: *claimOnly, StateDirectory: *state, InsecureHTTPAcknowledged: *insecure, Timeout: *timeout, Display: func(d enrollmentclient.TrustDisplay) error {
+	result, e := enroll(ctx, b, enrollmentclient.Options{ApproveMacOSInventory: approve, AutomaticRenewalAcknowledged: *automaticRenewal, ClaimOnly: *claimOnly, StateDirectory: *state, InsecureHTTPAcknowledged: *insecure, Timeout: *timeout, Display: func(d enrollmentclient.TrustDisplay) error {
 		if _, e := fmt.Fprintf(out, "Manager: %s\nProfile: %s\nEnrollment destination: %s\nAgent destination: %s\nCollection: %s\nInvitation: %s\n", d.ManagerInstanceID, d.Profile, d.EnrollmentOrigin, d.AgentOrigin, d.CollectionProfile, d.InvitationID); e != nil {
 			return e
 		}
