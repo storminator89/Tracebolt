@@ -2,67 +2,48 @@
 
 **Inventory, logs and diagnostics in one self-hosted dashboard.**
 
-Tracebolt combines a Go manager, native endpoint agents and an English/German
-web interface with light and dark themes. It is under active development.
-This page describes the current source; downloadable prereleases cover less.
+A Go manager and native endpoint agents, with an English/German web interface,
+light and dark themes, and mobile layouts. Tracebolt is a development pilot;
+source features and tested release coverage are listed separately below.
 
-[Get started](#get-started) · [Guides](docs/README.md) · [Windows status](docs/windows-status.md) · [Next steps](#what-is-next)
+[Get started](#get-started) · [Screenshots](#screenshots) · [Guides](docs/README.md)
 
-![Device overview with CPU, memory and disk history](docs/screenshots/2026-10-09-main-ui/resource-history-dark.png)
+![Device overview with CPU, memory and disk history](docs/screenshots/2026-10-13-current-ui/resource-history-dark.png)
 
-*Dashboard capture using invented test data. [Capture details](docs/screenshots/2026-10-09-main-ui/README.md).*
+*Actual dashboard capture with invented test data. [Capture details](docs/screenshots/2026-10-13-current-ui/README.md).*
 
-## What works in the current source
+## Current status
 
-- **Device overview:** hostname/IP search, resource history, source timestamps
-  and explicit missing, stale or partial data.
-- **Linux inspection:** visible processes and mounts, dpkg software, services,
-  connections, selected service logs, cached APT candidates and bounded
+| Component | Available now | Main limit |
+| --- | --- | --- |
+| Manager | Linux, native or Docker; authenticated dashboard and agent ingress | Built and configured separately from endpoint downloads |
+| Linux | [v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3), amd64 Read admin installation | Ubuntu 24.04 / Debian 13, systemd, cgroup v2, kernel 6.5+; [ARM64/Pi](docs/linux-arm64-support.md) remains a source/testing path |
+| Windows | [v0.1.0-windows-preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3), unsigned x64 Setup with 21-scope Read admin review | Native acceptance covers three hosted Server 2025 packaged-Setup cases; Windows 10/11 and complete provider coverage are unverified |
+| macOS | Limited local read-only collector | LAN enrollment and an installed service are in development, not released |
+
+### In the current source
+
+- **Inventory and resources:** device search, CPU/RAM/disk history, processes,
+  services, software, network and storage views, with observation times and
+  explicit missing, stale or partial data.
+- **Linux inspection:** selected service logs, cached APT candidates and bounded
   Debian/Ubuntu CVE warnings.
-- **Windows inspection:** complete caller-visible process snapshots, a separate
-  bounded process CPU/RAM sample, volumes, numeric network endpoints,
-  complete caller-visible Win32 services and machine software registrations,
-  adapter configuration, build/update history, Defender/Firewall posture,
-  client Security Center antivirus registration/status, TPM presence/version,
-  sessions/join context, hardware/firmware/power details, drive-letter mapping
-  and physical-disk provider status. Separately consented
-  [CPU/memory context](docs/windows-resource-context.md) adds source-labeled
-  processor counts, installed/usable RAM, commit capacity and aggregate pagefile use.
-  Independent [aggregate disk I/O](docs/windows-storage-io.md) adds local PerfDisk
-  throughput, operations, latency, queue lengths and sample timing.
-- **Windows logs and updates:** Application/System event headers, separately
-  approved older-event searches and selected message reads, and offline cached
-  Windows Update inspection.
-- **Prepared Windows MSI (source):** [one reviewed local x64 package](docs/windows-prepared-msi-jobs.md),
-  compact Software approval and verified single-attempt outcome. Native acceptance
-  and an explicit fresh package grant are still required.
-- **Selected Windows updates (source):** [explicit endpoint setup](docs/windows-selected-update-setup.md),
-  a manual fleet worklist, per-device cached-update review, one-time approval,
-  optional [explicitly approved one-shot update windows](docs/windows-scheduled-update-jobs.md)
-  and saved executor outcomes. Native setup and update execution still need acceptance.
-- **Selected-account software:** an explicitly consented foreground capture of
-  that Windows user's HKCU and Store registrations, with source filters and paging.
-- **Fleet groups:** organize devices and review one-time disk/CPU/RAM alert
-  settings for selected Windows members, with individual outcomes.
-- **Windows incidents and maintenance:** a [fleet incident inbox](docs/windows-incident-inbox.md),
-  seen acknowledgements, [planned maintenance](docs/windows-maintenance.md) and
-  separately approved [Windows notifications](docs/windows-notifications.md).
-  Maintenance suppresses matching Windows notification dispatch; incidents and
-  evidence continue unchanged.
-- **Optional monitoring:** platform-specific health checks, manager-side
-  application checks, webhook alarms and separately approved AI diagnostics.
+- **Windows inspection:** hardware, sessions, security-provider observations,
+  build/update history, Application/System event headers and separately granted
+  historical-message reads or cached Windows Update inspection.
+- **Fleet monitoring:** groups, selected health policies, an incident inbox,
+  maintenance windows and separately approved notifications.
+- **Optional workflows:** scoped AI diagnostics, selected service control,
+  software delivery and update jobs. These require their own setup and approval;
+  Windows MSI/WUA/service-action native acceptance remains pending.
 
-Collection depends on the endpoint's explicitly approved scope and accessible
-sources. Windows software covers machine HKLM registrations plus the separately
-captured account; it does not discover every user's or portable application.
-Complete process inventory does not expand the separate 128-row CPU/RAM sample.
-Cached updates do not prove patch compliance, and security observations do not
-prove that a device is protected.
-[Windows scope and limitations](docs/windows-status.md).
+Collection is limited by each endpoint's explicit grants and accessible sources.
+Read admin does not enable every optional feature. See the
+[technical guides](docs/README.md) for individual scope contracts.
 
 ## Get started
 
-### Try the local dashboard
+### Try the dashboard locally
 
 From the repository root, with Go **1.27.1**, Node.js **24**, npm and `make`:
 
@@ -72,115 +53,66 @@ make build
 ./bin/manager
 ```
 
-Open **http://127.0.0.1:8787**. This loopback-only demo shows seven synthetic
-devices and a limited read-only sample of the machine running it. State is saved
-in `.local/state.db`; Ctrl+C stops it. It does not connect remote devices or
-install a service. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
+Open **http://127.0.0.1:8787**. This loopback-only demo uses synthetic devices
+and a limited read-only sample of the local machine. State is saved in
+`.local/state.db`; Ctrl+C stops it. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 
 ### Connect real devices
 
-1. Prepare an authenticated Linux or Docker LAN manager using the
-   [installation guide](docs/installation.md). HTTPS is the default.
-2. **Linux:** use **Add device** and the
-   [verified installation command](docs/dashboard-verified-download.md). Review
-   the read-admin scope locally, enter the invitation at the hidden prompt, then
-   compare and approve the device fingerprint in the dashboard.
-3. **Windows preview:** download unsigned x64
-   [preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
-   and follow its attached
-   [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
-   Fresh Setup offers [Read admin](docs/windows-read-admin-setup.md) with unchecked
-   consent. Prepare the matching reviewed manager/frontend source separately;
-   native acceptance covers only a bounded Server 2025 x64 packaged-Setup subset.
-   The [preview.3 candidate](docs/windows-prerelease-install.md) passed its bounded
-   native Setup gate. Publication requires successful exact-source full Validate
-   and publisher review/CI; verify release availability before installation.
-4. Check the first accepted report, observation time and actual source coverage.
-   Choosing a profile does not prove that every provider returned data.
+1. **Manager:** follow the [installation guide](docs/installation.md) for a
+   Linux/Docker LAN manager with approved protected TLS material and operator
+   authentication. There is no zero-configuration production installer.
+2. **Linux:** configure guided enrollment, then use **Add device** and its
+   [verified rc.3 installation command](docs/dashboard-verified-download.md).
+   Review the local scope and compare/approve the device fingerprint.
+3. **Windows:** download [preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+   and follow its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md).
+   Build the manager/frontend from the guide's exact source pin. Verify the
+   release hashes, review Setup's unchecked permissions and keep OS protections intact.
+4. Confirm authenticated login, the endpoint service and fresh accepted reports
+   in the dashboard. A running process does not prove successful collection.
 
-The published Linux endpoint is
-[v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3).
-It is separate from the Windows preview and does not supply the matching manager.
-Manager deployment is separate from both endpoint downloads. Windows
-preview.2 retains the tested `v0.0.0-setup-candidate` executable names and version;
-verify its files using the attached guide. For older five-scope preview.1 bytes,
-use the [historical installation guide](docs/windows-prerelease-historical/windows-prerelease-install.md).
+**Windows manager prerequisite:** stock Compose starts manual-v1 only. Windows
+enrollment needs `windowsInventoryEnabled: true`, approved guided-enrollment
+issuer material and an explicit `--enrollment-config` alongside `--lan-config`.
+See [enrollment configuration](docs/enrollment-v2/runtime-config.md) and the
+[fresh renewal policy](docs/automatic-certificate-renewal.md). The pinned manager's
+invitation help is outdated; the release guide and Setup's 21-scope review govern
+the installation. Enter invitations only at the hidden local prompt.
 
-## Giving this repository to an agent
+## Important limits
 
-Include the target computer and use this short handoff:
+- **Windows preview:** real Linux-manager/shared-dashboard interoperability,
+  native restart/reboot, renewal cutover and optional MSI/WUA/service actions
+  remain unverified. Setup is unsigned. Service removal retains files, keys and
+  state; it does not revoke manager trust.
+- **Data coverage:** cached updates are not a patch-compliance assessment;
+  security observations do not prove protection. Software inventory is not a
+  complete list of every user's or portable application. Process CPU/RAM is a
+  separate bounded sample.
+- **Permissions:** the main observer stays unprivileged; helpers, host changes,
+  external delivery and AI use need separate approval. There is no arbitrary
+  remote shell or integrated remote desktop.
+- **Deployment:** HTTPS is the default. HTTP is only for explicitly approved
+  isolated tests and exposes credentials/content. Production hardening and
+  verified reboot persistence remain open.
 
-> Read AGENTS.md and docs/installation.md. Inspect the target OS/architecture,
-> checkout and existing configuration. Use the shortest supported Linux/Docker
-> manager setup, then the dashboard's verified Linux enrollment command. Ask for
-> approval before credential/trust, network or service changes; never put secrets
-> in chat. Check login, the endpoint service and fresh real device data. Report
-> what works and what is still blocked. For Windows, use preview.2's attached
-> guide and matching manager source, and report its bounded native coverage.
+## Screenshots
 
-The [installation-agent fast path](docs/installation.md#fast-path-for-installation-agents)
-points directly to the Compose commands, required configuration and smoke checks.
-There is no zero-configuration production installer; the local demo above is the
-quickest way to look at the dashboard.
-
-## Platform and safety limits
-
-- **Manager:** Linux, native or Docker.
-- **Linux release:** amd64, Ubuntu 24.04 or Debian 13, systemd, cgroup v2 and
-  kernel 6.5+. [ARM64/Pi](docs/linux-arm64-support.md) remains a source/testing path.
-- **Windows:** unsigned preview.2 targets a fresh x64 installation and has
-  bounded hosted Server 2025 packaged-Setup results. Windows 10/11, real
-  Linux-manager/shared-dashboard interoperability,
-  complete provider coverage, native restart and reboot remain unverified.
-- **macOS:** a limited standalone collector; no supported LAN installation path.
-
-The main agent stays unprivileged. Helpers, service control, selected package
-updates, external delivery and AI use have separate permissions. Read admin does
-not grant them all. There is no arbitrary remote shell or integrated remote
-desktop. HTTP is only for explicitly approved isolated tests: it exposes
-credentials and content on the network. Production hardening remains open.
-
-## What is next
-
-Build on the inventory with useful job results, fleet monitoring policies and
-carefully scoped software/update management. Close the remaining Admin data gaps
-alongside that work. Preview.2 is available with bounded packaged-Setup acceptance.
-Real Linux-manager/shared-dashboard interoperability and the remaining native
-scopes still need separate acceptance.
-There is no existing-user migration rollout. Remote desktop is deferred.
-
-[Windows priorities](docs/windows-admin-roadmap.md) · [Linux priorities](docs/roadmap.md)
-
-## A look at the dashboard
-
-| Linux service logs | Cached Windows Updates | Mobile overview, German |
+| Linux log workspace | Windows inventory | Mobile overview, German |
 | --- | --- | --- |
-| [<img src="docs/screenshots/2026-10-09-main-ui/log-workspace.png" width="360" alt="Linux Logs workspace with service selection and time-window controls">](docs/screenshots/2026-10-09-main-ui/log-workspace.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png" width="360" alt="Windows cached update rows with explicit freshness and coverage limits">](docs/screenshots/2026-10-10-windows-parity/windows-cached-updates.png) | [<img src="docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png" width="150" alt="German mobile Windows overview with inventory counts and observation times">](docs/screenshots/2026-10-10-windows-parity/windows-mobile-de.png) |
+| [<img src="docs/screenshots/2026-10-13-current-ui/log-workspace.png" width="360" alt="Linux service-log selection and time-window controls">](docs/screenshots/2026-10-13-current-ui/log-workspace.png) | [<img src="docs/screenshots/2026-10-13-current-ui/windows-inventory.png" width="360" alt="Windows interface inventory with source coverage and observation time">](docs/screenshots/2026-10-13-current-ui/windows-inventory.png) | [<img src="docs/screenshots/2026-10-13-current-ui/windows-mobile-de.png" width="150" alt="German mobile Windows overview with reported inventory counts">](docs/screenshots/2026-10-13-current-ui/windows-mobile-de.png) |
 
-*Genuine dashboard captures with invented test data; click to enlarge. Windows
-examples show source previews, including separately gated features. These illustrate
-the recorded source, not native acceptance. [Linux capture details](docs/screenshots/2026-10-09-main-ui/README.md)
-and [Windows capture details](docs/screenshots/2026-10-10-windows-parity/README.md).*
+*Unmodified browser captures of the current preview.3 source UI, using invented
+test data. Click to enlarge. They show the interface, not native installation or
+provider acceptance. [Source and capture details](docs/screenshots/2026-10-13-current-ui/README.md).*
 
 ## Development
 
 Run `make test`, `make build` and the [frontend checks](web/README.md#checks).
-Follow [repository constraints](AGENTS.md) and the [technical guides](docs/README.md).
-CI, fixtures and screenshots describe their exercised scope; they do not replace
-native host acceptance.
+Follow [AGENTS.md](AGENTS.md) and the [technical guides](docs/README.md).
 
 ## License
 
 [Apache License 2.0](LICENSE). Dependencies retain their own
 [licenses and notices](docs/dependencies/edwards25519.md).
-
-The separate [central managed MSI source candidate](docs/windows-managed-msi-delivery.md)
-adds bounded central upload and background delivery before separately approved
-installation on one explicitly set-up Windows x64 endpoint. Native acceptance is
-pending; this first deployment mode excludes other Tracebolt mutators while
-observation remains available.
-
-Fresh manager-only [multi-package MSI catalogue](docs/windows-multi-package-msi-catalogue.md)
-source supports four retained reviewed packages within the existing aggregate 128 MiB
-budget, exact package/device choice and independent saved worklists. Explicit fresh
-setup is required; this does not grant endpoint actions or establish native acceptance.
