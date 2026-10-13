@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "8c983f205fda8ad3709f914a12b695e1f660c9ae3e83477a843be360769eae28",
+  "goSourceSha256": "25022af8054648f633bfd5a2d9e8080405b01c6032e6986cacc3e6b481d461bf",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -5825,6 +5825,26 @@
     "localrmm/tests/e2e-review/v3fixture": [],
     "localrmm/tests/lanclient": [
       "TestNativeTwoBinaryRoundTrip"
+    ],
+    "localrmm/tests/macosnativeacceptance/inventoryprobe": [
+      "TestCheckDoesNotReadEnvironmentOrProvider",
+      "TestClosedReportRejectsInjectedStringsAndMeasurements",
+      "TestExplicitSelectorRequired",
+      "TestHostedGuardRejectsEveryMissingOrAlteredMarker",
+      "TestInertCancellationDiscardsReturnedSnapshot",
+      "TestInertEmptyInterfaceRowsRejected",
+      "TestInertEnvelopeMismatchDiscarded",
+      "TestInertFamilyFailureKeepsOtherFamily",
+      "TestInertIndependentOutcomes",
+      "TestInertInvalidSnapshotKeepsIndependentValidSources",
+      "TestInertNoRetryErrorAndPanic",
+      "TestInertObservedEmptyReceiptsAndAddresslessInterfaces",
+      "TestInertProjectionOnceContentFree",
+      "TestInertRejectedInputsNeverCallProvider",
+      "TestInertWholeSnapshotBoundsKeepIndividualSources",
+      "TestInjectedBoundaryCallsOnceAndFailedGateNonzero",
+      "TestOutputFailureDoesNotRetryOrPrintError",
+      "TestRuntimeGuardRejectsNonDarwinArchitectureAndToolchain"
     ],
     "localrmm/tests/security": [
       "TestAnalysisDiscardsUpstreamSecretEcho",
