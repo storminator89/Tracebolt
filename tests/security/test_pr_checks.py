@@ -234,6 +234,32 @@ class SelectionTests(unittest.TestCase):
         ])
         report.assert_called_once_with('windows-service-actions', SHA)
 
+    def test_fleet_software_owns_focused_node_and_hosted_evidence_contracts(self):
+        for filename in ['check-windows-fleet-software-evidence.mjs', 'capture-windows-fleet-software.mjs',
+                         'run-windows-fleet-software-ci.mjs', 'windows-fleet-software-contract.mjs',
+                         'windows-fleet-software-scenes.json', 'windows-fleet-software-contract.node.mjs']:
+            plan = self.select(('M', 'web/scripts/' + filename))
+            self.assertEqual(plan['flows'], ['windows-fleet-software'])
+            self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+        plan = self.select(('M', 'web/src/windows-fleet-software.tsx'))
+        self.assertEqual(plan['flows'], ['windows-fleet-software'])
+        self.assertEqual(p.flow_names('internal/windowsfullsoftware/fleet.go'), set())
+        self.assertEqual(p.flow_names('internal/windowsfullsoftware'), {'windows-full-software', 'windows-fleet-software'})
+        with patch.object(p, 'run') as run:
+            p.web_checks(plan)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands.count(['node', 'web/scripts/capture-windows-fleet-software.mjs', '--check']), 1)
+        self.assertEqual(commands.count(['node', '--test', 'web/scripts/windows-fleet-software-contract.node.mjs']), 1)
+        for workflow in ['pr-checks.yml', 'validate.yml']:
+            text = (ROOT / '.github/workflows' / workflow).read_text()
+            for filename in ['windows-fleet-software-results.json', 'windows-fleet-software-manifest.json', 'synthetic-windows-fleet-software-*.png']:
+                self.assertIn(filename, text)
+        self.assertIn('node --test web/scripts/windows-fleet-software-contract.node.mjs', (ROOT / '.github/workflows/validate.yml').read_text())
+        self.assertFalse((ROOT / 'web/scripts/windows-fleet-software-contract.test.mjs').exists())
+        runner = (ROOT / 'web/scripts/run-windows-fleet-software-ci.mjs').read_text()
+        self.assertIn("RUNNER_ENVIRONMENT === 'github-hosted'", runner)
+        self.assertIn('await validateEvidence(output, sourceSha)', runner)
+
     def test_cve_bridge_owns_one_changed_flow_and_shared_evidence_validator(self):
         for filename in ['check-linux-cve-update-review-evidence.mjs', 'capture-linux-cve-update-review.mjs', 'run-linux-cve-update-review-ci.mjs',
                          'linux-cve-update-review-contract.mjs', 'linux-cve-update-review-scenes.json',
@@ -265,7 +291,7 @@ class SelectionTests(unittest.TestCase):
         plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
         self.assertEqual(plan['packages'], expected['packages'])
         self.assertEqual(plan['web'], expected['web'])
-        self.assertEqual(plan['flows'], ['linux-cve-update-review', 'windows-fleet-msi', 'windows-maintenance', 'windows-service-actions'])
+        self.assertEqual(plan['flows'], ['linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance', 'windows-service-actions'])
         self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
         self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
                                       generated_allowlist_verified=True))

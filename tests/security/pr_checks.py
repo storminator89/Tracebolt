@@ -46,6 +46,7 @@ UI_SHARED = ('web/src/App.tsx', 'web/src/api.ts', 'web/src/types.ts', 'web/src/a
 FLOWS = {
     'lan': 'tests/e2e-review/lan-browser.mjs',
     'linux-cve-update-review': 'web/scripts/run-linux-cve-update-review-ci.mjs',
+    'windows-fleet-software': 'web/scripts/run-windows-fleet-software-ci.mjs',
     'shell': 'tests/e2e-review/run.mjs',
     'windows-mutation-coexistence': 'tests/e2e-review/windows-mutation-coexistence-runner.mjs',
     'windows-software-history': 'tests/e2e-review/windows-software-history-runner.mjs',
@@ -79,6 +80,12 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'web/scripts/check-windows-fleet-software-evidence.mjs': {'windows-fleet-software'},
+    'web/scripts/capture-windows-fleet-software.mjs': {'windows-fleet-software'},
+    'web/scripts/run-windows-fleet-software-ci.mjs': {'windows-fleet-software'},
+    'web/scripts/windows-fleet-software-contract.mjs': {'windows-fleet-software'},
+    'web/scripts/windows-fleet-software-scenes.json': {'windows-fleet-software'},
+    'web/scripts/windows-fleet-software-contract.node.mjs': {'windows-fleet-software'},
     'web/scripts/check-linux-cve-update-review-evidence.mjs': {'linux-cve-update-review'},
     'web/scripts/capture-linux-cve-update-review.mjs': {'linux-cve-update-review'},
     'web/scripts/run-linux-cve-update-review-ci.mjs': {'linux-cve-update-review'},
@@ -104,7 +111,8 @@ DOMAIN_UI = {
     'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
     'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
 }
-ALIASES = {'windowsmanagedmsiworklist': ['windows-fleet-msi'],
+ALIASES = {'windowsfullsoftware': ['windows-full-software', 'windows-fleet-software'],
+           'windowsmanagedmsiworklist': ['windows-fleet-msi'],
            'windowsmanagedmsireusable': ['windows-fleet-msi'],
            'windowsmanagedmsisaved': ['windows-fleet-msi'],
            # Paired setup filenames do not carry the windowsmanagedmsi prefix.
@@ -417,6 +425,9 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'windows-fleet-software' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-windows-fleet-software.mjs', '--check'], stage='ui-fleet-software-contract')
+        run(['node', '--test', 'web/scripts/windows-fleet-software-contract.node.mjs'], stage='ui-fleet-software-evidence-contract')
     if 'linux-cve-update-review' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
         run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
@@ -529,6 +540,8 @@ def browser_report(flow, sha):
         raise ValueError('invalid browser report')
     value = reporter.decode(path.read_bytes())
     validate_browser_report(flow, value, sha)
+    if flow == 'windows-fleet-software':
+        run(['node', 'web/scripts/check-windows-fleet-software-evidence.mjs', sha], stage='browser-fleet-software-evidence')
     if flow == 'linux-cve-update-review':
         run(['node', 'web/scripts/check-linux-cve-update-review-evidence.mjs', sha], stage='browser-cve-review-evidence')
     if flow == 'windows-fleet-msi':

@@ -646,6 +646,11 @@ jobs:
         run: |
           node web/scripts/capture-linux-cve-update-review.mjs --check
           node --test web/scripts/linux-cve-update-review-contract.node.mjs
+      - name: Windows fleet software lookup source contracts
+        working-directory: .
+        run: |
+          node web/scripts/capture-windows-fleet-software.mjs --check
+          node --test web/scripts/windows-fleet-software-contract.node.mjs
       - name: Production build
         run: npm run build
 
@@ -695,6 +700,14 @@ jobs:
         run: |
           node web/scripts/run-linux-cve-update-review-ci.mjs
           node web/scripts/check-linux-cve-update-review-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
+      - name: Synthetic Windows fleet software lookup canonical captures
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
+        env:
+          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node web/scripts/run-windows-fleet-software-ci.mjs
+          node web/scripts/check-windows-fleet-software-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic Windows actions, selected updates and exact retirement browser gate
         if: ${{ !cancelled() }}
         env:
@@ -1024,6 +1037,9 @@ jobs:
             artifacts/review/managed-preview-result.json
             artifacts/review/lan-browser-results.json
             artifacts/review/lan-browser-manifest.json
+            artifacts/review/windows-fleet-software-results.json
+            artifacts/review/windows-fleet-software-manifest.json
+            artifacts/review/synthetic-windows-fleet-software-*.png
             artifacts/review/linux-cve-update-review-results.json
             artifacts/review/linux-cve-update-review-manifest.json
             artifacts/review/synthetic-linux-cve-update-review-exact-binary-cached-candidate-1440-en.png

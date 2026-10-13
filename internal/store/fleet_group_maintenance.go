@@ -19,14 +19,28 @@ type FleetGroupMaintenanceSelection struct {
 	Identity      string
 }
 
+func (v FleetGroupMaintenanceSelection) valid() bool {
+	return enrollmentcrypto.ValidHash(v.Manager) && enrollmentcrypto.ValidID(v.GroupID, "group_") && v.GroupRevision >= 1 && v.GroupRevision <= MaxFleetGroupRevision && enrollmentcrypto.ValidHash(v.Identity)
+}
+
 // StartFleetGroupMaintenance shares the existing one-target start transaction,
 // including overlap, capacity, immutable ends and notification suppression. It
 // adds no group job or durable state and does not change the old v1 operation.
 func (s *Store) StartFleetGroupMaintenance(ctx context.Context, selection FleetGroupMaintenanceSelection, target WindowsMaintenanceTarget, expected uint64, endsAt time.Time, intent string, clock func() time.Time, guard func(time.Time, time.Time) error) (WindowsMaintenanceState, error) {
-	if !enrollmentcrypto.ValidHash(selection.Manager) || !enrollmentcrypto.ValidID(selection.GroupID, "group_") || selection.GroupRevision < 1 || selection.GroupRevision > MaxFleetGroupRevision || !enrollmentcrypto.ValidHash(selection.Identity) {
+	if !selection.valid() {
 		return WindowsMaintenanceState{}, ErrWindowsMaintenance
 	}
 	return s.changeWindowsMaintenance(ctx, target, expected, endsAt, intent, 0, clock, guard, &selection)
+}
+
+// EndFleetGroupMaintenance ends only the reviewed latest active window. The
+// original group membership and revision are checked in the same transaction as
+// the existing exact target revision, window ID and original-end guards.
+func (s *Store) EndFleetGroupMaintenance(ctx context.Context, selection FleetGroupMaintenanceSelection, target WindowsMaintenanceTarget, expected, windowID uint64, clock func() time.Time, guard func(time.Time, time.Time) error) (WindowsMaintenanceState, error) {
+	if !selection.valid() || windowID < 1 || windowID > MaxWindowsMaintenanceRevision {
+		return WindowsMaintenanceState{}, ErrWindowsMaintenance
+	}
+	return s.changeWindowsMaintenance(ctx, target, expected, time.Time{}, "", windowID, clock, guard, &selection)
 }
 
 func checkFleetGroupMaintenance(ctx context.Context, tx *sql.Tx, selection *FleetGroupMaintenanceSelection, target WindowsMaintenanceTarget) error {

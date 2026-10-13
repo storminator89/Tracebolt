@@ -17,6 +17,8 @@ import { GroupMonitoring } from './fleet-group-monitoring';
 import { validGroupMonitoringView } from './fleet-group-monitoring-types';
 import type { GroupMonitoringIO, GroupMonitoringView } from './fleet-group-monitoring-types';
 import { GroupMaintenance } from './fleet-group-maintenance';
+import { GroupMaintenanceEnd } from './fleet-group-maintenance-end';
+import type { GroupMaintenanceEndIO } from './fleet-group-maintenance-end-workflow';
 import { validGroupMaintenanceView } from './fleet-group-maintenance-workflow';
 import type { GroupMaintenanceIO, GroupMaintenanceView } from './fleet-group-maintenance-workflow';
 import './fleet-groups.css';
@@ -41,12 +43,12 @@ type PolicyLease = { view: WindowsPercentageView; started: Anchor; clockKey: str
 type GroupIntent = { groupId?: string; name: string; memberIds: string[]; expectedRevision: number; remove?: boolean; removeUnavailableMembers?: boolean };
 type MaintenanceLease = { view: GroupMaintenanceView; started: Anchor; clockKey: string };
 type MonitoringLease = { view: GroupMonitoringView; started: Anchor; clockKey: string };
-type Commands = { refresh: () => void; hold: (value: boolean) => void; cancel: () => void; save: (intent: GroupIntent) => Promise<boolean>; io: (fresh: boolean) => GroupHealthIO; monitoringIO: (groupId: string, fresh: boolean) => GroupMonitoringIO; maintenanceIO: (groupId: string, fresh: boolean) => GroupMaintenanceIO };
+type Commands = { refresh: () => void; hold: (value: boolean) => void; cancel: () => void; save: (intent: GroupIntent) => Promise<boolean>; io: (fresh: boolean) => GroupHealthIO; monitoringIO: (groupId: string, fresh: boolean) => GroupMonitoringIO; maintenanceIO: (groupId: string, fresh: boolean) => GroupMaintenanceIO & GroupMaintenanceEndIO };
 const unavailableIO = (): GroupHealthIO => ({ get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); }, active: () => false, accept: () => false });
 
 const unavailableMonitoringIO = (): GroupMonitoringIO => ({ active: () => false, get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); } });
 
-const unavailableMaintenanceIO = (): GroupMaintenanceIO => ({ active: () => false, get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); } });
+const unavailableMaintenanceIO = (): GroupMaintenanceIO & GroupMaintenanceEndIO => ({ end: async () => { throw new Error('Inactive'); }, active: () => false, get: async () => { throw new Error('Inactive'); }, post: async () => { throw new Error('Inactive'); } });
 
 /** A group selection fails closed while its membership is being checked. No group is an authority grant. */
 export function useFleetGroups(available: boolean, sessionKey: string | null, admin: boolean) {
@@ -199,7 +201,7 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
                 },
             };
         };
-        const maintenanceIO = (groupId: string, fresh: boolean): GroupMaintenanceIO => {
+        const maintenanceIO = (groupId: string, fresh: boolean): GroupMaintenanceIO & GroupMaintenanceEndIO => {
             if (fresh) { abort(); policies.clear(); monitoring = null; maintenance = null; }
             const run = operation, group = accepted?.view.groups.find(g => g.id === groupId);
             const active = () => run === operation && admin && !!group && allActive();
@@ -220,6 +222,11 @@ export function useFleetGroups(available: boolean, sessionKey: string | null, ad
                 post: async body => {
                     if (!maintenance || body.groupRevision !== group?.revision || !maintenance.view.members.some(m => m.targets.some(t => t.key === body.key && t.revision === body.revision))) throw new Error('No reviewed maintenance lease');
                     const response = await fetchValue(`/fleet/groups/${groupId}/maintenance/start`, active, body, 262144);
+                    return accept(response.value, response.started);
+                },
+                end: async body => {
+                    if (!maintenance || body.groupRevision !== group?.revision || !maintenance.view.members.some(m => m.targets.some(t => t.key === body.key && t.revision === body.revision && t.windows[0]?.id === body.windowId && t.windows[0].endedAt === null))) throw new Error('No reviewed early-end lease');
+                    const response = await fetchValue(`/fleet/groups/${groupId}/maintenance/end`, active, body, 262144);
                     return accept(response.value, response.started);
                 },
             };
@@ -334,17 +341,18 @@ function HealthEditor({ resource, group, c, onClose }: { resource: FleetGroupsRe
 export function FleetGroupsControls({ resource }: { resource: FleetGroupsResource }) {
     const [locale] = useLocale(), c = copy[locale];
     const [inheritance, setInheritance] = useState(false);
-    const [dialog, setDialog] = useState<'manage' | 'new' | 'edit' | 'health' | 'maintenance' | null>(null), [editingId, setEditingId] = useState('');
+    const [dialog, setDialog] = useState<'manage' | 'new' | 'edit' | 'health' | 'maintenance' | 'maintenance-end' | null>(null), [editingId, setEditingId] = useState('');
     const close = () => { resource.cancel(); resource.hold(false); setDialog(null); setInheritance(false); };
     const open = (next: typeof dialog) => { resource.cancel(); setInheritance(false); resource.hold(true); setDialog(next); };
     const group = resource.view?.groups.find(g => g.id === editingId) ?? resource.selected;
     if (!resource.requested) return <div className="fleet-groups"><button className="text-button" onClick={resource.activate}><Folder size={15} aria-hidden="true"/>{c.groups}</button></div>;
-    return <div className="fleet-groups"><div className="fleet-group-toolbar"><label className="fleet-group-select"><Folder size={15} aria-hidden="true"/><span>{c.groups}</span><select aria-label={c.groups} value={resource.selectedId} disabled={resource.loading || resource.saving} onChange={event => { close(); resource.select(event.target.value); }}><option value="">{c.all}</option>{resource.selectedId && !resource.selected && <option value={resource.selectedId}>{c.selectedMissing}</option>}{resource.view?.groups.map(item => <option key={item.id} value={item.id}>{item.name} ({item.memberIds.length})</option>)}</select></label><button className="text-button" disabled={!resource.view} onClick={() => open('manage')}><Settings2 size={14} aria-hidden="true"/>{c.manage}</button>{resource.admin && resource.view && (!resource.selectedId || resource.selected) && <button className="text-button" onClick={() => open('health')}>{c.health}</button>}{resource.admin && resource.view && resource.selected && <button className="text-button" onClick={() => open('maintenance')}>{locale === 'de' ? 'Gruppenwartung starten' : 'Start group maintenance'}</button>}{resource.view && resource.selected && <button className="text-button" aria-expanded={inheritance} onClick={() => { if (inheritance) close(); else { resource.cancel(); setDialog(null); resource.hold(true); setInheritance(true); } }}>{locale === 'de' ? 'Gruppen-Monitoring' : 'Group monitoring'}</button>}<button className="text-button" disabled={resource.loading || resource.saving} onClick={() => { close(); resource.refresh(); }}><RefreshCw size={14} aria-hidden="true"/>{c.refresh}</button></div>
+    return <div className="fleet-groups"><div className="fleet-group-toolbar"><label className="fleet-group-select"><Folder size={15} aria-hidden="true"/><span>{c.groups}</span><select aria-label={c.groups} value={resource.selectedId} disabled={resource.loading || resource.saving} onChange={event => { close(); resource.select(event.target.value); }}><option value="">{c.all}</option>{resource.selectedId && !resource.selected && <option value={resource.selectedId}>{c.selectedMissing}</option>}{resource.view?.groups.map(item => <option key={item.id} value={item.id}>{item.name} ({item.memberIds.length})</option>)}</select></label><button className="text-button" disabled={!resource.view} onClick={() => open('manage')}><Settings2 size={14} aria-hidden="true"/>{c.manage}</button>{resource.admin && resource.view && (!resource.selectedId || resource.selected) && <button className="text-button" onClick={() => open('health')}>{c.health}</button>}{resource.admin && resource.view && resource.selected && <button className="text-button" onClick={() => open('maintenance')}>{locale === 'de' ? 'Gruppenwartung starten' : 'Start group maintenance'}</button>}{resource.admin && resource.view && resource.selected && <button className="text-button" onClick={() => open('maintenance-end')}>{locale === 'de' ? 'Gruppenwartung beenden' : 'End group maintenance'}</button>}{resource.view && resource.selected && <button className="text-button" aria-expanded={inheritance} onClick={() => { if (inheritance) close(); else { resource.cancel(); setDialog(null); resource.hold(true); setInheritance(true); } }}>{locale === 'de' ? 'Gruppen-Monitoring' : 'Group monitoring'}</button>}<button className="text-button" disabled={resource.loading || resource.saving} onClick={() => { close(); resource.refresh(); }}><RefreshCw size={14} aria-hidden="true"/>{c.refresh}</button></div>
         {inheritance && resource.view && resource.selected && <GroupMonitoring key={resource.selected.id} resource={resource} group={resource.selected} onClose={close}/>}
         {resource.loading && <p role="status">{c.loading}</p>}{resource.error && <p role="status">{c.unavailable}</p>}{resource.notice && <p role="status">{c[resource.notice]}</p>}
         {dialog === 'manage' && resource.view && <Dialog title={c.manage} onClose={close} className="fleet-group-dialog"><h2>{c.manage}</h2><p>{c.organizational}</p><p>{c.limits}</p>{!resource.admin && <p>{c.readOnly}</p>}<ul className="fleet-group-list">{resource.view.groups.map(item => <li key={item.id}><button className="text-button" onClick={() => { setEditingId(item.id); open('edit'); }}>{item.name}</button><span>{item.memberIds.length}/50 · {c.revision}: {item.revision}{item.unavailableMembers > 0 && <> · {c.unavailableMembers}: {item.unavailableMembers}</>}</span></li>)}</ul>{!resource.view.groups.length && <p>{c.empty}</p>}{resource.admin && <button className="button" disabled={resource.view.groups.length >= 25} onClick={() => open('new')}>{c.create}</button>}</Dialog>}
         {(dialog === 'new' || dialog === 'edit' && group) && <GroupEditor key={dialog === 'new' ? 'new' : group!.id} resource={resource} initial={dialog === 'new' ? null : group} c={c} onClose={close}/>}
         {dialog === 'maintenance' && resource.view && resource.selected && <GroupMaintenance resource={resource} group={resource.selected} onClose={close}/>}
+        {dialog === 'maintenance-end' && resource.view && resource.selected && <GroupMaintenanceEnd resource={resource} group={resource.selected} onClose={close}/>}
         {dialog === 'health' && resource.view && (!resource.selectedId || resource.selected) && <HealthEditor resource={resource} group={resource.selected} c={c} onClose={close}/>}
     </div>;
 }

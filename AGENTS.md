@@ -327,6 +327,12 @@ missing material rather than inventing credentials or weakening protection.
   independent software/service floors and exact old primary bytes; old scopes
   never promote. Per-user, MSIX/Store, portable programs, paths and commands are
   excluded. Source fixtures never authorize native reads or host grants.
+- Read-only fleet machine-software lookup reuses those already-consented complete
+  generations. Read `docs/windows-fleet-software-lookup.md` before its body-only
+  query, signed fleet/detail cursors or private UI changes. Preserve original
+  enrollment and current-leaf/grant/generation/session bindings, bounded pages,
+  original expiry and unavailable-field truth. No selected-user join, collection,
+  export, notification or operation authority follows from a result.
 - Complete caller-visible Win32 service generations are a separate default-off
   local source extension. Read `docs/windows-full-services-contract.md` before
   consent, sender-state, native resume, chunk transport, store or UI changes.

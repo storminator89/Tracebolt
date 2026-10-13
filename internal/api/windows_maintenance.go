@@ -82,7 +82,7 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 		route = "/api/fleet/groups/" + groupID + "/maintenance"
 	}
 	start := r.URL.Path == route+"/start"
-	end := groupID == "" && r.URL.Path == route+"/end"
+	end := r.URL.Path == route+"/end"
 	mutation := start || end
 	if r.URL.Path != route && !mutation {
 		fail(w, 404, "not_found", "Windows maintenance is unavailable.")
@@ -150,13 +150,23 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 			key, revision, intent = body.Key, body.Revision, body.Intent
 		} else {
 			var body struct {
-				Key      string `json:"key"`
-				Revision uint64 `json:"revision"`
-				WindowID uint64 `json:"windowId"`
+				GroupRevision uint64 `json:"groupRevision"`
+				Key           string `json:"key"`
+				Revision      uint64 `json:"revision"`
+				WindowID      uint64 `json:"windowId"`
 			}
-			if !readObject(w, r, 256, []string{"key", "revision", "windowId"}, &body) {
+			keys := []string{"key", "revision", "windowId"}
+			if groupID != "" {
+				keys = append(keys, "groupRevision")
+			}
+			if !readObject(w, r, 256, keys, &body) {
 				return
 			}
+			if groupID != "" && (body.GroupRevision < 1 || body.GroupRevision > store.MaxFleetGroupRevision) {
+				fail(w, 400, "invalid_windows_maintenance", "Choose the exact reviewed group revision.")
+				return
+			}
+			groupRevision = body.GroupRevision
 			if body.WindowID < 1 || body.WindowID > store.MaxWindowsMaintenanceRevision {
 				fail(w, 400, "invalid_windows_maintenance", "Choose the exact active maintenance window.")
 				return
@@ -290,6 +300,10 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 			}
 			if groupRead != nil {
 				selection := store.FleetGroupMaintenanceSelection{Manager: groupRead.group.Manager, GroupID: groupID, GroupRevision: groupRevision, Identity: monitoringIdentity(groupRead.binding, in.Input)}
+				if end {
+					_, e := m.store.EndFleetGroupMaintenance(r.Context(), selection, target, revision, endID, m.source.Now, guard)
+					return e
+				}
 				_, e := m.store.StartFleetGroupMaintenance(r.Context(), selection, target, revision, endsAt, intent, m.source.Now, guard)
 				return e
 			}

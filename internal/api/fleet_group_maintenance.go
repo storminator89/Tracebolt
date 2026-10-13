@@ -41,7 +41,7 @@ var errFleetMaintenanceGroupMissing = errors.New("maintenance group missing")
 
 func (h *operatorHandler) fleetGroupMaintenanceAPI(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
-	if (len(parts) != 6 && len(parts) != 7) || parts[1] != "api" || parts[2] != "fleet" || parts[3] != "groups" || !enrollmentcrypto.ValidID(parts[4], "group_") || parts[5] != "maintenance" || len(parts) == 7 && parts[6] != "start" {
+	if (len(parts) != 6 && len(parts) != 7) || parts[1] != "api" || parts[2] != "fleet" || parts[3] != "groups" || !enrollmentcrypto.ValidID(parts[4], "group_") || parts[5] != "maintenance" || len(parts) == 7 && parts[6] != "start" && parts[6] != "end" {
 		fail(w, 404, "not_found", "Group maintenance is unavailable.")
 		return
 	}
