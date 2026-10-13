@@ -26,7 +26,7 @@ export function canReviewUpdateRetirement(view:UpdateJobView|null,now:number):bo
 export function sameUpdateRetirementReview(value:UpdateJobView,reviewed:UpdateJobView,now:number):boolean {
  const intent=updateRetirementIntent(reviewed);
  const sameResult=!!value.job?.result&&!!reviewed.job?.result&&Object.keys(reviewed.job.result).every(k=>value.job!.result![k as keyof NonNullable<typeof value.job.result>]===reviewed.job!.result![k as keyof NonNullable<typeof reviewed.job.result>]);
- return sameResult&&!!intent&&value.deviceId===reviewed.deviceId&&value.retiredFloor===reviewed.retiredFloor&&!!value.job&&!!reviewed.job&&sameUpdate(value.job.selection,reviewed.job.selection)&&matchesUpdateRetirement(value,intent)&&canReviewUpdateRetirement(value,now);
+ return value.job?.purpose===reviewed.job?.purpose&&sameResult&&!!intent&&value.deviceId===reviewed.deviceId&&value.retiredFloor===reviewed.retiredFloor&&!!value.job&&!!reviewed.job&&sameUpdate(value.job.selection,reviewed.job.selection)&&matchesUpdateRetirement(value,intent)&&canReviewUpdateRetirement(value,now);
 }
 export function readUpdateRetirementIntent(key:string):{intent:UpdateRetirementIntent|null;blocked:boolean} {
  try{

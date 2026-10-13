@@ -27,12 +27,12 @@ func (r ExecutorRecord) validateReadiness() error {
 		return nil
 	}
 	c, e := VerifyChallenge(a.Challenge, r.PublicKey)
-	if e != nil || c.Binding != r.Consent.Binding || c.Sequence != r.ReadinessSequence || a.ClaimedAt < c.IssuedAt || a.ClaimedAt >= c.Deadline || a.ClaimedAt > r.ClockFloor {
+	if e != nil || c.Binding != r.Consent.Binding || c.Download() && !r.Consent.DownloadEnabled() || c.Sequence != r.ReadinessSequence || a.ClaimedAt < c.IssuedAt || a.ClaimedAt >= c.Deadline || a.ClaimedAt > r.ClockFloor {
 		return ErrIntegrity
 	}
 	if len(a.Report) > 0 {
 		s, e := VerifyStatement(a.Report, r.ExecutorPublicKey)
-		if e != nil || s.Kind != "readiness" || s.Binding != r.Consent.Binding || s.JobID != c.JobID || s.ReferenceDigest != actionpermit.Digest(a.Challenge) || s.Deadline != c.Deadline || s.Readiness.Selection != c.Selection || s.IssuedAt < a.ClaimedAt || s.IssuedAt > r.ClockFloor || s.ExpiresAt > r.Consent.ExpiresAt {
+		if e != nil || s.Kind != "readiness" || (s.Version == DownloadRelayVersion) != c.Download() || s.Binding != r.Consent.Binding || s.JobID != c.JobID || s.ReferenceDigest != actionpermit.Digest(a.Challenge) || s.Deadline != c.Deadline || s.Readiness.Selection != c.Selection || s.IssuedAt < a.ClaimedAt || s.IssuedAt > r.ClockFloor || s.ExpiresAt > r.Consent.ExpiresAt {
 			return ErrIntegrity
 		}
 	}
@@ -47,7 +47,7 @@ func (r ExecutorRecord) validateResultReport(a Attempt, p Permit) error {
 		return nil
 	}
 	s, e := VerifyStatement(a.ResultReport, r.ExecutorPublicKey)
-	if e != nil || s.Kind != "result" || s.Binding != r.Consent.Binding || s.JobID != p.Preview.ID || s.ReferenceDigest != actionpermit.Digest(a.Envelope) || s.Deadline != p.Preview.ExpiresAt || *s.Result != *a.Result {
+	if e != nil || s.Kind != "result" || (s.Version == DownloadRelayVersion) != p.Download() || s.Binding != r.Consent.Binding || s.JobID != p.Preview.ID || s.ReferenceDigest != actionpermit.Digest(a.Envelope) || s.Deadline != p.Preview.ExpiresAt || *s.Result != *a.Result {
 		return ErrIntegrity
 	}
 	return nil
@@ -71,7 +71,7 @@ func (x *Executor) currentChallenge(c Current, challenge Challenge) (int64, erro
 	if e != nil {
 		return n, e
 	}
-	if challenge.Binding != c.Binding {
+	if challenge.Binding != c.Binding || challenge.Download() && !x.record.Consent.DownloadEnabled() {
 		return n, x.rejectTime(n, ErrAuthority)
 	}
 	if n < challenge.IssuedAt || n >= challenge.Deadline {
@@ -143,7 +143,7 @@ func (x *Executor) Readiness(ctx context.Context, raw []byte) ([]byte, error) {
 		if err = ctx.Err(); err != nil {
 			return err
 		}
-		prepared, err := x.adapter.PrepareExact(ctx, challenge.Selection)
+		prepared, err := x.prepare(ctx, challenge.Selection, challenge.Download())
 		if err != nil || prepared == nil {
 			if prepared != nil {
 				_ = prepared.Close()
@@ -172,14 +172,14 @@ func (x *Executor) Readiness(ctx context.Context, raw []byte) ([]byte, error) {
 		if err = ctx.Err(); err != nil {
 			return err
 		}
-		if readiness.Validate() != nil || readiness.Selection != challenge.Selection || readiness.CapturedAt < sourceAt || readiness.CapturedAt > n || n-readiness.CapturedAt >= 60 {
+		if (readiness.Purpose == DownloadPurpose) != challenge.Download() || readiness.Validate() != nil || readiness.Selection != challenge.Selection || readiness.CapturedAt < sourceAt || readiness.CapturedAt > n || n-readiness.CapturedAt >= 60 {
 			return ErrInvalid
 		}
 		expires := min(readiness.CapturedAt+60, challenge.Deadline, x.record.Consent.ExpiresAt, c.LeafNotAfter)
 		if n >= expires {
 			return x.rejectTime(n, ErrExpired)
 		}
-		report, err := SignStatement(Statement{Version: RelayVersion, Kind: "readiness", Binding: challenge.Binding, JobID: challenge.JobID, ReferenceDigest: actionpermit.Digest(raw), Deadline: challenge.Deadline, IssuedAt: readiness.CapturedAt, ExpiresAt: expires, Readiness: &readiness}, x.key)
+		report, err := SignStatement(Statement{Version: relayVersion(challenge.Download()), Kind: "readiness", Binding: challenge.Binding, JobID: challenge.JobID, ReferenceDigest: actionpermit.Digest(raw), Deadline: challenge.Deadline, IssuedAt: readiness.CapturedAt, ExpiresAt: expires, Readiness: &readiness}, x.key)
 		if err != nil {
 			return err
 		}

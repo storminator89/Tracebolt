@@ -3,6 +3,7 @@
 package windowsupdateexecutor
 
 import (
+	"encoding/binary"
 	"golang.org/x/sys/windows"
 	"testing"
 	"unsafe"
@@ -28,5 +29,22 @@ func TestNativeABI(t *testing.T) {
 	}
 	if installer2ID.Data1 != 0x3442d4fe || collectionID.Data1 != 0x13639463 || sessionID.Data1 != 0x4cb43d7f {
 		t.Fatal("fixed identifiers")
+	}
+}
+
+func TestNativeDownloadDecimalOverlayABI(t *testing.T) {
+	var v variant
+	v.kind = vtDecimal
+	b := unsafe.Slice((*byte)(unsafe.Pointer(&v)), 16)
+	binary.LittleEndian.PutUint32(b[8:], 0)
+	binary.LittleEndian.PutUint32(b[12:], 4)
+	if n, err := decodeDownloadDecimal(b); err != nil || n != 16<<30 {
+		t.Fatal(n, err)
+	}
+	// The sign/scale and high coefficient overlay VARIANT's reserved words,
+	// not its two-pointer data union. No native API is called by this test.
+	v.reserved[0] = 0x8000
+	if _, err := decodeDownloadDecimal(b); err == nil {
+		t.Fatal("negative decimal accepted")
 	}
 }

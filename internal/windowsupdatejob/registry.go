@@ -91,3 +91,15 @@ func (r *Registry) MatchesBinding(b enrollmentstate.Binding) bool {
 	}
 	return true
 }
+
+func (r *Registry) ConfigureDownloadPolicy(allowed func(string) bool) error {
+	if r == nil {
+		return ErrInvalid
+	}
+	for _, m := range r.ordered {
+		if e := m.ConfigureDownloadPolicy(allowed); e != nil {
+			return e
+		}
+	}
+	return nil
+}

@@ -169,3 +169,13 @@ Separately approved disposable Windows x64 acceptance must verify fresh setup an
 activation, the unchanged service identities/rights, one exact reviewed package,
 WUA contention, final-edge local revocation/expiry, interruption and no replay.
 No native acceptance is established by compilation or these inert tests.
+
+## Optional fresh manual-download coexistence
+
+The separate [download coexistence profile](windows-selected-update-downloads.md#fresh-manual-download-and-scheduled-install-coexistence)
+adds explicitly acknowledged manual WUA download to a fresh paired setup with
+one or both independently selected installation schedulers. Existing profiles
+retain their bytes and authority. Download never becomes scheduled, supplies
+installation approval, moves a fixed window or unlocks a busy/uncertain owner.
+Exact successful download retirement precedes a separate fresh WUA installation
+review and approval. Native Windows acceptance remains separately gated.

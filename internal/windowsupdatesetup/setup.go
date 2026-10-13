@@ -24,6 +24,13 @@ import (
 	job "localrmm/internal/windowsupdatejob"
 )
 
+const DownloadCoexistenceBackgroundVersion = "tracebolt.windows-background-update-provision.v5"
+const DownloadCoexistenceBackgroundDisclosure = "Run separately reviewed manual Windows-managed downloads and independently approved cached-content installations through the dedicated own-process LocalSystem background service after explicit activation. LocalSystem has high machine privileges and machine-network access. Observer rights stay unchanged. Each selected WUA or MSI installation scheduler requires its own explicit scope and acknowledgement. Download is manual only and shares the durable MSI/WUA owner and WUA occurrence; exact successful settled-result retirement must precede a fresh independent WUA installation review and approval. Busy or uncertain downloads never move an installation window or release the shared owner. No automatic download-and-install, scheduled download, license acceptance, reboot, retry, cache deletion, reset or elapsed-time unlock is authorized."
+const DownloadCoexistenceScheduleDisclosure = "Allow a named operator with both install and scheduling permission to approve one exact already-downloaded Windows update revision for one immutable UTC dispatch window of 1–60 minutes starting within 24 hours. Fresh signed matching readiness and active-idle shared-owner evidence are required before one short-lived installation permit. Approval occupies the current WUA job until successful settled-result retirement; canceled, blocked, expired, failed or uncertain jobs remain blocked. Installation can continue past the original window. Separately approved manual downloads never supply scheduling authority or move this window. No scheduled download, automatic download-and-install, license acceptance, reboot, retry, rescheduling or unlock is authorized."
+
+const DownloadBackgroundVersion = "tracebolt.windows-background-update-provision.v4"
+const DownloadBackgroundDisclosure = "Run separately reviewed manual cached-metadata download and cached-content installation jobs through the dedicated own-process LocalSystem background service after explicit activation. LocalSystem has high machine privileges and machine-network access. Observer rights stay unchanged. A successful settled operation needs explicit exact-result retirement before a fresh independent operation. No scheduling, automatic installation, license acceptance, reboot, retry, cache deletion, reset or elapsed-time unlock is authorized."
+
 const ReusableBackgroundVersion = "tracebolt.windows-background-update-provision.v3"
 const ReusableBackgroundScheduleDisclosure = "Allow a named operator with both install and scheduling permission to approve one exact cached Windows update revision for one immutable UTC dispatch window of 1–60 minutes starting within 24 hours. The separately activated background service and authenticated observer must be available. Fresh signed matching readiness and active-idle shared-owner evidence are required before one short-lived permit. Approval occupies the current job until successful settled-result retirement; canceled, blocked, expired, failed or uncertain jobs are never automatically freed. Installation can continue past the window. No downloads, license acceptance, reboot, automatic retry, rescheduling or unlock is authorized."
 const ReusableBackgroundDisclosure = "Run independently approved exact cached GUID/revision update jobs through the dedicated own-process LocalSystem background service after explicit activation. LocalSystem has high machine privileges and machine-network access; native update/custom code is not sandboxed. The observer receives only query/status/read-control on the service and query-limited/synchronize on its process, never start/control, token, key or state rights. Explicit result-bound retirement requires successful settled native completion and exact shared-owner release before another job can replace its bounded current evidence. Compact history and durable retired sequence floors remain; retirement never renews the original identity, consent or fixed expiry. Unknown, failed, partial, incomplete cleanup or retirement remains blocked. Scheduling requires its separate explicit selection and acknowledgement. No downloads, EULA acceptance, reboot, repair, automatic retry, reset or unlock is authorized."
@@ -46,6 +53,7 @@ var ErrExisting = errors.New("selected update setup or relay already exists; no 
 var ErrChanged = errors.New("selected update setup review or current identity changed")
 
 type Plan struct {
+	DownloadDisclosure     string                               `json:"downloadDisclosure,omitempty"`
 	MutationPlanDigest     string                               `json:"mutationPlanDigest,omitempty"`
 	Version                string                               `json:"version"`
 	Offer                  job.SetupOffer                       `json:"offer"`
@@ -82,15 +90,28 @@ func (p Plan) Background() bool {
 	return p.Version == BackgroundVersion || p.Version == ScheduledBackgroundVersion || p.Reusable()
 }
 
-func (p Plan) Reusable() bool { return p.Version == ReusableBackgroundVersion }
+func (p Plan) Reusable() bool { return p.Version == ReusableBackgroundVersion || p.DownloadEnabled() }
+func (p Plan) DownloadEnabled() bool {
+	return p.Version == DownloadBackgroundVersion || p.Version == DownloadCoexistenceBackgroundVersion
+}
 
 func (p Plan) Validate() error {
+	if p.DownloadEnabled() {
+		if p.DownloadDisclosure != job.DownloadDisclosure || p.Version == DownloadBackgroundVersion && (p.ScheduleScope != "" || p.ScheduleDisclosure != "") {
+			return ErrSetup
+		}
+	} else if p.DownloadDisclosure != "" {
+		return ErrSetup
+	}
 	scheduleDisclosure := ScheduleDisclosure
 	if p.Version == ScheduledBackgroundVersion {
 		scheduleDisclosure = job.BackgroundScheduleDisclosure
 	}
 	if p.Reusable() {
 		scheduleDisclosure = ReusableBackgroundScheduleDisclosure
+	}
+	if p.Version == DownloadCoexistenceBackgroundVersion {
+		scheduleDisclosure = DownloadCoexistenceScheduleDisclosure
 	}
 	if p.ScheduleScope == "" && p.ScheduleDisclosure != "" || p.ScheduleScope != "" && (p.ScheduleScope != job.ScheduleScope || p.ScheduleDisclosure != scheduleDisclosure) {
 		return ErrSetup
@@ -108,6 +129,12 @@ func (p Plan) Validate() error {
 		}
 		if p.Reusable() {
 			queryDisclosure = ReusableBackgroundDisclosure
+		}
+		if p.DownloadEnabled() {
+			queryDisclosure = DownloadBackgroundDisclosure
+			if p.Version == DownloadCoexistenceBackgroundVersion {
+				queryDisclosure = DownloadCoexistenceBackgroundDisclosure
+			}
 		}
 	}
 	raw, _ := json.Marshal(p.Artifact)
@@ -127,6 +154,7 @@ type Approval struct {
 	Schedule                     bool
 	Background                   bool
 	Reusable                     bool
+	Download                     bool
 }
 type Store interface {
 	Read(string) ([]byte, error)
@@ -202,7 +230,7 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 		return registration, ErrSetup
 	}
 	payload = bytes.Clone(payload)
-	if ctx == nil || p.Validate() != nil || p.Artifact.Validate(payload) != nil || a.Digest != p.Digest() || !a.Install || !a.Relay || !a.ProcessQuery || a.Schedule != (p.ScheduleScope != "") || a.Background != background || a.Reusable != p.Reusable() || h.Check == nil || h.Fresh == nil || h.CreateStore == nil || h.CreateImage == nil || h.VerifyImage == nil || h.CreateRelay == nil || h.VerifyRelay == nil || generate == nil || now == nil {
+	if ctx == nil || p.Validate() != nil || p.Artifact.Validate(payload) != nil || a.Digest != p.Digest() || !a.Install || !a.Relay || !a.ProcessQuery || a.Schedule != (p.ScheduleScope != "") || a.Background != background || a.Reusable != p.Reusable() || a.Download != p.DownloadEnabled() || h.Check == nil || h.Fresh == nil || h.CreateStore == nil || h.CreateImage == nil || h.VerifyImage == nil || h.CreateRelay == nil || h.VerifyRelay == nil || generate == nil || now == nil {
 		return registration, ErrSetup
 	}
 	guard := func() error {
@@ -298,6 +326,14 @@ func apply(ctx context.Context, p Plan, payload []byte, a Approval, h Hooks, gen
 			if p.Reusable() {
 				consent.Version = job.ReusableConsentVersion
 				consent.ReusableAcknowledged = true
+			}
+			if p.DownloadEnabled() {
+				consent.Version = job.DownloadConsentVersion
+				if p.Version == DownloadCoexistenceBackgroundVersion {
+					consent.Version = job.DownloadCoexistenceConsentVersion
+				}
+				consent.DownloadScope = job.DownloadScope
+				consent.DownloadAcknowledged = true
 			}
 			registration = job.SetupRegistration{Version: job.SetupRegistrationVersion, Offer: p.Offer, Consent: consent, ExecutorPublicKey: bytes.Clone(pub)}
 			if background {
@@ -457,7 +493,7 @@ func VerifyInstalled(s Store, c windowsupdateipc.Config) error {
 			return ErrSetup
 		}
 	}
-	if r.Validate() != nil || c.Consent.Background() != p.Background() || c.Consent.Reusable() != p.Reusable() || (c.Consent.Version == job.ScheduledBackgroundConsentVersion) != (p.Version == ScheduledBackgroundVersion) || c.Consent.MutationPlanDigest != p.MutationPlanDigest || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
+	if r.Validate() != nil || c.Consent.Background() != p.Background() || c.Consent.Reusable() != p.Reusable() || c.Consent.DownloadEnabled() != p.DownloadEnabled() || (c.Consent.Version == job.DownloadCoexistenceConsentVersion) != (p.Version == DownloadCoexistenceBackgroundVersion) || (c.Consent.Version == job.ScheduledBackgroundConsentVersion) != (p.Version == ScheduledBackgroundVersion) || c.Consent.MutationPlanDigest != p.MutationPlanDigest || c.Consent.ScheduleScope != p.ScheduleScope || c.Consent.ScheduleAcknowledged != (p.ScheduleScope != "") || !bytes.Equal(c.ManagerPublicKey, p.Offer.ManagerPublicKey) {
 		return ErrSetup
 	}
 	return s.Verify()
@@ -598,6 +634,35 @@ func NewReusableBackgroundPlan(o job.SetupOffer, a windowspackage.Manifest, i la
 	if scheduled {
 		p.ScheduleScope = job.ScheduleScope
 		p.ScheduleDisclosure = ReusableBackgroundScheduleDisclosure
+	}
+	return p, p.Validate()
+}
+
+// Fresh only; the entire plan/consent/roster digest binds the extra permission.
+func NewDownloadBackgroundPlan(o job.SetupOffer, a windowspackage.Manifest, i lanclient.WindowsUpdateSetupIdentity, r windowsservice.Receipt) (Plan, error) {
+	p, e := NewReusableBackgroundPlan(o, a, i, r, false)
+	if e != nil {
+		return p, e
+	}
+	p.Version = DownloadBackgroundVersion
+	p.ProcessQueryDisclosure = DownloadBackgroundDisclosure
+	p.DownloadDisclosure = job.DownloadDisclosure
+	return p, p.Validate()
+}
+
+// NewDownloadCoexistenceBackgroundPlan is a fresh paired contract. The combined
+// coordinator requires at least one separately selected installation scheduler;
+// scheduled selects WUA only and never infers that scope from the MSI peer.
+func NewDownloadCoexistenceBackgroundPlan(o job.SetupOffer, a windowspackage.Manifest, i lanclient.WindowsUpdateSetupIdentity, r windowsservice.Receipt, scheduled bool) (Plan, error) {
+	p, e := NewDownloadBackgroundPlan(o, a, i, r)
+	if e != nil {
+		return p, e
+	}
+	p.Version = DownloadCoexistenceBackgroundVersion
+	p.ProcessQueryDisclosure = DownloadCoexistenceBackgroundDisclosure
+	if scheduled {
+		p.ScheduleScope = job.ScheduleScope
+		p.ScheduleDisclosure = DownloadCoexistenceScheduleDisclosure
 	}
 	return p, p.Validate()
 }

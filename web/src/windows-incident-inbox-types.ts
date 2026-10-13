@@ -32,7 +32,7 @@ const optionalTime = (value: unknown, now: string): value is string | null => va
 export function validWindowsIncidentQuery(scope: unknown, ack: unknown, offset: unknown, limit: unknown): boolean {
     return ['active', 'recent', 'resolved', 'all'].includes(scope as string) && ['all', 'acknowledged', 'unacknowledged'].includes(ack as string) && integer(offset, 0, 12500) && integer(limit, 1, 50);
 }
-function validItem(value: unknown, now: string): value is WindowsIncidentItem {
+export function validWindowsIncidentItem(value: unknown, now: string): value is WindowsIncidentItem {
     if (!exact(value, ['key', 'deviceId', 'domain', 'incidentId', 'serviceName', 'openedAt', 'lastConfirmedAt', 'collectedAt', 'receivedAt', 'resolvedAt', 'recoveryCollectedAt', 'recoveryReceivedAt', 'closedReason', 'status', 'evaluatedAt', 'statusValidUntil', 'acknowledgedAt']) || !keyValid(value.key) || typeof value.deviceId !== 'string' || !validWindowsCapacityDeviceId(value.deviceId) || !['contact', 'disk', 'cpu', 'memory', 'service'].includes(value.domain as string)) return false;
     const prefix = value.domain === 'contact' ? 'wcontact_' : value.domain === 'service' ? 'wservice_' : 'wcapacity_';
     if (typeof value.incidentId !== 'string' || !new RegExp(`^${prefix}[a-f0-9]{16}$`).test(value.incidentId) || BigInt(`0x${value.incidentId.slice(prefix.length)}`) < 1n || BigInt(`0x${value.incidentId.slice(prefix.length)}`) > BigInt(Number.MAX_SAFE_INTEGER)) return false;
@@ -53,7 +53,7 @@ export function validWindowsIncidentInboxView(value: unknown, scope: WindowsInci
     if (!exact(value.counts, ['active', 'resolved', 'acknowledged', 'unacknowledged', 'total']) || !Object.values(value.counts).every(n => integer(n)) || !exact(value.coverage, ['devices', 'unavailableDevices', 'unknownChecks', 'disabledChecks']) || !Object.values(value.coverage).every(n => integer(n))) return false;
     const counts = value.counts as unknown as WindowsIncidentInboxView['counts'];
     if (counts.active + counts.resolved !== counts.total || counts.acknowledged + counts.unacknowledged !== counts.total || value.total > counts.total || scope === 'active' && value.total > counts.active || scope === 'resolved' && value.total > counts.resolved || ack !== 'all' && value.total > counts[ack]) return false;
-    if (!Array.isArray(value.items) || value.items.length !== Math.min(limit, Math.max(0, value.total - offset)) || !value.items.every(item => validItem(item, value.serverNow as string)) || new Set(value.items.map(item => item.key)).size !== value.items.length) return false;
+    if (!Array.isArray(value.items) || value.items.length !== Math.min(limit, Math.max(0, value.total - offset)) || !value.items.every(item => validWindowsIncidentItem(item, value.serverNow as string)) || new Set(value.items.map(item => item.key)).size !== value.items.length) return false;
     const items = value.items as WindowsIncidentItem[];
     if (items.some(item => item.statusValidUntil !== null && inventoryAge(value.authorityExpiresAt as string, item.statusValidUntil) < 0)) return false;
     if (items.some(item => scope === 'active' && item.resolvedAt !== null || scope === 'resolved' && item.resolvedAt === null || scope === 'recent' && inventoryAge(value.serverNow as string, item.openedAt) > 7 * 86400000 && (!item.resolvedAt || inventoryAge(value.serverNow as string, item.resolvedAt) > 7 * 86400000) || ack === 'acknowledged' && item.acknowledgedAt === null || ack === 'unacknowledged' && item.acknowledgedAt !== null)) return false;

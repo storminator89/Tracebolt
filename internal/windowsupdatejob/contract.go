@@ -1,6 +1,7 @@
 // Package windowsupdatejob is the source-only selected cached-WUA update job
 // domain. Enrollment-owned manager persistence and TLS relay are separate
-// integrations; no native elevated installer/provisioner is supplied.
+// integrations. Dedicated native adapters and fresh setup remain separately
+// authorized source candidates; source construction never grants host authority.
 // Observation and service-control grants never apply.
 package windowsupdatejob
 
@@ -79,6 +80,8 @@ const BackgroundConsentVersion = "tracebolt.windows-selected-update-consent.v4"
 const CoordinatedConsentVersion = "tracebolt.windows-selected-update-consent.v3"
 
 type Consent struct {
+	DownloadScope          string  `json:"downloadScope,omitempty"`
+	DownloadAcknowledged   bool    `json:"downloadAcknowledged,omitempty"`
 	ReusableAcknowledged   bool    `json:"reusableAcknowledged,omitempty"`
 	BackgroundAcknowledged bool    `json:"backgroundAcknowledged,omitempty"`
 	MutationPlanDigest     string  `json:"mutationPlanDigest,omitempty"`
@@ -93,13 +96,23 @@ type Consent struct {
 	ScheduleAcknowledged   bool    `json:"scheduleAcknowledged,omitempty"`
 }
 
-func (c Consent) Reusable() bool { return c.Version == ReusableConsentVersion }
+func (c Consent) Reusable() bool { return c.Version == ReusableConsentVersion || c.DownloadEnabled() }
+func (c Consent) DownloadEnabled() bool {
+	return c.Version == DownloadConsentVersion || c.Version == DownloadCoexistenceConsentVersion
+}
 
 func (c Consent) Background() bool {
 	return c.Version == BackgroundConsentVersion || c.Version == ScheduledBackgroundConsentVersion || c.Reusable()
 }
 
 func (c Consent) Validate() error {
+	if c.DownloadEnabled() {
+		if c.DownloadScope != DownloadScope || !c.DownloadAcknowledged || c.Version == DownloadConsentVersion && (c.ScheduleScope != "" || c.ScheduleAcknowledged) {
+			return ErrInvalid
+		}
+	} else if c.DownloadScope != "" || c.DownloadAcknowledged {
+		return ErrInvalid
+	}
 	if c.Reusable() != c.ReusableAcknowledged || c.Background() != c.BackgroundAcknowledged || !(c.Version == ConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledConsentVersion && c.MutationPlanDigest == "" && c.PeerBindingDigest == "" && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || (c.Version == CoordinatedConsentVersion || c.Version == BackgroundConsentVersion) && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == "" && !c.ScheduleAcknowledged || c.Version == ScheduledBackgroundConsentVersion && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged || c.Reusable() && actionpermit.ValidDigest(c.MutationPlanDigest) && actionpermit.ValidDigest(c.PeerBindingDigest) && ((c.ScheduleScope == "" && !c.ScheduleAcknowledged) || (c.ScheduleScope == ScheduleScope && c.ScheduleAcknowledged))) || c.Scope != Scope || !ValidBinding(c.Binding) || !validTime(c.ExpiresAt) || c.Enabled && !c.Acknowledged {
 		return ErrInvalid
 	}
@@ -118,16 +131,23 @@ const (
 func fact(f Fact) bool { return f == Yes || f == No || f == Unknown }
 
 type Readiness struct {
-	Selection           Selection `json:"selection"`
-	CapturedAt          int64     `json:"capturedAt"`
-	Software            Fact      `json:"software"`
-	Installed           Fact      `json:"installed"`
-	Hidden              Fact      `json:"hidden"`
-	Downloaded          Fact      `json:"downloaded"`
-	EULAAccepted        Fact      `json:"eulaAccepted"`
-	CanRequestUserInput Fact      `json:"canRequestUserInput"`
-	CanRequireSource    Fact      `json:"canRequireSource"`
-	RequiresNetwork     Fact      `json:"requiresNetwork"`
+	Purpose               string    `json:"purpose,omitempty"`
+	DownloadMetadataKnown bool      `json:"downloadMetadataKnown,omitempty"`
+	DownloadOrigins       string    `json:"downloadOrigins,omitempty"`
+	DownloadMinBytes      uint64    `json:"downloadMinBytes,omitempty"`
+	DownloadMaxBytes      uint64    `json:"downloadMaxBytes,omitempty"`
+	DownloadSource        string    `json:"downloadSource,omitempty"`
+	DownloadServiceID     string    `json:"downloadServiceId,omitempty"`
+	Selection             Selection `json:"selection"`
+	CapturedAt            int64     `json:"capturedAt"`
+	Software              Fact      `json:"software"`
+	Installed             Fact      `json:"installed"`
+	Hidden                Fact      `json:"hidden"`
+	Downloaded            Fact      `json:"downloaded"`
+	EULAAccepted          Fact      `json:"eulaAccepted"`
+	CanRequestUserInput   Fact      `json:"canRequestUserInput"`
+	CanRequireSource      Fact      `json:"canRequireSource"`
+	RequiresNetwork       Fact      `json:"requiresNetwork"`
 	// -1 means unreadable. The first increment rejects all bundles.
 	BundledCount         int32 `json:"bundledCount"`
 	InstallerBusy        Fact  `json:"installerBusy"`
@@ -138,6 +158,9 @@ type Readiness struct {
 }
 
 func (r Readiness) Validate() error {
+	if r.validateDownloadMetadata() != nil {
+		return ErrInvalid
+	}
 	if !ValidSelection(r.Selection) || !validTime(r.CapturedAt) || r.BundledCount < -1 {
 		return ErrInvalid
 	}
@@ -154,6 +177,9 @@ func (r Readiness) Validate() error {
 	return nil
 }
 func (r Readiness) Reason() string {
+	if r.Purpose == DownloadPurpose {
+		return r.downloadReason()
+	}
 	if r.Validate() != nil {
 		return "readiness_unknown"
 	}
@@ -207,6 +233,10 @@ type Preview struct {
 
 func digest(v any) string { raw, _ := json.Marshal(v); return actionpermit.Digest(raw) }
 func previewDigest(p Preview) string {
+	if p.Readiness.Purpose == DownloadPurpose {
+		p.Digest = ""
+		return digestPurpose("Tracebolt selected WUA download preview v1", p)
+	}
 	p.Digest = ""
 	raw, _ := json.Marshal(p)
 	return actionpermit.Digest(append([]byte("Tracebolt selected WUA preview v1\x00"), raw...))
@@ -229,10 +259,13 @@ type Permit struct {
 }
 
 func (p Permit) Validate() error {
+	if p.Download() != (p.Preview.Readiness.Purpose == DownloadPurpose) || p.Download() && p.Schedule != nil {
+		return ErrInvalid
+	}
 	if p.Schedule != nil {
 		return p.validateScheduled()
 	}
-	if (p.Version != Version && p.Version != ReusablePermitVersion) || p.PermitIssuedAt != 0 || p.Preview.Validate() != nil || p.Preview.Readiness.Reason() != "ready" || p.Sequence == 0 || p.ApprovedAt < p.Preview.CreatedAt || p.ApprovedAt >= p.Preview.ExpiresAt {
+	if (p.Version != Version && p.Version != ReusablePermitVersion && p.Version != DownloadPermitVersion) || p.PermitIssuedAt != 0 || p.Preview.Validate() != nil || p.Preview.Readiness.Reason() != "ready" || p.Sequence == 0 || p.ApprovedAt < p.Preview.CreatedAt || p.ApprovedAt >= p.Preview.ExpiresAt {
 		return ErrInvalid
 	}
 	return nil
@@ -245,6 +278,9 @@ type envelope struct {
 
 func signingMessage(p Permit) []byte {
 	raw, _ := json.Marshal(p)
+	if p.Download() {
+		return append([]byte("Tracebolt selected WUA download permit v1\x00"), raw...)
+	}
 	if p.Version == ReusablePermitVersion {
 		return append([]byte("Tracebolt reusable cached WUA install v3\x00"), raw...)
 	}

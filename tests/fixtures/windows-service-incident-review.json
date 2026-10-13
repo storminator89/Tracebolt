@@ -1,0 +1,125 @@
+{
+  "matched": {
+    "schemaVersion": "tracebolt.windows-service-incident-review.v1",
+    "serverNow": "2026-10-07T12:02:00Z",
+    "authorityExpiresAt": "2026-10-07T12:03:00Z",
+    "incident": {
+      "key": "882606e88175b0696c91136ff0554ed333385ae0de0a10ff1b0fb18f752b2d60",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "service",
+      "incidentId": "wservice_0000000000000001",
+      "serviceName": "FixtureService",
+      "openedAt": "2026-10-07T12:02:00Z",
+      "lastConfirmedAt": "2026-10-07T12:02:00Z",
+      "collectedAt": "2026-10-07T12:02:00Z",
+      "receivedAt": "2026-10-07T12:02:00Z",
+      "resolvedAt": null,
+      "recoveryCollectedAt": null,
+      "recoveryReceivedAt": null,
+      "closedReason": "",
+      "status": "attention",
+      "statusValidUntil": "2026-10-07T12:03:00Z",
+      "evaluatedAt": "2026-10-07T12:02:00Z",
+      "acknowledgedAt": null
+    },
+    "observation": {
+      "name": "FixtureService",
+      "displayName": "Fixture service",
+      "state": "stopped",
+      "collectedAt": "2026-10-07T12:02:00Z",
+      "receivedAt": "2026-10-07T12:02:00Z",
+      "sequence": 5,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 1
+    },
+    "control": {
+      "status": "matched",
+      "binding": {
+        "managerId": "manager_11111111111111111111111111111111",
+        "keyId": "sha256:e54893f1c9ff55ad58c5f54e0b16672c3c41f9ef04a8bbd03df7c3e39cecd328",
+        "endpointId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "incarnationDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "installationId": "broker_22222222222222222222222222222222",
+        "grantDigest": "sha256:3492ad65d05a973fef8c825521eeb41ae64625a672a8aeeeabc696e16d62a020",
+        "target": "FixtureService",
+        "targetDigest": "sha256:b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+      },
+      "bindingDigest": "sha256:4371bfab3b3dcf37f12bb870369957d02ae819afa5bdde4cd9f3013bd5943375"
+    }
+  },
+  "missingObservation": {
+    "schemaVersion": "tracebolt.windows-service-incident-review.v1",
+    "serverNow": "2026-10-07T12:02:00Z",
+    "authorityExpiresAt": "2026-10-07T12:04:00Z",
+    "incident": {
+      "key": "882606e88175b0696c91136ff0554ed333385ae0de0a10ff1b0fb18f752b2d60",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "service",
+      "incidentId": "wservice_0000000000000001",
+      "serviceName": "FixtureService",
+      "openedAt": "2026-10-07T12:02:00Z",
+      "lastConfirmedAt": "2026-10-07T12:02:00Z",
+      "collectedAt": "2026-10-07T12:02:00Z",
+      "receivedAt": "2026-10-07T12:02:00Z",
+      "resolvedAt": null,
+      "recoveryCollectedAt": null,
+      "recoveryReceivedAt": null,
+      "closedReason": "",
+      "status": "unknown",
+      "statusValidUntil": null,
+      "evaluatedAt": "2026-10-07T12:02:00Z",
+      "acknowledgedAt": null
+    },
+    "observation": null,
+    "control": {
+      "status": "not_configured",
+      "binding": null,
+      "bindingDigest": null
+    }
+  },
+  "unavailable": {
+    "schemaVersion": "tracebolt.windows-service-incident-review.v1",
+    "serverNow": "2026-10-07T12:02:00Z",
+    "authorityExpiresAt": "2026-10-07T12:04:00Z",
+    "incident": {
+      "key": "882606e88175b0696c91136ff0554ed333385ae0de0a10ff1b0fb18f752b2d60",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "service",
+      "incidentId": "wservice_0000000000000001",
+      "serviceName": "FixtureService",
+      "openedAt": "2026-10-07T12:02:00Z",
+      "lastConfirmedAt": "2026-10-07T12:02:00Z",
+      "collectedAt": "2026-10-07T12:02:00Z",
+      "receivedAt": "2026-10-07T12:02:00Z",
+      "resolvedAt": null,
+      "recoveryCollectedAt": null,
+      "recoveryReceivedAt": null,
+      "closedReason": "",
+      "status": "attention",
+      "statusValidUntil": "2026-10-07T12:04:00Z",
+      "evaluatedAt": "2026-10-07T12:02:00Z",
+      "acknowledgedAt": null
+    },
+    "observation": {
+      "name": "FixtureService",
+      "displayName": "Fixture service",
+      "state": "stopped",
+      "collectedAt": "2026-10-07T12:02:00Z",
+      "receivedAt": "2026-10-07T12:02:00Z",
+      "sequence": 5,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 1
+    },
+    "control": {
+      "status": "unavailable",
+      "binding": null,
+      "bindingDigest": null
+    }
+  }
+}

@@ -34,6 +34,7 @@ const (
 
 type Adapter struct {
 	checkStart                            func(context.Context, time.Time) error
+	checkDownloadStart                    func(context.Context, time.Time) error
 	mu                                    sync.Mutex
 	busy, uncertain, stopping             bool
 	ownerDone                             chan struct{}
@@ -47,10 +48,12 @@ type Adapter struct {
 // PrepareExact is the first native access; the default kernel remains inactive.
 func New() *Adapter { return newAdapter(openNative, time.Now) }
 func newAdapter(open func(context.Context) (comRuntime, error), now func() time.Time) *Adapter {
-	return &Adapter{checkStart: job.CheckInstallStart, open: open, now: now, prepareLimit: preparationLimit, installLimit: installationLimit, idleLimit: idleLimit}
+	return &Adapter{checkStart: job.CheckInstallStart, checkDownloadStart: job.CheckDownloadStart, open: open, now: now, prepareLimit: preparationLimit, installLimit: installationLimit, idleLimit: idleLimit}
 }
 
 var _ job.ExecutorAdapter = (*Adapter)(nil)
+var _ job.ExecutorDownloadAdapter = (*Adapter)(nil)
+var _ job.PreparedDownload = (*prepared)(nil)
 var _ job.PreparedUpdate = (*prepared)(nil)
 
 type reply struct {
@@ -65,6 +68,7 @@ type request struct {
 	settled chan struct{}
 }
 type prepared struct {
+	download                             bool
 	readySettled                         chan struct{}
 	owner                                *Adapter
 	requests                             chan request
@@ -76,6 +80,23 @@ type prepared struct {
 
 func (a *Adapter) poison() { a.mu.Lock(); a.uncertain = true; a.mu.Unlock() }
 func (a *Adapter) PrepareExact(ctx context.Context, selection job.Selection) (job.PreparedUpdate, error) {
+	p, err := a.prepareExact(ctx, selection, false)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// PrepareDownloadExact is a separate opt-in purpose. The pinned handle cannot
+// install, accept a EULA, change update sources, or choose a caller-supplied URL.
+func (a *Adapter) PrepareDownloadExact(ctx context.Context, selection job.Selection) (job.PreparedDownload, error) {
+	p, err := a.prepareExact(ctx, selection, true)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+func (a *Adapter) prepareExact(ctx context.Context, selection job.Selection, download bool) (*prepared, error) {
 	if ctx == nil || !job.ValidSelection(selection) || a == nil || a.open == nil || a.now == nil {
 		return nil, job.ErrInvalid
 	}
@@ -90,7 +111,7 @@ func (a *Adapter) PrepareExact(ctx context.Context, selection job.Selection) (jo
 	a.busy = true
 	a.ownerDone = make(chan struct{})
 	a.mu.Unlock()
-	p := &prepared{owner: a, requests: make(chan request), stop: make(chan struct{}), done: make(chan struct{}), readySettled: make(chan struct{})}
+	p := &prepared{download: download, owner: a, requests: make(chan request), stop: make(chan struct{}), done: make(chan struct{}), readySettled: make(chan struct{})}
 	defer close(p.readySettled)
 	bounded, cancel := context.WithTimeout(ctx, a.prepareLimit)
 	defer cancel()
@@ -153,7 +174,10 @@ func (p *prepared) run(ctx context.Context, selection job.Selection, ready chan<
 		return
 	}
 	defer native.close()
-	e := &engine{native: native, selection: selection, now: p.owner.now, checkStart: p.owner.checkStart}
+	e := &engine{native: native, selection: selection, now: p.owner.now, checkStart: p.owner.checkStart, download: p.download}
+	if p.download {
+		e.checkStart = p.owner.checkDownloadStart
+	}
 	defer e.close()
 	if err = e.prepare(ctx); err != nil {
 		publishReady(err)
@@ -182,7 +206,11 @@ func (p *prepared) run(ctx context.Context, selection job.Selection, ready chan<
 			if err := r.ctx.Err(); err != nil {
 				out.err = err
 			} else if r.install {
-				out.result, out.err = e.installOnce(r.ctx)
+				if p.download {
+					out.result, out.err = e.downloadOnce(r.ctx)
+				} else {
+					out.result, out.err = e.installOnce(r.ctx)
+				}
 			} else {
 				out.readiness, out.err = e.inspect(r.ctx)
 				if out.err == nil {
@@ -193,7 +221,11 @@ func (p *prepared) run(ctx context.Context, selection job.Selection, ready chan<
 			if err := r.ctx.Err(); err != nil {
 				out.err = err
 			}
-			if r.install && (out.err != nil || out.result.OperationResult != 2 || out.result.HResult < 0 || out.result.RebootRequired == job.Unknown) {
+			failed := out.err != nil || out.result.OperationResult != 2 || out.result.HResult < 0 || out.result.RebootRequired == job.Unknown
+			if p.download {
+				failed = out.err != nil || !downloadSucceeded(out.result)
+			}
+			if r.install && failed {
 				p.owner.poison()
 			}
 			r.reply <- out
@@ -296,7 +328,20 @@ func (p *prepared) Inspect(ctx context.Context) (job.Readiness, error) {
 	return r.readiness, r.err
 }
 func (p *prepared) InstallOnce(ctx context.Context) (job.NativeResult, error) {
+	if p.download {
+		return unknownDownloadResult(), job.ErrAuthority
+	}
 	r := p.call(ctx, true)
+	return r.result, r.err
+}
+func (p *prepared) DownloadOnce(ctx context.Context) (job.NativeResult, error) {
+	if !p.download {
+		return unknownDownloadResult(), job.ErrAuthority
+	}
+	r := p.call(ctx, true)
+	if !r.result.Download {
+		r.result = unknownDownloadResult()
+	}
 	return r.result, r.err
 }
 func (p *prepared) Close() error {

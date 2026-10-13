@@ -255,3 +255,26 @@ func InspectConfiguration(path, managerID, profile string, forbidden ...ed25519.
 
 // PublicKey returns only the detached Windows command pin for domain separation.
 func (m *Manager) PublicKey() ed25519.PublicKey { return m.keyPublic() }
+
+// ViewExpectedAt preserves the reviewed identity through the enrollment read.
+// It advances only the existing durable observation floor, never action authority.
+func (m *Manager) ViewExpectedAt(ctx context.Context, device, expectedBinding string) (windowsactionjob.Record, time.Time, error) {
+	if m == nil {
+		return windowsactionjob.Record{}, time.Time{}, ErrConfiguration
+	}
+	return m.store.WindowsServiceActionViewExpected(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), device, expectedBinding, m.Now())
+}
+
+func (m *Manager) PreviewExpected(ctx context.Context, device, actor, target, operation, expectedBinding string) (windowsactionjob.Record, error) {
+	if !windowsaction.ValidDigest(expectedBinding) {
+		return windowsactionjob.Record{}, windowsaction.ErrInvalid
+	}
+	if err := m.live(); err != nil {
+		return windowsactionjob.Record{}, err
+	}
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return windowsactionjob.Record{}, windowsaction.ErrUnavailable
+	}
+	return m.store.PreviewWindowsServiceActionExpected(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), device, "action_"+hex.EncodeToString(b[:]), actor, target, operation, expectedBinding, m.Now())
+}

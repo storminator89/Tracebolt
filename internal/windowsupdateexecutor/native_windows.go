@@ -38,6 +38,7 @@ const (
 	vtBSTR     = 8
 	vtDispatch = 9
 	vtBool     = 11
+	vtDecimal  = 14
 )
 
 // VARIANT includes a two-pointer BRECORD union: 24 bytes on 64-bit, 16 on 386.
@@ -161,7 +162,16 @@ func (o *nativeObject) same(other comObject) (bool, error) {
 	defer bID.close()
 	return aID.ptr == bID.ptr, nil
 }
-func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, args ...value) (value, error) {
+func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, args ...value) (returned value, returnErr error) {
+	download := name == "Download" && flags == method
+	nativeReturned := false
+	var nativeHResult int32
+	defer func() {
+		if download {
+			returned.nativeReturned = nativeReturned
+			returned.nativeHResult = nativeHResult
+		}
+	}()
 	if err := ctx.Err(); err != nil {
 		return value{}, err
 	}
@@ -238,6 +248,16 @@ func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, ar
 			return value{}, ErrReadiness
 		}
 	}
+	if download {
+		if err := verifyNativeToken(); err != nil {
+			return value{}, err
+		}
+		// All blocking lookups precede the one-use native fence. Repeat the
+		// pinned facts and downloader safeguards after method resolution.
+		if err := checkDownloadDispatch(ctx); err != nil {
+			return value{}, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return value{}, err
 	}
@@ -246,9 +266,18 @@ func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, ar
 			return value{}, err
 		}
 	}
+	if download {
+		if err := job.CheckNativeDownloadStart(ctx, time.Now()); err != nil {
+			return value{}, err
+		}
+	}
 	var out variant
 	// No EXCEPINFO: never collect vendor prose, paths, URLs or source-media text.
 	hr, _, _ = syscall.SyscallN(o.ptr.table[6], uintptr(unsafe.Pointer(o.ptr)), uintptr(uint32(id)), uintptr(unsafe.Pointer(&nullID)), 0x0409, uintptr(flags), uintptr(unsafe.Pointer(&params)), uintptr(unsafe.Pointer(&out)), 0, 0)
+	nativeReturned = download
+	if download {
+		nativeHResult = int32(uint32(hr))
+	}
 	runtime.KeepAlive(args)
 	runtime.KeepAlive(arg)
 	runtime.KeepAlive(params)
@@ -257,7 +286,7 @@ func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, ar
 	if hrError(hr) != nil {
 		return value{}, ErrUnavailable
 	}
-	if err := ctx.Err(); err != nil {
+	if err := ctx.Err(); err != nil && !download {
 		return value{}, err
 	}
 	switch out.kind {
@@ -278,7 +307,31 @@ func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, ar
 		ref := &nativeObject{ptr: (*dispatchObject)(out.pointer())}
 		out = variant{}
 		return objectArg(ref), nil
+	case vtDecimal:
+		if flags != get || (name != "MinDownloadSize" && name != "MaxDownloadSize") {
+			return value{}, ErrReadiness
+		}
+		// DECIMAL overlays the first sixteen VARIANT bytes on both 32/64-bit.
+		n, err := decodeDownloadDecimal(unsafe.Slice((*byte)(unsafe.Pointer(&out)), 16))
+		if err != nil {
+			return value{}, err
+		}
+		return value{kind: uintKind, unsigned: n}, nil
 	case vtBSTR:
+		if name == "DownloadUrl" && flags == get {
+			if out.data[0] == 0 {
+				return value{}, ErrReadiness
+			}
+			size, _, _ := sysStringLen.Call(out.data[0])
+			if size == 0 || size > maxDownloadURLBytes {
+				return value{}, ErrReadiness
+			}
+			text, err := decodeDownloadURLUnits(unsafe.Slice((*uint16)(out.pointer()), int(size)))
+			if err != nil {
+				return value{}, err
+			}
+			return value{kind: urlKind, text: text}, nil
+		}
 		if out.data[0] == 0 {
 			return value{kind: textKind}, nil
 		}
@@ -287,7 +340,7 @@ func (o *nativeObject) invoke(ctx context.Context, name string, flags uint16, ar
 			return value{}, ErrIdentity
 		}
 		units := unsafe.Slice((*uint16)(out.pointer()), int(size))
-		// The only returned string is an ASCII GUID. Never normalize malformed UTF-16.
+		// Other returned strings are ASCII GUIDs. Never normalize malformed UTF-16.
 		b := make([]byte, len(units))
 		for i, u := range units {
 			if u > 127 || u == 0 {

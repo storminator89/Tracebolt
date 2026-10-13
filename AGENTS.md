@@ -265,6 +265,17 @@ missing material rather than inventing credentials or weakening protection.
   distinct manager/executor keys, original age and current-leaf/final guards.
   Never promote observation/service permissions, retry uncertainty, download,
   accept EULAs or reboot. Native elevated executor/provisioning remain inactive.
+- Selected update downloading requires a separate fresh v7 paired background scope.
+  Fresh v8 consent/v9 paired setup additionally permits independently selected
+  installation schedulers; v7 remains manual-only. Never schedule download,
+  infer one scheduler/capability from another, reuse manual approval for install,
+  or move a fixed installation window while download owns the shared fence.
+  Read `docs/windows-selected-update-downloads.md`. Keep download-only capability,
+  signed purposes, bounded metadata-origin/size review and the shared MSI/WUA fence.
+  Windows-managed delivery is not a hard byte quota or egress allowlist. Successful
+  settled-result retirement must precede a new independent installation review.
+  Old v1–v6 grants cannot download; no online scan, EULA acceptance, automatic
+  install/retry, cache deletion or native acceptance follows from source checks.
 - Fresh background cached-update UTC scheduling requires
   `docs/windows-scheduled-background-updates.md`. Preserve standalone v2 and
   manual background v4 bytes; only fresh explicit v5 consent admits the combined
@@ -284,7 +295,10 @@ missing material rather than inventing credentials or weakening protection.
 - The Windows fleet incident inbox and operator acknowledgement are manager-only.
   Read `docs/windows-incident-inbox.md` before changing identity/domain keys, source
   deadlines or the enrollment-to-operator commit lease. Seen never means resolved;
-  keep all v1 histories, Linux alarms and AI admission unchanged.
+  keep all v1 histories, Linux alarms and AI admission unchanged. For the exact
+  service review bridge read `docs/windows-service-incident-review.md`; preserve
+  the original-identity projection and transaction-time expected-binding guard.
+  Opening a review must never choose an operation or create a preview/grant.
 - Bounded Windows planned maintenance is separate manager-owned metadata. Read
   `docs/windows-maintenance.md`. Preserve original identity, revision, immutable
   end, current enrollment lease and final clock/session guards. It suppresses

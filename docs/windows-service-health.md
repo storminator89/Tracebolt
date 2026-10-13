@@ -82,8 +82,14 @@ it exposes no PID. Null inventory means no fresh trustworthy chooser.
 POST `/api/devices/{id}/windows-services/policy` accepts exactly `enabled`,
 `services` and `expectedRevision`. It is shared-administrator-only, with same-origin,
 CSRF, exact route/body validation and session/certificate authority checks before
-mutation and response release. Named operators have read-only access. A save does
-not itself evaluate a report.
+mutation and response release. An enrollment-to-operator lease now freezes the
+original identity, current leaf and revocation through each policy commit. The
+transaction resamples the actual clock after SQLite waits, checks live operator
+access, and repeats exact source/policy admission immediately before commit.
+Failed guards roll back both policy and notification bookkeeping. This closes the
+earlier fixed-time save gap after an operator-store wait; evaluator timing and
+the strict v1 API are unchanged. Named operators have read-only access. A save
+does not itself evaluate a report.
 
 The production scheduler runs contact first, then all enabled disk/CPU/RAM/service
 policies from one accepted-source transaction, with one admission lock and no new

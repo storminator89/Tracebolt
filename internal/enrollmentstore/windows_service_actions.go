@@ -199,6 +199,10 @@ func (s *Store) loadWindowsActionRecords(ctx context.Context, t *transaction) er
 	return nil
 }
 func (s *Store) windowsActionTransaction(ctx context.Context, key ed25519.PublicKey, device, id, hash string, now time.Time, fn func(*windowsactionjob.Record, time.Time) error) (windowsactionjob.Record, time.Time, error) {
+	return s.windowsActionTransactionExpected(ctx, key, device, id, hash, "", now, fn)
+}
+
+func (s *Store) windowsActionTransactionExpected(ctx context.Context, key ed25519.PublicKey, device, id, hash, expectedBinding string, now time.Time, fn func(*windowsactionjob.Record, time.Time) error) (windowsactionjob.Record, time.Time, error) {
 	var out windowsactionjob.Record
 	var operationErr error
 	e := s.transact(ctx, func(t *transaction) error {
@@ -233,6 +237,12 @@ func (s *Store) windowsActionTransaction(ctx context.Context, key ed25519.Public
 		if windowsaction.DecodeCanonical(raw, &r, windowsactionjob.MaxRecordBytes) != nil || windowsactionjob.Validate(r) != nil || !bytes.Equal(r.PublicKey, key) || now.Before(r.EffectiveClockFloor()) {
 			return ErrStorage
 		}
+		// Compare the complete immutable binding under the enrollment transaction,
+		// before observation, preview creation, or a clock-floor write. Never fall
+		// through to a replacement selected by the mutable device ID.
+		if expectedBinding != "" && windowsaction.ServiceReviewBindingDigest(r.Binding) != expectedBinding {
+			return windowsactionjob.ErrConflict
+		}
 		// Retain pre-operation bytes so a final-time rejection can commit only its
 		// observed clock floor, without consuming or refreshing the saved request.
 		original := bytes.Clone(raw)
@@ -241,7 +251,9 @@ func (s *Store) windowsActionTransaction(ctx context.Context, key ed25519.Public
 		if before > 0 {
 			wasClaimed = r.Jobs[before-1].ClaimedAt != nil
 		}
+		beforePreview := r.Preview
 		operationErr = fn(&r, now)
+		madeReviewedPreview := expectedBinding != "" && operationErr == nil && r.Preview != nil && (beforePreview == nil || beforePreview.ID != r.Preview.ID || beforePreview.Digest != r.Preview.Digest)
 		if operationErr != nil {
 			// Even a stale/expired rejection advances trusted time; it cannot revive on rollback.
 			if windowsaction.DecodeCanonical(raw, &r, windowsactionjob.MaxRecordBytes) != nil {
@@ -280,6 +292,9 @@ func (s *Store) windowsActionTransaction(ctx context.Context, key ed25519.Public
 			}
 			_, finalErr := s.windowsFullServicesAuthority(t, id, hash, fresh)
 			if finalErr == nil && (len(r.Jobs) > before || len(r.Jobs) > 0 && !wasClaimed && r.Jobs[len(r.Jobs)-1].ClaimedAt != nil) && !fresh.Before(r.Jobs[len(r.Jobs)-1].Deadline()) {
+				finalErr = windowsaction.ErrExpired
+			}
+			if finalErr == nil && madeReviewedPreview && !fresh.Before(r.Preview.ExpiresAt) {
 				finalErr = windowsaction.ErrExpired
 			}
 			if finalErr != nil {
@@ -358,4 +373,23 @@ func (s *Store) ClaimWindowsServiceAction(ctx context.Context, key ed25519.Publi
 func (s *Store) AcceptWindowsServiceAction(ctx context.Context, key ed25519.PublicKey, id, hash string, result windowsaction.Result, now time.Time) error {
 	_, _, e := s.windowsActionTransaction(ctx, key, "", id, hash, now, func(r *windowsactionjob.Record, now time.Time) error { return r.Accept(result) })
 	return e
+}
+
+// WindowsServiceActionViewExpected observes only the exact reviewed binding.
+// Like the ordinary view, it advances the durable clock floor but creates no action.
+func (s *Store) WindowsServiceActionViewExpected(ctx context.Context, key ed25519.PublicKey, device, expectedBinding string, now time.Time) (windowsactionjob.Record, time.Time, error) {
+	if !windowsaction.ValidDigest(expectedBinding) {
+		return windowsactionjob.Record{}, now, windowsaction.ErrInvalid
+	}
+	return s.windowsActionTransactionExpected(ctx, key, device, "", "", expectedBinding, now, func(*windowsactionjob.Record, time.Time) error { return nil })
+}
+
+func (s *Store) PreviewWindowsServiceActionExpected(ctx context.Context, key ed25519.PublicKey, device, job, actor, target, op, expectedBinding string, now time.Time) (windowsactionjob.Record, error) {
+	if !windowsaction.ValidDigest(expectedBinding) {
+		return windowsactionjob.Record{}, windowsaction.ErrInvalid
+	}
+	r, _, err := s.windowsActionTransactionExpected(ctx, key, device, "", "", expectedBinding, now, func(r *windowsactionjob.Record, now time.Time) error {
+		return r.MakePreview(job, actor, target, op, now)
+	})
+	return r, err
 }

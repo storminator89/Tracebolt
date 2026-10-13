@@ -6,6 +6,12 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+Fresh [manual-download/scheduled-install coexistence](docs/windows-selected-update-downloads.md#fresh-manual-download-and-scheduled-install-coexistence)
+uses separately acknowledged WUA/MSI installation scheduling under the existing
+shared fence. Download remains manual; successful retirement precedes fresh WUA
+installation review. Original manual-only profiles remain unchanged. Source
+verification does not establish native Windows acceptance or release.
+
 Read-only [fleet machine-software lookup](docs/windows-fleet-software-lookup.md)
 finds reported application names/versions in existing complete HKLM generations,
 with per-device source/age/coverage and identity-bound detail. No new collection,

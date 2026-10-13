@@ -5,6 +5,9 @@ reviewed existing Windows application service. The Services view offers only the
 locally granted exact target. Inventory visibility, service health, existing
 observation grants and Linux `restart_service` authority confer no action rights.
 Use the separate named-operator `windows_service_control` capability.
+The [incident service review](windows-service-incident-review.md) can open these
+controls with an additional original-binding restriction, without selecting an
+operation or bypassing the existing preview and approval path.
 
 This is source/fixture evidence only. No Windows installation, account, ACL,
 persistent key, grant, native service control or release was performed. A

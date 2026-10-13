@@ -155,6 +155,21 @@
       "result",
       "reload",
       "complete"
+    ],
+    "update-download": [
+      "fixture",
+      "context",
+      "guards",
+      "close",
+      "screenshot",
+      "document",
+      "request",
+      "readiness",
+      "review",
+      "approve",
+      "result",
+      "reload",
+      "complete"
     ]
   }
 }

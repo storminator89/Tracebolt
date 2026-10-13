@@ -1,3 +1,4 @@
+import { updateDownloadCopy } from './windows-update-download';
 import { useLocale } from './i18n';
 import type { UpdateJobView } from './windows-update-jobs-types';
 export const updateRetirementCopy={
@@ -5,11 +6,11 @@ export const updateRetirementCopy={
  de:{mode:'Wiederverwendbare Updateaufträge',grant:'Ursprüngliche Zustimmung läuft ab',review:'Abgeschlossenen Auftrag prüfen',close:'Abgeschlossenen Auftrag schließen',ack:'Ich habe genau dieses erfolgreiche Ergebnis geprüft. Den Auftrag nach Prüfung der gemeinsamen Sperrfreigabe durch den Endpunkt schließen. Ergebnis, Neustartbedarf und Wiederholungsschutz behalten.',notice:'Nach Bestätigung durch den Endpunkt kann ein separater nächster Auftrag folgen. Dies macht das Update nicht rückgängig, startet Windows nicht neu und verlängert keine Zustimmung.',pending:'Abschließen ausstehend; nächster Auftrag blockiert.',retired:'Auftrag geschlossen; kein nächster Auftrag gestartet.',blocked:'Abschließen ist blockiert. Ein signiertes erfolgreiches Ergebnis und die bestätigte Freigabe der gemeinsamen Sperre sind erforderlich.',capacity:'Der aktuelle Auftrag muss geprüft und geschlossen werden, bevor ein weiterer beginnen kann.',remaining:'Verfügbarer Auftragsplatz',history:'Bis zu acht geschlossene Aufträge und der aktuelle Auftrag bleiben erhalten.',occurrence:'Auftragsfolge',result:'Prüfsumme des signierten Ergebnisses',envelope:'Prüfsumme der Installationsfreigabe',retiredAt:'Geschlossen',scheduleAck:'Ich genehmige die Installation genau dieser Revision vorausschauend für dieses UTC-Zeitfenster und mögliche Unterbrechungen. Sie belegt den aktuellen Auftragsplatz; abgebrochene oder ungewisse Aufträge blockieren die Wiederverwendung. Frische passende Bereitschaft ist erforderlich; eine genaue Startzeit ist nicht garantiert.'}
 };
 export function WindowsUpdateRetirementReview({view,ack,onAck,onClose,onDismiss,disabled}:{view:UpdateJobView;ack:boolean;onAck:(value:boolean)=>void;onClose:()=>void;onDismiss:()=>void;disabled:boolean}){
- const [locale]=useLocale(),c=updateRetirementCopy[locale],job=view.job!;
+ const [locale]=useLocale(),c=updateRetirementCopy[locale],job=view.job!,dc=updateDownloadCopy[locale],download=job.purpose==='download';
  return <div className="windows-update-retirement" role="group" aria-label={c.review} onKeyDown={event=>{if(event.key==='Escape')onDismiss()}}>
   <p>{job.selection.updateId} · Revision {job.selection.revision}</p>
-  <details className="windows-inventory-scope"><summary>{locale==='de'?'Exakter Ergebnisnachweis':'Exact result evidence'}</summary><p>{job.id} · {c.occurrence} {job.occurrence}</p><dl><dt>{c.result}</dt><dd>{job.resultDigest}</dd><dt>{c.envelope}</dt><dd>{job.result!.envelopeDigest}</dd></dl></details>
-  <p>{c.notice}</p><label className="service-action-consent"><input type="checkbox" checked={ack} onChange={event=>onAck(event.target.checked)}/>{c.ack}</label>
+  <details className="windows-inventory-scope"><summary>{locale==='de'?'Exakter Ergebnisnachweis':'Exact result evidence'}</summary><p>{job.id} · {c.occurrence} {job.occurrence}</p><dl><dt>{c.result}</dt><dd>{job.resultDigest}</dd><dt>{download?dc.envelope:c.envelope}</dt><dd>{job.result!.envelopeDigest}</dd></dl></details>
+  <p>{download?dc.next:c.notice}</p><label className="service-action-consent"><input type="checkbox" checked={ack} onChange={event=>onAck(event.target.checked)}/>{download?dc.closeAck:c.ack}</label>
   <button type="button" className="button small" disabled={!ack||disabled} onClick={onClose}>{c.close}</button>{' '}
   <button type="button" className="button small" onClick={onDismiss}>{locale==='de'?'Prüfung schließen':'Dismiss review'}</button>
  </div>;

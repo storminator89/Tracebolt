@@ -37,6 +37,12 @@ func withInstallStartCurrent(ctx context.Context, clock func() time.Time, check 
 // credential cannot outlive its own authority during blocking preparation.
 // Missing/malformed fences, cancellation, expiry and clock rollback fail closed.
 func CheckInstallStart(ctx context.Context, now time.Time) error {
+	if ctx != nil && ctx.Value(mutationPurposeKey{}) == DownloadPurpose {
+		return ErrAuthority
+	}
+	return checkMutationStart(ctx, now)
+}
+func checkMutationStart(ctx context.Context, now time.Time) error {
 	if ctx == nil {
 		return ErrInvalid
 	}
@@ -81,4 +87,31 @@ func CheckNativeInstallStart(ctx context.Context, now time.Time) error {
 		return ErrAuthority
 	}
 	return CheckInstallStart(context.WithValue(ctx, nativeInstallStartKey{}, true), now)
+}
+
+// The download gate shares one local authority/fence implementation while
+// keeping the native method purpose explicit and non-substitutable.
+type mutationPurposeKey struct{}
+type nativeDownloadStartKey struct{}
+
+func withMutationPurpose(ctx context.Context, download bool) context.Context {
+	if download {
+		return context.WithValue(ctx, mutationPurposeKey{}, DownloadPurpose)
+	}
+	return ctx
+}
+func CheckDownloadStart(ctx context.Context, now time.Time) error {
+	if ctx == nil || ctx.Value(mutationPurposeKey{}) != DownloadPurpose {
+		return ErrAuthority
+	}
+	return checkMutationStart(ctx, now)
+}
+func CheckNativeDownloadStart(ctx context.Context, now time.Time) error {
+	if ctx == nil {
+		return ErrAuthority
+	}
+	return CheckDownloadStart(context.WithValue(ctx, nativeDownloadStartKey{}, true), now)
+}
+func nativeMutationStart(ctx context.Context) bool {
+	return nativeInstallStart(ctx) || ctx.Value(nativeDownloadStartKey{}) == true
 }

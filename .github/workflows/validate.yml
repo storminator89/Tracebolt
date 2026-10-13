@@ -715,6 +715,7 @@ jobs:
         run: |
           node tests/e2e-review/windows-service-actions-runner.mjs
           node tests/e2e-review/windows-update-retirement-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
+          node tests/e2e-review/windows-update-download-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic central MSI separate-stage browser gate (16 captures)
         if: ${{ !cancelled() }}
         env:
@@ -782,7 +783,7 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/fleet-groups-runner.mjs
-      - name: Windows incident inbox and seen readback (8 required screenshots)
+      - name: Windows incident inbox, seen readback and exact service review (12 required screenshots)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         env:

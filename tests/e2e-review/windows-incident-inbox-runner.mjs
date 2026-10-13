@@ -6,7 +6,7 @@ import os from 'node:os';
 import {spawn,execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {windowsIncidentInboxBrowserCase,windowsIncidentInboxCaseName,windowsIncidentInboxDisclosure,windowsIncidentInboxFailureStage,windowsIncidentInboxRouteState,requireWindowsIncidentInboxEvidence} from './windows-incident-inbox-browser.mjs';
+import {windowsIncidentInboxBrowserCase,windowsIncidentInboxCaseName,windowsIncidentInboxDisclosure,windowsServiceIncidentReviewDisclosure,windowsIncidentInboxScenes,windowsIncidentInboxFailureStage,windowsIncidentInboxRouteState,requireWindowsIncidentInboxEvidence} from './windows-incident-inbox-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const {chromium,expect}=require('@playwright/test');
 const out=path.join(root,'artifacts/review'),temporary=await fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-windows-incident-inbox-browser-'));
@@ -16,8 +16,8 @@ await fs.mkdir(out,{recursive:true});
 const safeFailure=()=>new Error('Windows-incident-inbox browser gate failed; raw state intentionally withheld.');
 async function stop(){if(server&&!serverFailed&&server.exitCode===null){const end=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');const deadline=setTimeout(()=>server.kill('SIGKILL'),5000);await end;clearTimeout(deadline);}server=null;}
 async function shot(page,name,fixtureDisclosure){
- const match=/^synthetic-windows-incident-inbox-(?:list|seen)-(1440|390)-(en|de)$/.exec(name);
- if(!match||page.viewportSize()?.width!==Number(match[1])||await page.locator('html').getAttribute('lang')!==match[2]||fixtureDisclosure!==windowsIncidentInboxDisclosure)throw safeFailure();
+ const scene=windowsIncidentInboxScenes.find(value=>value.name===name);
+ if(!scene||page.viewportSize()?.width!==scene.width||await page.locator('html').getAttribute('lang')!==scene.locale||fixtureDisclosure!==scene.fixtureDisclosure||screenshots.some(value=>value.file===name+'.png'))throw safeFailure();
  await page.screenshot({path:path.join(out,name+'.png'),fullPage:false,animations:'disabled'});
  screenshots.push({file:name+'.png',sourceSha,publicSafe:true,fullPage:false,viewport:page.viewportSize(),locale:await page.locator('html').getAttribute('lang'),fixtureDisclosure,test:windowsIncidentInboxCaseName});
 }
@@ -38,6 +38,6 @@ try{
 finally{
  clearTimeout(timer);try{if(context)await context.close();}catch{passed=false;}try{if(browser)await browser.close();}catch{passed=false;}try{await stop();}catch{passed=false;}
  const routes=windowsIncidentInboxRouteState();if(routes.failures!==0||routes.pending!==0)passed=false;
- const report={sourceSha,createdAt:new Date().toISOString(),name:windowsIncidentInboxCaseName,status:passed?'PASS':'FAIL',stage:windowsIncidentInboxFailureStage(),scope:windowsIncidentInboxDisclosure,details:passed?details:null,runtimeErrorCount:errors,routeFailureCount:routes.failures,pendingRouteCount:routes.pending,browserAcceptance:passed,liveStoreAcceptance:false,transport:'intercepted invented incidents and exact acknowledgement readback',unexecutedNativeGate:true,secretsExported:false,privateKeysExported:false,realTelemetryExported:false};
+ const report={sourceSha,createdAt:new Date().toISOString(),name:windowsIncidentInboxCaseName,status:passed?'PASS':'FAIL',stage:windowsIncidentInboxFailureStage(),scope:windowsIncidentInboxDisclosure+" "+windowsServiceIncidentReviewDisclosure,details:passed?details:null,runtimeErrorCount:errors,routeFailureCount:routes.failures,pendingRouteCount:routes.pending,browserAcceptance:passed,liveStoreAcceptance:false,transport:'intercepted invented incidents, exact acknowledgement readback and pinned unapproved service previews',unexecutedNativeGate:true,secretsExported:false,privateKeysExported:false,realTelemetryExported:false};
  await fs.writeFile(path.join(out,'windows-incident-inbox-results.json'),JSON.stringify(report,null,2));await fs.writeFile(path.join(out,'windows-incident-inbox-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=passed?0:1;
 }

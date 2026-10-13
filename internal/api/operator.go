@@ -411,6 +411,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}
+	if !validWindowsServiceReviewHeader(r) {
+		fail(w, 400, "invalid_windows_service_review", "Use one canonical service-review binding on a status read or preview only.")
+		return
+	}
 	for _, part := range strings.Split(r.URL.Path, "/") {
 		if strings.HasPrefix(part, ".") {
 			fail(w, 404, "not_found", "Path is unavailable.")

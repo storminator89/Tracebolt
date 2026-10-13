@@ -126,3 +126,13 @@ Fresh [reusable cached-update jobs](windows-reusable-cached-update-jobs.md) can
 independently select this scheduling scope under new v6 consent and a v4 fence.
 Reusable consent alone never enables scheduling. The v5 profile and its original
 32 lifetime approvals described here are unchanged; no existing state migrates.
+
+## Optional fresh manual-download coexistence
+
+The separate [download coexistence profile](windows-selected-update-downloads.md#fresh-manual-download-and-scheduled-install-coexistence)
+adds explicitly acknowledged manual WUA download to a fresh paired setup with
+one or both independently selected installation schedulers. Existing profiles
+retain their bytes and authority. Download never becomes scheduled, supplies
+installation approval, moves a fixed window or unlocks a busy/uncertain owner.
+Exact successful download retirement precedes a separate fresh WUA installation
+review and approval. Native Windows acceptance remains separately gated.

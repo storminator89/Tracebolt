@@ -7,7 +7,7 @@ import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, mutate, request 
 import { Logo } from './components';
 import { fullDate, noteBytes, readSaved, saveLocal } from './utils';
 export type OperatorLoginMode = 'shared' | 'named';
-export type OperatorCapability = 'read' | 'plan_updates' | 'execute_updates' | 'restart_service' | 'manage_alarms' | 'manage_application_checks' | 'windows_service_control' | 'windows_update_install' | 'windows_update_schedule' | 'windows_software_install' | 'windows_managed_msi_deliver' | 'windows_managed_msi_install' | 'windows_managed_msi_schedule';
+export type OperatorCapability = 'read' | 'plan_updates' | 'execute_updates' | 'restart_service' | 'manage_alarms' | 'manage_application_checks' | 'windows_service_control' | 'windows_update_install' | 'windows_update_download' | 'windows_update_schedule' | 'windows_software_install' | 'windows_managed_msi_deliver' | 'windows_managed_msi_install' | 'windows_managed_msi_schedule';
 export interface OperatorSession {
     mode: 'development' | 'lan';
     transport: 'http' | 'https';
@@ -46,7 +46,7 @@ function validOperatorMetadata(s: Partial<OperatorSession>): boolean {
         return true;
     if (s.loginMode !== 'shared' && s.loginMode !== 'named')
         return false;
-    if (!Array.isArray(s.capabilities) || s.capabilities.length > 13 || new Set(s.capabilities).size !== s.capabilities.length || s.capabilities.some(capability => !['read', 'plan_updates', 'execute_updates', 'restart_service', 'manage_alarms', 'manage_application_checks', 'windows_service_control', 'windows_update_install', 'windows_update_schedule', 'windows_software_install', 'windows_managed_msi_deliver', 'windows_managed_msi_install', 'windows_managed_msi_schedule'].includes(capability)))
+    if (!Array.isArray(s.capabilities) || s.capabilities.length > 14 || new Set(s.capabilities).size !== s.capabilities.length || s.capabilities.some(capability => !['read', 'plan_updates', 'execute_updates', 'restart_service', 'manage_alarms', 'manage_application_checks', 'windows_service_control', 'windows_update_install', 'windows_update_download', 'windows_update_schedule', 'windows_software_install', 'windows_managed_msi_deliver', 'windows_managed_msi_install', 'windows_managed_msi_schedule'].includes(capability)))
         return false;
     if (s.mode === 'development')
         return s.loginMode === 'shared' && s.actorId === null && s.capabilities.length === 0;

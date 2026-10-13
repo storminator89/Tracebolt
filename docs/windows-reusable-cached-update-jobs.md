@@ -132,3 +132,13 @@ before/after fence compaction and before signed acknowledgement persistence.
 
 Fixtures exercise only inert source behavior. They do not establish WUA health,
 real NTFS/SCM durability, host grants, native update acceptance or release.
+
+## Optional fresh manual-download coexistence
+
+The separate [download coexistence profile](windows-selected-update-downloads.md#fresh-manual-download-and-scheduled-install-coexistence)
+adds explicitly acknowledged manual WUA download to a fresh paired setup with
+one or both independently selected installation schedulers. Existing profiles
+retain their bytes and authority. Download never becomes scheduled, supplies
+installation approval, moves a fixed window or unlocks a busy/uncertain owner.
+Exact successful download retirement precedes a separate fresh WUA installation
+review and approval. Native Windows acceptance remains separately gated.

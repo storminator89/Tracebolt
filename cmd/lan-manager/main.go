@@ -296,6 +296,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if e = windowsUpdates.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateInstall) }); e != nil {
 			return fail(e)
 		}
+		if e = windowsUpdates.ConfigureDownloadPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateDownload) }); e != nil {
+			return fail(e)
+		}
 		if e = windowsUpdates.ConfigureSchedulePolicy(context.Background(), func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateSchedule) }); e != nil {
 			return fail(e)
 		}
