@@ -103,7 +103,9 @@ revocation checks remain authoritative. See
 ## Next scopes and remaining native gates
 
 Expanded hardware, software receipts, process accounting labels and numeric
-interface metadata are separate optional inventory work. The basic profile does
+interface metadata have separate inactive [collector](macos-read-inventory-source.md)
+and [wire contract](macos-read-inventory-wire.md) source. They have no runtime,
+profile, sender, manager-store or UI integration. The basic profile does
 not collect them, and Linux/Windows consent is not macOS consent. Installer
 receipts must not be labeled a complete installed-application inventory. Public
 package sources may be reused; no private application catalogue is introduced.
