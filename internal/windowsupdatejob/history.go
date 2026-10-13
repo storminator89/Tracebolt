@@ -8,6 +8,7 @@ import (
 const HistoryVersion = "tracebolt.windows-selected-update-history.v1"
 
 type JobSummary struct {
+	Purpose     string          `json:"purpose,omitempty"`
 	Occurrence  uint64          `json:"occurrence,string,omitempty"`
 	Retirement  *RetirementView `json:"retirement,omitempty"`
 	ID          string          `json:"id"`
@@ -34,7 +35,7 @@ type History struct {
 }
 
 func publicJob(j Job, n int64, key []byte) PublicJob {
-	p := PublicJob{ID: j.ID, Selection: j.Selection, State: j.State, Reason: j.Reason, Result: j.Result}
+	p := PublicJob{Purpose: j.Purpose, ID: j.ID, Selection: j.Selection, State: j.State, Reason: j.Reason, Result: j.Result}
 	if j.Occurrence != 0 {
 		p.Occurrence = j.Occurrence
 		p.Retirement = retirementView(j, n)
@@ -91,7 +92,7 @@ func (m *Manager) History(ctx context.Context, device string) (History, error) {
 		for i := len(m.record.Jobs) - 1; i >= 0; i-- {
 			j := m.record.Jobs[i]
 			p := publicJob(j, n, m.record.PublicKey)
-			h.Jobs = append(h.Jobs, JobSummary{ID: j.ID, Selection: j.Selection, State: p.State, Reason: p.Reason, Result: j.Result, RequestedAt: j.RequestedAt, ApprovedAt: j.ApprovedAt, ClaimedAt: j.ClaimedAt, Schedule: p.Schedule, Occurrence: p.Occurrence, Retirement: p.Retirement})
+			h.Jobs = append(h.Jobs, JobSummary{Purpose: p.Purpose, ID: j.ID, Selection: j.Selection, State: p.State, Reason: p.Reason, Result: j.Result, RequestedAt: j.RequestedAt, ApprovedAt: j.ApprovedAt, ClaimedAt: j.ClaimedAt, Schedule: p.Schedule, Occurrence: p.Occurrence, Retirement: p.Retirement})
 		}
 		for i := len(m.record.Recent) - 1; i >= 0; i-- {
 			old := m.record.Recent[i]
@@ -103,7 +104,7 @@ func (m *Manager) History(ctx context.Context, device string) (History, error) {
 			}
 			if !duplicate {
 				p := retiredPublicJob(old)
-				h.Jobs = append(h.Jobs, JobSummary{ID: old.JobID, Selection: old.Selection, State: p.State, Reason: p.Reason, Result: p.Result, RequestedAt: old.RequestedAt, ApprovedAt: old.ApprovedAt, ClaimedAt: old.ClaimedAt, Occurrence: old.Occurrence, Retirement: p.Retirement})
+				h.Jobs = append(h.Jobs, JobSummary{Purpose: p.Purpose, ID: old.JobID, Selection: old.Selection, State: p.State, Reason: p.Reason, Result: p.Result, RequestedAt: old.RequestedAt, ApprovedAt: old.ApprovedAt, ClaimedAt: old.ClaimedAt, Occurrence: old.Occurrence, Retirement: p.Retirement})
 			}
 		}
 		return nil

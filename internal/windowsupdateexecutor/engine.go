@@ -20,14 +20,19 @@ const (
 	intKind
 	textKind
 	objectKind
+	uintKind
+	urlKind
 )
 
 type value struct {
-	kind    int
-	boolean bool
-	number  int32
-	text    string
-	object  comObject
+	unsigned       uint64
+	nativeReturned bool
+	nativeHResult  int32
+	kind           int
+	boolean        bool
+	number         int32
+	text           string
+	object         comObject
 }
 
 func boolean(v bool) value        { return value{kind: boolKind, boolean: v} }
@@ -49,6 +54,8 @@ type comRuntime interface {
 	close()
 }
 type engine struct {
+	download                                bool
+	downloader                              comObject
 	checkStart                              func(context.Context, time.Time) error
 	native                                  comRuntime
 	selection                               job.Selection
@@ -207,6 +214,9 @@ func (e *engine) prepare(ctx context.Context) error {
 	if err = e.identity(ctx, e.update); err != nil {
 		return err
 	}
+	if e.download {
+		return e.prepareDownloader(ctx, session)
+	}
 	base, err := e.retain(getObject(ctx, session, "CreateUpdateInstaller", method))
 	if err != nil {
 		return err
@@ -296,6 +306,9 @@ func fact(ctx context.Context, o comObject, name string) job.Fact {
 	return job.No
 }
 func (e *engine) inspect(ctx context.Context) (job.Readiness, error) {
+	if e.download {
+		return e.inspectDownload(ctx)
+	}
 	r := unknownReadiness(e.selection, e.now())
 	if err := e.native.verifyToken(); err != nil {
 		return r, err
@@ -354,6 +367,9 @@ func (e *engine) inspect(ctx context.Context) (job.Readiness, error) {
 }
 func (e *engine) installOnce(ctx context.Context) (job.NativeResult, error) {
 	unknown := job.NativeResult{RebootRequired: job.Unknown}
+	if e.download {
+		return unknown, job.ErrAuthority
+	}
 	if e.attempted {
 		return unknown, ErrClosed
 	}

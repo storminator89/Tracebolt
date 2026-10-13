@@ -37,7 +37,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		var m managedMSIResult
 		var w updateProvisionResult
 		// Caller cannot inject already generated material or a nested apply.
-		if in.MSI.apply || in.WUA.apply || in.WUA.reusable && !in.WUA.background || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
+		if in.MSI.apply || in.WUA.apply || in.WUA.reusable && !in.WUA.background || in.WUA.download && (!in.WUA.reusable || !in.WUA.background || in.WUA.schedule || in.MSI.schedule) || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
 			return nil, managed.ErrAuthority
 		}
 		if _, e := nativeManagedMSIProvisionUnderLease(ctx, in.MSI, &m, receipt, lease); e != nil {
@@ -75,6 +75,10 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 			if in.MSI.schedule {
 				plan.Disclosure += " " + managed.ScheduledDisclosure
 			}
+		}
+		if in.WUA.download {
+			plan.Version = downloadWUAMutationVersion
+			plan.Disclosure = windowsupdatesetup.DownloadBackgroundDisclosure + " " + job.DownloadDisclosure + " " + managed.ReusableDisclosure
 		}
 		if plan.Validate() != nil {
 			return nil, managed.ErrAuthority
@@ -153,6 +157,11 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 			consent.Version = job.ReusableConsentVersion
 			consent.ReusableAcknowledged = true
 		}
+		if in.WUA.download {
+			consent.Version = job.DownloadConsentVersion
+			consent.DownloadScope = job.DownloadScope
+			consent.DownloadAcknowledged = true
+		}
 		mbJSON, _ := json.Marshal(b)
 		wbJSON, _ := json.Marshal(wb)
 		g.PeerBindingDigest = managed.Digest(wbJSON)
@@ -185,7 +194,7 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		}
 		wi := in.WUA
 		wi.apply = true
-		wi.approval = windowsupdatesetup.Approval{Digest: plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Background: in.WUA.background, Schedule: in.WUA.schedule, Reusable: in.WUA.reusable}
+		wi.approval = windowsupdatesetup.Approval{Digest: plan.Digest(), Install: true, Relay: true, ProcessQuery: true, Background: in.WUA.background, Schedule: in.WUA.schedule, Reusable: in.WUA.reusable, Download: in.WUA.download}
 		wi.coordinated = &windowsupdatesetup.CoordinatedMaterial{Roster: roster, Key: wKey, ExecutorID: wb.ExecutorID, GrantID: wb.GrantID}
 		if _, e = nativeUpdateProvisionUnderLease(ctx, wi, &w, receipt, lease); e != nil {
 			return nil, e

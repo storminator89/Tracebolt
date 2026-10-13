@@ -170,7 +170,7 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 		}
 		return "idle"
 	}
-	if !enrollmentcrypto.ValidID(pending.JobID, "update_") || (pending.Kind != "readiness" && pending.Kind != "install" && pending.Kind != "retire") || pending.Deadline <= s.now().Unix() || pending.Deadline > g.ExpiresAt {
+	if !enrollmentcrypto.ValidID(pending.JobID, "update_") || (pending.Kind != "readiness" && pending.Kind != "install" && pending.Kind != "download" && pending.Kind != "retire") || pending.Deadline <= s.now().Unix() || pending.Deadline > g.ExpiresAt {
 		return "denied"
 	}
 	if status.InterventionRequired && pending.Kind != "retire" {
@@ -184,7 +184,7 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 			return "unavailable"
 		}
 	}
-	if pending.Kind == "install" && status.InstallCapacityRemaining == 0 {
+	if (pending.Kind == "install" || pending.Kind == "download") && status.InstallCapacityRemaining == 0 {
 		return "capacity_exhausted"
 	}
 	// Repeat verified-peer/current-authority checks after potentially blocking
@@ -198,6 +198,8 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 	path := "readiness-claim"
 	if pending.Kind == "install" {
 		path = "install-claim"
+	} else if pending.Kind == "download" {
+		path = "download-claim"
 	} else if pending.Kind == "retire" {
 		path = "retire-claim"
 	}
@@ -226,7 +228,7 @@ func (s *windowsUpdateJobSender) Run(ctx context.Context) string {
 		}
 	} else {
 		permit, err := windowsupdatejob.Verify(raw, g.ManagerPublicKey)
-		if err != nil || permit.Preview.Binding != g.Binding || permit.Preview.ID != pending.JobID || permit.Preview.ExpiresAt != pending.Deadline || s.now().Unix() < permit.ApprovedAt || s.now().Unix() >= permit.Preview.ExpiresAt {
+		if err != nil || permit.Download() != (pending.Kind == "download") || permit.Preview.Binding != g.Binding || permit.Preview.ID != pending.JobID || permit.Preview.ExpiresAt != pending.Deadline || s.now().Unix() < permit.ApprovedAt || s.now().Unix() >= permit.Preview.ExpiresAt {
 			return "denied"
 		}
 	}
@@ -395,7 +397,7 @@ func (s *windowsUpdateJobSender) request(ctx context.Context, path string, body 
 	switch path {
 	case windowsUpdateJobsRelayPrefix + "poll":
 		limit = 2
-	case windowsUpdateJobsRelayPrefix + "readiness-claim", windowsUpdateJobsRelayPrefix + "install-claim", windowsUpdateJobsRelayPrefix + "retire-claim":
+	case windowsUpdateJobsRelayPrefix + "readiness-claim", windowsUpdateJobsRelayPrefix + "install-claim", windowsUpdateJobsRelayPrefix + "download-claim", windowsUpdateJobsRelayPrefix + "retire-claim":
 		limit = 128
 	case windowsUpdateJobsRelayPrefix + "report":
 		limit = windowsupdatejob.MaxRelayBytes

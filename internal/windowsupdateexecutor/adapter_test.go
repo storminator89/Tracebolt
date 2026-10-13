@@ -13,22 +13,26 @@ import (
 )
 
 type fakeCOM struct {
-	cleanupStarted, cleanupRelease chan struct{}
-	before                         func(string)
-	mu                             sync.Mutex
-	values                         map[string]value
-	objects                        map[string]*fakeObject
-	calls                          []string
-	queries                        []string
-	installs                       int
-	closed                         bool
-	thread                         uint64
-	wrongThread                    bool
-	fail, ignorePut                string
-	noInstaller2                   bool
-	tokenErr                       error
-	installStarted                 chan struct{}
-	installRelease                 chan struct{}
+	downloads                        int
+	downloadStarted, downloadRelease chan struct{}
+	downloadAfter                    func(*fakeCOM)
+	downloadErr                      error
+	cleanupStarted, cleanupRelease   chan struct{}
+	before                           func(string)
+	mu                               sync.Mutex
+	values                           map[string]value
+	objects                          map[string]*fakeObject
+	calls                            []string
+	queries                          []string
+	installs                         int
+	closed                           bool
+	thread                           uint64
+	wrongThread                      bool
+	fail, ignorePut                  string
+	noInstaller2                     bool
+	tokenErr                         error
+	installStarted                   chan struct{}
+	installRelease                   chan struct{}
 }
 type fakeObject struct {
 	f    *fakeCOM
@@ -80,6 +84,37 @@ func (o *fakeObject) invoke(ctx context.Context, name string, flags uint16, args
 			close(o.f.installStarted)
 			<-o.f.installRelease
 		}
+	}
+	if key == "downloader.Download" {
+		if err := checkDownloadDispatch(ctx); err != nil {
+			return value{}, err
+		}
+		o.f.mu.Lock()
+		o.f.downloads++
+		o.f.mu.Unlock()
+		if o.f.downloadStarted != nil {
+			close(o.f.downloadStarted)
+			<-o.f.downloadRelease
+		}
+		if o.f.downloadAfter != nil {
+			o.f.downloadAfter(o.f)
+		}
+		v := o.f.values[key]
+		v.nativeReturned = true
+		if o.f.downloadErr != nil {
+			v.nativeHResult = -2147467259
+		}
+		return v, o.f.downloadErr
+	}
+	if key == "contents.Item" {
+		if len(args) != 1 || args[0].kind != intKind {
+			return value{}, ErrIdentity
+		}
+		v, ok := o.f.values[fmt.Sprintf("contents.Item.%d", args[0].number)]
+		if !ok {
+			return value{}, ErrIdentity
+		}
+		return v, nil
 	}
 	if (name == "Item" || name == "GetUpdateResult") && (len(args) != 1 || args[0].kind != intKind || args[0].number != 0) {
 		return value{}, ErrIdentity

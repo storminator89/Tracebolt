@@ -30,7 +30,7 @@ type Challenge struct {
 }
 
 func (c Challenge) Validate() error {
-	if c.Version != RelayVersion || c.Sequence == 0 || !ValidBinding(c.Binding) || !enrollmentcrypto.ValidID(c.JobID, "update_") || !ValidSelection(c.Selection) || !validTime(c.IssuedAt) || !validTime(c.Deadline) || c.Deadline <= c.IssuedAt || c.Deadline-c.IssuedAt > 120 {
+	if (c.Version != RelayVersion && c.Version != DownloadRelayVersion) || c.Sequence == 0 || !ValidBinding(c.Binding) || !enrollmentcrypto.ValidID(c.JobID, "update_") || !ValidSelection(c.Selection) || !validTime(c.IssuedAt) || !validTime(c.Deadline) || c.Deadline <= c.IssuedAt || c.Deadline-c.IssuedAt > 120 {
 		return ErrInvalid
 	}
 	return nil
@@ -43,6 +43,9 @@ type challengeEnvelope struct {
 
 func challengeMessage(c Challenge) []byte {
 	raw, _ := json.Marshal(c)
+	if c.Download() {
+		return append([]byte("Tracebolt selected WUA download readiness request v1\x00"), raw...)
+	}
 	return append([]byte("Tracebolt cached WUA readiness request v1\x00"), raw...)
 }
 func SignChallenge(c Challenge, k ed25519.PrivateKey) ([]byte, error) {
@@ -82,7 +85,10 @@ type Statement struct {
 }
 
 func (s Statement) Validate() error {
-	if s.Version != RelayVersion || !ValidBinding(s.Binding) || !enrollmentcrypto.ValidID(s.JobID, "update_") || !actionpermit.ValidDigest(s.ReferenceDigest) || !validTime(s.Deadline) || !validTime(s.IssuedAt) || !validTime(s.ExpiresAt) || s.ExpiresAt <= s.IssuedAt || s.ExpiresAt-s.IssuedAt > 300 {
+	if (s.Version != RelayVersion && s.Version != DownloadRelayVersion) || !ValidBinding(s.Binding) || !enrollmentcrypto.ValidID(s.JobID, "update_") || !actionpermit.ValidDigest(s.ReferenceDigest) || !validTime(s.Deadline) || !validTime(s.IssuedAt) || !validTime(s.ExpiresAt) || s.ExpiresAt <= s.IssuedAt || s.ExpiresAt-s.IssuedAt > 300 {
+		return ErrInvalid
+	}
+	if s.Version == DownloadRelayVersion && s.Kind == "mutation" {
 		return ErrInvalid
 	}
 	if s.Kind != "mutation" && s.Mutation != nil {
@@ -94,11 +100,11 @@ func (s Statement) Validate() error {
 			return ErrInvalid
 		}
 	case "readiness":
-		if s.Readiness == nil || s.Result != nil || s.Readiness.Validate() != nil || s.Readiness.CapturedAt != s.IssuedAt || s.ExpiresAt > s.Deadline || s.ExpiresAt-s.IssuedAt > 60 {
+		if s.Readiness == nil || (s.Readiness.Purpose == DownloadPurpose) != (s.Version == DownloadRelayVersion) || s.Result != nil || s.Readiness.Validate() != nil || s.Readiness.CapturedAt != s.IssuedAt || s.ExpiresAt > s.Deadline || s.ExpiresAt-s.IssuedAt > 60 {
 			return ErrInvalid
 		}
 	case "result":
-		if s.Readiness != nil || s.Result == nil || s.Result.Validate() != nil || s.Result.JobID != s.JobID || s.Result.EnvelopeDigest != s.ReferenceDigest || s.Result.CompletedAt != s.IssuedAt {
+		if s.Readiness != nil || s.Result == nil || (s.Result.Purpose == DownloadPurpose) != (s.Version == DownloadRelayVersion) || s.Result.Validate() != nil || s.Result.JobID != s.JobID || s.Result.EnvelopeDigest != s.ReferenceDigest || s.Result.CompletedAt != s.IssuedAt {
 			return ErrInvalid
 		}
 	default:
@@ -114,6 +120,9 @@ type statementEnvelope struct {
 
 func statementMessage(s Statement) []byte {
 	raw, _ := json.Marshal(s)
+	if s.Version == DownloadRelayVersion {
+		return append([]byte("Tracebolt dedicated WUA download statement v1\x00"), raw...)
+	}
 	return append([]byte("Tracebolt dedicated WUA executor statement v1\x00"), raw...)
 }
 func SignStatement(s Statement, k ed25519.PrivateKey) ([]byte, error) {
@@ -171,7 +180,11 @@ func (m *Manager) Pending(ctx context.Context) (*Pending, error) {
 				}
 			}
 			if j.State == "approved" && n < j.Preview.ExpiresAt {
-				out = &Pending{j.ID, "install", j.Preview.ExpiresAt}
+				kind := "install"
+				if j.Download() {
+					kind = "download"
+				}
+				out = &Pending{j.ID, kind, j.Preview.ExpiresAt}
 				return nil
 			}
 		}
@@ -263,6 +276,9 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 				}
 				return m.save(n)
 			}
+			if s.Kind != "mutation" && (s.Version == DownloadRelayVersion) != j.Download() {
+				return ErrAuthority
+			}
 			if s.Kind == "result" {
 				if bytes.Equal(j.ResultReport, raw) && j.Result != nil {
 					return nil
@@ -330,7 +346,7 @@ func (m *Manager) Review(ctx context.Context, device, actor, id string) error {
 	}
 	return m.transaction(ctx, func(_ Current, n int64) error {
 		for _, j := range m.record.Jobs {
-			if j.ID == id && j.ActorID == actor && j.State == "preview" && j.Preview != nil && n < j.Preview.ExpiresAt {
+			if j.ID == id && j.Download() == downloadRequest(ctx) && j.ActorID == actor && j.State == "preview" && j.Preview != nil && n < j.Preview.ExpiresAt {
 				return nil
 			}
 		}

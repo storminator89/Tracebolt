@@ -93,6 +93,12 @@ func nativeUpdateProvisionUnderLease(ctx context.Context, in updateProvisionInpu
 	if in.reusable {
 		p, e = windowsupdatesetup.NewReusableBackgroundPlan(in.offer, in.artifact, identity, receipt.Service, in.schedule)
 	}
+	if in.download {
+		if !in.background || !in.reusable || in.schedule {
+			return nil, windowsupdatesetup.ErrSetup
+		}
+		p, e = windowsupdatesetup.NewDownloadBackgroundPlan(in.offer, in.artifact, identity, receipt.Service)
+	}
 	if e != nil {
 		return nil, e
 	}

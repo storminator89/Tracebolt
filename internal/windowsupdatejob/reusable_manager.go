@@ -43,7 +43,7 @@ func retirementView(j Job, now int64) *RetirementView {
 }
 func retiredPublicJob(j RetiredJob) PublicJob {
 	result := j.Result
-	return PublicJob{ID: j.JobID, Selection: j.Selection, State: "complete", Reason: "ready", Result: &result, Occurrence: j.Occurrence, ResultDigest: j.ResultDigest, Retirement: &RetirementView{State: "retired", RetiredAt: j.RetiredAt}}
+	return PublicJob{Purpose: j.Result.Purpose, ID: j.JobID, Selection: j.Selection, State: "complete", Reason: "ready", Result: &result, Occurrence: j.Occurrence, ResultDigest: j.ResultDigest, Retirement: &RetirementView{State: "retired", RetiredAt: j.RetiredAt}}
 }
 
 func (r Record) validateReusable() error {
@@ -57,7 +57,7 @@ func (r Record) validateReusable() error {
 			}
 			if len(j.Envelope) > 0 {
 				p, e := Verify(j.Envelope, r.PublicKey)
-				if e != nil || p.Version == ReusablePermitVersion {
+				if e != nil || p.Reusable() {
 					return ErrIntegrity
 				}
 			}
@@ -89,7 +89,7 @@ func (r Record) validateReusable() error {
 		occurrence = j.Occurrence
 		if len(j.Envelope) > 0 {
 			p, e := Verify(j.Envelope, r.PublicKey)
-			if e != nil || p.Version != ReusablePermitVersion || p.Sequence != j.Occurrence {
+			if e != nil || !p.Reusable() || p.Sequence != j.Occurrence {
 				return ErrIntegrity
 			}
 		}
@@ -139,7 +139,7 @@ func (m *Manager) Retire(ctx context.Context, device, actor, id string, occurren
 			if j.ID != id {
 				continue
 			}
-			if j.Occurrence != occurrence || actionpermit.Digest(j.Envelope) != envelopeDigest || actionpermit.Digest(j.ResultReport) != resultDigest || j.State != "complete" || j.Result == nil || j.Result.Outcome != "succeeded" || len(j.ResultReport) == 0 {
+			if j.Download() != downloadRequest(ctx) || j.Occurrence != occurrence || actionpermit.Digest(j.Envelope) != envelopeDigest || actionpermit.Digest(j.ResultReport) != resultDigest || j.State != "complete" || j.Result == nil || j.Result.Outcome != "succeeded" || len(j.ResultReport) == 0 {
 				return ErrConflict
 			}
 			if len(j.RetirePermit) > 0 {
@@ -181,7 +181,7 @@ func (m *Manager) ClaimRetirement(ctx context.Context, id string) ([]byte, error
 			if e != nil || len(j.RetireReport) > 0 {
 				return ErrConflict
 			}
-			if m.transactionStore != nil && (m.operatorAllowed == nil || !m.operatorAllowed(p.ActorID)) {
+			if m.transactionStore != nil && !m.operationAllowed(p.ActorID, j.Download()) {
 				return ErrAuthority
 			}
 			if n >= p.ExpiresAt {

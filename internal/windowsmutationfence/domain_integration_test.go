@@ -122,15 +122,17 @@ func (i *inertMSI) Install(ctx context.Context, _ json.RawMessage, _ msi.Readine
 }
 
 type inertWUA struct {
-	now           func() time.Time
-	readiness     wua.Readiness
-	prepares      atomic.Int64
-	calls         atomic.Int64
-	entered       chan struct{}
-	release       <-chan struct{}
-	beforeStart   func()
-	skipFinalGate bool
-	closeError    error
+	downloadResult *wua.NativeResult
+	downloadError  error
+	now            func() time.Time
+	readiness      wua.Readiness
+	prepares       atomic.Int64
+	calls          atomic.Int64
+	entered        chan struct{}
+	release        <-chan struct{}
+	beforeStart    func()
+	skipFinalGate  bool
+	closeError     error
 }
 
 func (i *inertWUA) PrepareExact(_ context.Context, s wua.Selection) (wua.PreparedUpdate, error) {
@@ -239,6 +241,11 @@ func newPair(t *testing.T, reusable ...bool) *pairedDomains {
 		plan.Version = fence.ReusableWUAPlanVersion
 		f.consent.Version = wua.ReusableConsentVersion
 		f.consent.ReusableAcknowledged = true
+	}
+	if len(reusable) > 5 && reusable[5] {
+		f.consent.Version = wua.DownloadConsentVersion
+		f.consent.DownloadScope = wua.DownloadScope
+		f.consent.DownloadAcknowledged = true
 	}
 	f.shared = fence.NewIntegrationFence(t, plan, msi.MutationParticipant(f.grant), wua.MutationParticipant(f.consent), f.now)
 	f.msiSession = f.shared.Session(t, fence.ManagedMSI)

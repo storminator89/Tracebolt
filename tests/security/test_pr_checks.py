@@ -166,6 +166,18 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertEqual(self.select(('M', 'web/src/' + filename))['flows'], flows)
 
+    def test_selected_download_capture_scripts_reuse_exact_existing_flow(self):
+        for name in ['windows-update-download-browser.mjs', 'windows-update-download-fixtures.test.mjs']:
+            with self.subTest(name=name):
+                path = 'tests/e2e-review/' + name
+                self.assertEqual(p.DOMAIN_SCRIPTS[path], {'windows-service-actions'})
+                plan = self.select(('A', path))
+                self.assertEqual(plan['flows'], ['windows-service-actions'])
+                self.assertFalse(plan['broadWeb'])
+        for name in ['windows-update-download.tsx', 'windows-update-download.test.tsx']:
+            self.assertEqual(self.select(('A', 'web/src/' + name))['flows'],
+                             ['windows-mutation-coexistence', 'windows-service-actions'])
+
     def test_shared_or_unknown_ui_broadens_instead_of_guessing(self):
         for path in ['web/src/App.tsx', 'web/src/api.ts', 'web/src/new-feature.tsx', 'web/package-lock.json']:
             self.assertTrue(self.select(('M', path))['broadWeb'])
@@ -201,7 +213,9 @@ class SelectionTests(unittest.TestCase):
 
     def test_exact_retirement_fixture_selects_its_existing_update_owner(self):
         expected = {'tests/e2e-review/windows-update-retirement-browser.mjs',
-                    'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'}
+                    'tests/e2e-review/windows-update-retirement-fixtures.test.mjs',
+                    'tests/e2e-review/windows-update-download-browser.mjs',
+                    'tests/e2e-review/windows-update-download-fixtures.test.mjs'}
         self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items()
                           if flows == {'windows-service-actions'}}, expected)
         for path in expected:
@@ -231,6 +245,7 @@ class SelectionTests(unittest.TestCase):
             ['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'],
             ['node', 'tests/e2e-review/windows-service-actions-runner.mjs'],
             ['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', SHA],
+            ['node', 'tests/e2e-review/windows-update-download-browser.mjs', '--check-evidence', SHA],
         ])
         report.assert_called_once_with('windows-service-actions', SHA)
 
@@ -947,6 +962,7 @@ class WindowsActionFailureTests(unittest.TestCase):
             'service-actions': ('windows-service-actions-browser.mjs', 'exerciseWindowsServiceActions', 'windowsServiceActionsFailureStage', 'stage'),
             'action-history': ('windows-service-action-history-browser.mjs', 'exerciseWindowsServiceActionHistory', 'windowsServiceActionHistoryFailureStage', 'stage'),
             'update-jobs': ('windows-update-jobs-browser.mjs', 'exerciseWindowsUpdateJobs', 'windowsUpdateJobsFailureStage', 'stage'),
+            'update-download': ('windows-update-download-browser.mjs', 'exerciseWindowsUpdateDownload', 'windowsUpdateDownloadFailureStage', 'stage'),
             'update-retirement': ('windows-update-retirement-browser.mjs', 'exerciseWindowsUpdateRetirement', 'windowsUpdateRetirementFailureStage', 'stage'),
             'update-schedule': ('windows-update-schedule-browser.mjs', 'exerciseWindowsUpdateSchedule', 'windowsUpdateScheduleFailureStage', 'stage'),
             'background-schedule': ('windows-update-schedule-browser.mjs', 'exerciseWindowsUpdateSchedule', 'windowsUpdateScheduleFailureStage', 'stage'),

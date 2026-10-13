@@ -20,6 +20,7 @@ type updateProvisionInput struct {
 	offer       job.SetupOffer
 	artifact    windowspackage.Manifest
 	payload     []byte
+	download    bool
 	reusable    bool
 	background  bool
 	schedule    bool

@@ -715,6 +715,7 @@ jobs:
         run: |
           node tests/e2e-review/windows-service-actions-runner.mjs
           node tests/e2e-review/windows-update-retirement-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
+          node tests/e2e-review/windows-update-download-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic central MSI separate-stage browser gate (16 captures)
         if: ${{ !cancelled() }}
         env:

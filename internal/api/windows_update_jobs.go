@@ -34,20 +34,29 @@ func windowsUpdateJobRoute(r *http.Request) (string, string, bool) {
 	op := ""
 	if len(p) == 6 {
 		op = p[5]
-		if op != "request" && op != "approve" && op != "preview" && op != "retire" && !windowsUpdateScheduleOperation(op) {
+		if op != "request" && op != "approve" && op != "preview" && op != "retire" && !windowsUpdateDownloadOperation(op) && !windowsUpdateScheduleOperation(op) {
 			return "", "", false
 		}
 	}
 	return p[3], op, true
 }
+func windowsUpdateDownloadOperation(op string) bool {
+	return op == "request-download" || op == "preview-download" || op == "approve-download" || op == "retire-download"
+}
+func windowsUpdateCapability(op string) operatorauth.Capability {
+	if windowsUpdateDownloadOperation(op) {
+		return operatorauth.WindowsUpdateDownload
+	}
+	return operatorauth.WindowsUpdateInstall
+}
 func windowsUpdateScheduleOperation(op string) bool {
 	return op == "schedule" || op == "cancel-schedule" || op == "revoke-scheduling"
 }
 
-// One short install-capability lease also fences the separately required live
+// One short purpose-specific capability lease also fences the separately required live
 // scheduling capability. Never nest session leases or hold one during body reads.
 func (h *operatorHandler) beginWindowsUpdateMutation(w http.ResponseWriter, r *http.Request, op string) (string, func(), bool) {
-	actor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.WindowsUpdateInstall)
+	actor, release, ok := h.app.beginOperatorCapability(w, r, windowsUpdateCapability(op))
 	if !ok {
 		return "", nil, false
 	}
@@ -120,7 +129,7 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 	}
 	var mutate func() error
 	var selectedID string
-	if op == "request" {
+	if op == "request" || op == "request-download" {
 		var in struct {
 			RequestID string `json:"requestId"`
 			UpdateID  string `json:"updateId"`
@@ -131,9 +140,12 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		}
 		selectedID = in.RequestID
 		mutate = func() error {
+			if op == "request-download" {
+				return manager.RequestDownload(r.Context(), device, actor, in.RequestID, windowsupdatejob.Selection{UpdateID: in.UpdateID, Revision: in.Revision})
+			}
 			return manager.Request(r.Context(), device, actor, in.RequestID, windowsupdatejob.Selection{UpdateID: in.UpdateID, Revision: in.Revision})
 		}
-	} else if op == "retire" {
+	} else if op == "retire" || op == "retire-download" {
 		var in struct {
 			JobID          string `json:"jobId"`
 			Occurrence     uint64 `json:"occurrence,string"`
@@ -146,9 +158,12 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		}
 		selectedID = in.JobID
 		mutate = func() error {
+			if op == "retire-download" {
+				return manager.RetireDownload(r.Context(), device, actor, in.JobID, in.Occurrence, in.EnvelopeDigest, in.ResultDigest, in.Acknowledged)
+			}
 			return manager.Retire(r.Context(), device, actor, in.JobID, in.Occurrence, in.EnvelopeDigest, in.ResultDigest, in.Acknowledged)
 		}
-	} else if op == "preview" {
+	} else if op == "preview" || op == "preview-download" {
 		var in struct {
 			RequestID string `json:"requestId"`
 		}
@@ -156,7 +171,12 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 			return
 		}
 		selectedID = in.RequestID
-		mutate = func() error { return manager.Review(r.Context(), device, actor, in.RequestID) }
+		mutate = func() error {
+			if op == "preview-download" {
+				return manager.ReviewDownload(r.Context(), device, actor, in.RequestID)
+			}
+			return manager.Review(r.Context(), device, actor, in.RequestID)
+		}
 	} else if op == "schedule" {
 		var in struct {
 			PreviewID     string `json:"previewId"`
@@ -203,6 +223,9 @@ func (h *operatorHandler) windowsUpdateJobsAPI(w http.ResponseWriter, r *http.Re
 		}
 		selectedID = in.PreviewID
 		mutate = func() error {
+			if op == "approve-download" {
+				return manager.ApproveDownload(r.Context(), device, actor, in.PreviewID, in.PreviewDigest, in.Acknowledged)
+			}
 			return manager.Approve(r.Context(), device, actor, in.PreviewID, in.PreviewDigest, in.Acknowledged)
 		}
 	}
@@ -238,7 +261,7 @@ func (h *operatorHandler) windowsUpdateJobContext(r *http.Request, mutation bool
 		if !ok || !h.auth.Now().Before(owner.session.ExpiresAt) || owner.session.Lifetime().Err() != nil || owner.active == nil || !owner.active() {
 			return windowsupdatejob.ErrAuthority
 		}
-		if mutation && (!owner.session.Named() || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateInstall) || windowsUpdateScheduleOperation(op) && !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateSchedule)) {
+		if mutation && (!owner.session.Named() || !h.auth.ActorHasCapability(owner.session.ActorID(), windowsUpdateCapability(op)) || windowsUpdateScheduleOperation(op) && !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateSchedule)) {
 			return windowsupdatejob.ErrAuthority
 		}
 		return nil
@@ -247,11 +270,14 @@ func (h *operatorHandler) windowsUpdateJobContext(r *http.Request, mutation bool
 func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.Request, device string, ids ...string) {
 	v := windowsupdatejob.View{Version: windowsupdatejob.Version, DeviceID: device, ServerNow: h.auth.Now().UTC().Unix(), Reason: "executor_not_configured"}
 	owner, ok := operatorContext(r)
-	can := false
+	can, canDownload := false, false
 	if ok && owner.session.Named() {
 		for _, c := range owner.session.Capabilities() {
 			if c == operatorauth.WindowsUpdateInstall {
 				can = true
+			}
+			if c == operatorauth.WindowsUpdateDownload {
+				canDownload = true
 			}
 		}
 	}
@@ -283,17 +309,21 @@ func (h *operatorHandler) writeWindowsUpdateJobs(w http.ResponseWriter, r *http.
 	if !can || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateSchedule) {
 		v.SchedulingAvailable = false
 	}
+	v.DownloadAvailable = v.DownloadAvailable && canDownload
 	if !can {
 		v.Available = false
+	}
+	if !can && !canDownload {
 		v.Reason = "operator_capability_required"
-		if v.Job != nil {
-			v.Job.Preview = nil
-			if v.Job.Retirement != nil {
-				v.Job.Retirement.State = "blocked"
-			}
+	}
+	if v.Job != nil && (v.Job.Purpose == "download" && !canDownload || v.Job.Purpose != "download" && !can) {
+		v.Job.Preview = nil
+		if v.Job.Retirement != nil {
+			v.Job.Retirement.State = "blocked"
 		}
 	}
 	if h.insecureHTTPTest {
+		v.DownloadAvailable = false
 		v.SchedulingAvailable = false
 		v.Available = false
 		v.Reason = "tls_required"
@@ -320,7 +350,7 @@ func (h *operatorHandler) writeWindowsUpdateHistory(w http.ResponseWriter, r *ht
 		return
 	}
 	owner, ok := operatorContext(r)
-	if !ok || !owner.session.Named() || !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateInstall) {
+	if !ok || !owner.session.Named() || (!h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateInstall) && !h.auth.ActorHasCapability(owner.session.ActorID(), operatorauth.WindowsUpdateDownload)) {
 		v.Available = false
 		v.Reason = "operator_capability_required"
 	}
@@ -339,6 +369,6 @@ func windowsUpdateJobError(w http.ResponseWriter, e error) {
 	case errors.Is(e, windowsupdatejob.ErrConflict), errors.Is(e, windowsupdatejob.ErrConsumed):
 		fail(w, 409, "windows_update_job_conflict", "Read saved status before submitting another request.")
 	default:
-		fail(w, 409, "windows_update_job_unavailable", "The update job is unavailable or its result is unconfirmed. Read saved status; do not retry installation.")
+		fail(w, 409, "windows_update_job_unavailable", "The update job is unavailable or its result is unconfirmed. Read saved status; do not retry the operation.")
 	}
 }

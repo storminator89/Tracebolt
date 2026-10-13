@@ -38,14 +38,31 @@ type PreparedUpdate interface {
 	InstallOnce(context.Context) (NativeResult, error)
 	Close() error
 }
+type ExecutorDownloadAdapter interface {
+	PrepareDownloadExact(context.Context, Selection) (PreparedDownload, error)
+}
+type PreparedDownload interface {
+	PreparedUpdate
+	DownloadOnce(context.Context) (NativeResult, error)
+}
 type NativeResult struct {
-	OperationResult uint32
-	HResult         int32
-	RebootRequired  Fact
+	AggregateResultKnown     bool
+	AggregateHResultKnown    bool
+	UpdateResultKnown        bool
+	UpdateHResultKnown       bool
+	Download                 bool
+	NativeReturned           bool
+	AggregateOperationResult uint32
+	AggregateHResult         int32
+	DownloadedAfter          Fact
+	OperationResult          uint32
+	HResult                  int32
+	RebootRequired           Fact
 }
 
 // InactiveExecutor remains the default. The separately constructed source-only
-// windowsupdateexecutor adapter is not wired into a runtime or provisioner.
+// windowsupdateexecutor adapter is supplied only by explicitly provisioned
+// foreground/background runtimes. No observation grant can activate it.
 type InactiveExecutor struct{}
 
 func (InactiveExecutor) PrepareExact(context.Context, Selection) (PreparedUpdate, error) {
@@ -95,12 +112,12 @@ func (r ExecutorRecord) Validate() error {
 	ids := map[string]bool{}
 	for _, a := range r.Attempts {
 		p, e := Verify(a.Envelope, r.PublicKey)
-		if e != nil || p.Preview.Binding != r.Consent.Binding || (p.Version == ReusablePermitVersion) != r.Consent.Reusable() || p.Sequence <= seq || ids[p.Preview.ID] || a.ClaimedAt < p.IssuedAt() || a.ClaimedAt >= p.Preview.ExpiresAt || a.ClaimedAt > r.ClockFloor {
+		if e != nil || p.Preview.Binding != r.Consent.Binding || p.Reusable() != r.Consent.Reusable() || p.Download() && !r.Consent.DownloadEnabled() || p.Sequence <= seq || ids[p.Preview.ID] || a.ClaimedAt < p.IssuedAt() || a.ClaimedAt >= p.Preview.ExpiresAt || a.ClaimedAt > r.ClockFloor {
 			return ErrIntegrity
 		}
 		seq = p.Sequence
 		ids[p.Preview.ID] = true
-		if a.Result != nil && (a.Result.Validate() != nil || a.Result.JobID != p.Preview.ID || a.Result.EnvelopeDigest != actionpermit.Digest(a.Envelope) || a.Result.Attempted != a.Attempted || a.Result.CompletedAt < a.ClaimedAt || a.Result.CompletedAt > r.ClockFloor) {
+		if a.Result != nil && (a.Result.Validate() != nil || a.Result.JobID != p.Preview.ID || a.Result.EnvelopeDigest != actionpermit.Digest(a.Envelope) || a.Result.Attempted != a.Attempted || (a.Result.Purpose == DownloadPurpose) != p.Download() || a.Result.CompletedAt < a.ClaimedAt || a.Result.CompletedAt > r.ClockFloor) {
 			return ErrIntegrity
 		}
 		if e := r.validateMutationCompletion(a, p); e != nil {
@@ -250,7 +267,7 @@ func (x *Executor) currentPermit(c Current, p Permit) (int64, error) {
 	if e != nil {
 		return n, e
 	}
-	if p.Preview.Binding != c.Binding || (p.Version == ReusablePermitVersion) != x.record.Consent.Reusable() {
+	if p.Preview.Binding != c.Binding || p.Reusable() != x.record.Consent.Reusable() || p.Download() && !x.record.Consent.DownloadEnabled() {
 		return n, x.rejectTime(n, ErrAuthority)
 	}
 	if p.Schedule != nil && (!x.record.Consent.ScheduleAcknowledged || x.record.Consent.ScheduleScope != ScheduleScope) {
@@ -380,14 +397,31 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 	a := &x.record.Attempts[len(x.record.Attempts)-1]
 	var capability *fence.Capability
 	nativeSettled := false
+	cleanupSucceeded := false
 	finish := func(outcome string, native NativeResult) (Result, error) {
 		r := Result{JobID: p.Preview.ID, EnvelopeDigest: actionpermit.Digest(raw), Attempted: a.Attempted, Outcome: outcome, OperationResult: native.OperationResult, HResult: native.HResult, RebootRequired: native.RebootRequired, CompletedAt: x.now().UTC().Unix()}
+		if p.Download() {
+			r.Purpose = DownloadPurpose
+			r.AggregateResultKnown = native.AggregateResultKnown
+			r.AggregateHResultKnown = native.AggregateHResultKnown
+			r.UpdateResultKnown = native.UpdateResultKnown
+			r.UpdateHResultKnown = native.UpdateHResultKnown
+			r.RebootRequired = Unknown
+			r.NativeReturned = native.NativeReturned
+			r.CleanupSucceeded = cleanupSucceeded && a.Attempted
+			r.AggregateOperationResult = native.AggregateOperationResult
+			r.AggregateHResult = native.AggregateHResult
+			r.DownloadedAfter = native.DownloadedAfter
+			if !fact(r.DownloadedAfter) {
+				r.DownloadedAfter = Unknown
+			}
+		}
 		if r.Validate() != nil {
 			return Result{}, ErrInvalid
 		}
 		// Evidence is signed once at the actual completion time and persisted in
 		// the same record as Result. Recovery never synthesizes either field.
-		report, e := SignStatement(Statement{Version: RelayVersion, Kind: "result", Binding: x.record.Consent.Binding, JobID: r.JobID, ReferenceDigest: r.EnvelopeDigest, Deadline: p.Preview.ExpiresAt, IssuedAt: r.CompletedAt, ExpiresAt: min(r.CompletedAt+300, int64(253402300799)), Result: &r}, x.key)
+		report, e := SignStatement(Statement{Version: relayVersion(p.Download()), Kind: "result", Binding: x.record.Consent.Binding, JobID: r.JobID, ReferenceDigest: r.EnvelopeDigest, Deadline: p.Preview.ExpiresAt, IssuedAt: r.CompletedAt, ExpiresAt: min(r.CompletedAt+300, int64(253402300799)), Result: &r}, x.key)
 		if e != nil {
 			x.failed = true
 			return Result{}, ErrUncertain
@@ -438,7 +472,7 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 		if err = ctx.Err(); err != nil {
 			return err
 		}
-		prepared, err = x.adapter.PrepareExact(ctx, p.Preview.Readiness.Selection)
+		prepared, err = x.prepare(ctx, p.Preview.Readiness.Selection, p.Download())
 		if err != nil || prepared == nil {
 			return ErrUnavailable
 		}
@@ -490,7 +524,8 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 				return e
 			}
 		}
-		startCtx = withInstallStartFence(ctx, x.record.ClockFloor, p.Preview.ExpiresAt, x.record.Consent.ExpiresAt, c.LeafNotAfter)
+		startCtx = withMutationPurpose(ctx, p.Download())
+		startCtx = withInstallStartFence(startCtx, x.record.ClockFloor, p.Preview.ExpiresAt, x.record.Consent.ExpiresAt, c.LeafNotAfter)
 		startCtx = withInstallStartCurrent(startCtx, x.now, func(start context.Context) (installStartBounds, error) {
 			if !x.mu.TryLock() {
 				return installStartBounds{}, ErrConflict
@@ -514,7 +549,7 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 				return err
 			}
 			var err error
-			if x.mutation != nil && nativeInstallStart(start) {
+			if x.mutation != nil && nativeMutationStart(start) {
 				err = x.mutation.CheckStart(start, capability, checkCurrent)
 			} else {
 				err = checkCurrent()
@@ -537,7 +572,15 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 	})
 	x.mu.Unlock()
 	if e == nil {
-		result, e = prepared.InstallOnce(startCtx)
+		if p.Download() {
+			if d, ok := prepared.(PreparedDownload); ok {
+				result, e = d.DownloadOnce(startCtx)
+			} else {
+				e = ErrAuthority
+			}
+		} else {
+			result, e = prepared.InstallOnce(startCtx)
+		}
 	}
 	closeErr := prepared.Close()
 	x.mu.Lock()
@@ -546,6 +589,20 @@ func (x *Executor) RunAccepted(ctx context.Context, h *Accepted) (Result, error)
 	}
 	if !a.Attempted {
 		return noAttempt()
+	}
+	cleanupSucceeded = closeErr == nil
+	if p.Download() {
+		nativeSettled = e == nil && closeErr == nil && result.Download && result.NativeReturned
+		if !nativeSettled || result.OperationResult > 5 || result.AggregateOperationResult > 5 || !fact(result.DownloadedAfter) {
+			return finish("uncertain", result)
+		}
+		if result.AggregateResultKnown && result.AggregateHResultKnown && result.UpdateResultKnown && result.UpdateHResultKnown && result.OperationResult == 2 && result.HResult >= 0 && result.AggregateOperationResult == 2 && result.AggregateHResult >= 0 && result.DownloadedAfter == Yes {
+			return finish("succeeded", result)
+		}
+		if result.OperationResult == 4 || result.OperationResult == 5 || result.AggregateOperationResult == 4 || result.AggregateOperationResult == 5 {
+			return finish("failed", result)
+		}
+		return finish("uncertain", result)
 	}
 	nativeSettled = e == nil && closeErr == nil
 	if e != nil || closeErr != nil || !fact(result.RebootRequired) || result.OperationResult > 5 {
@@ -578,3 +635,14 @@ func (*Executor) Format(f fmt.State, _ rune) {
 	_, _ = io.WriteString(f, "<dedicated Windows update executor>")
 }
 func (*Executor) MarshalJSON() ([]byte, error) { return []byte(`{"secretsRedacted":true}`), nil }
+
+func (x *Executor) prepare(ctx context.Context, selection Selection, download bool) (PreparedUpdate, error) {
+	if download {
+		a, ok := x.adapter.(ExecutorDownloadAdapter)
+		if !ok || !x.record.Consent.DownloadEnabled() {
+			return nil, ErrAuthority
+		}
+		return a.PrepareDownloadExact(ctx, selection)
+	}
+	return x.adapter.PrepareExact(ctx, selection)
+}

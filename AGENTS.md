@@ -265,6 +265,13 @@ missing material rather than inventing credentials or weakening protection.
   distinct manager/executor keys, original age and current-leaf/final guards.
   Never promote observation/service permissions, retry uncertainty, download,
   accept EULAs or reboot. Native elevated executor/provisioning remain inactive.
+- Selected update downloading requires a separate fresh v7 paired background scope.
+  Read `docs/windows-selected-update-downloads.md`. Keep download-only capability,
+  signed purposes, bounded metadata-origin/size review and the shared MSI/WUA fence.
+  Windows-managed delivery is not a hard byte quota or egress allowlist. Successful
+  settled-result retirement must precede a new independent installation review.
+  Old v1–v6 grants cannot download; no online scan, EULA acceptance, automatic
+  install/retry, cache deletion or native acceptance follows from source checks.
 - Fresh background cached-update UTC scheduling requires
   `docs/windows-scheduled-background-updates.md`. Preserve standalone v2 and
   manual background v4 bytes; only fresh explicit v5 consent admits the combined

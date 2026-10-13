@@ -81,7 +81,7 @@ func (r ExecutorRecord) matchesRetirement(q RetirementPermit) error {
 	}
 	a := r.Attempts[0]
 	p, e := Verify(a.Envelope, r.PublicKey)
-	if e != nil || p.Version != ReusablePermitVersion || p.Preview.ID != q.JobID || p.Preview.Readiness.Selection != q.Selection || p.Sequence != q.Occurrence || q.Occurrence <= r.Reusable.RetiredFloor || actionpermit.Digest(a.Envelope) != q.EnvelopeDigest || a.Result == nil || !a.Attempted || !a.Result.Attempted || a.Result.Outcome != "succeeded" || len(a.ResultReport) == 0 || actionpermit.Digest(a.ResultReport) != q.ResultDigest || q.IssuedAt < a.Result.CompletedAt || a.MutationCompletion == nil || a.MutationCompletion.Outcome != "succeeded" || r.validateMutationCompletion(a, p) != nil || r.validateResultReport(a, p) != nil {
+	if e != nil || !p.Reusable() || p.Preview.ID != q.JobID || p.Preview.Readiness.Selection != q.Selection || p.Sequence != q.Occurrence || q.Occurrence <= r.Reusable.RetiredFloor || actionpermit.Digest(a.Envelope) != q.EnvelopeDigest || a.Result == nil || !a.Attempted || !a.Result.Attempted || a.Result.Outcome != "succeeded" || len(a.ResultReport) == 0 || actionpermit.Digest(a.ResultReport) != q.ResultDigest || q.IssuedAt < a.Result.CompletedAt || a.MutationCompletion == nil || a.MutationCompletion.Outcome != "succeeded" || r.validateMutationCompletion(a, p) != nil || r.validateResultReport(a, p) != nil {
 		return ErrAuthority
 	}
 	return nil

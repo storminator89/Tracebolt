@@ -55,10 +55,20 @@ type ReadinessSource interface {
 }
 
 type Result struct {
-	JobID          string `json:"jobId"`
-	EnvelopeDigest string `json:"envelopeDigest"`
-	Attempted      bool   `json:"attempted"`
-	Outcome        string `json:"outcome"`
+	AggregateResultKnown     bool   `json:"aggregateResultKnown,omitempty"`
+	AggregateHResultKnown    bool   `json:"aggregateHresultKnown,omitempty"`
+	UpdateResultKnown        bool   `json:"updateResultKnown,omitempty"`
+	UpdateHResultKnown       bool   `json:"updateHresultKnown,omitempty"`
+	Purpose                  string `json:"purpose,omitempty"`
+	NativeReturned           bool   `json:"nativeReturned,omitempty"`
+	CleanupSucceeded         bool   `json:"cleanupSucceeded,omitempty"`
+	AggregateOperationResult uint32 `json:"aggregateOperationResult,omitempty"`
+	AggregateHResult         int32  `json:"aggregateHresult,omitempty"`
+	DownloadedAfter          Fact   `json:"downloadedAfter,omitempty"`
+	JobID                    string `json:"jobId"`
+	EnvelopeDigest           string `json:"envelopeDigest"`
+	Attempted                bool   `json:"attempted"`
+	Outcome                  string `json:"outcome"`
 	// WUA OperationResultCode and HRESULT, not arbitrary error prose.
 	OperationResult uint32 `json:"operationResult"`
 	HResult         int32  `json:"hresult"`
@@ -67,6 +77,12 @@ type Result struct {
 }
 
 func (r Result) Validate() error {
+	if r.Purpose == DownloadPurpose {
+		return r.validateDownload()
+	}
+	if r.Purpose != "" || r.AggregateResultKnown || r.AggregateHResultKnown || r.UpdateResultKnown || r.UpdateHResultKnown || r.NativeReturned || r.CleanupSucceeded || r.AggregateOperationResult != 0 || r.AggregateHResult != 0 || r.DownloadedAfter != "" {
+		return ErrInvalid
+	}
 	if !enrollmentcrypto.ValidID(r.JobID, "update_") || !actionpermit.ValidDigest(r.EnvelopeDigest) || !validTime(r.CompletedAt) || !fact(r.RebootRequired) {
 		return ErrInvalid
 	}
@@ -94,6 +110,7 @@ func (r Result) Validate() error {
 }
 
 type Job struct {
+	Purpose            string           `json:"purpose,omitempty"`
 	Occurrence         uint64           `json:"occurrence,string,omitempty"`
 	RetirePermit       []byte           `json:"retirePermit,omitempty"`
 	RetireClaimedAt    int64            `json:"retireClaimedAt,omitempty"`
@@ -168,7 +185,7 @@ func (r Record) Validate() error {
 		}
 		ids[j.ID] = true
 		challenge, err := VerifyChallenge(j.Challenge, r.PublicKey)
-		if err != nil || challenge.Binding != r.Consent.Binding || challenge.JobID != j.ID || challenge.Selection != j.Selection || challenge.IssuedAt != j.RequestedAt || challenge.Sequence <= readinessSeq || challenge.Sequence > r.ReadinessSequence {
+		if err != nil || challenge.Binding != r.Consent.Binding || challenge.Download() != j.Download() || j.Download() && !r.Consent.DownloadEnabled() || (j.Purpose != "" && !j.Download()) || challenge.JobID != j.ID || challenge.Selection != j.Selection || challenge.IssuedAt != j.RequestedAt || challenge.Sequence <= readinessSeq || challenge.Sequence > r.ReadinessSequence {
 			return ErrIntegrity
 		}
 		readinessSeq = challenge.Sequence
@@ -177,18 +194,18 @@ func (r Record) Validate() error {
 		}
 		if len(j.ReadinessReport) > 0 {
 			statement, err := VerifyStatement(j.ReadinessReport, r.ExecutorPublicKey)
-			if err != nil || statement.Kind != "readiness" || statement.Binding != r.Consent.Binding || statement.JobID != j.ID || statement.ReferenceDigest != actionpermit.Digest(j.Challenge) || j.Preview == nil || statement.Readiness == nil || *statement.Readiness != j.Preview.Readiness || statement.Deadline != challenge.Deadline {
+			if err != nil || statement.Kind != "readiness" || (statement.Version == DownloadRelayVersion) != j.Download() || statement.Binding != r.Consent.Binding || statement.JobID != j.ID || statement.ReferenceDigest != actionpermit.Digest(j.Challenge) || j.Preview == nil || statement.Readiness == nil || *statement.Readiness != j.Preview.Readiness || statement.Deadline != challenge.Deadline {
 				return ErrIntegrity
 			}
 		}
 		if len(j.ResultReport) > 0 {
 			statement, err := VerifyStatement(j.ResultReport, r.ExecutorPublicKey)
-			if err != nil || statement.Kind != "result" || statement.Binding != r.Consent.Binding || statement.JobID != j.ID || j.Result == nil || statement.Result == nil || *statement.Result != *j.Result || statement.ReferenceDigest != actionpermit.Digest(j.Envelope) || j.Preview == nil || statement.Deadline != j.Preview.ExpiresAt {
+			if err != nil || statement.Kind != "result" || (statement.Version == DownloadRelayVersion) != j.Download() || statement.Binding != r.Consent.Binding || statement.JobID != j.ID || j.Result == nil || statement.Result == nil || *statement.Result != *j.Result || statement.ReferenceDigest != actionpermit.Digest(j.Envelope) || j.Preview == nil || statement.Deadline != j.Preview.ExpiresAt {
 				return ErrIntegrity
 			}
 		}
 
-		if j.Preview != nil && (j.Preview.Validate() != nil || j.Preview.ID != j.ID || j.Preview.ActorID != j.ActorID || j.Preview.Binding != r.Consent.Binding || j.Preview.Readiness.Selection != j.Selection || j.Preview.CreatedAt < j.RequestedAt || j.Preview.CreatedAt > r.ClockFloor) {
+		if j.Preview != nil && (j.Preview.Validate() != nil || j.Preview.ID != j.ID || j.Preview.ActorID != j.ActorID || j.Preview.Binding != r.Consent.Binding || j.Preview.Readiness.Selection != j.Selection || (j.Preview.Readiness.Purpose == DownloadPurpose) != j.Download() || j.Preview.CreatedAt < j.RequestedAt || j.Preview.CreatedAt > r.ClockFloor) {
 			return ErrIntegrity
 		}
 		if j.Schedule != nil && r.validateScheduledJob(j) != nil {
@@ -220,7 +237,7 @@ func (r Record) Validate() error {
 		}
 		if len(j.Envelope) > 0 {
 			p, e := Verify(j.Envelope, r.PublicKey)
-			if e != nil || p.Preview != *j.Preview || p.Sequence <= seq || p.ApprovedAt != j.ApprovedAt || j.ApprovedAt > r.ClockFloor {
+			if e != nil || p.Preview != *j.Preview || p.Download() != j.Download() || p.Sequence <= seq || p.ApprovedAt != j.ApprovedAt || j.ApprovedAt > r.ClockFloor {
 				return ErrIntegrity
 			}
 			seq = p.Sequence
@@ -235,7 +252,7 @@ func (r Record) Validate() error {
 			return ErrIntegrity
 		}
 		if j.State == "complete" {
-			if j.Result == nil || j.Result.Validate() != nil || j.Result.JobID != j.ID || j.Result.EnvelopeDigest != actionpermit.Digest(j.Envelope) || j.Result.CompletedAt < j.ClaimedAt || j.Result.CompletedAt > r.ClockFloor {
+			if j.Result == nil || j.Result.Validate() != nil || j.Result.JobID != j.ID || (j.Result.Purpose == DownloadPurpose) != j.Download() || j.Result.EnvelopeDigest != actionpermit.Digest(j.Envelope) || j.Result.CompletedAt < j.ClaimedAt || j.Result.CompletedAt > r.ClockFloor {
 				return ErrIntegrity
 			}
 		} else if j.Result != nil {
@@ -269,6 +286,7 @@ type Manager struct {
 	transactionStore   TransactionStore
 	configurationCheck func() error
 	operatorAllowed    func(string) bool
+	downloadAllowed    func(string) bool
 	scheduleAllowed    func(string) bool
 	binding            Binding
 	mu                 sync.Mutex
@@ -445,9 +463,13 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		return ErrInvalid
 	}
 	return m.transaction(ctx, func(c Current, n int64) error {
+		download := downloadRequest(ctx)
+		if download && !m.record.Consent.DownloadEnabled() {
+			return ErrAuthority
+		}
 		for _, j := range m.record.Jobs {
 			if j.ID == id {
-				if j.ActorID == actor && j.Selection == s {
+				if j.ActorID == actor && j.Selection == s && j.Download() == download {
 					return nil
 				}
 				return ErrConflict
@@ -471,11 +493,15 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		}
 		m.record.Jobs = kept
 		m.record.ReadinessSequence++
-		challenge, err := SignChallenge(Challenge{Sequence: m.record.ReadinessSequence, Version: RelayVersion, Binding: m.Binding(), JobID: id, Selection: s, IssuedAt: n, Deadline: min(n+120, c.LeafNotAfter, m.record.Consent.ExpiresAt)}, m.key)
+		challenge, err := SignChallenge(Challenge{Sequence: m.record.ReadinessSequence, Version: relayVersion(download), Binding: m.Binding(), JobID: id, Selection: s, IssuedAt: n, Deadline: min(n+120, c.LeafNotAfter, m.record.Consent.ExpiresAt)}, m.key)
 		if err != nil {
 			return err
 		}
-		m.record.Jobs = append(m.record.Jobs, Job{Challenge: challenge, ID: id, ActorID: actor, Selection: s, RequestedAt: n, State: "requested", Reason: "readiness_pending"})
+		purpose := ""
+		if download {
+			purpose = DownloadPurpose
+		}
+		m.record.Jobs = append(m.record.Jobs, Job{Purpose: purpose, Challenge: challenge, ID: id, ActorID: actor, Selection: s, RequestedAt: n, State: "requested", Reason: "readiness_pending"})
 		if e := m.save(n); e != nil {
 			return e
 		}
@@ -498,7 +524,7 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if sourceErr == nil && readiness.Validate() == nil && readiness.Selection == s && readiness.CapturedAt <= n && n-readiness.CapturedAt <= 60 {
+		if sourceErr == nil && (readiness.Purpose == DownloadPurpose) == download && readiness.Validate() == nil && readiness.Selection == s && readiness.CapturedAt <= n && n-readiness.CapturedAt <= 60 {
 			deadline := min(n+60, c.LeafNotAfter, m.record.Consent.ExpiresAt, readiness.CapturedAt+60)
 			if deadline > n {
 				p := Preview{ID: id, ActorID: actor, Binding: m.Binding(), Readiness: readiness, CreatedAt: n, ExpiresAt: deadline}
@@ -525,7 +551,7 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 			if j.ID != id {
 				continue
 			}
-			if j.Schedule != nil || j.ActorID != actor || j.Preview == nil || j.Preview.Digest != d {
+			if j.Download() != downloadRequest(ctx) || j.Download() && !m.record.Consent.DownloadEnabled() || j.Schedule != nil || j.ActorID != actor || j.Preview == nil || j.Preview.Digest != d {
 				return ErrConflict
 			}
 			if len(j.Envelope) > 0 {
@@ -550,6 +576,9 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 			if m.record.Consent.Reusable() {
 				j.Occurrence = m.record.Sequence
 				p.Version = ReusablePermitVersion
+			}
+			if j.Download() {
+				p.Version = DownloadPermitVersion
 			}
 			raw, e := Sign(p, m.key)
 			if e != nil {
@@ -577,7 +606,10 @@ func (m *Manager) Claim(ctx context.Context, id string) ([]byte, error) {
 			if j.ID != id {
 				continue
 			}
-			if m.transactionStore != nil && (m.operatorAllowed == nil || !m.operatorAllowed(j.ActorID)) {
+			if j.Download() != downloadRequest(ctx) {
+				return ErrAuthority
+			}
+			if m.transactionStore != nil && !m.operationAllowed(j.ActorID, j.Download()) {
 				return ErrAuthority
 			}
 			if j.Schedule != nil && !m.scheduleAuthorized(j) {
@@ -640,6 +672,8 @@ func (m *Manager) Submit(ctx context.Context, r Result) error {
 }
 
 type View struct {
+	DownloadAvailable    bool          `json:"downloadAvailable,omitempty"`
+	DownloadEnabled      bool          `json:"downloadEnabled,omitempty"`
 	ReusableJobs         bool          `json:"reusableJobs,omitempty"`
 	GrantExpiresAt       int64         `json:"grantExpiresAt,omitempty"`
 	RetiredFloor         uint64        `json:"retiredFloor,string,omitempty"`
@@ -660,6 +694,7 @@ type View struct {
 	SchedulingRevoked    bool          `json:"schedulingRevoked,omitempty"`
 }
 type PublicJob struct {
+	Purpose      string          `json:"purpose,omitempty"`
 	Occurrence   uint64          `json:"occurrence,string,omitempty"`
 	ResultDigest string          `json:"resultDigest,omitempty"`
 	Retirement   *RetirementView `json:"retirement,omitempty"`
@@ -704,6 +739,8 @@ func (m *Manager) View(ctx context.Context, device, actor string, ids ...string)
 		v.SchedulingAvailable = m.schedulingAvailable(actor)
 		v.SchedulingRevoked = m.record.ScheduleRevokedAt != 0
 		v.Available = !m.blocked(n, "")
+		v.DownloadEnabled = m.record.Consent.DownloadEnabled()
+		v.DownloadAvailable = v.DownloadEnabled && v.Available
 		v.Reason = "ready"
 		if !v.Available {
 			v.Reason = "job_pending_or_intervention"

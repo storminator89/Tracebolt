@@ -93,6 +93,8 @@ DOMAIN_SCRIPTS = {
     'web/scripts/linux-cve-update-review-scenes.json': {'linux-cve-update-review'},
     'web/scripts/linux-cve-update-review-contract.node.mjs': {'linux-cve-update-review'},
 
+    'tests/e2e-review/windows-update-download-browser.mjs': {'windows-service-actions'},
+    'tests/e2e-review/windows-update-download-fixtures.test.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
     'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi'},
@@ -432,6 +434,7 @@ def web_checks(plan):
         run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
         run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
     if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-update-download-fixtures.test.mjs'], stage='ui-windows-update-download-contract')
         run(['node', '--test', 'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'], stage='ui-windows-update-retirement-contract')
     if 'windows-fleet-msi' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-windows-msi-catalogue-fixtures.mjs', '--check'], stage='ui-msi-catalogue-contract')
@@ -891,6 +894,8 @@ def browser_checks(plan):
         if flow == 'windows-service-actions':
             run(['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', plan['sha']],
                 stage='browser-update-retirement-evidence', env=env)
+            run(['node', 'tests/e2e-review/windows-update-download-browser.mjs', '--check-evidence', plan['sha']],
+                stage='browser-update-download-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

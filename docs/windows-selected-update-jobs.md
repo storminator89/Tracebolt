@@ -482,3 +482,11 @@ adds explicit successful-result-bound retirement with bounded history and durabl
 retired sequence floors under new v6 consent and a v4 shared fence. Only fresh
 paired background setup can select it. The earlier contracts, lifetime limits,
 byte shapes and uncertainty rules in this document remain unchanged.
+
+## Separate fresh download opt-in
+
+The [manual selected-download profile](windows-selected-update-downloads.md)
+adds a new v7 consent only. Existing v1–v6 cached-install grants cannot download.
+A download uses its own signed purpose and named capability, then exact successful
+retirement before a new independent installation review. Windows-managed delivery
+and metadata estimates are disclosed without a hard egress/byte-cap claim.
