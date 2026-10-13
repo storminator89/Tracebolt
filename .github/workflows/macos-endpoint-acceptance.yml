@@ -1,0 +1,70 @@
+name: macOS manually approved endpoint subset
+
+# Publication and source checks do not authorize dispatch or credential creation.
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint_subset:
+        description: 'Separately approved disposable keys, loopback TLS, PTY enrollment and basic reads'
+        type: boolean
+        default: false
+        required: true
+      runner:
+        description: 'One standard disposable macOS VM per approved invocation'
+        type: choice
+        options: [macos-15, macos-15-intel]
+        default: macos-15
+        required: true
+      reviewed_commit:
+        description: 'Exact independently reviewed current commit (40 lowercase hex)'
+        type: string
+        required: true
+      reviewed_source_sha256:
+        description: 'Exact sourceSHA256 from inert gate.py --check after review'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-endpoint-acceptance-${{ github.ref }}-${{ inputs.runner }}
+  cancel-in-progress: false
+
+jobs:
+  endpoint-subset:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && inputs.endpoint_subset &&
+          github.repository == 'storminator89/Tracebolt' &&
+          github.event.repository.private == false && github.run_attempt == 1 }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: '-mod=readonly'
+      CGO_ENABLED: '0'
+      GO_DOWNLOAD_BASE_URL: ''
+      TRACEBOLT_RUNNER_LABEL: ${{ inputs.runner }}
+      TRACEBOLT_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+      TRACEBOLT_SELECT_ENDPOINT: ${{ inputs.endpoint_subset }}
+      TRACEBOLT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+      TRACEBOLT_REVIEWED_SOURCE_SHA256: ${{ inputs.reviewed_source_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify exact manual source before toolchain preparation
+        run: python3 -I -S -B tests/macosendpointfixture/gate.py --verify-dispatch
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.1'
+          token: ''
+          cache: false
+          check-latest: false
+      - name: Run only the separately approved endpoint subset
+        run: python3 -I -S -B tests/macosendpointfixture/gate.py --execute
+      # One closed metadata-only JSON line is retained in ordinary job output.
+      # No artifact upload, native retry, release, installation or other probe.

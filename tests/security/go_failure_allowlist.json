@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "bda9aac098e81834ca55abe2fbee67f03ba2448528c2844a5c092a5e88074a26",
+  "goSourceSha256": "b800c8828170c1e354f0ebef481cdcef886dc27ea04e115d78fae7cbc9a50ec4",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -5829,6 +5829,13 @@
     "localrmm/tests/e2e-review/v3fixture": [],
     "localrmm/tests/lanclient": [
       "TestNativeTwoBinaryRoundTrip"
+    ],
+    "localrmm/tests/macosendpointfixture": [
+      "TestBasicContractUnavailableTruthAndBoundedShape",
+      "TestBlockedEntryContract",
+      "TestPublicPeerStatusHasOnlyClosedBooleansAndCounts",
+      "TestReceiptLossExactRetryAndUnchangedFirstReceiptTime",
+      "TestStrictBoundedControl"
     ],
     "localrmm/tests/macosnativeacceptance/interfaceprobe": [
       "TestAdapterHasOneParserCallAndNoBroadCollector",
