@@ -40,6 +40,11 @@ def fake_capture(command_id):
     return row(command_id, versions.get(command_id, "Usage: synthetic documentation\n"))
 
 
+def fake_manual(source_id):
+    tool, path, compression = DRIVER.MANUAL_SOURCES[source_id]
+    return {"id": source_id, "tool": tool, "path": path, "status": "captured", "text": "Synthetic manual"}
+
+
 class ToolDocumentationTests(unittest.TestCase):
     def inert_capture(self, code, command_id="log-help", **limits):
         calls = []
@@ -247,7 +252,7 @@ class ToolDocumentationTests(unittest.TestCase):
             self.assertIsNone(result["sha256"])
 
     def test_artifact_write_preserves_inconclusive_or_success_result(self):
-        for status, exit_code in (("documentation_captured", 0), ("inconclusive", 1)):
+        for status, exit_code in (("documentation_acquired", 0), ("inconclusive", 1)):
             with tempfile.TemporaryDirectory() as temp:
                 target = Path(temp) / "review" / "evidence.json"
                 with mock.patch.object(DRIVER, "DESTINATION", target), \
@@ -273,9 +278,10 @@ class ToolDocumentationTests(unittest.TestCase):
 
     def test_success_records_only_documentation_claims_and_exact_selection(self):
         with mock.patch.object(DRIVER, "capture", side_effect=fake_capture) as captured, \
-                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "fingerprinted"}):
+                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "fingerprinted"}), \
+                mock.patch.object(DRIVER, "manual_capture", side_effect=fake_manual):
             result = DRIVER.collect(DRIVER.hosted_context(environment(), "darwin"))
-        self.assertEqual(result["result"], "documentation_captured")
+        self.assertEqual(result["result"], "documentation_acquired")
         self.assertEqual([call.args[0] for call in captured.call_args_list], list(DRIVER.COMMANDS))
         for key in ("nativeAcceptance", "logVisibilityEstablished", "logSchemaEstablished", "launchdBindingEstablished"):
             self.assertIs(result[key], False)
@@ -285,9 +291,15 @@ class ToolDocumentationTests(unittest.TestCase):
         def fake(command_id):
             return row(command_id, None, "inconclusive") if command_id == "log-help-show" else fake_capture(command_id)
         with mock.patch.object(DRIVER, "capture", side_effect=fake), \
-                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "fingerprinted"}):
+                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "fingerprinted"}), \
+                mock.patch.object(DRIVER, "manual_capture", side_effect=fake_manual):
             result = DRIVER.collect(DRIVER.hosted_context(environment(), "darwin"))
-        self.assertEqual(result["result"], "inconclusive")
+        self.assertEqual(result["result"], "documentation_acquired")
+        self.assertEqual(result["coverage"]["requestedHelpCoverage"], "partial")
+        self.assertEqual(result["coverage"]["requestedDocumentationCoverage"], "partial")
+        withheld = next(row for row in result["commands"] if row["id"] == "log-help-show")
+        self.assertEqual(withheld["status"], "inconclusive")
+        self.assertIsNone(withheld["text"])
         self.assertNotIn("permissionDenied", result)
         self.assertNotIn("absent", result)
 
@@ -315,6 +327,162 @@ class ToolDocumentationTests(unittest.TestCase):
                     collect.assert_not_called()
                 target.unlink()
 
+    def manual_fixture(self, payload, source_id="log-man", bad_index=None, attrs=None, changed=False):
+        from types import SimpleNamespace
+        import stat
+        stream = io.BytesIO(payload)
+        opened, closed, file_stats = [], [], [0]
+        def fake_open(component, flags, **kwargs):
+            index = len(opened)
+            self.assertLess(index, 6)
+            expected = ["/", "usr", "share", "man", "man1", DRIVER.MANUAL_SOURCES[source_id][1].split("/")[-1]][index]
+            self.assertEqual(component, expected)
+            self.assertTrue(flags & os.O_NOFOLLOW)
+            self.assertTrue(flags & os.O_NONBLOCK)
+            if index:
+                self.assertEqual(kwargs, {"dir_fd": 99 + index})
+            else:
+                self.assertEqual(kwargs, {})
+            if index < 5:
+                self.assertTrue(flags & os.O_DIRECTORY)
+            opened.append(component)
+            return 100 + index
+        def fake_stat(fd):
+            index = fd - 100
+            values = dict(st_mode=(stat.S_IFDIR | 0o755) if index < 5 else (stat.S_IFREG | 0o644),
+                          st_uid=0, st_dev=1, st_ino=index, st_size=len(payload), st_mtime_ns=1, st_ctime_ns=1)
+            if index == bad_index:
+                values.update(attrs or {})
+            if index == 5:
+                file_stats[0] += 1
+                if changed and file_stats[0] > 1:
+                    values["st_mtime_ns"] = 2
+            return SimpleNamespace(**values)
+        with mock.patch.object(DRIVER.os, "open", side_effect=fake_open), \
+                mock.patch.object(DRIVER.os, "fstat", side_effect=fake_stat), \
+                mock.patch.object(DRIVER.os, "read", side_effect=lambda fd, size: stream.read(size)), \
+                mock.patch.object(DRIVER.os, "close", side_effect=closed.append), \
+                mock.patch.object(DRIVER.subprocess, "Popen") as spawn:
+            result = DRIVER.manual_capture(source_id)
+            spawn.assert_not_called()
+        self.assertEqual(closed, list(reversed(range(100, 100 + len(opened)))))
+        return result
+
+    def test_fixed_manual_raw_and_gzip_descriptor_capture(self):
+        import gzip
+        import hashlib
+        for source_id, (tool, path, compression) in DRIVER.MANUAL_SOURCES.items():
+            raw = ('.Dd January 1, 2000\n.Dt ' + tool.upper() + ' 1\n.Os\n.Sh NAME\n.Nm ' + tool + '\n.Sh SYNOPSIS\nSynthetic documentation only.\n').encode()
+            payload = gzip.compress(raw) if compression == "gzip" else raw
+            result = self.manual_fixture(payload, source_id)
+            self.assertEqual(result["status"], "captured")
+            self.assertEqual(result["text"], raw.decode())
+            self.assertEqual(result["sourceSHA256"], hashlib.sha256(payload).hexdigest())
+            self.assertEqual(result["textSHA256"], hashlib.sha256(raw).hexdigest())
+            self.assertTrue(result["descriptorRootOwnedChecks"])
+            self.assertEqual(result["path"], path)
+
+    def test_unknown_manual_never_opens_a_path(self):
+        with mock.patch.object(DRIVER.os, "open") as opened:
+            for value in ("/Users/private/log.1", "../log.1", "log", "log-man; id"):
+                with self.assertRaises(KeyError):
+                    DRIVER.manual_capture(value)
+            opened.assert_not_called()
+        with self.assertRaises(TypeError):
+            DRIVER.MANUAL_SOURCES["new"] = ("log", "/tmp/private", "none")
+
+    def test_manual_read_error_is_content_free_and_no_search(self):
+        with mock.patch.object(DRIVER.os, "open", side_effect=OSError("PRIVATE_PATH SECRET")) as opened, \
+                mock.patch.object(DRIVER.subprocess, "Popen") as spawn:
+            result = DRIVER.manual_capture("log-man")
+            self.assertEqual(opened.call_count, 1)
+            spawn.assert_not_called()
+        self.assertEqual(result["reason"], "source_unavailable")
+        self.assertIsNone(result["text"])
+        self.assertNotIn("PRIVATE_PATH", json.dumps(result))
+        self.assertNotIn("SECRET", json.dumps(result))
+
+    def test_manual_root_owner_modes_and_types_fail_closed(self):
+        import stat
+        raw = b'.Dt LOG 1\n.Sh NAME\n.Nm log\n.Sh SYNOPSIS\nSynthetic.\n'
+        for index, attrs in ((0, {"st_uid": 501}), (2, {"st_mode": stat.S_IFDIR | 0o777}),
+                             (5, {"st_uid": 501}), (5, {"st_mode": stat.S_IFREG | 0o666}),
+                             (5, {"st_mode": stat.S_IFLNK | 0o777}),
+                             (5, {"st_mode": stat.S_IFIFO | 0o644})):
+            result = self.manual_fixture(raw, bad_index=index, attrs=attrs)
+            self.assertEqual(result["reason"], "unsafe_manual_source")
+            self.assertIsNone(result["text"])
+
+    def test_manual_changed_or_oversized_source_never_publishes_prefix(self):
+        raw = b'.Dt LOG 1\n.Sh NAME\n.Sh SYNOPSIS\nSynthetic.\n'
+        result = self.manual_fixture(raw, changed=True)
+        self.assertEqual(result["reason"], "manual_changed_during_read")
+        self.assertIsNone(result["text"])
+        with mock.patch.object(DRIVER, "MANUAL_SOURCE_LIMIT", 16):
+            result = self.manual_fixture(raw)
+        self.assertEqual(result["reason"], "manual_source_size")
+        self.assertIsNone(result["text"])
+
+    def test_manual_gzip_caps_malformed_trailing_or_multiple_members(self):
+        import gzip
+        raw = b'.Dt LOG 1\n.Sh NAME\n.Sh SYNOPSIS\n' + b'x' * 512
+        with mock.patch.object(DRIVER, "MANUAL_TEXT_LIMIT", 128):
+            result = self.manual_fixture(gzip.compress(raw), "log-man-gzip")
+        self.assertEqual(result["reason"], "manual_expansion_limit")
+        self.assertIsNone(result["text"])
+        for payload in (b'not gzip', gzip.compress(raw)[:-3], gzip.compress(raw) + b'trailer',
+                        gzip.compress(raw) + gzip.compress(raw)):
+            result = self.manual_fixture(payload, "log-man-gzip")
+            self.assertEqual(result["status"], "inconclusive")
+            self.assertIsNone(result["text"])
+
+    def test_manual_text_must_be_exact_tool_section_and_control_safe(self):
+        valid = b'.Dt LOG 1\n.Sh NAME\n.Nm log\n.Sh SYNOPSIS\nSynthetic.\n'
+        for payload in (valid.replace(b'LOG 1', b'LAUNCHCTL 1'), valid.replace(b'LOG 1', b'LOG 2'),
+                        valid.replace(b'.Sh SYNOPSIS', b'.Sh OTHER'), b'.so /private/data\n',
+                        valid + b'\x00PRIVATE', valid + b'\xff', valid + '\u202e'.encode()):
+            result = self.manual_fixture(payload)
+            self.assertEqual(result["status"], "inconclusive")
+            self.assertIsNone(result["text"])
+            self.assertNotIn("PRIVATE", json.dumps(result))
+
+    def test_manual_deadline_checked_before_any_path_is_opened(self):
+        with mock.patch.object(DRIVER.time, "monotonic", side_effect=[0, 10]), \
+                mock.patch.object(DRIVER.os, "open") as opened:
+            result = DRIVER.manual_capture("log-man")
+        self.assertEqual(result["reason"], "manual_timeout")
+        opened.assert_not_called()
+
+    def test_manuals_are_required_even_if_all_help_succeeds(self):
+        with mock.patch.object(DRIVER, "capture", side_effect=fake_capture), \
+                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "fingerprinted"}), \
+                mock.patch.object(DRIVER, "manual_capture", side_effect=lambda source: dict(fake_manual(source), status="inconclusive", text=None)):
+            result = DRIVER.collect(DRIVER.hosted_context(environment(), "darwin"))
+        self.assertEqual(result["result"], "inconclusive")
+        self.assertFalse(any(result["coverage"]["installedManualCaptured"].values()))
+
+    def test_one_manual_per_tool_suffices_but_missing_alternatives_stay_inconclusive(self):
+        def fake(source):
+            result = fake_manual(source)
+            if source.endswith("gzip"):
+                result.update(status="inconclusive", text=None)
+            return result
+        with mock.patch.object(DRIVER, "capture", side_effect=fake_capture), \
+                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "fingerprinted"}), \
+                mock.patch.object(DRIVER, "manual_capture", side_effect=fake):
+            result = DRIVER.collect(DRIVER.hosted_context(environment(), "darwin"))
+        self.assertEqual(result["result"], "documentation_acquired")
+        self.assertEqual([row["status"] for row in result["manuals"]], ["captured", "inconclusive", "captured", "inconclusive"])
+        self.assertTrue(all(result["coverage"]["installedManualCaptured"].values()))
+
+    def test_missing_tool_identity_prevents_completed_acquisition(self):
+        with mock.patch.object(DRIVER, "capture", side_effect=fake_capture), \
+                mock.patch.object(DRIVER, "tool_identity", return_value={"status": "inconclusive"}), \
+                mock.patch.object(DRIVER, "manual_capture", side_effect=fake_manual):
+            result = DRIVER.collect(DRIVER.hosted_context(environment(), "darwin"))
+        self.assertEqual(result["result"], "inconclusive")
+        self.assertFalse(result["coverage"]["requiredProvenanceCaptured"])
+
     def test_workflow_keeps_public_pinned_standard_runner_scope(self):
         text = (DRIVER.ROOT / ".github/workflows/macos-tool-docs.yml").read_text()
         self.assertIn("github.event.repository.private == false", text)
@@ -326,7 +494,7 @@ class ToolDocumentationTests(unittest.TestCase):
         job_env = text.split("    env:\n", 1)[1].split("    steps:\n", 1)[0]
         self.assertNotIn("runner.os", job_env)
         self.assertNotIn("runner.arch", job_env)
-        capture_step = text.split("      - name: Capture only built-in help and nonidentifying versions\n", 1)[1].split("      - name:", 1)[0]
+        capture_step = text.split("      - name: Capture only help, public manuals and versions\n", 1)[1].split("      - name:", 1)[0]
         self.assertIn("          TRACEBOLT_RUNNER_OS: ${{ runner.os }}", capture_step)
         self.assertIn("          TRACEBOLT_RUNNER_ARCH: ${{ runner.arch }}", capture_step)
         for forbidden in ("sudo", "setup-go", "brew", "pull_request_target", "secrets."):

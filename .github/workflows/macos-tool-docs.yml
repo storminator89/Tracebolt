@@ -45,7 +45,7 @@ jobs:
         run: python3 -B tests/macostooldocs/run.py --check
       - name: Test dispatcher and bounds with inert substitutes
         run: python3 -B -m unittest discover -s tests/macostooldocs -p 'test_*.py' -v
-      - name: Capture only built-in help and nonidentifying versions
+      - name: Capture only help, public manuals and versions
         env:
           TRACEBOLT_RUNNER_OS: ${{ runner.os }}
           TRACEBOLT_RUNNER_ARCH: ${{ runner.arch }}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture fixed built-in help only; --check invokes no command or native API."""
+"""Capture fixed help/manual sources only; --check invokes no command or native API."""
 import argparse
 import hashlib
 import json
@@ -12,6 +12,8 @@ import stat
 import subprocess
 import sys
 import time
+import unicodedata
+import zlib
 from types import MappingProxyType
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +41,14 @@ BINARY_LIMIT_BYTES = 32 * 1024 * 1024
 SOURCE_PATHS = (".github/workflows/macos-tool-docs.yml", "tests/macostooldocs/run.py",
                 "tests/macostooldocs/test_run.py", "docs/macos-tool-docs.md")
 CHILD_ENV = MappingProxyType({"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"})
+MANUAL_SOURCES = MappingProxyType({
+    "launchctl-man": ("launchctl", "/usr/share/man/man1/launchctl.1", "none"),
+    "launchctl-man-gzip": ("launchctl", "/usr/share/man/man1/launchctl.1.gz", "gzip"),
+    "log-man": ("log", "/usr/share/man/man1/log.1", "none"),
+    "log-man-gzip": ("log", "/usr/share/man/man1/log.1.gz", "gzip"),
+})
+MANUAL_SOURCE_LIMIT = 128 * 1024
+MANUAL_TEXT_LIMIT = 256 * 1024
 
 
 def check_commands():
@@ -53,6 +63,13 @@ def check_commands():
         ("/usr/bin/log", "help"), ("/usr/bin/log", "help", "show"),
     ):
         raise ValueError("documentation command allowlist changed; fresh review required")
+    if tuple(MANUAL_SOURCES.values()) != (
+        ("launchctl", "/usr/share/man/man1/launchctl.1", "none"),
+        ("launchctl", "/usr/share/man/man1/launchctl.1.gz", "gzip"),
+        ("log", "/usr/share/man/man1/log.1", "none"),
+        ("log", "/usr/share/man/man1/log.1.gz", "gzip"),
+    ):
+        raise ValueError("manual source allowlist changed; fresh review required")
 
 
 def hosted_context(env, system):
@@ -207,9 +224,124 @@ def tool_identity(path):
     return result
 
 
+class ManualRejected(ValueError):
+    """A fixed, content-free reason; never use native exception text."""
+
+
+def manual_capture(source_id):
+    tool, path, compression = MANUAL_SOURCES[source_id]
+    record = {"id": source_id, "tool": tool, "path": path,
+              "compression": compression, "format": "roff-source", "encoding": "utf-8",
+              "sourceByteLimit": MANUAL_SOURCE_LIMIT, "decodedByteLimit": MANUAL_TEXT_LIMIT,
+              "deadlineSeconds": TIMEOUT_SECONDS, "status": "inconclusive",
+              "reason": "source_unavailable", "text": None}
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    descriptors = []
+    def remaining():
+        if time.monotonic() >= deadline:
+            raise ManualRejected("manual_timeout")
+    def checked_open(component, parent=None, directory=False):
+        remaining()
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+        if directory:
+            flags |= os.O_DIRECTORY
+        fd = os.open(component, flags, **({"dir_fd": parent} if parent is not None else {}))
+        descriptors.append(fd)
+        info = os.fstat(fd)
+        expected = stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)
+        if not expected or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ManualRejected("unsafe_manual_source")
+        return fd, info
+    try:
+        # Walk only literal fixed system components, anchored to open descriptors.
+        # No realpath, MANPATH, home directory, glob, directory listing or man tool.
+        parent, _ = checked_open("/", directory=True)
+        parts = path.split("/")[1:]
+        for part in parts[:-1]:
+            parent, _ = checked_open(part, parent, directory=True)
+        fd, before = checked_open(parts[-1], parent)
+        if not 0 < before.st_size <= MANUAL_SOURCE_LIMIT:
+            raise ManualRejected("manual_source_size")
+        data = bytearray()
+        while True:
+            remaining()
+            chunk = os.read(fd, min(4096, MANUAL_SOURCE_LIMIT + 1 - len(data)))
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > MANUAL_SOURCE_LIMIT:
+                raise ManualRejected("manual_source_size")
+        after = os.fstat(fd)
+        fields = ("st_dev", "st_ino", "st_mode", "st_uid", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if (len(data) != before.st_size or
+                any(getattr(before, name) != getattr(after, name) for name in fields)):
+            raise ManualRejected("manual_changed_during_read")
+        remaining()
+        raw = bytes(data)
+        if compression == "gzip":
+            decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            decoded = decoder.decompress(raw, MANUAL_TEXT_LIMIT + 1)
+            if len(decoded) > MANUAL_TEXT_LIMIT or decoder.unconsumed_tail:
+                raise ManualRejected("manual_expansion_limit")
+            if not decoder.eof or decoder.unused_data:
+                raise ManualRejected("unsupported_gzip_stream")
+        else:
+            decoded = raw
+        remaining()
+        if not decoded or len(decoded) > MANUAL_TEXT_LIMIT:
+            raise ManualRejected("manual_expansion_limit")
+        text = decoded.decode("utf-8", errors="strict")
+        if any(unicodedata.category(c) in {"Cc", "Cf", "Cs"} and c not in "\t\r\n" for c in text):
+            raise ManualRejected("invalid_manual_text")
+        # Accept a section-1 roff source for this exact tool, never a redirect or
+        # guessed rendered page. Roff is retained as inert text, not interpreted.
+        title = r'^\.Dt\s+"?' + re.escape(tool) + r'"?\s+1(?:\s|$)'
+        if (not re.search(title, text, re.M | re.I) or
+                not re.search(r'^\.Sh\s+"?NAME"?\s*$', text, re.M | re.I) or
+                not re.search(r'^\.Sh\s+"?SYNOPSIS"?\s*$', text, re.M | re.I)):
+            raise ManualRejected("unrecognized_manual_shape")
+        record.update(status="captured", reason=None, text=text,
+                      sourceBytes=len(raw), decodedBytes=len(decoded),
+                      sourceSHA256=hashlib.sha256(raw).hexdigest(),
+                      textSHA256=hashlib.sha256(decoded).hexdigest(),
+                      descriptorRootOwnedChecks=True)
+    except ManualRejected as error:
+        record["reason"] = str(error)  # Only the fixed reasons above.
+    except UnicodeDecodeError:
+        record["reason"] = "invalid_manual_text"
+    except zlib.error:
+        record["reason"] = "invalid_gzip_stream"
+    except OSError:
+        pass  # No exception text, errno-derived permission claim or data fallback.
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+    return record
+
+
+def summarize_coverage(result):
+    by_id = {row["id"]: row for row in result["commands"]}
+    provenance = (all(by_id.get(name, {}).get("status") == "captured" for name in VERSION_IDS) and
+                  len(result["tools"]) == 4 and
+                  all(row["status"] == "fingerprinted" for row in result["tools"]))
+    manuals = {tool: any(row["tool"] == tool and row["status"] == "captured"
+                         for row in result["manuals"]) for tool in ("launchctl", "log")}
+    help_ids = [name for name in COMMANDS if name not in VERSION_IDS]
+    help_captured = [name for name in help_ids if by_id.get(name, {}).get("status") == "captured"]
+    result["coverage"] = {"requiredProvenanceCaptured": provenance,
+                          "installedManualCaptured": manuals,
+                          "helpCaptured": help_captured,
+                          "helpInconclusive": [name for name in help_ids if name not in help_captured],
+                          "requestedHelpCoverage": "complete" if len(help_captured) == len(help_ids) else "partial"}
+    acquired = provenance and all(manuals.values())
+    result["result"] = "documentation_acquired" if acquired else "inconclusive"
+    result["coverage"]["requestedDocumentationCoverage"] = (
+        "complete" if acquired and len(help_captured) == len(help_ids) else "partial")
+
+
 def collect(context):
-    result = {"schemaVersion": 1, "scope": "builtin-documentation-only",
-              "context": context, "sourceFiles": {}, "commands": [], "tools": [],
+    result = {"schemaVersion": 2, "scope": "builtin-help-and-installed-manuals-only",
+              "context": context, "sourceFiles": {}, "commands": [], "tools": [], "manuals": [],
               "result": "inconclusive", "nativeAcceptance": False,
               "logVisibilityEstablished": False, "logSchemaEstablished": False,
               "launchdBindingEstablished": False}
@@ -218,9 +350,11 @@ def collect(context):
     for command_id in VERSION_IDS:
         result["commands"].append(capture(command_id))
     if any(row["status"] != "captured" for row in result["commands"]):
+        summarize_coverage(result)
         return result
     if result["commands"][3]["text"].strip() != context["expectedMachine"]:
         result["reason"] = "native_architecture_mismatch"
+        summarize_coverage(result)
         return result
     for path in sorted({argv[0] for argv in COMMANDS.values()}):
         result["tools"].append(tool_identity(path))
@@ -228,19 +362,19 @@ def collect(context):
     for command_id in COMMANDS:
         if command_id not in VERSION_IDS:
             result["commands"].append(capture(command_id))
-    if (all(row["status"] == "captured" for row in result["commands"]) and
-            all(row["status"] == "fingerprinted" for row in result["tools"])):
-        result["result"] = "documentation_captured"
+    for source_id in MANUAL_SOURCES:
+        result["manuals"].append(manual_capture(source_id))
+    summarize_coverage(result)
     return result
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="check fixed command list without execution")
+    parser.add_argument("--check", action="store_true", help="check fixed command/manual selections without execution")
     args = parser.parse_args(argv)
     check_commands()
     if args.check:
-        print("Verified 10 fixed documentation/version commands; none executed.")
+        print("Verified 10 fixed commands and 4 fixed manual paths; no commands or manual reads executed.")
         return 0
     context = hosted_context(os.environ, sys.platform)
     # Refuse to overwrite previous evidence, including symlinks.
@@ -252,7 +386,7 @@ def main(argv=None):
         json.dump(result, stream, indent=2)
         stream.write("\n")
     print("Documentation evidence recorded: " + result["result"] + ". No log or service read was attempted.")
-    return 0 if result["result"] == "documentation_captured" else 1
+    return 0 if result["result"] == "documentation_acquired" else 1
 
 
 if __name__ == "__main__":
