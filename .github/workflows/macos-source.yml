@@ -104,7 +104,7 @@ jobs:
           GOSUMDB: 'off'
         run: |
           go build -buildvcs=false ./cmd/enroll-agent ./cmd/macos-agent ./cmd/macos-agent-service
-          for package in darwinprotect lanconfig enrollmentclient lanclientstate agentidentity macosservice macosinventory macosinventorywire; do
+          for package in darwinprotect lanconfig enrollmentclient lanclientstate agentidentity macosservice macosinventory macosinventorywire macosinventorystate macosinventorysender; do
             go test -c -buildvcs=false -o "$RUNNER_TEMP/${package}-${{ matrix.arch }}.test" "./internal/$package"
           done
 

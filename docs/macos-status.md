@@ -102,10 +102,17 @@ revocation checks remain authoritative. See
 
 ## Next scopes and remaining native gates
 
+The inactive [sender-state foundation](macos-read-inventory-state.md) and
+[protected sender integration](macos-read-inventory-sender.md) add bounded durable
+checkpoints, immutable used/ready markers, an exclusive Darwin storage adapter,
+and the fixed-source coordinator. They remain unregistered: no production
+protected authority reader, fresh inventory enrollment/consent, CLI or renewal
+scheduler selects this path. Existing basic scope is unchanged.
+
 Expanded hardware, software receipts, process accounting labels and numeric
 interface metadata have separate inactive [collector](macos-read-inventory-source.md)
 and [wire contract](macos-read-inventory-wire.md) source. They have no runtime,
-profile, sender, manager-store or UI integration. The basic profile does
+profile, manager-store or UI integration. The basic profile does
 not collect them, and Linux/Windows consent is not macOS consent. Installer
 receipts must not be labeled a complete installed-application inventory. Public
 package sources may be reused; no private application catalogue is introduced.
