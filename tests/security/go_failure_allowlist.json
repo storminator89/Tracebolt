@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "00df0165956f5aa20e10355a039407453b1f43a84cc038987779602014f56883",
+  "goSourceSha256": "deb1f38ca76cdc5854309213d71d87564c92d0019f8f3b691c684098c4b01cb4",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -3396,6 +3396,38 @@
       "TestTrimExactByteEdgesAndMetadataFailure",
       "TestTrimItemLimitAndBytePriority",
       "TestTruncatedCountFeasibility"
+    ],
+    "localrmm/internal/macosinventory": [
+      "TestConsentBeforeAllSources",
+      "TestContractRoundTrip",
+      "TestFixedCommandAllowlist",
+      "TestInterfaceCLATOppositeFamilyIsValidatedAndDiscarded",
+      "TestMidCollectionCancellationDoesNotInvokeLaterSources",
+      "TestNativeErrorSanitizationPreservesCanonicalClassification",
+      "TestNetworkAggregateErrorAndInvalidFamilyStillFailClosed",
+      "TestNetworkCallerCancellationStillDiscardsCompletedFamily",
+      "TestNetworkSecondFamilyTimeoutRetainsCompletedFirstFamily",
+      "TestNoPrefixOnBounds",
+      "TestOppositeFamilyDoesNotConsumeSelectedAddressBudget",
+      "TestOutputBoundConcurrentStreams",
+      "TestParserFailClosed",
+      "TestProcessInvalidUTF8NameDoesNotErasePIDRows",
+      "TestProviderFailuresAreIndependentAndSafe",
+      "TestWireRejectsFabricatedAvailability",
+      "TestZeroPrefixAndNoObservedFabrication"
+    ],
+    "localrmm/internal/macosinventorywire": [
+      "TestCanonicalRoundTripsAndEmbeddedObject",
+      "TestCaptureMonotonicityAndExactRetry",
+      "TestGenerationAndDigestDomains",
+      "TestIndependentBoundsAndOldTelemetryRoutes",
+      "TestOverflowAndUnrepresentableDates",
+      "TestQualityAndOriginalAge",
+      "TestReceiptExactRequestBindingAndPrivacy",
+      "TestReceiptRejectsUnboundedInputsBeforeEncoding",
+      "TestReportBindingsCannotBeRewritten",
+      "TestStrictCanonicalReportControlAndReceipt",
+      "TestTerminalDisableFloorAndRevision"
     ],
     "localrmm/internal/macosservice": [
       "TestAccountCommandArgumentsCannotExpand",
