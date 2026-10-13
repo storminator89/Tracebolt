@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "0bd00cfe9631f0940a6716e0aa373d302ef7f8dd641940411449c661114ad6a0",
+  "goSourceSha256": "00df0165956f5aa20e10355a039407453b1f43a84cc038987779602014f56883",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -145,6 +145,11 @@
       "TestGuidedRuntimeRejectsLegacyTombstone",
       "TestGuidedRuntimeRejectsUnmarkedPartialState",
       "TestGuidedThreeBinaryEnrollmentAndForeground",
+      "TestMacOSManagerDefaultOffAndMixedImmutableStores",
+      "TestMacOSManagerExistingPrimaryRejectsOrphanFragments",
+      "TestMacOSManagerRejectsHTTPAndMissingGuidedProfile",
+      "TestMacOSManagerRejectsUsedLedgerDisappearance",
+      "TestMacOSManagerRouteFamilyNeverFallsThrough",
       "TestManagedServiceObservationRequiresPostActionCollection",
       "TestManagerFixtureTLSWorksWithPythonVerification",
       "TestOperationalThreeBinaryEnrollmentAndForeground",
@@ -185,6 +190,16 @@
       "TestWindowsEventPreparedRuntimeRequiresIndependentScopeAndAuthentication",
       "TestWindowsInventoryCannotReplacePrimaryEnrollmentBinding",
       "TestWindowsManagerExplicitSidecarProfileAndOperatorConsent"
+    ],
+    "localrmm/cmd/macos-agent": [
+      "TestMacOSAgentForegroundUsesRenewableSchedulerAndCancellation",
+      "TestMacOSAgentReadOnlyValidationAndSafeFailure",
+      "TestMacOSAgentRejectsBeforeStateAccess"
+    ],
+    "localrmm/cmd/macos-agent-service": [
+      "TestCLIRefusesMutationAndSecretsBeforeInspection",
+      "TestDefaultCLIInspectsAndReportsBlocker",
+      "TestRenderOnlyCLIAndHelpDoNotReadHost"
     ],
     "localrmm/cmd/manager": [
       "TestHTTPWriteBudgetOutlastsAnalysis",
@@ -739,7 +754,9 @@
       "TestActionWireBodiesRejectUnknownFieldsAndBounds",
       "TestV2CapabilityBudgetAndCodecCannotWidenV1"
     ],
-    "localrmm/internal/agentidentity": [],
+    "localrmm/internal/agentidentity": [
+      "TestDarwinIDsRequireRealSavedEffectiveAndBoundedGroups"
+    ],
     "localrmm/internal/agentinstall": [
       "TestAccountUnitAndCgroupPurePolicies",
       "TestArtifactRejectsUnsafeAndChangedSource",
@@ -1047,6 +1064,7 @@
       "TestLinuxCVERecomputesOutgoingFeedAge",
       "TestLinuxCVERejectsMixedOrTruncatedInventory",
       "TestLinuxCVEVerticalSliceUsesCompleteSourceVersions",
+      "TestMacOSMixedFleetLookupKeepsPlatformAndRejectsAmbiguity",
       "TestManagedFleetArtifactRoutesAreFixed",
       "TestManagedFleetReadRechecksPinnedCapabilityAfterWait",
       "TestManagedMSICatalogueGETPinsAndFixedRoutes",
@@ -1088,6 +1106,7 @@
       "TestPersistentAIExplicitKeyStorageAndHTTPBoundary",
       "TestPersistentAIMemoryOnlyReplacementAndClearDoNotResurrect",
       "TestPersistentAIProviderAndScopeSurviveRestartWithoutReplay",
+      "TestPrimaryEnrollmentNeverAdvertisesMacOS",
       "TestProactiveAIDisableDoesNotDependOnHealthSource",
       "TestProactiveAIDisableProviderChangeAndRevocationDiscardResults",
       "TestProactiveAIExplicitScopeRunsOnceWithoutBrowserAndPersists",
@@ -1499,6 +1518,11 @@
       "TestResidualCategoriesEverySplitAndStickyFirst",
       "TestUnknownAndBounds"
     ],
+    "localrmm/internal/darwinprotect": [
+      "TestNativeDarwinACLAndDurabilityFixtures",
+      "TestSecurityAttributesFailClosed",
+      "TestVolumeACLSupportRequiresKnownCapability"
+    ],
     "localrmm/internal/debianversion": [
       "TestBoundedOrderProperties",
       "TestCancellationAtEveryShortInputPoll",
@@ -1545,6 +1569,7 @@
       "TestGuidedSenderBoundaryRejectsLostOrChangedDomainBeforeNetwork",
       "TestGuidedSenderLockBlocksEnrollmentResume",
       "TestInitializedSenderResumesInterruptedPublicationWithoutReset",
+      "TestMacOSRouteSelectionUsesTrustedRuntimeOnly",
       "TestPendingCancellationAndBoundedTimeout",
       "TestPendingResumePreservesIdentityAndSenderState",
       "TestPendingServiceClaimResponseAloneCannotCreateServiceMarker",
@@ -1605,6 +1630,10 @@
     "localrmm/internal/enrollmentconfig": [
       "TestAutomaticRenewalConfigIsExplicitFreshTLSOnly",
       "TestAutomaticRenewalModeCannotAdoptExistingManagerStore",
+      "TestMacOSDatabaseFragmentsRejectFreshOrManualAdoption",
+      "TestMacOSExistingPrimaryRejectsEveryOrphanFragment",
+      "TestMacOSInterruptedInitializationIsNeverFresh",
+      "TestMacOSReadyFenceReopensAndNeverRecreatesMissingLedger",
       "TestOptionalCollectionProfileAndExactModeBinding",
       "TestWindowsDatabaseFragmentsCannotBeAdoptedAsFreshOrManualState",
       "TestWindowsSidecarNeedsExplicitOptInAndPreservesPrimaryBinding"
@@ -1650,6 +1679,8 @@
       "TestEndpointIdentityServiceCancellationSuppressesMetadata",
       "TestEndpointIdentityServicePropagatesTrustedClockAcrossReadBoundaries",
       "TestInvitationPlatformProfileAdmission",
+      "TestMacOSBasicTLSRenewalTelemetryRetainsIdentityAndReplay",
+      "TestMacOSServiceRequiresDedicatedStore",
       "TestOptionalJournalContentNeedsSeparatePermissionAndDoesNotPromoteDeniedMetadata",
       "TestProfileCapabilitiesCompleteScopeIsNotObservedSuccess",
       "TestProfileCapabilitiesOlderManagedScopeDoesNotClaimCompleteInventory",
@@ -1686,6 +1717,8 @@
       "TestIntentImmutableSerialUniquenessAndNoAdvanceRetry",
       "TestInvalidSnapshotStateShape",
       "TestIssueAndActivationCancellationExpiryAndCAS",
+      "TestMacOSStoreImmutablePlatformFence",
+      "TestObservationPlatformMapsOnlyDarwin",
       "TestQuotaTombstonesNeverEvicted",
       "TestStrictCommandsAndBounds",
       "TestStrictSnapshotJSONAndAllPhases",
@@ -1848,6 +1881,8 @@
       "TestJournalStaleRecordedLeafCannotAuthorizeAfterLeafChange",
       "TestJournalStatusReadAdmissionAndClock",
       "TestLegacyCompleteIdentityRetainsNativePackageAuthority",
+      "TestMacOSStoreOpenPoliciesNeverAdoptOrRecreate",
+      "TestMacOSStoreReopenRejectsRebinding",
       "TestManagedFleetArtifactIndependentOfRevokedOrExpiredTarget",
       "TestManagedFleetRejectsAliasedBindingsAndSingletonAdoption",
       "TestManagedMSICatalogueActiveWorklistsPinRetiredSlots",
@@ -2205,6 +2240,7 @@
       "TestJournalRealTransportPurposeAndTerminalExpiry",
       "TestJournalRealTransportResultSearchRetryAndRevocation",
       "TestJournalRealTransportRevocationDuringClaimBody",
+      "TestMacOSClosedIngressPlatformCredentialAndRouteFences",
       "TestManagedFleetRegistryLoadAndTLSIdentityRouting",
       "TestManagedMSIChunkFrameFits64KiB",
       "TestManagedMSIFramingDoesNotPromotePreparedOrURLs",
@@ -2639,6 +2675,8 @@
       "TestJournalSocketCredentialReaderRejectsMissingCredentials",
       "TestJournalSocketKernelCredentialsAndFixedFrame",
       "TestJournalSocketTruncatedFrameRejected",
+      "TestMacOSConfigAdmitsOnlyBasicGuidedTLS",
+      "TestMacOSFixedBootstrapAndTelemetryRoutes",
       "TestMalformedOrEncodedReceiptRetainsPending",
       "TestManagedMSIExpiredReadinessReportDoesNotStarveExplicitFreshSequence",
       "TestManagedMSIOnlyReportConflictAllowsFreshPollClassification",
@@ -3141,6 +3179,7 @@
       "TestBodyLimitsAndJSON",
       "TestConcurrentStageAndStateCopies",
       "TestCorruptOversizeStateAndSequenceExhaustion",
+      "TestDarwinInitialPublicationCannotReplaceUnexpectedState",
       "TestExactPendingBytesSurviveReopenAndCopies",
       "TestExistingLockContentsAndMissingLedgerFailClosed",
       "TestFormattingAndJSONNeverDumpObservation",
@@ -3179,6 +3218,7 @@
     ],
     "localrmm/internal/lanconfig": [
       "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
+      "TestDarwinReadProtectedUsesDescriptorAndACLPolicy",
       "TestNamedApplicationCheckCapabilityStrictLoading",
       "TestNamedAuthStrictVersionProfileAndNestedParsing",
       "TestNamedProtectedConfigLoadAndSnapshotIsolation",
@@ -3356,6 +3396,24 @@
       "TestTrimExactByteEdgesAndMetadataFailure",
       "TestTrimItemLimitAndBytePriority",
       "TestTruncatedCountFeasibility"
+    ],
+    "localrmm/internal/macosservice": [
+      "TestAccountCommandArgumentsCannotExpand",
+      "TestAccountLookupFailsClosedBeforeNextRead",
+      "TestAccountLookupUsesOnlyExactLocalReadQueries",
+      "TestAccountParserRejectsUncertainOrMultipleIDs",
+      "TestBasicTLSConfigBoundToExactFixedPaths",
+      "TestBinaryRequiresExactNativeMachORoleArchitecture",
+      "TestCancellationAndInvalidRequestAvoidInspection",
+      "TestDirectoryOwnershipPolicy",
+      "TestNativeAccountOutputIsBounded",
+      "TestPlanDeterministicInertPlist",
+      "TestPreflightRequiresCompleteOrderedEvidence",
+      "TestRenderNeverInspects",
+      "TestRenewableBasicTLSUsesExactManifestWithoutScopeExpansion",
+      "TestRequestStrict",
+      "TestSnapshotDetectsIdentityAndMetadataChanges",
+      "TestSourceHashIsBoundedExactAndCancelable"
     ],
     "localrmm/internal/model": [],
     "localrmm/internal/mutationfence": [

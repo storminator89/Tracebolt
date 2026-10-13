@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/enrollmentservice"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
 	"net/http"
@@ -46,16 +47,35 @@ func (h *operatorHandler) resourceHistory(w http.ResponseWriter, r *http.Request
 		fail(w, 404, "not_found", "Resource history is unavailable.")
 		return
 	}
-	source := h.enrollment
-	view, e := source.ResourceHistory(r.Context(), parts[3], source.Now())
-	if errors.Is(e, enrollmentstate.ErrNotFound) && h.windowsEnrollment != nil {
-		source = h.windowsEnrollment.enrollment
-		view, e = source.ResourceHistory(r.Context(), parts[3], source.Now())
+	sources := []*enrollmentservice.Service{h.enrollment}
+	if h.windowsEnrollment != nil {
+		sources = append(sources, h.windowsEnrollment.enrollment)
 	}
-	if e != nil {
-		systemInventoryError(w, e)
+	if h.macosEnrollment != nil {
+		sources = append(sources, h.macosEnrollment.enrollment)
+	}
+	var source *enrollmentservice.Service
+	var view enrollmentstore.ResourceHistoryView
+	for _, candidate := range sources {
+		part, err := candidate.ResourceHistory(r.Context(), parts[3], candidate.Now())
+		if errors.Is(err, enrollmentstate.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			systemInventoryError(w, err)
+			return
+		}
+		if source != nil {
+			systemInventoryError(w, enrollmentstore.ErrStorage)
+			return
+		}
+		source, view = candidate, part
+	}
+	if source == nil {
+		systemInventoryError(w, enrollmentstate.ErrNotFound)
 		return
 	}
+	var e error
 	if !operatorStillActive(w, r) {
 		return
 	}

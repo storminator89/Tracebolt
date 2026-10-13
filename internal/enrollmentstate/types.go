@@ -82,6 +82,8 @@ type Binding struct {
 }
 
 type Config struct {
+	// Platform is a fresh immutable store fence; omission preserves historical ledgers.
+	Platform           string `json:",omitempty"`
 	AutomaticRenewal   bool   `json:",omitempty"`
 	RenewalAgentOrigin string `json:",omitempty"`
 	Binding            Binding

@@ -1,7 +1,8 @@
 # Automatic certificates: fresh TLS source candidate
 
 This source candidate renews a freshly consented Linux or Windows guided identity
-with the same private key. It is not a released installer or native-host acceptance
+with the same private key. The macOS basic-TLS source path reuses this unchanged
+protocol and scheduler; see [macOS source status](macos-status.md). It is not a released installer or native-host acceptance
 claim. Existing release pins are unchanged. Use matching reviewed source artifacts;
 the dashboard does not send renewable bootstrap data to the old pinned release.
 

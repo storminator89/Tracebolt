@@ -420,6 +420,9 @@ func systemStateBinding(m Material) string {
 
 // Platform admission derives from the running process, never remote metadata.
 func (c Config) platformAllowed(runningOS string) bool {
+	if runningOS == "darwin" {
+		return c.Profile == "tls" && (c.SchemaVersion == GuidedConfigVersion && c.CollectionProfile == "" || c.SchemaVersion == RenewalConfigVersion && c.CollectionProfile == enrollmentcrypto.CollectionProfile)
+	}
 	return !c.windowsInventory() || runningOS == "windows"
 }
 func (c Config) windowsInventory() bool {

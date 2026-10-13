@@ -243,3 +243,15 @@ func (m Material) WindowsStoreConfig() (enrollmentstate.Config, error) {
 	cfg.Binding.CollectionProfile = enrollmentcrypto.CollectionProfileWindowsInventory
 	return cfg, nil
 }
+
+// MacOSStoreConfig derives a separate basic-only TLS domain after explicit opt-in.
+// The issuer, origins, renewal policy and every historical store remain unchanged.
+func (m Material) MacOSStoreConfig() (enrollmentstate.Config, error) {
+	if m.value == nil || !m.value.lan.MacOSBasicEnabled || m.value.lan.Profile != lanconfig.TLS || m.value.config.Profile != lanconfig.TLS {
+		return enrollmentstate.Config{}, ErrConfiguration
+	}
+	cfg := m.StoreConfig()
+	cfg.Binding.CollectionProfile = enrollmentcrypto.CollectionProfile
+	cfg.Platform = "darwin"
+	return cfg, nil
+}

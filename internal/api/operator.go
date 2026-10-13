@@ -36,6 +36,8 @@ import (
 )
 
 type LANOperatorConfig struct {
+	MacOSEnrollment           *enrollmentservice.Service
+	MacOSEnrollmentBootstrap  EnrollmentBootstrap
 	WindowsManagedMSI         *windowsmanagedmsimanager.Manager
 	WindowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
 	// Source-only injection; no CLI/config loader or native executor is supplied.
@@ -90,6 +92,7 @@ type operatorHandler struct {
 	cookieName                string
 	enrollment                *enrollmentservice.Service
 	windowsEnrollment         *operatorHandler
+	macosEnrollment           *operatorHandler
 	enrollmentBootstrap       EnrollmentBootstrap
 	bootstrapAdmission        bootstrapAdmission
 }
@@ -139,7 +142,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if strings.HasSuffix(u.Host, ":") || u.Hostname() == "" {
 		return nil, errors.New("invalid operator authority")
 	}
-	if c.Enrollment != nil && (c.Enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || !validEnrollmentBootstrap(c.Enrollment, c.EnrollmentBootstrap, c.Origin, c.InsecureHTTPTest)) {
+	if c.Enrollment != nil && (c.Enrollment.Platform() != "" || c.Enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || !validEnrollmentBootstrap(c.Enrollment, c.EnrollmentBootstrap, c.Origin, c.InsecureHTTPTest)) {
 		return nil, errors.New("enrollment public bootstrap does not match configured authority")
 	}
 	if c.WindowsEnrollment != nil {
@@ -149,6 +152,15 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		a, b := c.Enrollment.Binding(), c.WindowsEnrollment.Binding()
 		if a.InstanceID != b.InstanceID || a.Origin != b.Origin || a.Profile != b.Profile || a.IssuerFingerprint != b.IssuerFingerprint {
 			return nil, errors.New("Windows enrollment boundary does not match manager authority")
+		}
+	}
+	if c.MacOSEnrollment != nil {
+		if c.Enrollment == nil || c.MacOSEnrollment == c.Enrollment || c.MacOSEnrollment == c.WindowsEnrollment || c.InsecureHTTPTest || c.MacOSEnrollment.Platform() != "darwin" || c.MacOSEnrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfile || !validEnrollmentBootstrap(c.MacOSEnrollment, c.MacOSEnrollmentBootstrap, c.Origin, false) {
+			return nil, errors.New("macOS enrollment authority is not separately configured")
+		}
+		a, b := c.Enrollment.Binding(), c.MacOSEnrollment.Binding()
+		if a.InstanceID != b.InstanceID || a.Origin != b.Origin || a.Profile != b.Profile || a.IssuerFingerprint != b.IssuerFingerprint || c.Enrollment.AutomaticRenewal() != c.MacOSEnrollment.AutomaticRenewal() || c.EnrollmentBootstrap.AgentOrigin != c.MacOSEnrollmentBootstrap.AgentOrigin {
+			return nil, errors.New("macOS enrollment boundary does not match manager authority")
 		}
 	}
 	profile := "tls"
@@ -282,6 +294,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.WindowsEnrollment != nil {
 		h.windowsEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.WindowsEnrollment, enrollmentBootstrap: c.WindowsEnrollmentBootstrap}
+	}
+	if c.MacOSEnrollment != nil {
+		h.macosEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, cookieName: cookieName, enrollment: c.MacOSEnrollment, enrollmentBootstrap: c.MacOSEnrollmentBootstrap}
 	}
 	return h, nil
 }
@@ -447,6 +462,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		servePublicBootstrap(w, r, h.enrollmentBootstrap, &h.bootstrapAdmission)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v2/macos/enrollment/") {
+		h.macosEnrollmentClient(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/v2/windows/enrollment/") {
@@ -617,6 +636,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/logout" || r.URL.Path == "/api/auth/session" {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
+		return
+	}
+	if r.URL.Path == "/api/macos/enrollment" || strings.HasPrefix(r.URL.Path, "/api/macos/enrollment/") {
+		h.macosEnrollmentOperator(w, r)
 		return
 	}
 	if r.URL.Path == "/api/windows/enrollment" || strings.HasPrefix(r.URL.Path, "/api/windows/enrollment/") {

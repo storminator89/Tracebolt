@@ -83,7 +83,7 @@ func contextError(ctx context.Context) error {
 }
 
 func (e *Engine) CreateInvitation(ctx context.Context, c CreateCommand) (Snapshot, error) {
-	if e == nil || e.engineState == nil || validateCreate(c) != nil {
+	if e == nil || e.engineState == nil || validateCreate(c) != nil || e.config.Platform != "" && c.Platform != e.config.Platform {
 		return Snapshot{}, ErrInvalid
 	}
 	if err := contextError(ctx); err != nil {

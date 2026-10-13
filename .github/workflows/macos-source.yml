@@ -1,0 +1,152 @@
+name: macOS source-only checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/macos-source.yml'
+      - 'go.mod'
+      - 'go.sum'
+      - 'cmd/enroll-agent/**'
+      - 'cmd/macos-agent/**'
+      - 'cmd/macos-agent-service/**'
+      - 'cmd/lan-manager/**'
+      - 'internal/collector/**'
+      - 'internal/darwinprotect/**'
+      - 'internal/agentidentity/**'
+      - 'internal/enrollment*/**'
+      - 'internal/lan*/**'
+      - 'internal/macos*/**'
+      - 'internal/api/**'
+      - 'internal/model/**'
+      - 'internal/store/**'
+      - 'web/src/enrollment*'
+      - 'web/src/verified-download-command.ts'
+      - 'web/src/api.ts'
+      - 'web/src/auth.tsx'
+      - 'web/src/components.tsx'
+      - 'web/src/i18n*'
+      - 'web/src/styles.css'
+      - 'web/src/utils.ts'
+      - 'web/scripts/*macos-enrollment*'
+      - 'web/package.json'
+      - 'web/package-lock.json'
+      - 'web/tsconfig.json'
+      - 'web/vite.config.ts'
+      - 'web/test-environments.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/macos-source.yml'
+      - 'go.mod'
+      - 'go.sum'
+      - 'cmd/enroll-agent/**'
+      - 'cmd/macos-agent/**'
+      - 'cmd/macos-agent-service/**'
+      - 'cmd/lan-manager/**'
+      - 'internal/collector/**'
+      - 'internal/darwinprotect/**'
+      - 'internal/agentidentity/**'
+      - 'internal/enrollment*/**'
+      - 'internal/lan*/**'
+      - 'internal/macos*/**'
+      - 'internal/api/**'
+      - 'internal/model/**'
+      - 'internal/store/**'
+      - 'web/src/enrollment*'
+      - 'web/src/verified-download-command.ts'
+      - 'web/src/api.ts'
+      - 'web/src/auth.tsx'
+      - 'web/src/components.tsx'
+      - 'web/src/i18n*'
+      - 'web/src/styles.css'
+      - 'web/src/utils.ts'
+      - 'web/scripts/*macos-enrollment*'
+      - 'web/package.json'
+      - 'web/package-lock.json'
+      - 'web/tsconfig.json'
+      - 'web/vite.config.ts'
+      - 'web/test-environments.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-source-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  darwin-crossbuild:
+    name: Darwin ${{ matrix.arch }} compilation only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify locked Go dependencies
+        run: go mod download && go mod verify
+      - name: Compile source CLIs without execution or host changes
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+        run: |
+          go build -buildvcs=false ./cmd/enroll-agent ./cmd/macos-agent ./cmd/macos-agent-service
+          for package in darwinprotect lanconfig enrollmentclient lanclientstate agentidentity macosservice; do
+            go test -c -buildvcs=false -o "$RUNNER_TEMP/${package}-${{ matrix.arch }}.test" "./internal/$package"
+          done
+
+  ui-source:
+    name: macOS synthetic enrollment UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.19.0'
+          package-manager-cache: false
+      - name: Locked dependencies and whole production UI typecheck/build
+        working-directory: web
+        run: npm ci && npm run build
+      - name: Enrollment isolation, interruption and secret-lifetime regressions
+        working-directory: web
+        run: |
+          npm run test:environments
+          npx --no-install vitest run src/enrollment-macos.test.tsx src/enrollment-windows.test.tsx src/enrollment-progressive.test.tsx src/enrollment.test.tsx src/enrollment-package.test.tsx src/enrollment-security-review.test.ts --maxWorkers=2
+      - name: Inert capture and route contract
+        run: |
+          node web/scripts/capture-macos-enrollment.mjs --check
+          node --test web/scripts/macos-enrollment-capture.node.mjs
+      - name: Install locked Playwright Chromium runtime
+        working-directory: web
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Capture 16 EN/DE source-only views and verify exact source
+        run: node web/scripts/run-macos-enrollment-ci.mjs
+      - name: Keep verified synthetic UI captures only
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-source-ui-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/review/macos-enrollment-results.json
+            artifacts/review/macos-enrollment-manifest.json
+            artifacts/review/macos-enrollment-*.png

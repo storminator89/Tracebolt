@@ -138,7 +138,7 @@ func RestoreTrustedLedger(config Config, raw []byte) (*Engine, error) {
 			return nil, ErrInvalid
 		}
 		s, err := DecodeSnapshot(body)
-		if err != nil || s.Binding != config.Binding || s.InvitationID <= previous {
+		if err != nil || s.Binding != config.Binding || s.InvitationID <= previous || config.Platform != "" && s.Platform != config.Platform {
 			return nil, ErrInvalid
 		}
 		previous = s.InvitationID

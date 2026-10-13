@@ -44,6 +44,10 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 			d.Platform = "windows"
 			d.OS = "Awaiting Windows agent"
 		}
+		if snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfile && snapshot.Binding.Profile == "tls" && snapshot.Platform == "darwin" {
+			d.Platform = "macos"
+			d.OS = "Awaiting macOS agent"
+		}
 		if observation, ok := observations[id]; ok {
 			d = observation
 			d.Capabilities = profileCapabilities(d.Capabilities, s.binding.CollectionProfile)

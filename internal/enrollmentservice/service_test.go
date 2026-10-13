@@ -161,9 +161,14 @@ func claimForPlatform(t *testing.T, f *fixture, platform string) (enrollmentstat
 	return pending, key
 }
 func TestDurableServiceApprovalIssuanceDeliveryActivation(t *testing.T) {
-	for _, tc := range []struct{ platform, profile string }{{"linux", "tls"}, {"linux", "http-test"}, {"windows", "tls"}} {
+	for _, tc := range []struct{ platform, profile string }{{"linux", "tls"}, {"linux", "http-test"}, {"windows", "tls"}, {"darwin", "tls"}} {
 		t.Run(tc.platform+"/"+tc.profile, func(t *testing.T) {
 			f := newFixture(t, tc.profile)
+			if tc.platform == "darwin" {
+				f.config.Platform = "darwin"
+				f.path = filepath.Join(t.TempDir(), "private", "macos.db")
+				f.restart(t)
+			}
 			ctx := context.Background()
 			pending, key := claimForPlatform(t, f, tc.platform)
 			c, b := status(t, f, pending.InvitationID, pending.Claim.ClaimID, "credential", 3, key)
@@ -244,7 +249,7 @@ func TestChallengeLimitsExpiryAndConfiguration(t *testing.T) {
 	if _, e := f.service.takeChallenge(c.Context.Challenge, "status"); !errors.Is(e, ErrChallenge) {
 		t.Fatal("expired challenge")
 	}
-	if _, e := f.service.CreateInvitation(context.Background(), id("request", 1), "darwin"); !errors.Is(e, ErrPlatform) {
+	if _, e := f.service.CreateInvitation(context.Background(), id("request", 1), "freebsd"); !errors.Is(e, ErrPlatform) {
 		t.Fatal("unimplemented platform accepted")
 	}
 	cfg := f.config
