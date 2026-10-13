@@ -17,10 +17,11 @@ _spec = importlib.util.spec_from_file_location("_current_windows_gate", ROOT / "
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
-# Exact source 62435ef7e605df0b102e030bf1d68cb255829a90, accepted by
-# first-attempt current native run 38303755541 (three-case packaged GUI subset).
-# This later publisher revision is distinct; never rebuild the accepted bytes.
-ACCEPTED_SOURCE_TREE = "b66e8a8eaa8cfdb0a5b7108254c930ae244b6763"
+# Exact source 992b8d8c9d9693a97bd63301a3c147e1b2681357, accepted by
+# first-attempt current native run 38369063888 (three-case packaged GUI subset).
+# Full Validate and this later publisher revision remain separate release gates.
+# Never rebuild or replace the original tested bytes.
+ACCEPTED_SOURCE_TREE = "7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c"
 publisher.ACCEPTED_SOURCE_TREE = ACCEPTED_SOURCE_TREE
 publisher.gate = gate
 publisher.NATIVE_WORKFLOW = gate.provenance.WORKFLOW_PATH

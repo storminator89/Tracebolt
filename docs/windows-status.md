@@ -6,6 +6,15 @@ three hosted Server 2025 packaged-Setup cases; complete provider coverage and
 real Linux-manager/shared-dashboard interoperability remain unproved. The source
 also contains separate optional features with their own acceptance gates.
 
+**Preview.3 release preparation.** It pairs the selected Windows source with
+its matching Linux manager/frontend build. The three-case Server 2025 native
+Setup subset and aggregation passed in
+[run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
+Publication requires successful exact-source full Validate and publisher
+review/CI. Verify the linked validation run’s current state in the release guide. Use the
+[candidate installation guide](windows-prerelease-install.md) only after its
+release is verified. Optional features remain separately configured and approved.
+
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
 
 ## Current development source
@@ -102,7 +111,7 @@ The Linux rc.3 endpoint download is separate and does not supply a matching mana
 For older five-scope preview.1 bytes, use the
 [historical installation guide](windows-prerelease-historical/windows-prerelease-install.md).
 
-## Current hosted Setup acceptance
+## Published preview.2 hosted Setup acceptance
 
 The [released source](https://github.com/storminator89/Tracebolt/tree/62435ef7e605df0b102e030bf1d68cb255829a90)
 passed [full Validate](https://github.com/storminator89/Tracebolt/actions/runs/38303779043)
