@@ -132,3 +132,12 @@ describe('bounded multi-policy monitoring selection', () => {
         await expect(reviewGroupHealth(null, view, [ids[0], ids[0]], settings, io)).rejects.toThrow('Invalid'); expect(get).not.toHaveBeenCalled();
     });
 });
+
+// Four isolated enrollment domains can each advertise 25 organizational devices.
+describe('mixed-platform organizational projection bounds', () => {
+ it('accepts 100 available devices including Macs without raising the 50-member cap', () => {
+  const view = fixture().view; view.groups = []; view.devices = Array.from({length:100}, (_, i) => ({id:`agent_${(i+1).toString(16).padStart(32, '0')}`, name:`Fixture ${i}`, platform:i % 3 === 0 ? 'macos' : i % 3 === 1 ? 'linux' : 'windows'}));
+  expect(validFleetGroupsView(view)).toBe(true); view.groups = [{id:`group_${'4'.repeat(32)}`, name:'Mixed', revision:1, memberIds:view.devices.slice(0,50).map(d=>d.id), unavailableMembers:0}]; expect(validFleetGroupsView(view)).toBe(true);
+  view.groups[0].memberIds.push(view.devices[50].id); expect(validFleetGroupsView(view)).toBe(false); view.groups=[]; view.devices.push({id:`agent_${'f'.repeat(32)}`,name:'Over bound',platform:'macos'}); expect(validFleetGroupsView(view)).toBe(false);
+ });
+});

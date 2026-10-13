@@ -1,19 +1,19 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceDetail } from './details';
-import { APIError, AUTH_REQUIRED_EVENT, request } from './api';
+import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
 import { AuthBoundary } from './auth';
 import { setLocale } from './i18n';
 import type { Device, Metric } from './types';
 import type { OperationalView } from './operational-types';
-vi.mock('./api',async original=>({...await original<typeof import('./api')>(),request:vi.fn()}));
+vi.mock('./api',async original=>({...await original<typeof import('./api')>(),request:vi.fn(),mutateRaw:vi.fn()}));
 const id='agent_'+'7'.repeat(32);
 const metric:Metric={value:null,unit:'%',quality:'unknown',source:'Synthetic integration fixture',collectedAt:'0001-01-01T00:00:00Z'};
 function device(overrides:Partial<Device>={}):Device{return {id,name:'Synthetic integration fixture',platform:'linux',os:'Linux fixture',site:'Fixture',group:'Fixture',ip:null,status:'unknown',source:'lan',synthetic:false,lastSeen:'0001-01-01T00:00:00Z',agentVersion:'fixture',cpu:metric,memory:metric,disk:metric,uptime:'',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[],...overrides};}
 function view(deviceId=id,status:OperationalView['status']='not_configured'):OperationalView{return {schemaVersion:'tracebolt.operational-view.v1',deviceId,status,serverNow:'2026-10-03T12:00:00Z',receivedAt:null,sequence:null,maxAgeSeconds:120,snapshot:null,lastGood:{volumes:null,network:null,services:null,processes:null,software:null,events:null},assessments:{updates:{quality:'unknown',reason:'not_implemented'},vulnerabilities:{quality:'unknown',reason:'not_implemented'}}};}
 const session={mode:'lan',transport:'https',insecureTestMode:false,transportWarning:null,authenticationRequired:true,authenticated:true,csrfToken:'synthetic-session',serverNow:'2026-10-03T12:00:00Z',expiresAt:'2026-10-03T12:30:00Z',expiresInSeconds:1800};
 let selected:Device;
-beforeEach(()=>{setLocale('en',false);localStorage.clear();sessionStorage.clear();selected=device();vi.mocked(request).mockReset().mockImplementation(async path=>path==='/auth/session'?session:path.endsWith('/operational')?view(selected.id):selected);});
+beforeEach(()=>{setLocale('en',false);localStorage.clear();sessionStorage.clear();selected=device();vi.mocked(request).mockReset().mockImplementation(async path=>path==='/auth/session'?session:path.endsWith('/operational')?view(selected.id):selected);vi.mocked(mutateRaw).mockReset();});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function detail(){return <AuthBoundary><DeviceDetail id={selected.id} onClose={vi.fn()} onCase={vi.fn()}/></AuthBoundary>;}
 async function inventory(){render(detail());const tab=await screen.findByRole('tab',{name:'Inventory'});fireEvent.click(tab);fireEvent.click(screen.getByText('Legacy inventory source', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Open bounded preview' }));return tab;}
@@ -24,8 +24,19 @@ describe('actual device page operational integration',()=>{
   expect(tab).toHaveAttribute('aria-selected','true');expect(screen.getByRole('tabpanel',{name:'Inventory'})).toHaveAttribute('aria-labelledby',tab.id);expect(request).toHaveBeenCalledWith(`/devices/${id}/operational`,expect.objectContaining({signal:expect.any(AbortSignal)}));
   expect(screen.getByText('Available updates')).toBeVisible();expect(screen.getByText('Vulnerabilities / CVEs')).toBeVisible();expect(screen.queryByText('Secure')).not.toBeInTheDocument();
  });
- it.each([{synthetic:true},{source:'sandbox' as const},{source:'local' as const},{platform:'macos' as const}])('does not invent operational support for %j',async overrides=>{
+ it.each([{synthetic:true},{source:'sandbox' as const},{source:'local' as const}])('does not invent operational support for %j',async overrides=>{
   selected=device(overrides);render(detail());await screen.findByRole('tab',{name:'Overview'});expect(screen.queryByRole('tab',{name:'Inventory'})).not.toBeInTheDocument();expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/operational'),expect.anything());
+ });
+ it('keeps basic Mac inventory separate without inventing Linux collection or expanded authority',async()=>{
+  selected=device({platform:'macos',os:'Basic Mac fixture'});render(detail());
+  const tab=await screen.findByRole('tab',{name:'Inventory'});fireEvent.click(tab);
+  const panel=screen.getByRole('region',{name:'Mac inventory'});
+  expect(within(panel).getByText(/This Mac has basic read-only scope/)).toBeVisible();
+  expect(tab).toHaveAttribute('aria-selected','true');expect(screen.getByRole('tabpanel',{name:'Inventory'})).toHaveAttribute('aria-labelledby',tab.id);
+  expect(within(panel).getByRole('button',{name:'Refresh inventory'})).toBeDisabled();expect(within(panel).queryByRole('table')).not.toBeInTheDocument();
+  expect(screen.queryByText('Legacy inventory source')).not.toBeInTheDocument();expect(screen.queryByText('Operational inventory')).not.toBeInTheDocument();
+  expect(vi.mocked(request).mock.calls.every(([path])=>path==='/auth/session'||path===`/devices/${id}`)).toBe(true);
+  expect(mutateRaw).not.toHaveBeenCalled();
  });
  it.each(['not_configured','unavailable','missing'] as const)('keeps basic Windows inventory %s without inventing Linux collection',async status=>{
   selected=device({platform:'windows',os:'Basic Windows fixture'});

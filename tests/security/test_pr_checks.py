@@ -1364,5 +1364,106 @@ class CVEReviewFailureTests(unittest.TestCase):
         location.assert_not_called()
 
 
+JOURNAL_MARKER = 'PRIVATE_MARKER_MUST_NOT_ESCAPE'
+
+
+def journal_diagnostic_report():
+    return {'schemaVersion': 'tracebolt.journal-browser-failure.v1', 'sourceSha': SHA,
+            'failures': [{'case': 1, 'checkpoint': 5}], 'setupFailure': False,
+            'runtimeFailure': False, 'finalCheckpoint': 8}
+
+
+class JournalDiagnosticTests(unittest.TestCase):
+    def test_exact_numeric_only_projection_and_failure_flags(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'record.json'
+            for extra, expected in [({}, 'case=1 checkpoint=5'),
+                                    ({'setupFailure': True}, 'case=1 checkpoint=5; setup-checkpoint=8'),
+                                    ({'failures': [], 'runtimeFailure': True}, 'runtime-errors')]:
+                path.write_text(json.dumps({**journal_diagnostic_report(), **extra}))
+                self.assertEqual(p.journal_failure_location(path, SHA), expected)
+
+    def test_tampered_unknown_oversized_and_duplicate_records_are_withheld(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'record.json'
+            invalid = [{'sourceSha': 'b' * 40}, {'schemaVersion': JOURNAL_MARKER}, {'private': JOURNAL_MARKER},
+                       {'failures': []}, {'setupFailure': 1}, {'runtimeFailure': 0},
+                       {'finalCheckpoint': True}, {'finalCheckpoint': -1}, {'finalCheckpoint': 128},
+                       {'failures': [{'case': 1, 'checkpoint': 128}]},
+                       {'failures': [{'case': 0, 'checkpoint': 5}]},
+                       {'failures': [{'case': 8, 'checkpoint': 5}]},
+                       {'failures': [{'case': True, 'checkpoint': 5}]},
+                       {'failures': [{'case': 1, 'checkpoint': False}]},
+                       {'failures': [{'case': 1, 'checkpoint': 5, 'error': JOURNAL_MARKER}]},
+                       {'failures': [{'case': 2, 'checkpoint': 5}, {'case': 1, 'checkpoint': 5}]},
+                       {'failures': [{'case': 1, 'checkpoint': 5}] * 2},
+                       {'failures': [{'case': 1, 'checkpoint': 5}] * 8}]
+            for extra in invalid:
+                path.write_text(json.dumps({**journal_diagnostic_report(), **extra}))
+                self.assertIsNone(p.journal_failure_location(path, SHA), extra)
+            for raw in [b'{', b'\xff', b'x' * 8193,
+                        json.dumps(journal_diagnostic_report()).replace('"failures":', '"failures": [], "failures":').encode(),
+                        json.dumps(journal_diagnostic_report()).replace('"finalCheckpoint": 8', '"finalCheckpoint": NaN').encode()]:
+                path.write_bytes(raw)
+                self.assertIsNone(p.journal_failure_location(path, SHA))
+
+    def test_nonregular_files_symlinks_and_untrusted_contract_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'record.json'; path.write_text(json.dumps(journal_diagnostic_report()))
+            link = root / 'link.json'; link.symlink_to(path)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            for unsafe in [link, fifo, root]:
+                self.assertIsNone(p.journal_failure_location(unsafe, SHA))
+            alias = root / 'alias'; alias.symlink_to(root, target_is_directory=True)
+            self.assertIsNone(p.journal_failure_location(alias / 'record.json', SHA))
+            contract = root / 'contract.json'
+            for raw in [b'{}', b'x' * 16385]:
+                contract.write_bytes(raw)
+                with patch.object(p, 'JOURNAL_COORDINATES_SOURCE', contract):
+                    self.assertIsNone(p.journal_failure_location(path, SHA))
+
+    def test_one_invocation_private_lifetime_original_failure_and_no_raw_output(self):
+        paths, output = [], io.StringIO()
+        def process(args, **kwargs):
+            kwargs['stdout'].write(JOURNAL_MARKER.encode())
+            path = Path(kwargs['env']['TRACEBOLT_JOURNAL_DIAGNOSTICS_PATH'])
+            self.assertFalse(path.exists()); self.assertNotIn('artifacts', path.parts)
+            paths.append(path)
+            if len(paths) == 1:
+                path.write_text(json.dumps(journal_diagnostic_report()))
+            return SimpleNamespace(returncode=1)
+        with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                    p.run_journal_browser({'TRACEBOLT_JOURNAL_DIAGNOSTICS_PATH': '/not-used'}, SHA)
+        self.assertNotEqual(paths[0], paths[1])
+        self.assertTrue(all(not path.parent.exists() for path in paths))
+        self.assertEqual(output.getvalue().count('FAIL journal location: case=1 checkpoint=5'), 1)
+        for forbidden in [JOURNAL_MARKER, SHA, 'PASS:', *map(str, paths)]:
+            self.assertNotIn(forbidden, output.getvalue())
+
+    def test_original_exception_identity_and_success_skip_projection(self):
+        original = ValueError(JOURNAL_MARKER)
+        with patch.object(p, 'run', side_effect=original), patch.object(p, 'journal_failure_location', return_value=None):
+            with self.assertRaises(ValueError) as caught:
+                p.run_journal_browser({}, SHA)
+        self.assertIs(caught.exception, original)
+        with patch.object(p, 'run'), patch.object(p, 'journal_failure_location') as projection:
+            p.run_journal_browser({}, SHA)
+        projection.assert_not_called()
+
+    def test_only_journal_failure_uses_projection_and_browser_failure_stays_failed(self):
+        original = ValueError(JOURNAL_MARKER)
+        with patch.object(p, 'run'), patch.object(p, 'run_journal_browser', side_effect=original) as journal, \
+                patch.object(p, 'browser_report') as acceptance:
+            with self.assertRaises(ValueError) as caught:
+                p.browser_checks({'flows': ['journal'], 'sha': SHA})
+        self.assertIs(caught.exception, original); journal.assert_called_once(); acceptance.assert_not_called()
+        with patch.object(p, 'run'), patch.object(p, 'run_journal_browser') as journal, patch.object(p, 'browser_report'):
+            p.browser_checks({'flows': ['shell'], 'sha': SHA})
+        journal.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()

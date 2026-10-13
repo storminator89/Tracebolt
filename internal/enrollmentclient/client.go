@@ -22,6 +22,11 @@ import (
 )
 
 type Options struct {
+	// ApproveMacOSInventory receives the full disclosure before any private write.
+	// Returning true is the explicit local decision; no default is supplied.
+	ApproveMacOSInventory     func(string) (bool, error)
+	inventoryEnrollment       bool
+	inventoryAuthorityReading bool
 	// AutomaticRenewalAcknowledged is fresh, explicit local same-key consent.
 	AutomaticRenewalAcknowledged bool
 	renewalReconcile             bool
@@ -60,27 +65,28 @@ type Result struct {
 type ledger struct{ *ledgerData }
 
 type ledgerData struct {
-	RenewalReadyPublished       bool                    `json:"renewalReadyPublished,omitempty"`
-	Version                     string                  `json:"version"`
-	Bootstrap                   Bootstrap               `json:"bootstrap"`
-	Seed                        string                  `json:"seed"`
-	CSR                         string                  `json:"csr"`
-	ClaimID                     string                  `json:"claimId"`
-	ClaimRequestID              string                  `json:"claimRequestId"`
-	StatusRequestID             string                  `json:"statusRequestId"`
-	CredentialRequestID         string                  `json:"credentialRequestId"`
-	ActivationRequestID         string                  `json:"activationRequestId"`
-	ClaimHash                   string                  `json:"claimHash"`
-	ClaimDefinitelyRejected     bool                    `json:"claimDefinitelyRejected"`
-	AmbiguousClaimHash          string                  `json:"ambiguousClaimHash"`
-	ClaimConfirmed              bool                    `json:"claimConfirmed"`
-	LastRevision                uint64                  `json:"lastRevision"`
-	Intent                      enrollmentcrypto.Intent `json:"intent"`
-	CertificateDER              string                  `json:"certificateDer"`
-	ActivationAttempted         bool                    `json:"activationAttempted"`
-	Activated                   bool                    `json:"activated"`
-	HandoffPrepared             bool                    `json:"handoffPrepared"`
-	SenderInitializationStarted bool                    `json:"senderInitializationStarted"`
+	MacOSInventory              *macOSInventoryEnrollment `json:"macOSInventory,omitempty"`
+	RenewalReadyPublished       bool                      `json:"renewalReadyPublished,omitempty"`
+	Version                     string                    `json:"version"`
+	Bootstrap                   Bootstrap                 `json:"bootstrap"`
+	Seed                        string                    `json:"seed"`
+	CSR                         string                    `json:"csr"`
+	ClaimID                     string                    `json:"claimId"`
+	ClaimRequestID              string                    `json:"claimRequestId"`
+	StatusRequestID             string                    `json:"statusRequestId"`
+	CredentialRequestID         string                    `json:"credentialRequestId"`
+	ActivationRequestID         string                    `json:"activationRequestId"`
+	ClaimHash                   string                    `json:"claimHash"`
+	ClaimDefinitelyRejected     bool                      `json:"claimDefinitelyRejected"`
+	AmbiguousClaimHash          string                    `json:"ambiguousClaimHash"`
+	ClaimConfirmed              bool                      `json:"claimConfirmed"`
+	LastRevision                uint64                    `json:"lastRevision"`
+	Intent                      enrollmentcrypto.Intent   `json:"intent"`
+	CertificateDER              string                    `json:"certificateDer"`
+	ActivationAttempted         bool                      `json:"activationAttempted"`
+	Activated                   bool                      `json:"activated"`
+	HandoffPrepared             bool                      `json:"handoffPrepared"`
+	SenderInitializationStarted bool                      `json:"senderInitializationStarted"`
 }
 
 const ledgerVersion = "tracebolt.enrollment-client-state.v2"
@@ -104,13 +110,19 @@ type sessionData struct {
 // resets keys/state or installs anything. Uncertain network outcomes reconcile
 // with a fresh bound-key status proof; only uncommitted claims ask for the secret.
 func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory || o.inventoryEnrollment || o.ApproveMacOSInventory != nil {
+		return Result{}, ErrBootstrap
+	}
+	return runEnrollment(ctx, b, o)
+}
+func runEnrollment(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	if !o.ResumeOnly && (b.RenewalPolicy != "") != o.AutomaticRenewalAcknowledged {
 		return Result{}, ErrBootstrap
 	}
 	if o.ClaimOnly && o.ResumeOnly || o.ResumeOnly && o.Secret != nil || !o.ResumeOnly && (b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory) != o.WindowsInventoryAcknowledged {
 		return Result{}, ErrBootstrap
 	}
-	if ctx == nil || validatePlatformBootstrap(b, runtime.GOOS) != nil || o.Display == nil || !filepath.IsAbs(o.StateDirectory) || filepath.Clean(o.StateDirectory) != o.StateDirectory {
+	if ctx == nil || validateEnrollmentPlatform(b, runtime.GOOS, o.inventoryEnrollment) != nil || o.Display == nil || !filepath.IsAbs(o.StateDirectory) || filepath.Clean(o.StateDirectory) != o.StateDirectory {
 		return Result{}, ErrBootstrap
 	}
 	if (b.Profile == "http-test") != o.InsecureHTTPAcknowledged {
@@ -318,6 +330,13 @@ func (s *session) load(b Bootstrap) error {
 			version = renewableLedgerVersion
 		}
 		s.l = ledger{&ledgerData{Version: version, Bootstrap: b, Seed: base64.RawStdEncoding.EncodeToString(seed), CSR: base64.RawStdEncoding.EncodeToString(csr)}}
+		if o := s.opts; o.inventoryEnrollment {
+			grant, e := randomID("")
+			if e != nil {
+				return e
+			}
+			s.l.MacOSInventory = &macOSInventoryEnrollment{Version: macOSInventoryEnrollmentVersion, Acknowledged: true, GrantID: grant}
+		}
 		for _, p := range []struct {
 			dst    *string
 			prefix string
@@ -342,7 +361,7 @@ func (s *session) load(b Bootstrap) error {
 	if b.RenewalPolicy != "" {
 		expectedVersion = renewableLedgerVersion
 	}
-	if s.l.Version != expectedVersion || s.l.Bootstrap != b {
+	if s.l.Version != expectedVersion || s.l.Bootstrap != b || s.validateMacOSInventoryLedger() != nil {
 		return ErrState
 	}
 	seen := map[string]bool{}
@@ -396,7 +415,9 @@ func (s *session) load(b Bootstrap) error {
 			return ErrState
 		}
 		verificationTime := time.Now()
-		if b.RenewalPolicy != "" && s.l.SenderInitializationStarted {
+		if b.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory && s.opts.inventoryAuthorityReading {
+			verificationTime = time.Unix(s.l.Intent.NotBefore, 0)
+		} else if b.RenewalPolicy != "" && s.l.SenderInitializationStarted {
 			if !s.opts.renewalReconcile {
 				if _, e := s.loadRenewalManifest(); e != nil {
 					return ErrState
@@ -463,6 +484,12 @@ func grow(d time.Duration) time.Duration {
 // Keep the transport allowlist bound to the same validated collection profile
 // that chooses the wire route family. Legacy clients retain legacy paths only.
 func newEnrollmentHTTPClient(b Bootstrap) (*http.Client, error) {
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+		if b.Profile != "tls" {
+			return nil, ErrBootstrap
+		}
+		return lanclient.NewMacOSInventoryEnrollmentHTTPClient(b.EnrollmentOrigin, []byte(b.ServerCAPEM))
+	}
 	if runtime.GOOS == "darwin" {
 		return lanclient.NewMacOSBootstrapHTTPClient(b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM))
 	}

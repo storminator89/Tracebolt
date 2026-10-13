@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {installJournalPrimaryBody} from './journal-primary-body.mjs';
+import {journalFailureCoordinates} from './journal-browser-diagnostics.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
@@ -435,6 +436,14 @@ finally{
  if(context)await context.close();await stop();if(browser)await browser.close();
  const safe={secretsExported:false,realTelemetryExported:false,hostJournalRead:false,helperExecuted:false,permissionChanges:false,collectorExecuted:false,installerExecuted:false,userVmAccessed:false};
  const report={sourceSha,createdAt:new Date().toISOString(),scope:apiSmoke?'Real-handler journal API smoke; no browser executed':'Built React and real authenticated loopback HTTP-test journal handler with typed synthetic cache/store admission',fixture:'Disposable generated activated v3 identities and invented journal rows. Direct cache/store admission does not prove native ingress, helper isolation, local consent or host journal access.',faultInjection:'Held or lost real responses, injected visibility state and service-only forward clock. Auth clock remains real.',existingGate:'Inherited98 required cases, three enrollment skips and five review cycles unchanged.',runtimeErrorCount,...safe,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
+ // The PR runner owns this fresh, private, single-invocation destination. It is
+ // outside artifacts, never uploaded, and accepts only numeric coordinates.
+ if(!apiSmoke&&process.env.TRACEBOLT_JOURNAL_DIAGNOSTICS_PATH) {
+  try {
+   const diagnostic=journalFailureCoordinates({sourceSha,results,setupFailure:fatal,runtimeErrorCount,stage});
+   if(diagnostic)await fs.writeFile(process.env.TRACEBOLT_JOURNAL_DIAGNOSTICS_PATH,JSON.stringify(diagnostic),{flag:'wx',mode:0o600});
+  } catch { /* Diagnostic failure must not replace the original test result. */ }
+ }
  await fs.writeFile(path.join(out,apiSmoke?'journal-api-smoke.json':'journal-browser-results.json'),JSON.stringify(report,null,2));
  if(!apiSmoke)await fs.writeFile(path.join(out,'journal-browser-manifest.json'),JSON.stringify({sourceSha,...safe,screenshots},null,2));
  await fs.rm(temporary,{recursive:true,force:true});process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status==='FAIL')?1:0;

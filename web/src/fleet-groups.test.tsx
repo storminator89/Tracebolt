@@ -251,3 +251,11 @@ describe('multi-policy device selection integration', () => {
         expect(posts()).toHaveLength(1); await act(async () => finish(policy(windowsDeviceId, 'disk', true))); expect(posts()).toHaveLength(1);
     });
 });
+
+describe('organizational macOS membership', () => {
+ it('labels Macs accurately in the editor and keeps Windows policy selection closed to them', async () => {
+  const mac=`agent_${'a'.repeat(32)}`;groups.devices.push({id:mac,name:'Mac Desk',platform:'macos'});groups.groups[0].memberIds.push(mac);
+  render(<Harness/>);await load();fireEvent.click(screen.getByRole('button',{name:'Manage groups'}));fireEvent.click(screen.getByRole('button',{name:'Office'}));expect(screen.getByRole('checkbox',{name:`Mac Desk macOS · ${mac}`})).toBeChecked();fireEvent.click(screen.getByRole('button',{name:'Review group changes'}));expect(screen.getByText('macOS',{exact:true})).toBeVisible();cleanup();
+  render(<Harness/>);await load();select();fireEvent.click(screen.getByRole('button',{name:'Apply monitoring policies'}));expect(screen.queryByRole('checkbox',{name:/Mac Desk/})).not.toBeInTheDocument();expect(posts()).toHaveLength(0);
+ });
+});

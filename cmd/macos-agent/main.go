@@ -1,4 +1,4 @@
-// macos-agent reports the explicitly enrolled basic TLS scope. It never installs
+// macos-agent reports only the explicitly enrolled basic or fresh inventory TLS scope. It never installs
 // a service, creates a grant, repairs state or changes the endpoint identity.
 package main
 
@@ -22,12 +22,14 @@ import (
 )
 
 type dependencies struct {
-	platform   string
-	uid        func() int
-	identity   func(string) bool
-	validate   func(string) error
-	once       func(context.Context, string) (lanclient.Report, error)
-	foreground func(context.Context, string, time.Duration, func(agentloop.Event) error) (agentloop.Summary, error)
+	inventory     func(string) (bool, error)
+	inventoryOnce func(context.Context, string) error
+	platform      string
+	uid           func() int
+	identity      func(string) bool
+	validate      func(string) error
+	once          func(context.Context, string) (lanclient.Report, error)
+	foreground    func(context.Context, string, time.Duration, func(agentloop.Event) error) (agentloop.Summary, error)
 }
 
 func main() {
@@ -35,14 +37,15 @@ func main() {
 	defer stop()
 	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr, dependencies{
 		platform: runtime.GOOS, uid: os.Geteuid, identity: agentidentity.Validate,
-		validate: lanclient.ValidateGuidedHandoff,
+		validate:  enrollmentclient.ValidateMacOSHandoff,
+		inventory: lanclient.IsMacOSInventoryConfig, inventoryOnce: enrollmentclient.RunMacOSInventoryOnce,
 		once: func(ctx context.Context, path string) (lanclient.Report, error) {
 			m, e := lanclient.Load(path)
 			if e != nil {
 				return lanclient.Report{}, e
 			}
 			return lanclient.Run(ctx, m)
-		}, foreground: enrollmentclient.RunRenewableForeground,
+		}, foreground: enrollmentclient.RunMacOSForeground,
 	}))
 }
 
@@ -70,6 +73,19 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, d dependenci
 		fmt.Fprintln(out, "Guided state validated locally; no collection, network or initialization performed.")
 		return 0
 	}
+	inventory := false
+	if d.inventory != nil {
+		var e error
+		inventory, e = d.inventory(*path)
+		if e != nil {
+			fmt.Fprintln(errOut, "macOS profile configuration is invalid; preserve state.")
+			return 1
+		}
+	}
+	if inventory && *interval != 30*time.Second && *interval != time.Minute {
+		fmt.Fprintln(errOut, "macOS inventory uses a fixed one-minute capture cadence.")
+		return 2
+	}
 	encoder := json.NewEncoder(out)
 	if *foreground {
 		if d.foreground == nil {
@@ -83,6 +99,24 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, d dependenci
 		})
 		if e != nil && !errors.Is(e, context.Canceled) {
 			fmt.Fprintln(errOut, "macOS reporting stopped; preserve state and inspect its safe status.")
+			return 1
+		}
+		return 0
+	}
+	if inventory {
+		if d.inventoryOnce == nil {
+			return 2
+		}
+		attempt, cancel := context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+		if e := d.inventoryOnce(attempt, *path); e != nil {
+			fmt.Fprintln(errOut, "macOS inventory delivery was not confirmed. Preserve existing pending state.")
+			return 1
+		}
+		if encoder.Encode(struct {
+			SchemaVersion string `json:"schemaVersion"`
+			Delivery      string `json:"delivery"`
+		}{"tracebolt.macos-inventory-run.v1", "confirmed"}) != nil {
 			return 1
 		}
 		return 0

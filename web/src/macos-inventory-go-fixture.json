@@ -1,0 +1,328 @@
+{
+  "hardware": {
+    "schemaVersion": "tracebolt.macos-read-inventory-page.v1",
+    "deviceId": "agent_00000000000000000000000000000001",
+    "section": "hardware",
+    "status": "fresh",
+    "serverNow": "2027-01-15T08:00:10Z",
+    "authorityUntil": "2027-01-16T08:00:10Z",
+    "generationId": "sample_1fb98ca36c96fa715951f080794fd668",
+    "sourceQuality": "full",
+    "collectedAt": "2027-01-15T08:00:10Z",
+    "expiresAt": "2027-01-16T08:00:10Z",
+    "sources": {
+      "hardware": {
+        "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+        "quality": "observed",
+        "reason": ""
+      },
+      "receipts": {
+        "source": "pkgutil --pkgs-plist: Installer receipt identifiers only",
+        "quality": "observed",
+        "reason": ""
+      },
+      "processes": {
+        "source": "ps -A -o ucomm=,pid=,ppid=: caller-visible kernel accounting labels",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv4": {
+        "source": "ifconfig -a inet: passive local IPv4 interface context",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv6": {
+        "source": "ifconfig -a inet6: passive local IPv6 interface context",
+        "quality": "observed",
+        "reason": ""
+      }
+    },
+    "hardware": {
+      "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+      "quality": "observed",
+      "reason": "",
+      "modelIdentifier": "Mac14,2",
+      "physicalCPUs": 8,
+      "logicalCPUs": 8,
+      "memoryCapacityBytes": 17179869184
+    },
+    "receiptIds": [],
+    "processes": [],
+    "interfaces": [],
+    "offset": 0,
+    "total": 0,
+    "nextOffset": null
+  },
+  "ipv4": {
+    "schemaVersion": "tracebolt.macos-read-inventory-page.v1",
+    "deviceId": "agent_00000000000000000000000000000001",
+    "section": "ipv4",
+    "status": "fresh",
+    "serverNow": "2027-01-15T08:00:10Z",
+    "authorityUntil": "2027-01-16T08:00:10Z",
+    "generationId": "sample_1fb98ca36c96fa715951f080794fd668",
+    "sourceQuality": "full",
+    "collectedAt": "2027-01-15T08:00:10Z",
+    "expiresAt": "2027-01-16T08:00:10Z",
+    "sources": {
+      "hardware": {
+        "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+        "quality": "observed",
+        "reason": ""
+      },
+      "receipts": {
+        "source": "pkgutil --pkgs-plist: Installer receipt identifiers only",
+        "quality": "observed",
+        "reason": ""
+      },
+      "processes": {
+        "source": "ps -A -o ucomm=,pid=,ppid=: caller-visible kernel accounting labels",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv4": {
+        "source": "ifconfig -a inet: passive local IPv4 interface context",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv6": {
+        "source": "ifconfig -a inet6: passive local IPv6 interface context",
+        "quality": "observed",
+        "reason": ""
+      }
+    },
+    "hardware": null,
+    "receiptIds": [],
+    "processes": [],
+    "interfaces": [
+      {
+        "name": "en0",
+        "mtu": 1500,
+        "up": true,
+        "running": true,
+        "addresses": [
+          {
+            "ip": "192.0.2.7",
+            "prefixBits": 24
+          }
+        ]
+      }
+    ],
+    "offset": 0,
+    "total": 1,
+    "nextOffset": null
+  },
+  "ipv6": {
+    "schemaVersion": "tracebolt.macos-read-inventory-page.v1",
+    "deviceId": "agent_00000000000000000000000000000001",
+    "section": "ipv6",
+    "status": "fresh",
+    "serverNow": "2027-01-15T08:00:10Z",
+    "authorityUntil": "2027-01-16T08:00:10Z",
+    "generationId": "sample_1fb98ca36c96fa715951f080794fd668",
+    "sourceQuality": "full",
+    "collectedAt": "2027-01-15T08:00:10Z",
+    "expiresAt": "2027-01-16T08:00:10Z",
+    "sources": {
+      "hardware": {
+        "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+        "quality": "observed",
+        "reason": ""
+      },
+      "receipts": {
+        "source": "pkgutil --pkgs-plist: Installer receipt identifiers only",
+        "quality": "observed",
+        "reason": ""
+      },
+      "processes": {
+        "source": "ps -A -o ucomm=,pid=,ppid=: caller-visible kernel accounting labels",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv4": {
+        "source": "ifconfig -a inet: passive local IPv4 interface context",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv6": {
+        "source": "ifconfig -a inet6: passive local IPv6 interface context",
+        "quality": "observed",
+        "reason": ""
+      }
+    },
+    "hardware": null,
+    "receiptIds": [],
+    "processes": [],
+    "interfaces": [
+      {
+        "name": "en0",
+        "mtu": 1500,
+        "up": true,
+        "running": true,
+        "addresses": []
+      }
+    ],
+    "offset": 0,
+    "total": 1,
+    "nextOffset": null
+  },
+  "processes": {
+    "schemaVersion": "tracebolt.macos-read-inventory-page.v1",
+    "deviceId": "agent_00000000000000000000000000000001",
+    "section": "processes",
+    "status": "fresh",
+    "serverNow": "2027-01-15T08:00:10Z",
+    "authorityUntil": "2027-01-16T08:00:10Z",
+    "generationId": "sample_1fb98ca36c96fa715951f080794fd668",
+    "sourceQuality": "full",
+    "collectedAt": "2027-01-15T08:00:10Z",
+    "expiresAt": "2027-01-16T08:00:10Z",
+    "sources": {
+      "hardware": {
+        "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+        "quality": "observed",
+        "reason": ""
+      },
+      "receipts": {
+        "source": "pkgutil --pkgs-plist: Installer receipt identifiers only",
+        "quality": "observed",
+        "reason": ""
+      },
+      "processes": {
+        "source": "ps -A -o ucomm=,pid=,ppid=: caller-visible kernel accounting labels",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv4": {
+        "source": "ifconfig -a inet: passive local IPv4 interface context",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv6": {
+        "source": "ifconfig -a inet6: passive local IPv6 interface context",
+        "quality": "observed",
+        "reason": ""
+      }
+    },
+    "hardware": null,
+    "receiptIds": [],
+    "processes": [
+      {
+        "pid": 1,
+        "parentPid": 0,
+        "accountingName": "Fixture",
+        "nameQuality": "observed"
+      },
+      {
+        "pid": 2,
+        "parentPid": 0,
+        "accountingName": "Fixture",
+        "nameQuality": "observed"
+      },
+      {
+        "pid": 3,
+        "parentPid": 0,
+        "accountingName": "Fixture",
+        "nameQuality": "observed"
+      }
+    ],
+    "interfaces": [],
+    "offset": 0,
+    "total": 3,
+    "nextOffset": null
+  },
+  "receipts": {
+    "schemaVersion": "tracebolt.macos-read-inventory-page.v1",
+    "deviceId": "agent_00000000000000000000000000000001",
+    "section": "receipts",
+    "status": "fresh",
+    "serverNow": "2027-01-15T08:00:10Z",
+    "authorityUntil": "2027-01-16T08:00:10Z",
+    "generationId": "sample_1fb98ca36c96fa715951f080794fd668",
+    "sourceQuality": "full",
+    "collectedAt": "2027-01-15T08:00:10Z",
+    "expiresAt": "2027-01-16T08:00:10Z",
+    "sources": {
+      "hardware": {
+        "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+        "quality": "observed",
+        "reason": ""
+      },
+      "receipts": {
+        "source": "pkgutil --pkgs-plist: Installer receipt identifiers only",
+        "quality": "observed",
+        "reason": ""
+      },
+      "processes": {
+        "source": "ps -A -o ucomm=,pid=,ppid=: caller-visible kernel accounting labels",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv4": {
+        "source": "ifconfig -a inet: passive local IPv4 interface context",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv6": {
+        "source": "ifconfig -a inet6: passive local IPv6 interface context",
+        "quality": "observed",
+        "reason": ""
+      }
+    },
+    "hardware": null,
+    "receiptIds": [
+      "org.example.private-fixture"
+    ],
+    "processes": [],
+    "interfaces": [],
+    "offset": 0,
+    "total": 1,
+    "nextOffset": null
+  },
+  "summary": {
+    "schemaVersion": "tracebolt.macos-read-inventory-page.v1",
+    "deviceId": "agent_00000000000000000000000000000001",
+    "section": "summary",
+    "status": "fresh",
+    "serverNow": "2027-01-15T08:00:10Z",
+    "authorityUntil": "2027-01-16T08:00:10Z",
+    "generationId": "sample_1fb98ca36c96fa715951f080794fd668",
+    "sourceQuality": "full",
+    "collectedAt": "2027-01-15T08:00:10Z",
+    "expiresAt": "2027-01-16T08:00:10Z",
+    "sources": {
+      "hardware": {
+        "source": "sysctl: hw.model,hw.physicalcpu,hw.logicalcpu,hw.memsize",
+        "quality": "observed",
+        "reason": ""
+      },
+      "receipts": {
+        "source": "pkgutil --pkgs-plist: Installer receipt identifiers only",
+        "quality": "observed",
+        "reason": ""
+      },
+      "processes": {
+        "source": "ps -A -o ucomm=,pid=,ppid=: caller-visible kernel accounting labels",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv4": {
+        "source": "ifconfig -a inet: passive local IPv4 interface context",
+        "quality": "observed",
+        "reason": ""
+      },
+      "ipv6": {
+        "source": "ifconfig -a inet6: passive local IPv6 interface context",
+        "quality": "observed",
+        "reason": ""
+      }
+    },
+    "hardware": null,
+    "receiptIds": [],
+    "processes": [],
+    "interfaces": [],
+    "offset": 0,
+    "total": 0,
+    "nextOffset": null
+  }
+}
