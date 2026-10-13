@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "scope": "native temporary-filesystem fixtures and synthetic parser/state contracts only",
+  "packages": {
+    "./internal/darwinprotect": [
+      "TestSecurityAttributesFailClosed",
+      "TestVolumeACLSupportRequiresKnownCapability",
+      "TestNativeDarwinACLAndDurabilityFixtures"
+    ],
+    "./internal/macosinventory": [
+      "TestContractRoundTrip",
+      "TestParserFailClosed",
+      "TestNoPrefixOnBounds",
+      "TestProcessInvalidUTF8NameDoesNotErasePIDRows",
+      "TestInterfaceCLATOppositeFamilyIsValidatedAndDiscarded",
+      "TestOppositeFamilyDoesNotConsumeSelectedAddressBudget"
+    ],
+    "./internal/macosinventorystate": [
+      "TestFreshMustCommitAndAcknowledgeEnableBeforeCollection",
+      "TestMissingUsedStateCannotBecomeFresh",
+      "TestLostReservationConsumesFloorAndPacingAcrossReopen",
+      "TestExactPendingAndReceiptsAcrossReopenAndRenewal",
+      "TestReceiptMustBindExactPendingBytesAndTime"
+    ],
+    "./internal/macosinventorysender": [
+      "TestStorageDarwinRoundTripAndNoop",
+      "TestStorageDarwinCrossProcessLock",
+      "TestStorageDarwinMissingAndUnexpectedEntries",
+      "TestStorageDarwinExpectedInodeBytesAndProtection",
+      "TestStorageDarwinPublicationFlagsAndIrreversibleMarkers",
+      "TestStorageDarwinReplacementErrorAndPanicPoison"
+    ]
+  }
+}

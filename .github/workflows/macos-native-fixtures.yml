@@ -1,0 +1,82 @@
+name: macOS native fixture checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/macos-native-fixtures.yml'
+      - 'tests/macosfixtures/**'
+      - 'docs/macos-native-fixtures.md'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/darwinprotect/**'
+      - 'internal/macosinventory/**'
+      - 'internal/macosinventorywire/**'
+      - 'internal/macosinventorystate/**'
+      - 'internal/macosinventorysender/**'
+      - 'internal/lantrust/**'
+      - 'internal/keyvalidation/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/macos-native-fixtures.yml'
+      - 'tests/macosfixtures/**'
+      - 'docs/macos-native-fixtures.md'
+      - 'go.mod'
+      - 'go.sum'
+      - 'internal/darwinprotect/**'
+      - 'internal/macosinventory/**'
+      - 'internal/macosinventorywire/**'
+      - 'internal/macosinventorystate/**'
+      - 'internal/macosinventorysender/**'
+      - 'internal/lantrust/**'
+      - 'internal/keyvalidation/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-native-fixtures-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-fixtures:
+    name: macOS ${{ matrix.runner }} fixture execution only
+    # Standard hosted runners are free for public repositories. Never select a
+    # larger/paid runner or silently charge a private fork's Actions allotment.
+    if: ${{ github.event.repository.private == false }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    env:
+      GOTOOLCHAIN: local
+      GOFLAGS: '-mod=readonly'
+      GOWORK: 'off'
+      CGO_ENABLED: '0'
+      TRACEBOLT_RUNNER_LABEL: ${{ matrix.runner }}
+      TRACEBOLT_RUNNER_OS: ${{ runner.os }}
+      TRACEBOLT_RUNNER_ARCH: ${{ runner.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify explicit fixture selections without execution
+        run: python3 tests/macosfixtures/run.py --check
+      - name: Verify locked Go dependencies
+        run: go mod download && go mod verify
+      - name: Execute temporary-file and synthetic fixtures only
+        run: python3 tests/macosfixtures/run.py
+      - name: Keep fixture result metadata only
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-native-fixtures-${{ matrix.runner }}-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: artifacts/review/macos-native-fixtures.json
