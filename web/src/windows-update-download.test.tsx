@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request, mutateRaw } from './api';
 import { useOperator, validOperatorSession } from './auth';
@@ -30,8 +30,24 @@ describe('selected Windows download review',()=>{
   setLocale(locale,false);expect(validOperatorSession(session)).toBe(true);await open();await review(locale);
   expect(screen.queryByRole('button',{name:'Check readiness'})).toBeNull();expect(screen.queryByText('Schedule this update')).toBeNull();
   const approve=screen.getByRole('button',{name:locale==='de'?'Download einmal freigeben':'Approve download once'});expect(approve).toBeDisabled();expect(screen.getByRole('checkbox')).not.toBeChecked();
-  expect(document.body).toHaveTextContent(locale==='de'?'keine feste Datenobergrenze':'not a hard byte quota');expect(document.body).toHaveTextContent('https://updates.invalid');expect(document.body).toHaveTextContent(locale==='de'?'separate frische Installationsprüfung':'separate fresh installation review');
+  expect(document.body).toHaveTextContent(locale==='de'?'keine feste Datenobergrenze':'no hard byte quota');expect(document.body).toHaveTextContent('https://updates.invalid');expect(document.body).toHaveTextContent(locale==='de'?'separate frische Installationsprüfung':'separate fresh installation review');
   fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(approve);fireEvent.click(approve);await flush();expect(mutateRaw).toHaveBeenCalledTimes(2);expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([`/devices/${device}/windows-update-jobs/request-download`,`/devices/${device}/windows-update-jobs/approve-download`]);
+ });
+ it.each(['en','de'] as const)('keeps material download limits visible and exact identity in closed details in %s',async locale=>{
+  setLocale(locale,false);await open();await review(locale);const de=locale==='de',group=screen.getByRole('group',{name:de?'Bereitschaft prüfen':'Check readiness'}),ui=within(group);
+  expect(ui.getByText('Synthetic update')).toBeVisible();
+  const identity=ui.getByText(`${selection.updateId} · Revision 3`),readiness=ui.getByText(de?'Bereitschaftsdetails':'Readiness details',{selector:'summary'});
+  expect(identity).not.toBeVisible();expect(readiness.closest('details')).not.toHaveAttribute('open');
+  for(const phrase of [de?/keine feste Datenobergrenze/:/no hard byte quota/,de?/Ursprünge begrenzen die Ziele nicht/:/origins do not restrict destinations/,de?/Downloads können Cache-Inhalte hinterlassen/:/downloads may leave cached content/,de?/danach separate frische Installationsprüfung/:/before a separate fresh installation review/])expect(ui.getByText(phrase)).toBeVisible();
+  const technical=ui.getByText(de?/einschließlich konfigurierter Proxys, BITS/:/including configured proxies, BITS/),origins=ui.getByText(de?'Metadaten-Ursprünge':'Metadata origins',{selector:'summary'});
+  expect(technical).not.toBeVisible();expect(ui.getByText('https://updates.invalid')).not.toBeVisible();
+  fireEvent.click(readiness);expect(identity).toBeVisible();expect(ui.getByText(de?/Lizenz bereits angenommen/:/license already accepted/)).toBeVisible();fireEvent.click(readiness);
+  fireEvent.click(origins);expect(technical).toBeVisible();expect(ui.getByText('https://updates.invalid')).toBeVisible();fireEvent.click(origins);
+  expect(identity).not.toBeVisible();expect(technical).not.toBeVisible();expect(ui.getByRole('checkbox')).not.toBeChecked();expect(ui.getByRole('button',{name:de?'Download einmal freigeben':'Approve download once'})).toBeDisabled();expect(mutateRaw).toHaveBeenCalledTimes(1);
+ });
+ it('never substitutes an unrelated current row title for the exact reviewed download',async()=>{
+  const ui=await open();await review();resource.updates!.rows=[{...resource.updates!.rows[0],updateId:'99999999-2222-3333-4444-555555555555',title:'Unrelated update'}];ui.rerender(<WindowsUpdateJobs resource={resource}/>);
+  const group=screen.getByRole('group',{name:'Check readiness'});expect(within(group).getByText(`${selection.updateId} · Revision 3`)).toBeVisible();expect(group).not.toHaveTextContent('Unrelated update');expect(within(group).getByRole('checkbox')).not.toBeChecked();expect(mutateRaw).toHaveBeenCalledTimes(1);
  });
  it('shows the download action only for explicit undownloaded selected rows and enabled availability',async()=>{
   resource.updates!.rows[0].downloaded=true;await open();fireEvent.change(screen.getByRole('combobox'),{target:{value:`${selection.updateId}:3`}});expect(screen.queryByRole('button',{name:'Review download'})).toBeNull();expect(mutateRaw).not.toHaveBeenCalled();

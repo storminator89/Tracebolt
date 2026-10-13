@@ -215,7 +215,13 @@ class SelectionTests(unittest.TestCase):
         expected = {'tests/e2e-review/windows-update-retirement-browser.mjs',
                     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs',
                     'tests/e2e-review/windows-update-download-browser.mjs',
-                    'tests/e2e-review/windows-update-download-fixtures.test.mjs'}
+                    'tests/e2e-review/windows-update-download-fixtures.test.mjs',
+                    'web/scripts/capture-windows-complete-service-health.mjs',
+                    'web/scripts/check-windows-complete-service-health-evidence.mjs',
+                    'web/scripts/windows-complete-service-health-contract.mjs',
+                    'web/scripts/windows-complete-service-health-contract.node.mjs',
+                    'web/scripts/windows-complete-service-health-scenes.json',
+                    }
         self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items()
                           if flows == {'windows-service-actions'}}, expected)
         for path in expected:
@@ -246,8 +252,72 @@ class SelectionTests(unittest.TestCase):
             ['node', 'tests/e2e-review/windows-service-actions-runner.mjs'],
             ['node', 'tests/e2e-review/windows-update-retirement-browser.mjs', '--check-evidence', SHA],
             ['node', 'tests/e2e-review/windows-update-download-browser.mjs', '--check-evidence', SHA],
+            ['node', 'web/scripts/check-windows-complete-service-health-evidence.mjs', SHA],
         ])
         report.assert_called_once_with('windows-service-actions', SHA)
+
+    def test_exact_fleet_group_helpers_select_existing_owner_and_inert_contract(self):
+        expected = {'tests/e2e-review/fleet-groups-browser.mjs',
+                    'tests/e2e-review/fleet-groups-evidence.mjs',
+                    'tests/e2e-review/fleet-groups-fixtures.test.mjs'}
+        self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items() if flows == {'fleet-groups'}}, expected)
+        for path in expected:
+            for status in ['A', 'M']:
+                plan = self.select((status, path))
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['flows'], ['fleet-groups'])
+                with patch.object(p, 'run') as run:
+                    p.web_checks(plan)
+                self.assertEqual([call.args[0] for call in run.call_args_list].count(
+                    ['node', '--test', 'tests/e2e-review/fleet-groups-fixtures.test.mjs']), 1)
+                with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+                    p.browser_checks(plan)
+                self.assertEqual([call.args[0] for call in run.call_args_list], [
+                    ['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'],
+                    ['node', 'tests/e2e-review/fleet-groups-runner.mjs']])
+                report.assert_called_once_with('fleet-groups', SHA)
+        # Only these checked-in consumers may support this exact narrowing.
+        consumers = {name: set() for name in ['fleet-groups-browser.mjs', 'fleet-groups-evidence.mjs', 'fleet-groups-fixtures.test.mjs']}
+        for directory in ['web/scripts', 'web/src', 'tests/e2e-review']:
+            for source in (ROOT / directory).rglob('*'):
+                if source.suffix in {'.js', '.mjs', '.ts', '.tsx', '.mts'}:
+                    text = source.read_text()
+                    for name in consumers:
+                        if name in text: consumers[name].add(source.relative_to(ROOT).as_posix())
+        self.assertEqual(consumers, {
+            'fleet-groups-browser.mjs': {'tests/e2e-review/fleet-groups-runner.mjs', 'tests/e2e-review/fleet-groups-fixtures.test.mjs'},
+            'fleet-groups-evidence.mjs': {'tests/e2e-review/fleet-groups-browser.mjs'},
+            'fleet-groups-fixtures.test.mjs': {'tests/e2e-review/fleet-groups-fixtures.test.mjs'},
+        })
+        runner = (ROOT / 'tests/e2e-review/fleet-groups-runner.mjs').read_text()
+        self.assertIn('fleetGroupsBrowserCase({page,expect,base,login,shot})', runner)
+        self.assertIn('requireFleetGroupsEvidence(screenshots,sourceSha)', runner)
+        self.assertIn('if(routes.failures!==0||routes.pending!==0)passed=false', runner)
+        for path in ['tests/e2e-review/fleet-groups-new-helper.mjs', 'tests/e2e-review/fleet-groups-runner.mjs',
+                     'web/src/windows-complete-service-health-go-fixture.json', 'web/src/windows-complete-group-service-go-fixture.json']:
+            plan = self.select(('M', path)); self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+
+    def test_complete_service_component_capture_selection_and_artifacts(self):
+        for filename in ['windows-service-health-complete.tsx', 'windows-service-health-complete-resource.ts',
+                         'windows-service-health-complete-types.ts', 'windows-service-health-complete-fixture.ts',
+                         'fleet-group-service-checks-complete.tsx', 'fleet-group-service-checks-complete-workflow.ts',
+                         'windows-full-services-picker.tsx', 'fleet-groups.tsx']:
+            plan = self.select(('M', 'web/src/' + filename))
+            self.assertIn('windows-service-actions', plan['flows'])
+            self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+        self.assertIn('windows-service-actions', p.flow_names('internal/windowsservicehealth'))
+        with patch.object(p, 'run') as run:
+            p.web_checks(plan)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands.count(['node', 'web/scripts/capture-windows-complete-service-health.mjs', '--check']), 1)
+        self.assertEqual(commands.count(['node', '--test', 'web/scripts/windows-complete-service-health-contract.node.mjs']), 1)
+        for workflow in ['pr-checks.yml', 'validate.yml']:
+            text = (ROOT / '.github/workflows' / workflow).read_text()
+            for filename in ['windows-complete-service-health-manifest.json', 'complete-service-single-beyond-preview-en-1440.png']:
+                self.assertIn(filename, text)
+        full = (ROOT / '.github/workflows/validate.yml').read_text()
+        self.assertIn('node --test web/scripts/windows-complete-service-health-contract.node.mjs', full)
+        self.assertIn('node web/scripts/check-windows-complete-service-health-evidence.mjs "$TRACEBOLT_SOURCE_SHA"', full)
 
     def test_fleet_software_owns_focused_node_and_hosted_evidence_contracts(self):
         for filename in ['check-windows-fleet-software-evidence.mjs', 'capture-windows-fleet-software.mjs',
@@ -306,7 +376,7 @@ class SelectionTests(unittest.TestCase):
         plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
         self.assertEqual(plan['packages'], expected['packages'])
         self.assertEqual(plan['web'], expected['web'])
-        self.assertEqual(plan['flows'], ['linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance', 'windows-service-actions'])
+        self.assertEqual(plan['flows'], ['fleet-groups', 'linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance', 'windows-service-actions'])
         self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
         self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
                                       generated_allowlist_verified=True))

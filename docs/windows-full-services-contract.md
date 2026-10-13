@@ -3,8 +3,10 @@
 This is a new default-off source slice, not a host grant or native acceptance.
 It enumerates the Win32 services visible through SCM to the existing LocalService
 identity. Drivers, ACL-invisible services, paths, accounts, startup/configuration
-and all software sources remain outside it. Selected-service health continues to
-read the old bounded telemetry preview under its existing counters and limits.
+and all software sources remain outside it. Legacy v1 selected-service health continues to read the bounded telemetry preview.
+The separate explicit [complete-source v2 health policy](windows-complete-service-health.md)
+uses current complete generations with their own provenance and freshness; old
+policies and local grants are never silently promoted.
 
 ## Bounded capture and transfer
 
@@ -61,7 +63,9 @@ expired or inactive identity); 404 not_found; 409 windows_full_services_restart_
 503 storage_unavailable. Every error hides rows and preserves source age.
 The UI must clear data/cursors on pending requests, device/tab/session/navigation
 changes, visibility/focus loss, untrusted time and original expiry. Never append
-across page generations. Never present these rows as an expanded alarm chooser.
+across page generations. The ordinary inventory browser grants no monitoring. The separate explicit v2
+health chooser must additionally enforce its five-minute source age, exact reviewed
+generation and policy consent; it never changes this inventory retention.
 
 ## Shared endpoint/store transport interface
 

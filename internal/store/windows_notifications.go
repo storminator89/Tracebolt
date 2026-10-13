@@ -207,6 +207,10 @@ func capacityNotificationEpisodes(s windowscapacity.State, domain string) []wind
 	return out
 }
 func serviceNotificationEpisodes(s windowsservicehealth.State) []windowsNotificationEpisode {
+	// Existing recipient consent and delivery envelopes cover preview-v1 only.
+	if s.SchemaVersion == windowsservicehealth.CompleteStateSchema {
+		return []windowsNotificationEpisode{}
+	}
 	out := []windowsNotificationEpisode{}
 	for _, i := range s.Incidents {
 		at := i.LastBadObservation.CollectedAt

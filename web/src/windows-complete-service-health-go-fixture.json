@@ -1,0 +1,179 @@
+{
+  "attention": {
+    "schemaVersion": "tracebolt.windows-service-view.v2",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:03:03Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": true,
+      "services": [
+        "FixtureService"
+      ],
+      "revision": 1,
+      "source": {
+        "kind": "windows_full_services",
+        "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantRevision": 1
+      }
+    },
+    "status": "attention",
+    "evaluatedAt": "2026-10-10T12:03:03Z",
+    "checks": [
+      {
+        "name": "FixtureService",
+        "status": "attention",
+        "observation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:03:00Z",
+          "receivedAt": "2026-10-10T12:03:03Z",
+          "sequence": 2,
+          "source": {
+            "kind": "windows_full_services",
+            "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "grantRevision": 1,
+            "generationId": "sample_c58b379998c9423d966d8b9e6391801d",
+            "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sequence": 2,
+            "capturedAt": "2026-10-10T12:03:00Z",
+            "captureFinishedAt": "2026-10-10T12:03:00Z",
+            "receivedAt": "2026-10-10T12:03:03Z",
+            "expiresAt": "2026-10-11T12:03:00Z",
+            "rowCount": 2050
+          }
+        }
+      }
+    ],
+    "incidents": [
+      {
+        "id": "wservice_0000000000000001",
+        "name": "FixtureService",
+        "policyRevision": 1,
+        "openedAt": "2026-10-10T12:03:03Z",
+        "lastConfirmedAt": "2026-10-10T12:03:03Z",
+        "openingObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:03:00Z",
+          "receivedAt": "2026-10-10T12:03:03Z",
+          "sequence": 2,
+          "source": {
+            "kind": "windows_full_services",
+            "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "grantRevision": 1,
+            "generationId": "sample_c58b379998c9423d966d8b9e6391801d",
+            "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sequence": 2,
+            "capturedAt": "2026-10-10T12:03:00Z",
+            "captureFinishedAt": "2026-10-10T12:03:00Z",
+            "receivedAt": "2026-10-10T12:03:03Z",
+            "expiresAt": "2026-10-11T12:03:00Z",
+            "rowCount": 2050
+          }
+        },
+        "lastBadObservation": {
+          "state": "stopped",
+          "collectedAt": "2026-10-10T12:03:00Z",
+          "receivedAt": "2026-10-10T12:03:03Z",
+          "sequence": 2,
+          "source": {
+            "kind": "windows_full_services",
+            "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "grantRevision": 1,
+            "generationId": "sample_c58b379998c9423d966d8b9e6391801d",
+            "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sequence": 2,
+            "capturedAt": "2026-10-10T12:03:00Z",
+            "captureFinishedAt": "2026-10-10T12:03:00Z",
+            "receivedAt": "2026-10-10T12:03:03Z",
+            "expiresAt": "2026-10-11T12:03:00Z",
+            "rowCount": 2050
+          }
+        },
+        "resolvedAt": null,
+        "recoveryObservation": null,
+        "closedReason": ""
+      }
+    ],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:03:00Z",
+      "receivedAt": "2026-10-10T12:03:03Z",
+      "sequence": 2,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2050,
+      "services": [
+        {
+          "name": "FixtureService",
+          "displayName": "Fixture service beyond the preview",
+          "state": "stopped"
+        }
+      ],
+      "source": {
+        "kind": "windows_full_services",
+        "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantRevision": 1,
+        "generationId": "sample_c58b379998c9423d966d8b9e6391801d",
+        "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sequence": 2,
+        "capturedAt": "2026-10-10T12:03:00Z",
+        "captureFinishedAt": "2026-10-10T12:03:00Z",
+        "receivedAt": "2026-10-10T12:03:03Z",
+        "expiresAt": "2026-10-11T12:03:00Z",
+        "rowCount": 2050
+      }
+    }
+  },
+  "disabled": {
+    "schemaVersion": "tracebolt.windows-service-view.v2",
+    "deviceId": "agent_11111111111111111111111111111111",
+    "serverNow": "2026-10-10T12:00:00Z",
+    "certificateExpiresAt": "2026-10-10T14:00:00Z",
+    "policy": {
+      "enabled": false,
+      "services": [],
+      "revision": 0
+    },
+    "status": "disabled",
+    "evaluatedAt": null,
+    "checks": [],
+    "incidents": [],
+    "inventory": {
+      "collectedAt": "2026-10-10T12:00:00Z",
+      "receivedAt": "2026-10-10T12:00:00Z",
+      "sequence": 1,
+      "quality": "healthy",
+      "complete": true,
+      "truncated": false,
+      "countExact": true,
+      "observedCount": 2050,
+      "services": [],
+      "source": {
+        "kind": "windows_full_services",
+        "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantRevision": 1,
+        "generationId": "sample_bb5bfe045e1202dc2ca22f1efba3db2e",
+        "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sequence": 1,
+        "capturedAt": "2026-10-10T12:00:00Z",
+        "captureFinishedAt": "2026-10-10T12:00:00Z",
+        "receivedAt": "2026-10-10T12:00:00Z",
+        "expiresAt": "2026-10-11T12:00:00Z",
+        "rowCount": 2050
+      }
+    }
+  },
+  "source": {
+    "kind": "windows_full_services",
+    "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "grantRevision": 1,
+    "generationId": "sample_c58b379998c9423d966d8b9e6391801d",
+    "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sequence": 2,
+    "capturedAt": "2026-10-10T12:03:00Z",
+    "captureFinishedAt": "2026-10-10T12:03:00Z",
+    "receivedAt": "2026-10-10T12:03:03Z",
+    "expiresAt": "2026-10-11T12:03:00Z",
+    "rowCount": 2050
+  }
+}

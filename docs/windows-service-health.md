@@ -1,5 +1,9 @@
 # Windows service checks
 
+This page documents the retained strict preview-v1 contract. Fresh explicit
+complete-generation checks use the separate [v2 source policy](windows-complete-service-health.md),
+with independent provenance and no automatic v1 conversion.
+
 This source increment adds **Service checks / Dienstprüfungen** in the Windows
 Health tab. A shared administrator can choose up to eight currently reported
 services by readable display name, review the exact reported names, and explicitly

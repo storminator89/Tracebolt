@@ -434,3 +434,23 @@ reload, original success/restart evidence and no automatic next job.
 The validator requires the four source-bound image files and all reconciliation
 assertions. Source-only fixture tests do not establish a hosted-browser pass,
 durable manager behavior, endpoint owner release or native WUA acceptance.
+
+
+## Complete-generation service checks v2
+
+The existing hosted Windows service-actions runner also invokes
+`web/scripts/capture-windows-complete-service-health.mjs` on its installed browser.
+Its canonical scene manifest supplies the single-device beyond-preview selection
+and exact group review in EN/DE at 1440×1100 and 390×844. The eight existing
+`complete-service-*.png` filenames and component interactions are preserved.
+These are real compiled components and hooks with invented intercepted data,
+not whole-App mounting, native Windows acceptance, policy writes or deployment.
+
+Both focused PR checks and full Validate require the canonical scene/source digest,
+exact ordered image matrix, file hashes and viewport dimensions, zero unexpected
+or external requests, and successful existing runner cleanup and failure gates.
+The source SHA must match hosted HEAD; compiled source bytes must match tracked
+blobs in that commit. All previous action/update scenes and the 120-second budget
+remain. The artifact upload includes the separate complete-service manifest and
+images. The inert `--check` and Node contract tests generate no browser evidence;
+successful hosted captures still require independent pixel review.

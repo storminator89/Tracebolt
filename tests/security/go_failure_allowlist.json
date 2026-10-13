@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "aed75f47d3caf85993d7deece5e507b1b3b0029f4bb058ad2df583164ee2b0f7",
+  "goSourceSha256": "0bd00cfe9631f0940a6716e0aa373d302ef7f8dd641940411449c661114ad6a0",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -918,6 +918,7 @@
       "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
       "TestCachedUpdatesRechecksSessionAfterRead",
       "TestCollectionInvitationAcknowledgementIsProfileBound",
+      "TestCompleteGroupServiceHealthRecorderReviewAndFixture",
       "TestCompleteOverviewConfiguredQueryRequiresOperatorCSRF",
       "TestCompleteOverviewDTOIndependentTimesAndFailure",
       "TestCompleteOverviewFinalOutputRechecksAfterEncodingAndSession",
@@ -928,6 +929,9 @@
       "TestCompleteOverviewQueryExactSectionAndBounds",
       "TestCompleteOverviewQueryRechecksSessionAfterBody",
       "TestCompletePackageMetadataFinalOutputRechecksIdentityAndSession",
+      "TestCompleteServiceHealthRecorderAuthorityAndClosedRequests",
+      "TestCompleteServiceHealthRecorderEvaluatorGuards",
+      "TestCompleteServiceHealthRecorderSelectionAndMonitor",
       "TestCompleteUpdatesFinalOutputRechecksAfterEncodingAndSession",
       "TestCompleteUpdatesGoDTOFixture",
       "TestCompleteUpdatesOperatorGuardsAndBoundedUnknown",
@@ -1756,6 +1760,9 @@
       "TestCompleteOverviewStableRetiredCursorSearchAndZero",
       "TestCompleteOverviewSteadyMinuteCadenceRetainsPagesAndCleans",
       "TestCompleteOverviewVolumeDisplayOrderPagingAndByteAccounting",
+      "TestCompleteServiceHealthLeaseExactSourceAndUsedStateLoss",
+      "TestCompleteServiceHealthOriginalGenerationBeyondPreview",
+      "TestCompleteServiceHealthPartialDisabledMissingAndRevoked",
       "TestCompleteUpdatesDeclaredQuotaRollbackPreservesCurrent",
       "TestCompleteUpdatesExpiryAndAuthorityRevocation",
       "TestCompleteUpdatesFinalizeRechecksClockAfterStream",
@@ -3721,6 +3728,9 @@
       "TestAlarmSyntheticTestRejectsMalformedQueuePayload",
       "TestAlarmSyntheticTestRestartDisableAndUncertainty",
       "TestAlarmWorkerShutdownPersistsUncertaintyBeforeReturn",
+      "TestCompleteServiceDurableSourceAndIsolation",
+      "TestCompleteServiceEvaluatorSQLWaitAndFinalGuards",
+      "TestCompleteServiceFinalSourceExpiryRollsBack",
       "TestDurableMutationAndSeed",
       "TestFleetGroupMaintenanceEndExactWindowAndUnchangedHistory",
       "TestFleetGroupMaintenanceEndFinalGuardAndTimeRollback",
@@ -5041,6 +5051,11 @@
     "localrmm/internal/windowsservicehealth": [
       "TestAdvancingSourceConfirmationRecoveryAndUnknown",
       "TestAllReportedStatesAndNoPercentageSemantics",
+      "TestCompleteServiceHealthSharedFixture",
+      "TestCompleteSourceGrantGenerationAndStrictLegacyIsolation",
+      "TestCompleteSourceHistoryByteBoundPreservesOpenAndFloors",
+      "TestCompleteSourceIndependentCadenceAndCachedEvidence",
+      "TestCompleteSourceLongIdentityUnavailableAndOriginalExpiry",
       "TestDefaultOffExactSelectionAndPolicyAuthority",
       "TestEpochGapRegressionAndOriginalCaptureFloors",
       "TestPolicyCloseIsNotRecoveryAndHistoryIsReadOnly",

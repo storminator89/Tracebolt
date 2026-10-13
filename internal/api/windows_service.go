@@ -12,6 +12,7 @@ import (
 
 func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Request) {
 	id, mutation, valid := windowsServiceRoute(r)
+	complete := strings.Contains(r.URL.Path, "/windows-services/complete")
 	if !valid {
 		fail(w, 404, "not_found", "Windows service checks are unavailable.")
 		return
@@ -31,9 +32,10 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var policy struct {
-		Enabled  bool     `json:"enabled"`
-		Services []string `json:"services"`
-		Expected uint64   `json:"expectedRevision"`
+		Enabled  bool                             `json:"enabled"`
+		Services []string                         `json:"services"`
+		Expected uint64                           `json:"expectedRevision"`
+		Source   *windowsservicehealth.Provenance `json:"source"`
 	}
 	if mutation {
 		operator, ok := operatorContext(r)
@@ -44,10 +46,18 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 		if !h.app.authorizeJSONMutation(w, r) {
 			return
 		}
-		if !readObject(w, r, 16<<10, []string{"enabled", "services", "expectedRevision"}, &policy) {
+		fields := []string{"enabled", "services", "expectedRevision"}
+		if complete {
+			fields = append(fields, "source")
+		}
+		if !readObject(w, r, 32<<10, fields, &policy) {
 			return
 		}
-		if _, err := windowsservicehealth.Services(policy.Services); err != nil || policy.Enabled && len(policy.Services) == 0 || policy.Expected >= windowsservicehealth.MaxCounter {
+		validateNames := windowsservicehealth.Services
+		if complete {
+			validateNames = windowsservicehealth.CompleteServices
+		}
+		if _, err := validateNames(policy.Services); err != nil || policy.Enabled && len(policy.Services) == 0 || policy.Expected >= windowsservicehealth.MaxCounter {
 			fail(w, 400, "invalid_windows_service_policy", "Choose at most eight exact reported names and the current policy revision.")
 			return
 		}
@@ -60,6 +70,18 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.source.Now().UTC()
+	if complete {
+		initial, e := m.store.WindowsServiceState(r.Context(), id)
+		if e != nil {
+			fail(w, 503, "windows_service_unavailable", "Service state is unavailable.")
+			return
+		}
+		names := initial.Policy.Services
+		if mutation {
+			names = policy.Services
+		}
+		r = r.WithContext(windowsservicehealth.WithCompleteSelections(r.Context(), map[string][]string{id: names}))
+	}
 	inputs, err := m.source.WindowsCapacityInputs(r.Context(), now)
 	if err != nil {
 		systemInventoryError(w, err)
@@ -78,6 +100,13 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 	state, err := m.store.WindowsServiceState(r.Context(), in.DeviceID)
 	if err != nil {
 		fail(w, 503, "windows_service_unavailable", "Service state is temporarily unavailable.")
+		return
+	}
+	if complete && state.DeviceID == "" {
+		state = windowsservicehealth.NewComplete()
+	}
+	if complete != (state.SchemaVersion == windowsservicehealth.CompleteStateSchema) {
+		fail(w, 409, "windows_service_source_conflict", "This policy uses another explicit source version.")
 		return
 	}
 	if state.InvitationID != "" && (state.InvitationID != in.InvitationID || state.CertificateHash != in.CertificateHash) {
@@ -104,7 +133,7 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 			return false
 		}
 		v, ok := latest[in.DeviceID]
-		if !ok || !v.Authorized || v.InvitationID != in.InvitationID || v.CertificateHash != in.CertificateHash || !v.AuthorityUntil.Equal(in.AuthorityUntil) {
+		if !ok || !v.Authorized || v.InvitationID != in.InvitationID || v.CertificateHash != in.CertificateHash || !v.AuthorityUntil.Equal(in.AuthorityUntil) || complete && v.CurrentLeaf != in.CurrentLeaf {
 			fail(w, 409, "windows_service_conflict", "Device authority changed. Refresh this view.")
 			return false
 		}
@@ -120,9 +149,14 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 		if !recheck() {
 			return
 		}
-		state, err = h.withWindowsServicePolicyAuthority(r, in, now, func(guard func(time.Time) error) (windowsservicehealth.State, error) {
-			return m.store.ConfigureWindowsServiceGuarded(r.Context(), windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, policy.Enabled, policy.Services, policy.Expected, m.source.Now, guard)
-		})
+		configure := func(guard func(time.Time) error) (windowsservicehealth.State, error) {
+			return m.store.ConfigureWindowsServiceGuarded(r.Context(), windowsservicehealth.Input{Input: in.Input, Sample: in.Services, Complete: complete, Selection: policy.Source}, policy.Enabled, policy.Services, policy.Expected, m.source.Now, guard)
+		}
+		if complete {
+			state, err = h.withWindowsCompleteServicePolicyAuthority(r, in, policy.Source, now, configure)
+		} else {
+			state, err = h.withWindowsServicePolicyAuthority(r, in, now, configure)
+		}
 		if errors.Is(err, windowsservicehealth.ErrInvalid) {
 			fail(w, 409, "windows_service_conflict", "Policy changed or is unavailable. Refresh before saving again.")
 			return
@@ -159,6 +193,10 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 		fail(w, 409, "windows_service_conflict", "Device authority or time reference changed. Refresh this view.")
 		return
 	}
+	if complete && view.Inventory != nil && (view.Inventory.Source == nil || !view.Inventory.Source.Fresh(finished)) {
+		fail(w, 409, "windows_service_conflict", "The reviewed source expired. Refresh this view.")
+		return
+	}
 	if !operatorStillActive(w, r) {
 		return
 	}
@@ -173,6 +211,11 @@ func windowsServiceRoute(r *http.Request) (id string, mutation, valid bool) {
 		return
 	}
 	id = p[3]
+	if len(p) >= 6 && p[5] == "complete" {
+		mutation = len(p) == 7
+		valid = len(p) == 6 || len(p) == 7 && p[6] == "policy"
+		return
+	}
 	mutation = len(p) == 6
 	valid = len(p) == 5 || len(p) == 6 && p[5] == "policy"
 	return

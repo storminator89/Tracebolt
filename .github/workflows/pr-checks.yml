@@ -160,6 +160,15 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-complete-service-health-manifest.json
+            artifacts/review/complete-service-single-beyond-preview-en-1440.png
+            artifacts/review/complete-service-group-exact-review-en-1440.png
+            artifacts/review/complete-service-single-beyond-preview-en-390.png
+            artifacts/review/complete-service-group-exact-review-en-390.png
+            artifacts/review/complete-service-single-beyond-preview-de-1440.png
+            artifacts/review/complete-service-group-exact-review-de-1440.png
+            artifacts/review/complete-service-single-beyond-preview-de-390.png
+            artifacts/review/complete-service-group-exact-review-de-390.png
             artifacts/review/windows-managed-msi-results.json
             artifacts/review/windows-managed-msi-manifest.json
             artifacts/review/windows-fleet-msi-results.json

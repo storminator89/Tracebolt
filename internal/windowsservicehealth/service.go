@@ -41,21 +41,27 @@ var ErrInvalid = errors.New("windows_service_invalid")
 type Sample struct {
 	CollectedAt time.Time
 	Services    windowsmanaged.Section[windowsmanaged.Service]
+	Complete    *CompleteSample
 }
 type Input struct {
 	windowscontact.Input
-	Sample Sample
+	Sample      Sample
+	Complete    bool
+	CurrentLeaf string
+	Selection   *Provenance
 }
 type Policy struct {
-	Enabled  bool     `json:"enabled"`
-	Services []string `json:"services"`
-	Revision uint64   `json:"revision"`
+	Enabled  bool           `json:"enabled"`
+	Services []string       `json:"services"`
+	Revision uint64         `json:"revision"`
+	Source   *SourceBinding `json:"source,omitempty"`
 }
 type Observation struct {
-	State       string    `json:"state"`
-	CollectedAt time.Time `json:"collectedAt"`
-	ReceivedAt  time.Time `json:"receivedAt"`
-	Sequence    uint64    `json:"sequence"`
+	State       string      `json:"state"`
+	CollectedAt time.Time   `json:"collectedAt"`
+	ReceivedAt  time.Time   `json:"receivedAt"`
+	Sequence    uint64      `json:"sequence"`
+	Source      *Provenance `json:"source,omitempty"`
 }
 type Check struct {
 	Name        string       `json:"name"`
@@ -80,20 +86,21 @@ type Incident struct {
 	ClosedReason        string       `json:"closedReason"`
 }
 type State struct {
-	SchemaVersion   string     `json:"schemaVersion"`
-	DeviceID        string     `json:"deviceId"`
-	InvitationID    string     `json:"invitationId"`
-	CertificateHash string     `json:"certificateHash"`
-	Policy          Policy     `json:"policy"`
-	PolicyChangedAt *time.Time `json:"policyChangedAt"`
-	Epoch           string     `json:"epoch"`
-	EvaluatedAt     *time.Time `json:"evaluatedAt"`
-	Checks          []Progress `json:"checks"`
-	SequenceFloor   uint64     `json:"sequenceFloor"`
-	ReceiptFloor    *time.Time `json:"receiptFloor"`
-	CaptureFloor    *time.Time `json:"captureFloor"`
-	Incidents       []Incident `json:"incidents"`
-	NextID          uint64     `json:"nextId"`
+	SchemaVersion   string      `json:"schemaVersion"`
+	DeviceID        string      `json:"deviceId"`
+	InvitationID    string      `json:"invitationId"`
+	CertificateHash string      `json:"certificateHash"`
+	Policy          Policy      `json:"policy"`
+	PolicyChangedAt *time.Time  `json:"policyChangedAt"`
+	Epoch           string      `json:"epoch"`
+	EvaluatedAt     *time.Time  `json:"evaluatedAt"`
+	Checks          []Progress  `json:"checks"`
+	SequenceFloor   uint64      `json:"sequenceFloor"`
+	ReceiptFloor    *time.Time  `json:"receiptFloor"`
+	CaptureFloor    *time.Time  `json:"captureFloor"`
+	Incidents       []Incident  `json:"incidents"`
+	NextID          uint64      `json:"nextId"`
+	SourceFloor     *Provenance `json:"sourceFloor,omitempty"`
 }
 type Choice struct {
 	Name        string `json:"name"`
@@ -101,15 +108,16 @@ type Choice struct {
 	State       string `json:"state"`
 }
 type Inventory struct {
-	CollectedAt   time.Time `json:"collectedAt"`
-	ReceivedAt    time.Time `json:"receivedAt"`
-	Sequence      uint64    `json:"sequence"`
-	Quality       string    `json:"quality"`
-	Complete      bool      `json:"complete"`
-	Truncated     bool      `json:"truncated"`
-	CountExact    bool      `json:"countExact"`
-	ObservedCount uint32    `json:"observedCount"`
-	Services      []Choice  `json:"services"`
+	CollectedAt   time.Time   `json:"collectedAt"`
+	ReceivedAt    time.Time   `json:"receivedAt"`
+	Sequence      uint64      `json:"sequence"`
+	Quality       string      `json:"quality"`
+	Complete      bool        `json:"complete"`
+	Truncated     bool        `json:"truncated"`
+	CountExact    bool        `json:"countExact"`
+	ObservedCount uint32      `json:"observedCount"`
+	Services      []Choice    `json:"services"`
+	Source        *Provenance `json:"source,omitempty"`
 }
 type View struct {
 	SchemaVersion        string     `json:"schemaVersion"`
@@ -167,6 +175,9 @@ func (in Input) authorized(now time.Time) bool {
 // Validate quality/truncation invariants but never convert scoped counts to host
 // coverage. Omit every ambiguous name, even if duplicate rows happen to agree.
 func (in Input) Inventory(now time.Time) *Inventory {
+	if in.Complete {
+		return in.completeInventory(now)
+	}
 	s := in.Sample.Services
 	if !in.authorized(now) || !Fresh(in.Sample.CollectedAt, now) || !Fresh(in.ReceivedAt, now) || in.Sequence == 0 || in.Sequence > MaxCounter || s.Rows == nil || len(s.Rows) > windowsmanaged.MaxServiceRows || s.ObservedCount > 2048 || int(s.ObservedCount) < len(s.Rows) || int(s.ObservedCount) > len(s.Rows) && !s.Truncated {
 		return nil
@@ -197,7 +208,7 @@ func (in Input) Inventory(now time.Time) *Inventory {
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
-	return &Inventory{in.Sample.CollectedAt, in.ReceivedAt, in.Sequence, s.Quality, s.Complete, s.Truncated, s.CountExact, s.ObservedCount, rows}
+	return &Inventory{CollectedAt: in.Sample.CollectedAt, ReceivedAt: in.ReceivedAt, Sequence: in.Sequence, Quality: s.Quality, Complete: s.Complete, Truncated: s.Truncated, CountExact: s.CountExact, ObservedCount: s.ObservedCount, Services: rows}
 }
 func observation(inv *Inventory, name string) *Observation {
 	if inv == nil {
@@ -205,7 +216,7 @@ func observation(inv *Inventory, name string) *Observation {
 	}
 	for _, r := range inv.Services {
 		if r.Name == name && (r.State == "running" || bad(r.State)) {
-			return &Observation{r.State, inv.CollectedAt, inv.ReceivedAt, inv.Sequence}
+			return &Observation{State: r.State, CollectedAt: inv.CollectedAt, ReceivedAt: inv.ReceivedAt, Sequence: inv.Sequence, Source: inv.Source}
 		}
 	}
 	return nil
@@ -247,7 +258,7 @@ func (s *State) transition(change func(*State) error) error {
 	if e = change(&copy); e != nil {
 		return e
 	}
-	if copy.Validate() != nil {
+	if _, e := Encode(copy); e != nil {
 		return ErrInvalid
 	}
 	*s = copy
@@ -255,7 +266,16 @@ func (s *State) transition(change func(*State) error) error {
 }
 func (s *State) Configure(in Input, enabled bool, names []string, expected uint64, now time.Time) error {
 	return s.transition(func(c *State) error {
-		names, e := Services(names)
+		if in.Complete && !c.complete() {
+			if c.DeviceID != "" || c.Policy.Revision != 0 {
+				return ErrInvalid
+			}
+			c.SchemaVersion = CompleteStateSchema
+		}
+		if c.complete() != in.Complete {
+			return ErrInvalid
+		}
+		names, e := c.names(names)
 		if e != nil || enabled && len(names) == 0 || !validTime(now) || !in.authorized(now) || expected != c.Policy.Revision || expected >= MaxCounter || c.EvaluatedAt != nil && now.Before(*c.EvaluatedAt) || c.PolicyChangedAt != nil && now.Before(*c.PolicyChangedAt) {
 			return ErrInvalid
 		}
@@ -263,7 +283,24 @@ func (s *State) Configure(in Input, enabled bool, names []string, expected uint6
 			return e
 		}
 		unchanged := strings.Join(names, "\x00") == strings.Join(c.Policy.Services, "\x00")
-		if unchanged && enabled == c.Policy.Enabled {
+		sourceChanged := false
+		var selectedSource *SourceBinding
+		if c.complete() {
+			selectedSource = c.Policy.Source
+			if in.Selection != nil {
+				inv := in.Inventory(now)
+				if inv == nil || inv.Source == nil || *inv.Source != *in.Selection {
+					return ErrInvalid
+				}
+				binding := in.Selection.Binding()
+				selectedSource = &binding
+				sourceChanged = c.Policy.Source == nil || *c.Policy.Source != binding
+			}
+			if selectedSource == nil && (enabled || len(names) > 0) {
+				return ErrInvalid
+			}
+		}
+		if unchanged && enabled == c.Policy.Enabled && !sourceChanged {
 			return nil
 		}
 		// Existing names may always be removed/disabled under live authority. New names
@@ -280,8 +317,10 @@ func (s *State) Configure(in Input, enabled bool, names []string, expected uint6
 			old[n] = true
 		}
 		for _, n := range names {
-			if (!old[n] || enabled && !c.Policy.Enabled) && !known[n] {
-				return ErrInvalid
+			if !old[n] || enabled && !c.Policy.Enabled || sourceChanged {
+				if !known[n] || c.complete() && (in.Selection == nil || selectedSource == nil || in.Selection.Binding() != *selectedSource) {
+					return ErrInvalid
+				}
 			}
 		}
 		for i := range c.Incidents {
@@ -290,7 +329,7 @@ func (s *State) Configure(in Input, enabled bool, names []string, expected uint6
 				c.Incidents[i].ClosedReason = "policy-changed"
 			}
 		}
-		c.Policy = Policy{enabled, names, expected + 1}
+		c.Policy = Policy{Enabled: enabled, Services: names, Revision: expected + 1, Source: selectedSource}
 		c.PolicyChangedAt = stamp(now)
 		c.Epoch = ""
 		c.EvaluatedAt = nil
@@ -303,6 +342,8 @@ func (s *State) Configure(in Input, enabled bool, names []string, expected uint6
 	})
 }
 func (s *State) Evaluate(in Input, now time.Time, epoch string) error {
+	in.Complete = s.complete()
+	in = in.normalized()
 	return s.transition(func(c *State) error {
 		if !validTime(now) || !windowscontact.ValidEpoch(epoch) || !windowscontact.ValidDeviceID(in.DeviceID) {
 			return ErrInvalid
@@ -319,13 +360,24 @@ func (s *State) Evaluate(in Input, now time.Time, epoch string) error {
 		c.Epoch = epoch
 		c.EvaluatedAt = stamp(now)
 		inv := in.Inventory(now)
-		monotonic := in.authorized(now) && in.Sequence > 0 && in.Sequence <= MaxCounter && validTime(in.ReceivedAt) && !in.ReceivedAt.After(now)
+		if c.complete() && (inv == nil || inv.Source == nil || c.Policy.Source == nil || inv.Source.Binding() != *c.Policy.Source) {
+			inv = nil
+		}
+		sourceOK := !c.complete() || in.Sample.Complete != nil && in.Sample.Complete.Source.Valid()
+		if c.complete() && sourceOK && c.SourceFloor != nil && in.Sequence == c.SequenceFloor && in.Sample.Complete.Source != *c.SourceFloor {
+			sourceOK = false
+		}
+		monotonic := sourceOK && in.authorized(now) && in.Sequence > 0 && in.Sequence <= MaxCounter && validTime(in.ReceivedAt) && !in.ReceivedAt.After(now)
 		if monotonic && c.ReceiptFloor != nil {
 			monotonic = in.Sequence >= c.SequenceFloor && !in.ReceivedAt.Before(*c.ReceiptFloor) && (in.Sequence != c.SequenceFloor || in.ReceivedAt.Equal(*c.ReceiptFloor))
 		}
 		if monotonic {
 			c.SequenceFloor = in.Sequence
 			c.ReceiptFloor = stamp(in.ReceivedAt)
+			if c.complete() {
+				p := in.Sample.Complete.Source
+				c.SourceFloor = &p
+			}
 		} else {
 			inv = nil
 		}
@@ -422,9 +474,42 @@ func (s *State) prune(now time.Time) {
 		}
 	}
 	s.Incidents = out
+	// Full provenance is intentionally retained per historical observation.
+	// Under the same durable byte cap, remove only oldest closed episodes;
+	// open episodes, floors and exact policy identity can never be truncated.
+	if s.complete() {
+		for {
+			raw, e := json.Marshal(s)
+			if e != nil || len(raw) <= MaxStateBytes {
+				break
+			}
+			removed := false
+			for i := len(s.Incidents) - 1; i >= 0; i-- {
+				if s.Incidents[i].ResolvedAt != nil {
+					s.Incidents = append(s.Incidents[:i], s.Incidents[i+1:]...)
+					removed = true
+					break
+				}
+			}
+			if !removed {
+				break
+			}
+		}
+	}
 }
 func (s State) View(in Input, now time.Time, epoch string) View {
+	in.Complete = s.complete()
+	in = in.normalized()
 	inv := in.Inventory(now)
+	if s.complete() && inv != nil {
+		selected := []Choice{}
+		for _, row := range inv.Services {
+			if contains(s.Policy.Services, row.Name) {
+				selected = append(selected, row)
+			}
+		}
+		inv.Services = selected
+	}
 	checks := []Check{}
 	status := "running"
 	if !s.Policy.Enabled {
@@ -433,7 +518,10 @@ func (s State) View(in Input, now time.Time, epoch string) View {
 	for _, p := range s.Checks {
 		c := p.Check
 		current := observation(inv, c.Name)
-		if !s.Policy.Enabled || s.Epoch != epoch || epoch == "" || s.EvaluatedAt == nil || !Fresh(*s.EvaluatedAt, now) || !s.binding(in) || c.Observation == nil || current == nil || *current != *c.Observation {
+		if s.complete() && (inv == nil || inv.Source == nil || s.Policy.Source == nil || inv.Source.Binding() != *s.Policy.Source) {
+			current = nil
+		}
+		if !s.Policy.Enabled || s.Epoch != epoch || epoch == "" || s.EvaluatedAt == nil || !Fresh(*s.EvaluatedAt, now) || !s.binding(in) || c.Observation == nil || current == nil || !sameObservation(*current, *c.Observation) {
 			c.Status = "unknown"
 			c.Observation = nil
 		}
@@ -449,17 +537,41 @@ func (s State) View(in Input, now time.Time, epoch string) View {
 			}
 		}
 	}
-	return View{SchemaVersion, in.DeviceID, now, in.AuthorityUntil, s.Policy, status, s.EvaluatedAt, checks, append([]Incident{}, s.Incidents...), inv}
+	schema := SchemaVersion
+	if s.complete() {
+		schema = CompleteSchemaVersion
+	}
+	return View{schema, in.DeviceID, now, in.AuthorityUntil, s.Policy, status, s.EvaluatedAt, checks, append([]Incident{}, s.Incidents...), inv}
 }
 func validObservation(o Observation, at time.Time) bool {
 	return (o.State == "running" || bad(o.State)) && o.Sequence > 0 && o.Sequence <= MaxCounter && Fresh(o.CollectedAt, at) && Fresh(o.ReceivedAt, at)
 }
 func (s State) Validate() error {
-	names, e := Services(s.Policy.Services)
-	if e != nil || !equalNames(names, s.Policy.Services) || s.SchemaVersion != StateSchema || s.Policy.Revision > MaxCounter || s.Policy.Enabled && (s.Policy.Revision == 0 || len(names) == 0) || s.Checks == nil || len(s.Checks) != len(names) || s.Incidents == nil || len(s.Incidents) > MaxIncidents || s.NextID > MaxCounter || !optional(s.PolicyChangedAt) || !optional(s.EvaluatedAt) || !optional(s.ReceiptFloor) || !optional(s.CaptureFloor) {
+	names, e := s.names(s.Policy.Services)
+	if !s.complete() && (s.Policy.Source != nil || s.SourceFloor != nil) {
+		return ErrInvalid
+	}
+	if s.complete() {
+		if s.Policy.Source != nil && (s.Policy.Source.Kind != CompleteSourceKind || !validBinding(*s.Policy.Source)) {
+			return ErrInvalid
+		}
+		if s.Policy.Revision > 0 && (s.Policy.Enabled || len(s.Policy.Services) > 0) && s.Policy.Source == nil {
+			return ErrInvalid
+		}
+		if (s.SourceFloor == nil) != (s.SequenceFloor == 0) {
+			return ErrInvalid
+		}
+		if s.SourceFloor != nil && (!s.SourceFloor.Valid() || s.SourceFloor.Sequence != s.SequenceFloor || s.ReceiptFloor == nil || !s.SourceFloor.ReceivedAt.Equal(*s.ReceiptFloor)) {
+			return ErrInvalid
+		}
+	}
+	if e != nil || !equalNames(names, s.Policy.Services) || (s.SchemaVersion != StateSchema && s.SchemaVersion != CompleteStateSchema) || s.Policy.Revision > MaxCounter || s.Policy.Enabled && (s.Policy.Revision == 0 || len(names) == 0) || s.Checks == nil || len(s.Checks) != len(names) || s.Incidents == nil || len(s.Incidents) > MaxIncidents || s.NextID > MaxCounter || !optional(s.PolicyChangedAt) || !optional(s.EvaluatedAt) || !optional(s.ReceiptFloor) || !optional(s.CaptureFloor) {
 		return ErrInvalid
 	}
 	if s.DeviceID == "" {
+		if s.Policy.Source != nil || s.SourceFloor != nil {
+			return ErrInvalid
+		}
 		if s.InvitationID != "" || s.CertificateHash != "" || s.Policy.Revision != 0 || s.Policy.Enabled || s.PolicyChangedAt != nil || s.EvaluatedAt != nil || s.Epoch != "" || len(names) != 0 || len(s.Incidents) != 0 || s.NextID != 0 || s.SequenceFloor != 0 || s.ReceiptFloor != nil || s.CaptureFloor != nil {
 			return ErrInvalid
 		}
@@ -467,6 +579,12 @@ func (s State) Validate() error {
 	}
 	if !windowscontact.ValidDeviceID(s.DeviceID) || !enrollmentcrypto.ValidID(s.InvitationID, "invite_") || !enrollmentcrypto.ValidHash(s.CertificateHash) || s.Policy.Revision > 0 && s.PolicyChangedAt == nil || (s.EvaluatedAt == nil) != (s.Epoch == "") || s.Epoch != "" && !windowscontact.ValidEpoch(s.Epoch) || s.SequenceFloor > MaxCounter || (s.SequenceFloor == 0) != (s.ReceiptFloor == nil) || s.CaptureFloor != nil && s.ReceiptFloor == nil {
 		return ErrInvalid
+	}
+	if s.complete() && s.SourceFloor != nil {
+		g, e := generationFor(s.DeviceID, *s.SourceFloor)
+		if e != nil || g != s.SourceFloor.GenerationID {
+			return ErrInvalid
+		}
 	}
 	at := s.PolicyChangedAt
 	if s.EvaluatedAt != nil && (at == nil || s.EvaluatedAt.After(*at)) {
@@ -479,7 +597,13 @@ func (s State) Validate() error {
 	previous := s.NextID + 1
 	for _, r := range s.Incidents {
 		var n uint64
-		if _, e := fmt.Sscanf(r.ID, "wservice_%x", &n); e != nil || r.ID != fmt.Sprintf("wservice_%016x", n) || n == 0 || n >= previous || n > s.NextID || !validText(r.Name, true) || r.PolicyRevision == 0 || r.PolicyRevision > s.Policy.Revision || !validTime(r.OpenedAt) || !validTime(r.LastConfirmedAt) || at == nil || r.LastConfirmedAt.Before(r.OpenedAt) || r.LastConfirmedAt.After(*at) || !validObservation(r.OpeningObservation, r.OpenedAt) || !bad(r.OpeningObservation.State) || !validObservation(r.LastBadObservation, r.LastConfirmedAt) || !bad(r.LastBadObservation.State) || r.LastBadObservation.Sequence < r.OpeningObservation.Sequence || r.LastBadObservation.CollectedAt.Before(r.OpeningObservation.CollectedAt) {
+		if (r.OpeningObservation.Source != nil) != s.complete() || (r.LastBadObservation.Source != nil) != s.complete() || r.RecoveryObservation != nil && (r.RecoveryObservation.Source != nil) != s.complete() {
+			return ErrInvalid
+		}
+		if _, e := fmt.Sscanf(r.ID, "wservice_%x", &n); e != nil || r.ID != fmt.Sprintf("wservice_%016x", n) || n == 0 || n >= previous || n > s.NextID || !s.validName(r.Name) || r.PolicyRevision == 0 || r.PolicyRevision > s.Policy.Revision || !validTime(r.OpenedAt) || !validTime(r.LastConfirmedAt) || at == nil || r.LastConfirmedAt.Before(r.OpenedAt) || r.LastConfirmedAt.After(*at) || !s.validEvidence(r.OpeningObservation, r.OpenedAt) || !bad(r.OpeningObservation.State) || !s.validEvidence(r.LastBadObservation, r.LastConfirmedAt) || !bad(r.LastBadObservation.State) || r.LastBadObservation.Sequence < r.OpeningObservation.Sequence || r.LastBadObservation.CollectedAt.Before(r.OpeningObservation.CollectedAt) {
+			return ErrInvalid
+		}
+		if s.complete() && (r.OpeningObservation.Source.Binding() != r.LastBadObservation.Source.Binding() || r.RecoveryObservation != nil && r.RecoveryObservation.Source.Binding() != r.LastBadObservation.Source.Binding() || r.ResolvedAt == nil && (s.Policy.Source == nil || r.LastBadObservation.Source.Binding() != *s.Policy.Source)) {
 			return ErrInvalid
 		}
 		previous = n
@@ -499,7 +623,7 @@ func (s State) Validate() error {
 				}
 			case "running":
 				o := r.RecoveryObservation
-				if o == nil || !validObservation(*o, *r.ResolvedAt) || o.State != "running" || o.Sequence <= r.LastBadObservation.Sequence || !o.CollectedAt.After(r.LastBadObservation.CollectedAt) {
+				if o == nil || !s.validEvidence(*o, *r.ResolvedAt) || o.State != "running" || o.Sequence <= r.LastBadObservation.Sequence || !o.CollectedAt.After(r.LastBadObservation.CollectedAt) {
 					return ErrInvalid
 				}
 			default:
@@ -511,10 +635,16 @@ func (s State) Validate() error {
 		if p.Name != names[i] || !optional(p.Since) || (p.Since == nil) != (p.Start == nil) {
 			return ErrInvalid
 		}
-		if p.Observation != nil && (s.EvaluatedAt == nil || !validObservation(*p.Observation, *s.EvaluatedAt) || s.ReceiptFloor == nil || s.CaptureFloor == nil || p.Observation.Sequence != s.SequenceFloor || !p.Observation.ReceivedAt.Equal(*s.ReceiptFloor) || !p.Observation.CollectedAt.Equal(*s.CaptureFloor)) {
+		if p.Observation != nil && ((p.Observation.Source != nil) != s.complete()) {
 			return ErrInvalid
 		}
-		if p.Start != nil && (s.EvaluatedAt == nil || p.Since.After(*s.EvaluatedAt) || !validObservation(*p.Start, *p.Since) || p.Observation == nil || p.Start.Sequence > p.Observation.Sequence || p.Start.CollectedAt.After(p.Observation.CollectedAt)) {
+		if p.Observation != nil && (s.EvaluatedAt == nil || !s.validEvidence(*p.Observation, *s.EvaluatedAt) || s.ReceiptFloor == nil || s.CaptureFloor == nil || p.Observation.Sequence != s.SequenceFloor || !p.Observation.ReceivedAt.Equal(*s.ReceiptFloor) || !p.Observation.CollectedAt.Equal(*s.CaptureFloor)) {
+			return ErrInvalid
+		}
+		if p.Start != nil && (s.EvaluatedAt == nil || p.Since.After(*s.EvaluatedAt) || !s.validEvidence(*p.Start, *p.Since) || p.Observation == nil || p.Start.Sequence > p.Observation.Sequence || p.Start.CollectedAt.After(p.Observation.CollectedAt)) {
+			return ErrInvalid
+		}
+		if s.complete() && p.Observation != nil && (s.SourceFloor == nil || *p.Observation.Source != *s.SourceFloor || s.Policy.Source == nil || p.Observation.Source.Binding() != *s.Policy.Source || p.Start != nil && p.Start.Source.Binding() != p.Observation.Source.Binding()) {
 			return ErrInvalid
 		}
 		if !s.Policy.Enabled && (p.Status != "unknown" || p.Observation != nil || p.Since != nil) {

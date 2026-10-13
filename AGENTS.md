@@ -367,7 +367,10 @@ missing material rather than inventing credentials or weakening protection.
   `internal/windowsservicehealth` package. The one-time exact group configuration
   workflow uses `docs/fleet-group-service-checks.md`; keep its original member keys,
   explicit confirmation, transaction-time group checks and bounded 128-row preview.
-  It grants no complete-generation monitoring or inheritance. Missing/duplicate rows never prove down;
+  It grants no complete-generation monitoring or inheritance. The separate explicit
+  complete-source v2 chooser and evaluator use `docs/windows-complete-service-health.md`;
+  retain strict v1 bytes and independent complete provenance, with no automatic
+  source conversion. Missing/duplicate rows never prove down;
   preserve positive partial-row scope, original capture, authority and durable floors.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped
