@@ -142,7 +142,7 @@ jobs:
         run: npx --no-install playwright install --with-deps chromium
       - name: Capture 16 EN/DE source-only views and verify exact source
         run: node web/scripts/run-macos-enrollment-ci.mjs
-      - name: Capture 40 EN/DE source-only inventory views and verify exact source
+      - name: Capture synthetic Mac inventory UI and verify exact source
         run: node web/scripts/run-macos-inventory-ci.mjs
       - name: Keep verified synthetic UI captures only
         if: success()
