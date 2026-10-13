@@ -142,7 +142,11 @@ func newCollectionFixture(t *testing.T, profile, collection string, activate boo
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.snapshot, err = f.store.BeginIssuance(ctx, enrollmentstate.IntentCommand{Control: f.control(4), IntentID: id("intent", 1), SerialHex: fmt.Sprintf("%032x", 1), TemplateVersion: enrollmentcrypto.TemplateVersion, NotBefore: now.Unix() - 30, NotAfter: now.Add(24 * time.Hour).Unix()})
+	leafTTL := 24 * time.Hour
+	if collection == enrollmentcrypto.CollectionProfileMacOSInventory {
+		leafTTL = 3 * 24 * time.Hour
+	}
+	f.snapshot, err = f.store.BeginIssuance(ctx, enrollmentstate.IntentCommand{Control: f.control(4), IntentID: id("intent", 1), SerialHex: fmt.Sprintf("%032x", 1), TemplateVersion: enrollmentcrypto.TemplateVersion, NotBefore: now.Unix() - 30, NotAfter: now.Add(leafTTL).Unix()})
 	if err != nil {
 		t.Fatal(err)
 	}

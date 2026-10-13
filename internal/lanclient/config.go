@@ -420,11 +420,47 @@ func systemStateBinding(m Material) string {
 
 // Platform admission derives from the running process, never remote metadata.
 func (c Config) platformAllowed(runningOS string) bool {
-	if runningOS == "darwin" {
-		return c.Profile == "tls" && (c.SchemaVersion == GuidedConfigVersion && c.CollectionProfile == "" || c.SchemaVersion == RenewalConfigVersion && c.CollectionProfile == enrollmentcrypto.CollectionProfile)
+	collection := c.CollectionProfile
+	switch c.SchemaVersion {
+	case ConfigVersion, GuidedConfigVersion:
+		if collection != "" {
+			return false
+		}
+		collection = enrollmentcrypto.CollectionProfile
+	case RenewalConfigVersion:
+		if collection != enrollmentcrypto.CollectionProfile && !enrollmentcrypto.ManagedCollectionProfile(collection) {
+			return false
+		}
+	case OperationalConfigVersion:
+		if collection != enrollmentcrypto.CollectionProfileOperational {
+			return false
+		}
+	case PackageConfigVersion:
+		if collection != enrollmentcrypto.CollectionProfilePackages {
+			return false
+		}
+	case CompleteConfigVersion:
+		if collection != enrollmentcrypto.CollectionProfileComplete {
+			return false
+		}
+	case WindowsInventoryConfigVersion, WindowsRenewalConfigVersion:
+		if collection != enrollmentcrypto.CollectionProfileWindowsInventory {
+			return false
+		}
+	default:
+		return false
 	}
-	return !c.windowsInventory() || runningOS == "windows"
+	// The fresh inventory sender has its own protected authority contract. The
+	// generic LAN sender cannot accept that profile or reinterpret basic state.
+	if !enrollmentcrypto.ValidPlatformCollectionProfile(runningOS, c.Profile, collection) {
+		return false
+	}
+	if runningOS == "darwin" {
+		return c.SchemaVersion == GuidedConfigVersion || c.SchemaVersion == RenewalConfigVersion
+	}
+	return true
 }
+
 func (c Config) windowsInventory() bool {
 	return (c.SchemaVersion == WindowsInventoryConfigVersion || c.SchemaVersion == WindowsRenewalConfigVersion) && c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory
 }

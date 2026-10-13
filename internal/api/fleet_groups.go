@@ -79,10 +79,13 @@ func (h *operatorHandler) groupSources() []fleetGroupSource {
 	if h.macosEnrollment != nil && h.macosEnrollment.enrollment != nil {
 		sources = append(sources, fleetEnrollmentSource{h.macosEnrollment.enrollment})
 	}
+	if h.macosInventoryEnrollment != nil && h.macosInventoryEnrollment.enrollment != nil {
+		sources = append(sources, fleetEnrollmentSource{h.macosInventoryEnrollment.enrollment})
+	}
 	return sources
 }
 func fleetGroupAdmission(ctx context.Context, sources []fleetGroupSource) (string, time.Time, map[string]fleetGroupDevice, error) {
-	if len(sources) == 0 || len(sources) > 3 {
+	if len(sources) == 0 || len(sources) > 4 {
 		return "", time.Time{}, nil, store.ErrFleetGroupInvalid
 	}
 	// Scope the group catalog to this manager and transport, while retaining each

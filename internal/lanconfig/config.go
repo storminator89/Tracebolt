@@ -26,6 +26,7 @@ var ErrConfiguration = errors.New("LAN configuration or file protection is inval
 
 type Config struct {
 	MacOSBasicEnabled               bool   `json:"macosBasicEnabled,omitempty"`
+	MacOSInventoryEnabled           bool   `json:"macosInventoryEnabled,omitempty"`
 	WindowsServiceActionsConfigFile string `json:"windowsServiceActionsConfigFile,omitempty"`
 	WindowsUpdateJobsConfigFile     string `json:"windowsUpdateJobsConfigFile,omitempty"`
 	WindowsSoftwareJobsConfigFile   string `json:"windowsSoftwareJobsConfigFile,omitempty"`
@@ -143,7 +144,7 @@ func validListen(raw string) bool {
 	return e == nil && ne == nil && net.ParseIP(h) != nil && n > 0 && n <= 65535 && strconv.Itoa(n) == p
 }
 func (c *Config) Validate() error {
-	if c.MacOSBasicEnabled && c.Profile != TLS {
+	if (c.MacOSBasicEnabled || c.MacOSInventoryEnabled) && c.Profile != TLS {
 		return ErrConfiguration
 	}
 	if c.WindowsUpdateJobsConfigFile != "" && (c.Profile != TLS || !c.WindowsInventoryEnabled || !filepath.IsAbs(c.WindowsUpdateJobsConfigFile) || filepath.Clean(c.WindowsUpdateJobsConfigFile) != c.WindowsUpdateJobsConfigFile) {
@@ -209,7 +210,7 @@ func Load(path string) (Material, error) {
 		return fail()
 	}
 	var c Config
-	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsServiceActionsConfigFile", "windowsUpdateJobsConfigFile", "windowsSoftwareJobsConfigFile", "windowsManagedMSIConfigFile", "windowsInventoryEnabled", "macosBasicEnabled", "packageActionsConfigFile") != nil || c.Validate() != nil {
+	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsServiceActionsConfigFile", "windowsUpdateJobsConfigFile", "windowsSoftwareJobsConfigFile", "windowsManagedMSIConfigFile", "windowsInventoryEnabled", "macosBasicEnabled", "macosInventoryEnabled", "packageActionsConfigFile") != nil || c.Validate() != nil {
 		return fail()
 	}
 	auth, e := ReadProtected(c.OperatorAuthFile, true, 32768)

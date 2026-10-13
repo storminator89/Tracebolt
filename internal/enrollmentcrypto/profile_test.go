@@ -73,7 +73,7 @@ func TestOrdinaryGeneratedProofsBindSelectedCollectionProfile(t *testing.T) {
 
 func TestImplementedCollectionProofDomainsRemainDistinct(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete, CollectionProfileWindowsInventory}
+	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete, CollectionProfileWindowsInventory, CollectionProfileMacOSInventory}
 	for _, selected := range profiles {
 		c := contextFixture("tls", now)
 		c.CollectionProfile = selected
@@ -92,5 +92,56 @@ func TestImplementedCollectionProofDomainsRemainDistinct(t *testing.T) {
 func TestWindowsInventoryConsentIsSeparateFromLinuxManagedProfiles(t *testing.T) {
 	if !ValidCollectionProfile(CollectionProfileWindowsInventory) || ManagedCollectionProfile(CollectionProfileWindowsInventory) {
 		t.Fatal("Windows consent must remain valid and outside Linux managed profiles")
+	}
+}
+
+func TestMacOSInventoryIsFreshTLSOnlyProofDomain(t *testing.T) {
+	if !ValidCollectionProfile(CollectionProfileMacOSInventory) || ManagedCollectionProfile(CollectionProfileMacOSInventory) {
+		t.Fatal("inventory scope classification")
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	c := contextFixture("tls", now)
+	c.CollectionProfile = CollectionProfileMacOSInventory
+	_, claim, _, _, _ := claimFixture(t, c, now)
+	if claim.CollectionProfile() != CollectionProfileMacOSInventory {
+		t.Fatal("fresh profile lost")
+	}
+	f := certificateFixture(t, "tls", now, CollectionProfileMacOSInventory)
+	if _, err := VerifyIssued(f.leaf, f.issuer, f.intent, now); err != nil {
+		t.Fatal(err)
+	}
+	c.Profile = "http-test"
+	c.Origin = "http://manager.example"
+	if validContext(c, now) {
+		t.Fatal("HTTP inventory proof admitted")
+	}
+	f.intent.Profile = "http-test"
+	f.intent.Origin = "http://manager.example"
+	if ValidateIntent(f.intent) == nil {
+		t.Fatal("HTTP inventory intent admitted")
+	}
+}
+
+func TestExplicitPlatformProfileMatrix(t *testing.T) {
+	profiles := []string{CollectionProfile, CollectionProfileOperational, CollectionProfilePackages, CollectionProfileComplete, CollectionProfileWindowsInventory, CollectionProfileMacOSInventory, "", "unknown"}
+	for _, platform := range []string{"linux", "windows", "darwin", "macos", "freebsd", "", "Linux"} {
+		for _, transport := range []string{"tls", "http-test", "", "unknown"} {
+			for _, collection := range profiles {
+				want := false
+				if transport == "tls" || transport == "http-test" {
+					switch platform {
+					case "linux":
+						want = collection == CollectionProfile || collection == CollectionProfileOperational || collection == CollectionProfilePackages || collection == CollectionProfileComplete
+					case "windows":
+						want = collection == CollectionProfileWindowsInventory || transport == "tls" && collection == CollectionProfile
+					case "darwin":
+						want = transport == "tls" && (collection == CollectionProfile || collection == CollectionProfileMacOSInventory)
+					}
+				}
+				if ValidPlatformCollectionProfile(platform, transport, collection) != want {
+					t.Fatalf("matrix %s/%s/%s", platform, transport, collection)
+				}
+			}
+		}
 	}
 }

@@ -131,7 +131,7 @@ func Load(path string, lan lanconfig.Material, now time.Time) (Material, error) 
 	if c.CollectionProfile == "" {
 		c.CollectionProfile = enrollmentcrypto.CollectionProfile
 	}
-	if !enrollmentcrypto.ValidCollectionProfile(c.CollectionProfile) || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+	if !enrollmentcrypto.ValidCollectionProfile(c.CollectionProfile) || c.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || c.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
 		return fail()
 	}
 	for _, p := range []string{c.IssuerCertificateFile, c.IssuerPrivateKeyFile, c.IssuerRootFile} {
@@ -252,6 +252,18 @@ func (m Material) MacOSStoreConfig() (enrollmentstate.Config, error) {
 	}
 	cfg := m.StoreConfig()
 	cfg.Binding.CollectionProfile = enrollmentcrypto.CollectionProfile
+	cfg.Platform = "darwin"
+	return cfg, nil
+}
+
+// MacOSInventoryStoreConfig derives only a fresh explicitly enabled inventory
+// domain. No existing basic, Windows or Linux identity is adopted or promoted.
+func (m Material) MacOSInventoryStoreConfig() (enrollmentstate.Config, error) {
+	if m.value == nil || !m.value.lan.MacOSInventoryEnabled || m.value.lan.Profile != lanconfig.TLS || m.value.config.Profile != lanconfig.TLS {
+		return enrollmentstate.Config{}, ErrConfiguration
+	}
+	cfg := m.StoreConfig()
+	cfg.Binding.CollectionProfile = enrollmentcrypto.CollectionProfileMacOSInventory
 	cfg.Platform = "darwin"
 	return cfg, nil
 }

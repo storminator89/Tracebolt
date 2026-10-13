@@ -19,7 +19,7 @@ const (
 )
 
 func physicalInventoryProfile(profile string) bool {
-	return completeProfile(profile) || profile == enrollmentcrypto.CollectionProfileWindowsInventory
+	return completeProfile(profile) || profile == enrollmentcrypto.CollectionProfileWindowsInventory || profile == "macos-read-inventory-v1"
 }
 func databaseCap(profile string) int64 {
 	if completeProfile(profile) {

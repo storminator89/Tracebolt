@@ -12,11 +12,12 @@ const ModeFile = "identity-mode-v2.json"
 const DatabaseFile = "enrollment-v2.db"
 const WindowsDatabaseFile = "enrollment-windows.db"
 const MacOSDatabaseFile = "enrollment-macos.db"
+const MacOSInventoryDatabaseFile = "enrollment-macos-inventory.db"
 
 // RejectEnrollmentMode prevents an existing v2 ledger from silently returning
 // to manual-v1 operation, including an interrupted mode-marker initialization.
 func RejectEnrollmentMode(dir string) error {
-	for _, name := range []string{MacOSInitializingFile, MacOSReadyFile, MacOSDatabaseFile, MacOSDatabaseFile + "-wal", MacOSDatabaseFile + "-shm", MacOSDatabaseFile + "-journal", ModeFile, DatabaseFile, DatabaseFile + "-wal", DatabaseFile + "-shm", DatabaseFile + "-journal", WindowsDatabaseFile, WindowsDatabaseFile + "-wal", WindowsDatabaseFile + "-shm", WindowsDatabaseFile + "-journal"} {
+	for _, name := range []string{MacOSInventoryInitializingFile, MacOSInventoryReadyFile, MacOSInventoryDatabaseFile, MacOSInventoryDatabaseFile + "-wal", MacOSInventoryDatabaseFile + "-shm", MacOSInventoryDatabaseFile + "-journal", MacOSInitializingFile, MacOSReadyFile, MacOSDatabaseFile, MacOSDatabaseFile + "-wal", MacOSDatabaseFile + "-shm", MacOSDatabaseFile + "-journal", ModeFile, DatabaseFile, DatabaseFile + "-wal", DatabaseFile + "-shm", DatabaseFile + "-journal", WindowsDatabaseFile, WindowsDatabaseFile + "-wal", WindowsDatabaseFile + "-shm", WindowsDatabaseFile + "-journal"} {
 		if _, e := os.Lstat(filepath.Join(dir, name)); e == nil || !os.IsNotExist(e) {
 			return ErrConfiguration
 		}
@@ -35,6 +36,9 @@ func (m Material) PrepareMode(dir string, legacyEntries int) error {
 	if _, err := m.macOSState(dir); err != nil {
 		return err
 	}
+	if _, err := m.macOSInventoryState(dir); err != nil {
+		return err
+	}
 	path := filepath.Join(dir, ModeFile)
 	if lanstore.ValidateStateFile(path) != nil {
 		return ErrConfiguration
@@ -49,7 +53,7 @@ func (m Material) PrepareMode(dir string, legacyEntries int) error {
 	} else if !os.IsNotExist(e) {
 		return ErrConfiguration
 	}
-	for _, name := range []string{WindowsDatabaseFile, MacOSDatabaseFile, MacOSInitializingFile, MacOSReadyFile} {
+	for _, name := range []string{WindowsDatabaseFile, MacOSDatabaseFile, MacOSInitializingFile, MacOSReadyFile, MacOSInventoryDatabaseFile, MacOSInventoryInitializingFile, MacOSInventoryReadyFile} {
 		for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
 			if _, e := os.Lstat(filepath.Join(dir, name+suffix)); e == nil || !os.IsNotExist(e) {
 				return ErrConfiguration

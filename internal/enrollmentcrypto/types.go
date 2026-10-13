@@ -23,9 +23,36 @@ const CollectionProfileComplete = "managed-operations-v3"
 // inventory scope. It is never a Linux managed-operations profile.
 const CollectionProfileWindowsInventory = "windows-inventory-v1"
 
+// CollectionProfileMacOSInventory is a fresh Darwin-only TLS inventory scope.
+// It does not expand an existing basic or other-platform identity.
+const CollectionProfileMacOSInventory = "macos-read-inventory-v1"
+
 // ValidCollectionProfile admits only explicitly implemented, consent-bound profiles.
 func ValidCollectionProfile(profile string) bool {
-	return profile == CollectionProfile || profile == CollectionProfileWindowsInventory || ManagedCollectionProfile(profile)
+	return profile == CollectionProfile || profile == CollectionProfileWindowsInventory || profile == CollectionProfileMacOSInventory || ManagedCollectionProfile(profile)
+}
+
+// ValidCollectionTransportProfile is the closed transport/profile matrix.
+func ValidCollectionTransportProfile(transport, collection string) bool {
+	return (transport == "tls" || transport == "http-test") && ValidCollectionProfile(collection) && (collection != CollectionProfileMacOSInventory || transport == "tls")
+}
+
+// ValidPlatformCollectionProfile is the explicit GOOS/transport/scope matrix.
+// New profiles never inherit Linux admission through an exclusion fallback.
+func ValidPlatformCollectionProfile(platform, transport, collection string) bool {
+	if !ValidCollectionTransportProfile(transport, collection) {
+		return false
+	}
+	switch platform {
+	case "linux":
+		return collection == CollectionProfile || ManagedCollectionProfile(collection)
+	case "windows":
+		return collection == CollectionProfileWindowsInventory || transport == "tls" && collection == CollectionProfile
+	case "darwin":
+		return transport == "tls" && (collection == CollectionProfile || collection == CollectionProfileMacOSInventory)
+	default:
+		return false
+	}
 }
 
 // ManagedCollectionProfile identifies explicit managed metadata scopes. It does

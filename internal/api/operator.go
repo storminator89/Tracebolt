@@ -36,10 +36,12 @@ import (
 )
 
 type LANOperatorConfig struct {
-	MacOSEnrollment           *enrollmentservice.Service
-	MacOSEnrollmentBootstrap  EnrollmentBootstrap
-	WindowsManagedMSI         *windowsmanagedmsimanager.Manager
-	WindowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
+	MacOSInventoryEnrollment          *enrollmentservice.Service
+	MacOSInventoryEnrollmentBootstrap EnrollmentBootstrap
+	MacOSEnrollment                   *enrollmentservice.Service
+	MacOSEnrollmentBootstrap          EnrollmentBootstrap
+	WindowsManagedMSI                 *windowsmanagedmsimanager.Manager
+	WindowsManagedMSIRegistry         *windowsmanagedmsimanager.Registry
 	// Source-only injection; no CLI/config loader or native executor is supplied.
 	WindowsUpdateJobs       *windowsupdatejob.Manager
 	WindowsSoftwareJobs     *windowssoftwarejob.Manager
@@ -93,6 +95,7 @@ type operatorHandler struct {
 	enrollment                *enrollmentservice.Service
 	windowsEnrollment         *operatorHandler
 	macosEnrollment           *operatorHandler
+	macosInventoryEnrollment  *operatorHandler
 	enrollmentBootstrap       EnrollmentBootstrap
 	bootstrapAdmission        bootstrapAdmission
 }
@@ -161,6 +164,15 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 		a, b := c.Enrollment.Binding(), c.MacOSEnrollment.Binding()
 		if a.InstanceID != b.InstanceID || a.Origin != b.Origin || a.Profile != b.Profile || a.IssuerFingerprint != b.IssuerFingerprint || c.Enrollment.AutomaticRenewal() != c.MacOSEnrollment.AutomaticRenewal() || c.EnrollmentBootstrap.AgentOrigin != c.MacOSEnrollmentBootstrap.AgentOrigin {
 			return nil, errors.New("macOS enrollment boundary does not match manager authority")
+		}
+	}
+	if c.MacOSInventoryEnrollment != nil {
+		if c.Enrollment == nil || c.MacOSInventoryEnrollment == c.Enrollment || c.MacOSInventoryEnrollment == c.WindowsEnrollment || c.MacOSInventoryEnrollment == c.MacOSEnrollment || c.InsecureHTTPTest || c.MacOSInventoryEnrollment.Platform() != "darwin" || c.MacOSInventoryEnrollment.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileMacOSInventory || !validEnrollmentBootstrap(c.MacOSInventoryEnrollment, c.MacOSInventoryEnrollmentBootstrap, c.Origin, false) {
+			return nil, errors.New("macOS inventory enrollment authority is not separately configured")
+		}
+		a, b := c.Enrollment.Binding(), c.MacOSInventoryEnrollment.Binding()
+		if a.InstanceID != b.InstanceID || a.Origin != b.Origin || a.Profile != b.Profile || a.IssuerFingerprint != b.IssuerFingerprint || c.Enrollment.AutomaticRenewal() != c.MacOSInventoryEnrollment.AutomaticRenewal() || c.EnrollmentBootstrap.AgentOrigin != c.MacOSInventoryEnrollmentBootstrap.AgentOrigin {
+			return nil, errors.New("macOS inventory enrollment boundary does not match manager authority")
 		}
 	}
 	profile := "tls"
@@ -297,6 +309,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	}
 	if c.MacOSEnrollment != nil {
 		h.macosEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, cookieName: cookieName, enrollment: c.MacOSEnrollment, enrollmentBootstrap: c.MacOSEnrollmentBootstrap}
+	}
+	if c.MacOSInventoryEnrollment != nil {
+		h.macosInventoryEnrollment = &operatorHandler{app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, cookieName: cookieName, enrollment: c.MacOSInventoryEnrollment, enrollmentBootstrap: c.MacOSInventoryEnrollmentBootstrap}
 	}
 	return h, nil
 }
@@ -462,6 +477,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		servePublicBootstrap(w, r, h.enrollmentBootstrap, &h.bootstrapAdmission)
+		return
+	}
+	if r.URL.Path == "/v2/macos-inventory/enrollment" || strings.HasPrefix(r.URL.Path, "/v2/macos-inventory/enrollment/") {
+		h.macosInventoryEnrollmentClient(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/v2/macos/enrollment/") {
@@ -636,6 +655,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/logout" || r.URL.Path == "/api/auth/session" {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
+		return
+	}
+	if r.URL.Path == "/api/macos-inventory/enrollment" || strings.HasPrefix(r.URL.Path, "/api/macos-inventory/enrollment/") {
+		h.macosInventoryEnrollmentOperator(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/macos-inventory") {
+		h.macosInventoryQuery(w, r)
 		return
 	}
 	if r.URL.Path == "/api/macos/enrollment" || strings.HasPrefix(r.URL.Path, "/api/macos/enrollment/") {

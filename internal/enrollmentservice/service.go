@@ -156,16 +156,7 @@ func (s *Service) CreateInvitation(ctx context.Context, requestID, platform stri
 	if s.store.Config().Platform != "" && platform != s.store.Config().Platform || platform == "darwin" && s.store.Config().Platform != "darwin" {
 		return InvitationCreation{}, ErrPlatform
 	}
-	// Linux retains its existing profile matrix. Windows admission is limited
-	// to explicit Windows scope: basic remains TLS-only, while the separate
-	// inventory profile also has an acknowledged signed HTTP-test path. No
-	// Windows invitation can reinterpret a Linux managed profile. macOS admits
-	// only the existing basic TLS scope; it does not inherit managed inventory.
-	if s.binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
-		if platform != "windows" || s.binding.Profile != "tls" && s.binding.Profile != "http-test" {
-			return InvitationCreation{}, ErrPlatform
-		}
-	} else if platform != "linux" && ((platform != "windows" && platform != "darwin") || s.binding.Profile != "tls" || s.binding.CollectionProfile != enrollmentcrypto.CollectionProfile) {
+	if !enrollmentcrypto.ValidPlatformCollectionProfile(platform, s.binding.Profile, s.binding.CollectionProfile) {
 		return InvitationCreation{}, ErrPlatform
 	}
 	id, e := newID("invite_")

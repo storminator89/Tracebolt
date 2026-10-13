@@ -2,6 +2,7 @@ package enrollmentservice
 
 import (
 	"context"
+	"fmt"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/enrollmentstore"
@@ -20,9 +21,13 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 	snapshots := make([]enrollmentstate.Snapshot, 0, len(views))
 	observations := make(map[string]model.Device, len(views))
 	received := make(map[string]time.Time, len(views))
+	macosContacts := make(map[string]enrollmentstore.MacOSInventoryContact, len(views))
 	renewals := make(map[string]enrollmentstore.RenewalView, len(views))
 	for _, view := range views {
 		snapshots = append(snapshots, view.Snapshot)
+		if view.MacOSInventoryContact != nil {
+			macosContacts[view.Snapshot.Approval.DeviceID] = *view.MacOSInventoryContact
+		}
 		if view.Renewal != nil {
 			renewals[view.Snapshot.Approval.DeviceID] = *view.Renewal
 		}
@@ -44,7 +49,7 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 			d.Platform = "windows"
 			d.OS = "Awaiting Windows agent"
 		}
-		if snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfile && snapshot.Binding.Profile == "tls" && snapshot.Platform == "darwin" {
+		if (snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfile || snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory) && snapshot.Binding.Profile == "tls" && snapshot.Platform == "darwin" {
 			d.Platform = "macos"
 			d.OS = "Awaiting macOS agent"
 		}
@@ -70,6 +75,14 @@ func (s *Service) Devices(ctx context.Context, now time.Time) ([]model.Device, e
 					}
 				}
 			}
+		}
+		if contact, ok := macosContacts[id]; ok && snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+			d.OS = "macOS inventory"
+			d.LastSeen = contact.CollectedAt
+			d.Capabilities = append(d.Capabilities, model.Capability{ID: "macos_inventory_contact", Name: "Inventory contact", Status: "recorded", Detail: fmt.Sprintf("Original inventory capture %s; accepted receipt %s. Historical contact does not establish a running service, source coverage or host health.", contact.CollectedAt.Format(time.RFC3339Nano), contact.ReceivedAt.Format(time.RFC3339Nano))})
+		}
+		if snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+			d.Capabilities = append(d.Capabilities, model.Capability{ID: "macos_inventory", Name: "macOS read inventory", Status: "scope", Detail: "Fresh macOS inventory scope. Private inventory shows actual source coverage and original capture age; this does not establish local consent, successful collection or host health."})
 		}
 		// An issuance intent alone is not evidence that a certificate was issued.
 		// Always overwrite any observation metadata with the committed ledger view.

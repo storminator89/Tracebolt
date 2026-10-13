@@ -75,6 +75,7 @@ type Replay struct {
 	ReceivedAt  time.Time `json:"receivedAt"`
 }
 type credential struct {
+	MacOSInventoryInitialized          bool                           `json:"macosInventoryInitialized,omitempty"`
 	Renewal                            *renewalRecord                 `json:"renewal,omitempty"`
 	WindowsActionSetup                 *windowsActionSetupMarker      `json:"windowsActionSetup,omitempty"`
 	WindowsUpdateJobSetup              *windowsUpdateJobSetupMarker   `json:"windowsUpdateJobSetup,omitempty"`
@@ -96,6 +97,7 @@ type credential struct {
 type transaction struct {
 	ctx                             context.Context
 	issuerDER                       []byte
+	originalMacOSInventory          map[string]bool
 	originalWindowsActionSetup      map[string]windowsActionSetupMarker
 	originalWindowsUpdateJobSetup   map[string]windowsUpdateJobSetupMarker
 	originalWindowsSoftwareJobSetup map[string]windowsSoftwareJobSetupMarker
@@ -156,7 +158,7 @@ const (
 )
 
 func openStore(path string, config enrollmentstate.Config, issuerDER []byte, policy openPolicy) (*Store, error) {
-	if runtime.GOOS != "linux" || validateIssuer(config, issuerDER) != nil || (enrollmentcrypto.ManagedCollectionProfile(config.Binding.CollectionProfile) && config.RecordLimit > 25) {
+	if runtime.GOOS != "linux" || validateIssuer(config, issuerDER) != nil || ((enrollmentcrypto.ManagedCollectionProfile(config.Binding.CollectionProfile) || config.Binding.CollectionProfile == "macos-read-inventory-v1") && config.RecordLimit > 25) {
 		return nil, ErrStorage
 	}
 	engine, err := enrollmentstate.New(config)
@@ -266,6 +268,12 @@ func openStore(path string, config enrollmentstate.Config, issuerDER []byte, pol
 		}
 		for _, query := range queries {
 			if _, err = conn.ExecContext(context.Background(), query); err != nil {
+				rollback()
+				return fail()
+			}
+		}
+		if config.Binding.CollectionProfile == "macos-read-inventory-v1" {
+			if initializeMacOSInventory(context.Background(), conn) != nil {
 				rollback()
 				return fail()
 			}
@@ -429,7 +437,7 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err != nil {
 		return nil, ErrStorage
 	}
-	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsUpdateJobSetup: make(map[string]windowsUpdateJobSetupMarker), originalWindowsSoftwareJobSetup: make(map[string]windowsSoftwareJobSetupMarker), originalWindowsManagedMSISetup: make(map[string]windowsManagedMSISetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsUserSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
+	t := &transaction{ctx: ctx, issuerDER: s.issuerDER, conn: conn, engine: engine, credentials: make(map[string]credential), originalLedger: raw, originalMacOSInventory: make(map[string]bool), originalCredentials: make(map[string][]byte), originalRenewals: make(map[string][]byte), originalServiceActionSetup: make(map[string]serviceActionSetupMarker), originalWindowsActionSetup: make(map[string]windowsActionSetupMarker), originalWindowsUpdateJobSetup: make(map[string]windowsUpdateJobSetupMarker), originalWindowsSoftwareJobSetup: make(map[string]windowsSoftwareJobSetupMarker), originalWindowsManagedMSISetup: make(map[string]windowsManagedMSISetupMarker), originalWindowsHistoryAuthority: make(map[string]bool), originalWindowsEventAuthority: make(map[string]bool), originalWindowsFullServices: make(map[string]bool), originalWindowsFullSoftware: make(map[string]bool), originalWindowsUserSoftware: make(map[string]bool), originalWindowsFullProcesses: make(map[string]bool), originalWindowsNetworkContext: make(map[string]bool), operational: map[string]operationalRecord{}, originalOperational: map[string][]byte{}, inventory: map[string]inventoryRecord{}, originalInventory: map[string][]byte{}, overview: map[string]overviewRecord{}, originalOverview: map[string][]byte{}}
 	if conn.QueryRowContext(ctx, "SELECT count(*),coalesce(max(length(body)),0) FROM enrollment_credentials").Scan(&count, &n) != nil || count > s.config.RecordLimit || n > maxCredentialBytes {
 		return nil, ErrStorage
 	}
@@ -465,6 +473,9 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 			return nil, ErrStorage
 		}
 		t.credentials[id] = c
+		if c.MacOSInventoryInitialized {
+			t.originalMacOSInventory[id] = true
+		}
 		if c.WindowsActionSetup != nil {
 			t.originalWindowsActionSetup[id] = *c.WindowsActionSetup
 		}
@@ -570,9 +581,15 @@ func (s *Store) load(ctx context.Context, conn *sql.Conn) (*transaction, error) 
 	if err = s.loadSystemMetadata(ctx, t); err != nil {
 		return nil, ErrStorage
 	}
+	if err = validateMacOSInventoryState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bool {
+	if c.MacOSInventoryInitialized && (s.Platform != "darwin" || s.Binding.Profile != "tls" || s.Binding.CollectionProfile != "macos-read-inventory-v1") {
+		return false
+	}
 	if c.WindowsFullServicesInitialized && (s.Platform != "windows" || s.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return false
 	}
@@ -672,6 +689,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		return err
 	}
 	for id, c := range t.credentials {
+		if t.originalMacOSInventory[id] && !c.MacOSInventoryInitialized {
+			return ErrStorage
+		}
 		if original, ok := t.originalWindowsManagedMSISetup[id]; ok && (c.WindowsManagedMSISetup == nil || original != *c.WindowsManagedMSISetup) {
 			return ErrStorage
 		}
@@ -783,6 +803,9 @@ func (s *Store) transact(ctx context.Context, action func(*transaction) error) e
 		}
 		return err
 	}
+	if err = validateMacOSInventoryState(ctx, t, s.config.Binding.CollectionProfile); err != nil {
+		return err
+	}
 	if err = sharedInventoryBudget(ctx, t); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -838,6 +861,11 @@ func validateSchema(ctx context.Context, conn *sql.Conn, profile string) error {
 	expected := map[string]inventoryledger.SchemaObject{
 		"enrollment_state":       {Type: "table", Name: "enrollment_state", SQL: stateSchema},
 		"enrollment_credentials": {Type: "table", Name: "enrollment_credentials", SQL: credentialSchema},
+	}
+	if profile == "macos-read-inventory-v1" {
+		for _, obj := range macOSInventorySchemaObjects() {
+			expected[obj.Name] = obj
+		}
 	}
 	windowsActionsEnabled, e := windowsActionSchemaPresent(ctx, conn)
 	if e != nil {
