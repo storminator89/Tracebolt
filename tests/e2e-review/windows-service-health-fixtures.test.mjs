@@ -74,7 +74,9 @@ test('initial complete status read represents retained legacy source conflict wi
 test('real compiled App explicitly switches default complete source to preserved preview without policy writes',async()=>{
  const {createRequire}=await import('node:module'),require=createRequire(new URL('../../web/package.json',import.meta.url));
  const {JSDOM}=require('jsdom'),{build}=require('esbuild');
- const {windowsInventoryBrowserCase,windowsHealthBrowserDevice}=await import('./windows-inventory-browser.mjs');
+ // Keep this login-stopping walkthrough's diagnostic state out of sibling tests.
+ const {windowsInventoryBrowserCase,windowsHealthBrowserDevice,windowsInventoryFailureStage}=await import(new URL('./windows-inventory-browser.mjs?inert-complete-source-app',import.meta.url).href);
+ assert.equal(windowsInventoryFailureStage(),'setup');
  const compiled=await build({entryPoints:[new URL('../../web/src/main.tsx',import.meta.url).pathname],outdir:'memory-only',bundle:true,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},loader:{'.woff':'dataurl','.woff2':'dataurl'},write:false,logLevel:'silent'});
  const script=compiled.outputFiles.find(file=>file.path.endsWith('.js')).text;
  for(const locale of ['en','de']){
@@ -82,6 +84,7 @@ test('real compiled App explicitly switches default complete source to preserved
   const session={mode:'lan',transport:'https',insecureTestMode:false,transportWarning:null,authenticationRequired:true,authenticated:true,csrfToken:'synthetic-only',serverNow:at,expiresAt:new Date(Date.parse(at)+3600000).toISOString(),expiresInSeconds:3600,loginMode:'shared',actorId:null,capabilities:['read']};
   let handler;const stop=new Error('inert App route setup'),page={clock:{install:async()=>{},pauseAt:async()=>{}},route:async(_pattern,read)=>{handler=read;},evaluate:async()=>Date.parse(at)};
   await assert.rejects(windowsInventoryBrowserCase({pageAt:async()=>page,login:async()=>{throw stop;},base}),error=>error===stop);
+  assert.equal(windowsInventoryFailureStage(),'login');
   const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:base+'/#/devices/'+device.id+'/health',runScripts:'outside-only',pretendToBeVisual:true});
   try{
    const w=dom.window;Object.assign(w,{TextEncoder,TextDecoder,structuredClone});w.localStorage.setItem('tracebolt.locale',locale);w.HTMLElement.prototype.scrollIntoView=()=>{};
