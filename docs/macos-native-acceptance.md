@@ -2,8 +2,9 @@
 
 **Source candidate, default-off, not production acceptance.** The first separately
 approved native run is recorded in [2026-10-13 evidence](macos-native-evidence-20261013.md).
-It does not authorize another run. The version-2 diagnostic change below is
-source-only and has not been executed natively. This harness is not a Tracebolt
+It does not authorize another run. The log version-2 diagnostics and the
+separate [Gate I interface diagnostics](macos-interface-diagnostics.md) are
+source-only and have not been executed natively. This harness is not a Tracebolt
 agent, production log adapter, host grant, installation, release or proof of
 normal non-admin access. Existing fixture workflows remain unchanged.
 Publishing or merging these files does not authorize a dispatch. Independently
@@ -13,7 +14,8 @@ approval of the selected gates, two hosts and public evidence upload before a ru
 ## Fixed dispatch boundary
 
 `.github/workflows/macos-native-acceptance.yml` has only `workflow_dispatch`.
-Both gate selectors default to false. It accepts only public
+All three gate selectors (A, B and I) default to false. Gate A and Gate I are
+mutually exclusive; Gate B remains an independent selection. It accepts only public
 `storminator89/Tracebolt`, first run attempt, standard GitHub-hosted `macos-15`
 (ARM64) and `macos-15-intel` (X64). There is no caller-supplied runner, command,
 path, predicate or time window. A private fork, different label, rerun, non-Darwin
@@ -38,8 +40,9 @@ identity, invoke a subprocess/compiler, build or execute a native probe, or
 contact a service. No argument also performs this inert check. The dedicated
 `--execute` edge requires the verified manual context. A later, separately
 approved dispatch must supply `reviewed_commit` and this exact `sourceSHA256`.
-Source hashing includes `go.mod`, `go.sum`, this document, the workflow, every
-file beneath `internal/`, and every harness source file, excluding Python bytecode
+Source hashing includes `go.mod`, `go.sum`, this document, the focused
+[Gate I disclosure](macos-interface-diagnostics.md), the workflow, every file
+beneath `internal/`, and every harness source file, excluding Python bytecode
 only. Symlink sources/parents, missing files or size bounds fail closed. The
 aggregate includes path, executable-mode bit, length and SHA-256; public hashes
 for the fixed harness files are retained. The source tree is independently read
@@ -51,7 +54,7 @@ the exact hashed source bytes; Python bytecode caches are never loaded for it. R
 
 ## Preparation and metadata
 
-Only Gate A needs pinned `actions/setup-go` and Go `1.27.1`. The existing pinned
+Gate A or Gate I needs pinned `actions/setup-go` and Go `1.27.1`. The existing pinned
 action uses its default documented vendor download flow, `token: ''`,
 `GO_DOWNLOAD_BASE_URL: ''`, `cache: false`, and `check-latest: false`. No custom
 installer or credential-bearing download wrapper is added. The PATH-selected exact `RUNNER_TOOL_CACHE/go/1.27.1/{arm64,x64}/bin/go`
@@ -63,14 +66,16 @@ Normal public setup-go version/environment/download metadata can appear in the
 Actions console; the native provider no-content rule below does not claim to
 suppress the action's ordinary output.
 
-Within a new task tree, Gate A prepares locked modules with `go mod download` and
+Within a new task tree, selected Gate A or I prepares locked modules with `go mod download` and
 `go mod verify`, `GOPROXY=https://proxy.golang.org`, `GOSUMDB=sum.golang.org` and
 `GOVCS=*:off`. There is no direct/VCS fallback. Then `GOPROXY=off`, `GOSUMDB=off`,
 `GOTOOLCHAIN=local`, `GOWORK=off`, `GOFLAGS=-mod=readonly`, `CGO_ENABLED=0` and
-`go build -trimpath -buildvcs=false` build only the reviewed inventory probe. Each preparation
+`go build -trimpath -buildvcs=false` builds only the selected reviewed probe:
+Gate A inventory, or Gate I interfaces with the explicit
+`-tags=tracebolt_interface_diagnostics` tag. Each preparation
 child is bounded to 240 seconds and at most 1 MiB per output stream for module
 steps, 64 KiB per stream for compilation. Text is discarded, including normal
-module-progress stderr. This does not execute the compiled inventory probe.
+module-progress stderr. This does not execute the compiled probe.
 
 Only Gate B resolves the already installed Apple clang and SDK with fixed
 `xcrun --find clang`, `--show-sdk-path` and `--show-sdk-version` calls. It records
@@ -135,6 +140,22 @@ probe does not independently prove every product-internal child was reaped.
 Nonzero exit 1 can preserve a strictly validated failure projection; arbitrary
 output, stderr, truncation, unknown fields and exception text are discarded.
 
+## Gate I: narrow interface diagnostics once
+
+The separate [Gate I disclosure](macos-interface-diagnostics.md) defines the
+exact two once-only interface commands, explicit diagnostic build tag, unchanged
+runner/parser limits, null unavailable inner-command measurements and closed
+16-KiB `tracebolt.macos-native-interface-diagnostics.v1` result. Gate I does not
+call the complete inventory collector. A plus I is rejected; choosing I grants
+no Gate B writes or reads. Any future I-only proposal uses `gate_a: false`,
+`gate_b: false`, `gate_i: true` and requires fresh exact-source approval.
+
+The assembled supervisor report uses numeric `schemaVersion: 2` and
+`scope: macos-native-evidence-v2`. It carries independently selected gate results
+and the new interface-probe metadata. Historical outer-v1 reports retain their
+original validator and are not rewritten or interpreted as outer-v2 evidence.
+This report-version change is separate from Gate B's nested log schema below.
+
 ## Gate B: synthetic write/read, not a production provider
 
 This gate needs explicit approval of both writes and reads. Before emission and
@@ -171,7 +192,9 @@ performance, non-admin visibility and a production adapter remain unproved.
 ### Source-only rejection diagnostics (synthetic result version 2)
 
 The nested `syntheticLog.schemaVersion` is explicitly **2**. Its query rows add
-one closed `diagnostic` object; the supervisor report version is unchanged.
+one closed `diagnostic` object. The log-only change did not change the outer
+report; this assembled Gate I composition separately uses outer numeric version
+2 and `scope: macos-native-evidence-v2`, as described above.
 Version-1 reports remain immutable first-run evidence and must be interpreted
 with their original reviewed validator. They are not rewritten or silently
 accepted as version 2. The first run established only `unsupported_schema` on
@@ -220,7 +243,7 @@ not evidence about Apple schema or native access.
 No new native workflow is created and no dispatch or rerun is authorized by this text.
 After review of the assembled new commit/tree/source digest, the narrow proposed
 scope is one **new** manual first-attempt dispatch of the existing workflow with
-`gate_a: false` and `gate_b: true`, on the same standard GitHub-hosted `macos-15`
+`gate_a: false`, `gate_b: true` and `gate_i: false`, on the same standard GitHub-hosted `macos-15`
 ARM64 and `macos-15-intel` X64 labels. Gate A's inventory reads are not repeated.
 Each host compiles the unchanged emitter under the same preparation rules,
 writes its same three synthetic messages once, and runs up to the original three
@@ -242,7 +265,8 @@ which cannot be specified before the complete candidate is assembled.
 A canonical mode-0700 task tree under canonical `RUNNER_TEMP` owns empty HOME,
 temp, binary and build-cache directories. OSLog children get only fixed PATH,
 LANG/LC_ALL=C, TZ=UTC, task HOME/TMPDIR, closed stdin and task HOME cwd. The
-inventory collector retains its unchanged fixed environment and `/` cwd.
+inventory collector and tagged interface diagnostic bridge retain the unchanged
+runner environment and `/` cwd.
 Ambient proxy, developer, credential and logging variables are not inherited.
 Owned children have incremental bounded pipe reads, monotonic deadlines,
 cancellation/overflow group termination and direct wait/reap. No global kill or

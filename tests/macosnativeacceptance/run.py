@@ -20,7 +20,8 @@ import unicodedata
 import types
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = 1
+SCHEMA = 2
+INTERFACE_REPORT_LIMIT = 16 * 1024
 REPORT_LIMIT = 64 * 1024
 SOURCE_LIMIT = 128 * 1024 * 1024
 SOURCE_FILE_LIMIT = 8 * 1024 * 1024
@@ -30,8 +31,11 @@ MANUAL_LIMIT = 1024 * 1024
 MANUAL_SHA256 = "d89cb620dbcab9e849161d2f3c63c4be62c5bd8240bba851d395a09fc7504c08"
 RUNNERS = {"macos-15": ("ARM64", "arm64"), "macos-15-intel": ("X64", "x86_64")}
 BASE_ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
-SOURCE_FIXED = ("go.mod", "go.sum", ".github/workflows/macos-native-acceptance.yml", "docs/macos-native-acceptance.md")
-HARNESS_REQUIRED = ("run.py", "test_run.py", "log_probe.py", "test_log_probe.py", "emitter.c")
+SOURCE_FIXED = ("go.mod", "go.sum", ".github/workflows/macos-native-acceptance.yml", "docs/macos-native-acceptance.md", "docs/macos-interface-diagnostics.md")
+HARNESS_REQUIRED = ("run.py", "test_run.py", "test_interface_run.py", "log_probe.py", "test_log_probe.py", "emitter.c")
+INVENTORY_PROBE_FILES = ("main.go", "main_test.go", "probe.go", "probe_test.go", "README.md")
+INTERFACE_PROBE_FILES = ("main.go", "main_test.go", "probe.go", "probe_test.go", "native_enabled.go", "native_disabled.go", "README.md")
+SOURCE_PUBLIC = frozenset(SOURCE_FIXED) | {"tests/macosnativeacceptance/" + n for n in HARNESS_REQUIRED} | {"tests/macosnativeacceptance/inventoryprobe/" + n for n in INVENTORY_PROBE_FILES} | {"tests/macosnativeacceptance/interfaceprobe/" + n for n in INTERFACE_PROBE_FILES}
 TOOL_PATHS = {"sysctl": "/usr/sbin/sysctl", "pkgutil": "/usr/sbin/pkgutil", "ps": "/bin/ps", "ifconfig": "/sbin/ifconfig", "log": "/usr/bin/log"}
 VERSION_COMMANDS = {
     "productVersion": (("/usr/bin/sw_vers", "-productVersion"), r"15(?:\.[0-9]{1,3}){1,2}"),
@@ -164,7 +168,7 @@ def verify_source_unchanged(manifest):
 
 
 def verify_binary_custody(tree, name, expected):
-    if name not in ("inventory-probe", "tracebolt-native-log-probe") or not _hash(expected):
+    if name not in ("inventory-probe", "interface-probe", "tracebolt-native-log-probe") or not _hash(expected):
         raise Refused("source_mismatch")
     # Recheck protected task components and inode immediately before execution.
     root = tree.path
@@ -227,7 +231,7 @@ def source_manifest(root=ROOT):
                 if name.endswith(".pyc"):
                     continue
                 paths.add((Path(directory) / name).relative_to(root).as_posix())
-    if len(paths) > 8192 or not all("tests/macosnativeacceptance/" + p in paths for p in HARNESS_REQUIRED):
+    if len(paths) > 8192 or not SOURCE_PUBLIC <= paths:
         raise Refused("source_invalid")
     if not any(p.startswith("tests/macosnativeacceptance/inventoryprobe/") and p.endswith(".go") for p in paths):
         raise Refused("source_invalid")
@@ -245,7 +249,7 @@ def source_manifest(root=ROOT):
             raise Refused("source_invalid")
         mode = stat.S_IMODE(path.stat().st_mode)
         digest.update((relative + "\0" + ("x" if mode & 0o111 else "-") + "\0" + str(size) + "\0" + value + "\n").encode())
-        if relative in SOURCE_FIXED or relative in {"tests/macosnativeacceptance/" + n for n in HARNESS_REQUIRED} or relative in {"tests/macosnativeacceptance/inventoryprobe/" + n for n in ("main.go", "main_test.go", "probe.go", "probe_test.go", "README.md")}:
+        if relative in SOURCE_PUBLIC:
             harness[relative] = value
     return {"sha256": digest.hexdigest(), "fileCount": len(paths), "bytes": total, "files": harness}
 
@@ -263,10 +267,10 @@ def hosted_admission(env, platform, manifest):
     review = env.get("TRACEBOLT_REVIEWED_SOURCE_SHA256", "")
     if not re.fullmatch(r"[0-9a-f]{64}", review) or review != manifest["sha256"]:
         raise Refused("source_mismatch")
-    a, b = env.get("TRACEBOLT_SELECT_GATE_A"), env.get("TRACEBOLT_SELECT_GATE_B")
-    if a not in ("true", "false") or b not in ("true", "false") or (a, b) == ("false", "false"):
+    a, b, i = (env.get("TRACEBOLT_SELECT_GATE_" + gate) for gate in ("A", "B", "I"))
+    if any(v not in ("true", "false") for v in (a, b, i)) or (a, b, i) == ("false", "false", "false") or (a, i) == ("true", "true"):
         raise Refused("dispatch_not_admitted")
-    return {"runnerLabel": label, "runnerArch": RUNNERS[label][0], "commit": sha, "gateASelected": a == "true", "gateBSelected": b == "true"}
+    return {"runnerLabel": label, "runnerArch": RUNNERS[label][0], "commit": sha, "gateASelected": a == "true", "gateBSelected": b == "true", "gateISelected": i == "true"}
 
 
 def elapsed_milliseconds(started, maximum=1200000):
@@ -570,8 +574,8 @@ def selected_go(ambient, context):
 
 def prepare(processes, tree, context, ambient):
     env = clean_environment(tree)
-    metadata = {"goVersion": None, "goSHA256": None, "inventorySHA256": None, "emitterSHA256": None, "clangSHA256": None, "clangVersion": None, "sdkVersion": None, "sdkSettingsSHA256": None}
-    if context["gateASelected"]:
+    metadata = {"goVersion": None, "goSHA256": None, "inventorySHA256": None, "interfaceSHA256": None, "emitterSHA256": None, "clangSHA256": None, "clangVersion": None, "sdkVersion": None, "sdkSettingsSHA256": None}
+    if context["gateASelected"] or context["gateISelected"]:
         go_root, go = selected_go(ambient, context)
         env.update(GOROOT=str(go_root), GOTOOLCHAIN="local", GOWORK="off", GOFLAGS="-mod=readonly", CGO_ENABLED="0", GOPROXY="https://proxy.golang.org", GOSUMDB="sum.golang.org", GOPRIVATE="", GONOPROXY="", GONOSUMDB="", GOVCS="*:off", GOPATH=str(tree.path / "gopath"), GOCACHE=str(tree.path / "cache"), GOMODCACHE=str(tree.path / "modules"))
         version = require_capture(processes, (str(go), "version"), env, ROOT, maximum=128)
@@ -584,11 +588,18 @@ def prepare(processes, tree, context, ambient):
             if capture.metadata["reason"] != "ok":
                 raise Refused("preparation_failed")
         env.update(GOPROXY="off", GOSUMDB="off")
-        binary = tree.path / "bin/inventory-probe"
-        capture = processes.capture((str(go), "build", "-trimpath", "-buildvcs=false", "-o", str(binary), "./tests/macosnativeacceptance/inventoryprobe"), env=env, cwd=ROOT, seconds=240, stdout_limit=65536, stderr_limit=65536, retain=False)
+        if context["gateISelected"]:
+            binary = tree.path / "bin/interface-probe"
+            build_args = ("-tags=tracebolt_interface_diagnostics", "-o", str(binary), "./tests/macosnativeacceptance/interfaceprobe")
+            digest_key = "interfaceSHA256"
+        else:
+            binary = tree.path / "bin/inventory-probe"
+            build_args = ("-o", str(binary), "./tests/macosnativeacceptance/inventoryprobe")
+            digest_key = "inventorySHA256"
+        capture = processes.capture((str(go), "build", "-trimpath", "-buildvcs=false", *build_args), env=env, cwd=ROOT, seconds=240, stdout_limit=65536, stderr_limit=65536, retain=False)
         if capture.metadata["reason"] != "ok":
             raise Refused("preparation_failed")
-        metadata["inventorySHA256"] = bounded_hash(binary)[0]
+        metadata[digest_key] = bounded_hash(binary)[0]
     if context["gateBSelected"]:
         # Only the already installed Apple compiler/SDK, with no install fallback.
         clang = Path(require_capture(processes, ("/usr/bin/xcrun", "--find", "clang"), clean_environment(tree), tree.path / "home", maximum=1024)).resolve(strict=True)
@@ -705,6 +716,66 @@ def valid_inventory(v):
         return False
 
 
+# Fixed public categories only. Never accept native interface values, counts,
+# arbitrary errors or a claim to command observations the runner cannot expose.
+INTERFACE_PARSER_CODES = frozenset((
+    "none", "source_size", "source_control", "source_newline", "source_line_size",
+    "source_encoding", "empty_record", "orphan_record", "blank_record",
+    "interface_limit", "header_shape", "header_flags", "header_name", "mtu_missing",
+    "mtu_duplicate", "mtu_value", "address_shape", "address_numeric",
+    "address_family", "address_zone", "prefix_missing", "prefix_duplicate",
+    "prefix_value", "address_limit", "result_empty", "duplicate_interface",
+    "duplicate_address", "result_invalid",
+))
+
+
+def valid_interface_diagnostics(value):
+    """Closed Gate I projection; the unchanged runner exposes no command metrics."""
+    try:
+        if not _keys(value, {"schemaVersion", "gate", "mode", "status", "reason", "commandMetricsAvailable", "limits", "families"}):
+            return False
+        if value["schemaVersion"] != "tracebolt.macos-native-interface-diagnostics.v1" or value["gate"] != "I" or value["mode"] != "native" or value["status"] not in ("passed", "failed") or value["reason"] not in ("none", "interface_outcome", "invalid_input", "budget_exhausted") or value["commandMetricsAvailable"] is not False:
+            return False
+        limits = {"commandMilliseconds": 1000, "pipeWaitMilliseconds": 200, "maxOutputBytes": 262144, "maxInterfaces": 128, "maxAddressesPerInterface": 16, "reportMaxBytes": INTERFACE_REPORT_LIMIT}
+        if not _keys(value["limits"], limits) or value["limits"] != limits or any(type(v) is not int for v in value["limits"].values()):
+            return False
+        rows = value["families"]
+        if type(rows) is not list or len(rows) != 2:
+            return False
+        metrics = {"stdoutBytes", "stderrBytes", "elapsedMilliseconds", "exitCode", "childStarted", "childReaped"}
+        keys = {"id", "commandCalls", "commandOutcome", "parserCalls", "parserCode", "validation", "passed"} | metrics
+        outcomes = {"not_run", "succeeded", "access_denied", "source_unavailable", "unsupported_platform", "bounds_exceeded", "budget_exhausted", "command_panic"}
+        for row, source_id in zip(rows, ("interfaces_ipv4_ifconfig_v1", "interfaces_ipv6_ifconfig_v1")):
+            if not _keys(row, keys) or row["id"] != source_id or not _integer(row["commandCalls"], 0, 1) or not _integer(row["parserCalls"], 0, 1) or row["commandOutcome"] not in outcomes or row["parserCode"] not in INTERFACE_PARSER_CODES | {"not_run"} or row["validation"] not in ("not_run", "passed", "failed") or type(row["passed"]) is not bool or any(row[k] is not None for k in metrics):
+                return False
+            if (row["commandCalls"] == 0) != (row["commandOutcome"] == "not_run"):
+                return False
+            if row["commandOutcome"] != "succeeded":
+                if row["parserCalls"] != 0 or row["parserCode"] != "not_run" or row["validation"] != "not_run" or row["passed"]:
+                    return False
+            elif row["parserCalls"] != 1 or row["parserCode"] == "not_run":
+                return False
+            elif row["parserCode"] != "none":
+                if row["validation"] != "not_run" or row["passed"]:
+                    return False
+            elif row["validation"] not in ("passed", "failed") or row["passed"] != (row["validation"] == "passed"):
+                return False
+        both_passed = all(row["passed"] for row in rows)
+        if value["status"] == "passed" and (not both_passed or value["reason"] != "none"):
+            return False
+        if value["status"] == "failed" and value["reason"] == "none":
+            return False
+        # Cancellation can be observed after both families completed. Preserve
+        # those observations while refusing a successful overall attempt.
+        if value["reason"] == "interface_outcome" and (both_passed or any(row["commandCalls"] != 1 for row in rows)):
+            return False
+        if value["reason"] == "invalid_input" and any(row["commandCalls"] != 0 for row in rows):
+            return False
+        return len(json.dumps(value, allow_nan=False).encode("utf-8")) <= INTERFACE_REPORT_LIMIT
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 def valid_process(value):
     return (_keys(value, {"reason", "started", "reaped", "exitCode", "stdoutBytes", "stderrBytes", "elapsedMilliseconds"}) and value["reason"] in PROCESS_REASONS and all(type(value[k]) is bool for k in ("started", "reaped")) and (value["exitCode"] is None or _integer(value["exitCode"], -255, 255)) and _integer(value["stdoutBytes"], 0, REPORT_LIMIT + 1) and _integer(value["stderrBytes"], 0, 1025) and (value["elapsedMilliseconds"] is None or _integer(value["elapsedMilliseconds"], 0, 1200000)) and (value["elapsedMilliseconds"] is not None or value["reason"] != "ok") and (not value["reaped"] or value["started"]))
 
@@ -712,13 +783,13 @@ def valid_process(value):
 def validate_report(value, log_module=None):
     """Exact closed projection. Never publish arbitrary strings or source content."""
     try:
-        if not _keys(value, report_template({}, {})) or type(value["schemaVersion"]) is not int or value["schemaVersion"] != SCHEMA or value["scope"] != "macos-native-evidence-v1" or value["status"] not in ("passed", "failed", "blocked") or value["reason"] not in REASONS:
+        if not _keys(value, report_template({}, {})) or type(value["schemaVersion"]) is not int or value["schemaVersion"] != SCHEMA or value["scope"] != "macos-native-evidence-v2" or value["status"] not in ("passed", "failed", "blocked") or value["reason"] not in REASONS:
             return False
         c = value["context"]
-        if not _keys(c, {"runnerLabel", "runnerArch", "commit", "gateASelected", "gateBSelected"}) or c["runnerLabel"] not in RUNNERS or c["runnerArch"] != RUNNERS[c["runnerLabel"]][0] or not _hash(c["commit"], 40) or any(type(c[k]) is not bool for k in ("gateASelected", "gateBSelected")) or not (c["gateASelected"] or c["gateBSelected"]):
+        if not _keys(c, {"runnerLabel", "runnerArch", "commit", "gateASelected", "gateBSelected", "gateISelected"}) or c["runnerLabel"] not in RUNNERS or c["runnerArch"] != RUNNERS[c["runnerLabel"]][0] or not _hash(c["commit"], 40) or any(type(c[k]) is not bool for k in ("gateASelected", "gateBSelected", "gateISelected")) or not (c["gateASelected"] or c["gateBSelected"] or c["gateISelected"]) or (c["gateASelected"] and c["gateISelected"]):
             return False
         source = value["source"]
-        expected_files = set(SOURCE_FIXED) | {"tests/macosnativeacceptance/" + name for name in HARNESS_REQUIRED} | {"tests/macosnativeacceptance/inventoryprobe/" + name for name in ("main.go", "main_test.go", "probe.go", "probe_test.go", "README.md")}
+        expected_files = SOURCE_PUBLIC
         if not _keys(source, {"sha256", "fileCount", "bytes", "files"}) or not _hash(source["sha256"]) or not _integer(source["fileCount"], len(expected_files), 8192) or not _integer(source["bytes"], 1, SOURCE_LIMIT) or not _keys(source["files"], expected_files) or not all(_hash(x) for x in source["files"].values()):
             return False
         for key, size in (("sourceTree", 40), ("installedLogManualSHA256", 64)):
@@ -739,14 +810,22 @@ def validate_report(value, log_module=None):
             return False
         if value["build"] is not None:
             b = value["build"]
-            if not _keys(b, {"goVersion", "goSHA256", "inventorySHA256", "emitterSHA256", "clangSHA256", "clangVersion", "sdkVersion", "sdkSettingsSHA256"}) or b["goVersion"] not in (None, "go1.27.1"):
+            if not _keys(b, {"goVersion", "goSHA256", "inventorySHA256", "interfaceSHA256", "emitterSHA256", "clangSHA256", "clangVersion", "sdkVersion", "sdkSettingsSHA256"}) or b["goVersion"] not in (None, "go1.27.1"):
                 return False
-            if any(b[k] is not None and not _hash(b[k]) for k in ("goSHA256", "inventorySHA256", "emitterSHA256", "clangSHA256", "sdkSettingsSHA256")) or any(b[k] is not None and (type(b[k]) is not str or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", b[k])) for k in ("clangVersion", "sdkVersion")):
+            if any(b[k] is not None and not _hash(b[k]) for k in ("goSHA256", "inventorySHA256", "interfaceSHA256", "emitterSHA256", "clangSHA256", "sdkSettingsSHA256")) or any(b[k] is not None and (type(b[k]) is not str or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", b[k])) for k in ("clangVersion", "sdkVersion")):
                 return False
         if value["inventory"] is not None and not valid_inventory(value["inventory"]):
             return False
         if value["inventoryProcess"] is not None and not valid_process(value["inventoryProcess"]):
             return False
+        if value["interfaceDiagnostics"] is not None and not valid_interface_diagnostics(value["interfaceDiagnostics"]):
+            return False
+        if value["interfaceProcess"] is not None and (not valid_process(value["interfaceProcess"]) or value["interfaceProcess"]["stdoutBytes"] > INTERFACE_REPORT_LIMIT + 1):
+            return False
+        if value["interfaceDiagnostics"] is not None:
+            process = value["interfaceProcess"]
+            if process is None or not process["started"] or not process["reaped"] or process["stderrBytes"] != 0 or process["exitCode"] != (0 if value["interfaceDiagnostics"]["status"] == "passed" else 1) or process["reason"] != ("ok" if process["exitCode"] == 0 else "nonzero_exit"):
+                return False
         if value["syntheticLog"] is not None and (log_module is None or not log_module.validate_result(value["syntheticLog"])):
             return False
         if type(value["logrcAbsenceChecked"]) is not bool or (value["nativeElapsedMilliseconds"] is not None and not _integer(value["nativeElapsedMilliseconds"], 0, 1200000)):
@@ -758,12 +837,16 @@ def validate_report(value, log_module=None):
             return False
         if not c["gateASelected"] and (value["inventory"] is not None or value["inventoryProcess"] is not None):
             return False
+        if not c["gateISelected"] and (value["interfaceDiagnostics"] is not None or value["interfaceProcess"] is not None or (value["build"] is not None and value["build"]["interfaceSHA256"] is not None)):
+            return False
         if not c["gateBSelected"] and (value["syntheticLog"] is not None or value["installedLogManualSHA256"] is not None or value["logrcAbsenceChecked"]):
             return False
         if value["status"] == "passed":
             if value["reason"] != "ok" or value["nativeElapsedMilliseconds"] is None or not all(value[k] is not None for k in ("sourceTree", "imageOS", "imageVersion", "versions", "identity", "tools", "build")) or not clean["allDirectChildrenReaped"] or clean["taskTreeRemoved"] is not True:
                 return False
             if c["gateASelected"] and (value["inventory"] is None or value["inventory"]["status"] != "passed" or value["inventoryProcess"] is None or value["inventoryProcess"]["reason"] != "ok" or not value["inventoryProcess"]["reaped"]):
+                return False
+            if c["gateISelected"] and (value["interfaceDiagnostics"] is None or value["interfaceDiagnostics"]["status"] != "passed" or value["interfaceProcess"] is None or value["interfaceProcess"]["reason"] != "ok" or not value["interfaceProcess"]["reaped"] or value["interfaceProcess"]["exitCode"] != 0 or value["interfaceProcess"]["stderrBytes"] != 0 or not _hash(value["build"]["interfaceSHA256"]) or value["build"]["goVersion"] != "go1.27.1" or not _hash(value["build"]["goSHA256"]) or value["build"]["inventorySHA256"] is not None):
                 return False
             if c["gateBSelected"] and (value["syntheticLog"] is None or value["syntheticLog"]["status"] != "passed" or clean["syntheticChildrenReaped"] is not True or not value["logrcAbsenceChecked"] or value["installedLogManualSHA256"] != MANUAL_SHA256):
                 return False
@@ -772,7 +855,7 @@ def validate_report(value, log_module=None):
         return False
 
 def report_template(context, manifest):
-    return {"schemaVersion": SCHEMA, "scope": "macos-native-evidence-v1", "status": "blocked", "reason": "dispatch_not_admitted", "context": context, "source": manifest, "sourceTree": None, "imageOS": None, "imageVersion": None, "versions": None, "identity": None, "tools": None, "build": None, "installedLogManualSHA256": None, "logrcAbsenceChecked": False, "inventory": None, "inventoryProcess": None, "syntheticLog": None, "nativeElapsedMilliseconds": 0, "cleanup": {"directChildrenStarted": 0, "directChildrenReaped": 0, "allDirectChildrenReaped": True, "syntheticChildrenReaped": None, "taskTreeRemoved": None, "hostLogsErased": False}, "ordinaryNonAdminEstablished": False, "installedAgentEstablished": False, "nativeReleaseAccepted": False}
+    return {"schemaVersion": SCHEMA, "scope": "macos-native-evidence-v2", "status": "blocked", "reason": "dispatch_not_admitted", "context": context, "source": manifest, "sourceTree": None, "imageOS": None, "imageVersion": None, "versions": None, "identity": None, "tools": None, "build": None, "installedLogManualSHA256": None, "logrcAbsenceChecked": False, "inventory": None, "inventoryProcess": None, "interfaceDiagnostics": None, "interfaceProcess": None, "syntheticLog": None, "nativeElapsedMilliseconds": 0, "cleanup": {"directChildrenStarted": 0, "directChildrenReaped": 0, "allDirectChildrenReaped": True, "syntheticChildrenReaped": None, "taskTreeRemoved": None, "hostLogsErased": False}, "ordinaryNonAdminEstablished": False, "installedAgentEstablished": False, "nativeReleaseAccepted": False}
 
 
 def execute(context, manifest, ambient):
@@ -827,6 +910,21 @@ def execute(context, manifest, ambient):
                         report["inventory"] = parsed
                 except (ValueError, TypeError, AttributeError):
                     pass  # Discard an invalid projection; independently selected B remains eligible.
+        if context["gateISelected"]:
+            verify_source_unchanged(manifest)
+            verify_binary_custody(tree, "interface-probe", report["build"]["interfaceSHA256"])
+            native_env = dict(child_env, GITHUB_ACTIONS="true", GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REPOSITORY="storminator89/Tracebolt", GITHUB_RUN_ATTEMPT="1", GITHUB_SHA=context["commit"], GITHUB_WORKFLOW_SHA=context["commit"], TRACEBOLT_REVIEWED_COMMIT=context["commit"], TRACEBOLT_REVIEWED_SOURCE_SHA256=manifest["sha256"], RUNNER_ENVIRONMENT="github-hosted", RUNNER_OS="macOS", RUNNER_ARCH=context["runnerArch"], TRACEBOLT_RUNNER_LABEL=context["runnerLabel"], TRACEBOLT_NATIVE_GATE_I="enabled", TRACEBOLT_REPOSITORY_VISIBILITY="public", GOPROXY="off", GOSUMDB="off", GOTOOLCHAIN="local", GOWORK="off", GOFLAGS="-mod=readonly")
+            result = processes.capture((str(tree.path / "bin/interface-probe"), "--native-interfaces-once"), env=native_env, cwd=tree.path / "home", seconds=12, stdout_limit=INTERFACE_REPORT_LIMIT, stderr_limit=1024, allow_failed_projection=True)
+            report["interfaceProcess"] = result.metadata
+            if result.data and len(result.data) <= INTERFACE_REPORT_LIMIT:
+                try:
+                    parsed = strict_json(result.data)
+                    coherent_exit = result.metadata["exitCode"] == (0 if parsed.get("status") == "passed" else 1)
+                    safe_process = valid_process(result.metadata) and result.metadata["reason"] == ("ok" if result.metadata["exitCode"] == 0 else "nonzero_exit") and result.metadata["reaped"] and result.metadata["stderrBytes"] == 0 and result.metadata["stdoutBytes"] == len(result.data)
+                    if valid_interface_diagnostics(parsed) and coherent_exit and safe_process:
+                        report["interfaceDiagnostics"] = parsed
+                except (ValueError, TypeError, AttributeError, RecursionError):
+                    pass  # Invalid I output never blocks independently selected B.
         if context["gateBSelected"]:
             verify_source_unchanged(manifest)
             verify_binary_custody(tree, "tracebolt-native-log-probe", report["build"]["emitterSHA256"])
@@ -848,7 +946,8 @@ def execute(context, manifest, ambient):
             report["cleanup"]["syntheticChildrenReaped"] = (not result["emitter"]["started"] or result["emitter"]["reaped"]) and all(not q["started"] or q["reaped"] for q in result["queries"])
         passed_a = not context["gateASelected"] or (report["inventory"] is not None and report["inventory"]["status"] == "passed")
         passed_b = not context["gateBSelected"] or report["syntheticLog"]["status"] == "passed"
-        report["status"], report["reason"] = ("passed", "ok") if passed_a and passed_b else ("failed", "probe_failed")
+        passed_i = not context["gateISelected"] or (report["interfaceDiagnostics"] is not None and report["interfaceDiagnostics"]["status"] == "passed")
+        report["status"], report["reason"] = ("passed", "ok") if passed_a and passed_b and passed_i else ("failed", "probe_failed")
     except Refused as exc:
         report["reason"] = exc.reason
     except NativeDeadline:
