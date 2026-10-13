@@ -41,7 +41,7 @@ func TestDownloadWUACLIRequiresFreshManualSelectionAndAck(t *testing.T) {
 		t.Fatal("bad inputs reached setup")
 		return coordinatedMutationResult{}, nil
 	}
-	for _, extra := range [][]string{{"--allow-update-downloads"}, {"--background-updates", "--allow-update-downloads"}, {"--background-updates", "--reusable-update-jobs", "--allow-update-downloads", "--acknowledge-update-downloads"}, {"--background-updates", "--reusable-update-jobs", "--allow-update-downloads", "--allow-scheduled-updates"}} {
+	for _, extra := range [][]string{{"--allow-update-downloads"}, {"--background-updates", "--allow-update-downloads"}, {"--background-updates", "--reusable-update-jobs", "--allow-update-downloads", "--acknowledge-update-downloads"}} {
 		if code := runCoordinatedMutationProvision(context.Background(), append(append([]string{}, base...), extra...), io.Discard, io.Discard, never); code != 2 {
 			t.Fatal("invalid scope accepted", code)
 		}

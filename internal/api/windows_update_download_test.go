@@ -17,6 +17,10 @@ import (
 // Pure recorder/source fixtures: no listener, native provider or delivery call.
 func newDownloadAPIFixture(t *testing.T, caps ...operatorauth.Capability) updateAPIFixture {
 	t.Helper()
+	return newDownloadAPIFixtureMode(t, false, caps...)
+}
+func newDownloadAPIFixtureMode(t *testing.T, coexistence bool, caps ...operatorauth.Capability) updateAPIFixture {
+	t.Helper()
 	f := newUpdateAPIFixture(t, append([]operatorauth.Capability{operatorauth.Read}, caps...), false, true)
 	old, err := job.DecodeRecord(f.store["jobs.json"])
 	if err != nil {
@@ -24,6 +28,11 @@ func newDownloadAPIFixture(t *testing.T, caps ...operatorauth.Capability) update
 	}
 	consent := old.Consent
 	consent.Version = job.DownloadConsentVersion
+	if coexistence {
+		consent.Version = job.DownloadCoexistenceConsentVersion
+		consent.ScheduleScope = job.ScheduleScope
+		consent.ScheduleAcknowledged = true
+	}
 	consent.DownloadScope = job.DownloadScope
 	consent.DownloadAcknowledged = true
 	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{62}, 32))
@@ -54,6 +63,13 @@ func newDownloadAPIFixture(t *testing.T, caps ...operatorauth.Capability) update
 		return f.handler.auth.ActorHasCapability(actor, operatorauth.WindowsUpdateDownload)
 	}); err != nil {
 		t.Fatal(err)
+	}
+	if coexistence {
+		if err = m.ConfigureSchedulePolicy(context.Background(), func(actor string) bool {
+			return f.handler.auth.ActorHasCapability(actor, operatorauth.WindowsUpdateSchedule)
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	f.handler.windowsUpdateJobs = m
 	return f
@@ -177,5 +193,45 @@ func TestWindowsUpdateDownloadOnlyActorCannotReadInstallPreview(t *testing.T) {
 	download.handler.windowsUpdateJobs = install.handler.windowsUpdateJobs
 	if code, v := download.call(t, "GET", "?jobId="+install.id, nil, nil); code != 200 || v["job"].(map[string]any)["preview"] != nil {
 		t.Fatal("download-only actor received install review", code, v)
+	}
+}
+
+func TestWindowsUpdateDownloadCoexistenceAPIIndependentCapabilities(t *testing.T) {
+	for _, caps := range [][]operatorauth.Capability{
+		{operatorauth.WindowsUpdateDownload},
+		{operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateSchedule},
+		{operatorauth.WindowsUpdateDownload, operatorauth.WindowsUpdateSchedule},
+		{operatorauth.WindowsUpdateDownload, operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateSchedule},
+	} {
+		f := newDownloadAPIFixtureMode(t, true, caps...)
+		has := func(want operatorauth.Capability) bool {
+			for _, cap := range caps {
+				if cap == want {
+					return true
+				}
+			}
+			return false
+		}
+		code, view := f.call(t, "GET", "", nil, nil)
+		if code != 200 || view["downloadEnabled"] != true || view["backgroundScheduling"] != true || (view["downloadAvailable"] == true) != has(operatorauth.WindowsUpdateDownload) || (view["schedulingAvailable"] == true) != (has(operatorauth.WindowsUpdateInstall) && has(operatorauth.WindowsUpdateSchedule)) {
+			t.Fatal("capability promotion or false coexistence view", caps, code, view)
+		}
+		code, view = f.call(t, "POST", "/request-download", downloadRequestBody(f), nil)
+		if !has(operatorauth.WindowsUpdateDownload) {
+			if code != 403 {
+				t.Fatal("installation grants download", code)
+			}
+			continue
+		}
+		if code != 200 {
+			t.Fatal(code, view)
+		}
+		j := view["job"].(map[string]any)
+		p := j["preview"].(map[string]any)
+		before := bytes.Clone(f.store["jobs.json"])
+		code, _ = f.call(t, "POST", "/schedule", map[string]any{"previewId": f.id, "previewDigest": p["digest"], "startAt": int64(view["serverNow"].(float64)) + 120, "endAt": int64(view["serverNow"].(float64)) + 240, "acknowledged": true}, nil)
+		if code == 200 || !bytes.Equal(before, f.store["jobs.json"]) {
+			t.Fatal("download entered scheduler or consumed approval", caps, code)
+		}
 	}
 }

@@ -63,9 +63,21 @@ func setDownloadReadiness(f *pairedDomains) {
 	r.DownloadSource = "default"
 }
 func TestDownloadRetirementRequiresFreshIndependentInstallation(t *testing.T) {
-	f := downloadPair(t)
+	testDownloadRetirementInstallation(t, false)
+}
+func TestDownloadCoexistenceRetirementRequiresFreshScheduledInstallation(t *testing.T) {
+	testDownloadRetirementInstallation(t, true)
+}
+func testDownloadRetirementInstallation(t *testing.T, scheduled bool) {
+	t.Helper()
+	var f *pairedDomains
+	if scheduled {
+		f = newPair(t, true, true, true, true, true, true, true)
+	} else {
+		f = downloadPair(t)
+	}
 	ctx := context.Background()
-	initialConsent := objectDigest(f.consent)
+	initialConsent, initialGrant, initialAuthority := objectDigest(f.consent), objectDigest(f.grant), objectDigest(f.wuaAuthority.value)
 	r, e := wua.NewRecordWithExecutor(f.consent, public(f.wuaKey), public(f.wuaExecutorKey), f.now().Unix())
 	if e != nil {
 		t.Fatal(e)
@@ -80,9 +92,16 @@ func TestDownloadRetirementRequiresFreshIndependentInstallation(t *testing.T) {
 	defer manager.Close()
 	manager.ConfigureOperatorPolicy(func(string) bool { return true })
 	manager.ConfigureDownloadPolicy(func(string) bool { return true })
+	if scheduled {
+		if e = manager.ConfigureSchedulePolicy(ctx, func(string) bool { return true }); e != nil {
+			t.Fatal(e)
+		}
+	}
 	installReadiness := f.wuaNative.readiness
 	setDownloadReadiness(f)
 	var downloadPermit, downloadProof []byte
+	var downloadPreview string
+	var approval *wua.ScheduleApproval
 	for n := uint64(1); n <= 2; n++ {
 		job := id("update_", 4000+int(n))
 		download := n == 1
@@ -117,10 +136,57 @@ func TestDownloadRetirementRequiresFreshIndependentInstallation(t *testing.T) {
 			t.Fatal("preview", n, err)
 		}
 		if download {
+			downloadPreview = view.Job.Preview.Digest
+			if scheduled && manager.Schedule(ctx, device, actor, job, downloadPreview, f.now().Unix()+1, f.now().Unix()+121, true) == nil {
+				t.Fatal("coexistence scheduled a download")
+			}
 			if manager.Approve(ctx, device, actor, job, view.Job.Preview.Digest, true) == nil {
 				t.Fatal("install authority reused for download")
 			}
 			e = manager.ApproveDownload(ctx, device, actor, job, view.Job.Preview.Digest, true)
+		} else if scheduled {
+			start, end := f.now().Unix()+1, f.now().Unix()+121
+			if manager.Schedule(ctx, device, actor, job, downloadPreview, start, end, true) == nil {
+				t.Fatal("download review authorized installation")
+			}
+			if manager.Schedule(ctx, device, actor, job, view.Job.Preview.Digest, start, end, false) == nil {
+				t.Fatal("installation scheduled without separate approval")
+			}
+			if e = manager.Schedule(ctx, device, actor, job, view.Job.Preview.Digest, start, end, true); e != nil {
+				t.Fatal("fresh installation schedule", e)
+			}
+			record, err := wua.DecodeRecord(store.raw)
+			if err != nil || len(record.Jobs) != 1 || record.Jobs[0].Schedule == nil || record.Jobs[0].Occurrence != n || record.Sequence != n || record.RetiredFloor != 1 {
+				t.Fatal("fresh schedule occurrence/floor", err)
+			}
+			saved := record.Jobs[0].Schedule.Approval
+			approval = &saved
+			if saved.StartAt != start || saved.EndAt != end || saved.AuthorityExpiresAt != f.consent.ExpiresAt || saved.Baseline.Binding != f.consent.Binding || saved.Baseline.ActorID != actor {
+				t.Fatal("original schedule bounds/authority changed", saved)
+			}
+			if pending, err := manager.Pending(ctx); err != nil || pending != nil || f.wuaNative.calls.Load() != 1 {
+				t.Fatal("installation dispatched before window", pending, err)
+			}
+			f.at.Store(start)
+			if _, err = manager.Pending(ctx); err != nil {
+				t.Fatal(err)
+			}
+			freshChallenge, err := manager.ClaimReadiness(ctx, job)
+			if err != nil || bytes.Equal(challenge, freshChallenge) {
+				t.Fatal("scheduled installation reused baseline readiness", err)
+			}
+			freshProof, err := f.executor.Readiness(ctx, freshChallenge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			status, err := f.executor.Status(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if e = manager.Report(ctx, status.MutationReport); e != nil {
+				t.Fatal(e)
+			}
+			e = manager.Report(ctx, freshProof)
 		} else {
 			e = manager.Approve(ctx, device, actor, job, view.Job.Preview.Digest, true)
 		}
@@ -139,6 +205,9 @@ func TestDownloadRetirementRequiresFreshIndependentInstallation(t *testing.T) {
 		p, e := wua.Verify(permit, public(f.wuaKey))
 		if e != nil || p.Sequence != n || p.Download() != download {
 			t.Fatal("sequence/purpose", n, e)
+		}
+		if !download && scheduled && (p.Schedule == nil || *p.Schedule != *approval || p.Preview.ExpiresAt > approval.EndAt || p.Preview.Readiness.CapturedAt < approval.StartAt) {
+			t.Fatal("scheduled permit lost original bounds or fresh readiness")
 		}
 		result, err := f.executor.Execute(ctx, permit)
 		if err != nil || result.Outcome != "succeeded" {
@@ -193,6 +262,12 @@ func TestDownloadRetirementRequiresFreshIndependentInstallation(t *testing.T) {
 	saved := readWUA(t, f.wuaStore)
 	if saved.Sequence != 2 || saved.Reusable.RetiredFloor != 2 || len(saved.Attempts) != 0 || objectDigest(f.consent) != initialConsent || f.wuaNative.calls.Load() != 2 {
 		t.Fatal("independent stages/floors lost")
+	}
+	if scheduled {
+		managerRecord, err := wua.DecodeRecord(store.raw)
+		if err != nil || managerRecord.Sequence != 2 || managerRecord.RetiredFloor != 2 || saved.ReadinessSequence != 3 || managerRecord.ReadinessSequence != 3 || f.wuaNative.prepares.Load() != 5 || objectDigest(managerRecord.Consent) != initialConsent || objectDigest(f.grant) != initialGrant || objectDigest(f.wuaAuthority.value) != initialAuthority {
+			t.Fatal("coexistence changed original grants/leaf or monotonic floors", err)
+		}
 	}
 	if s := f.fenceStatus(t); s.Blocked || s.Phase != "idle" {
 		t.Fatal("successful retirement stranded shared owner", s)

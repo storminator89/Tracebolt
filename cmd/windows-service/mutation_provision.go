@@ -16,6 +16,8 @@ import (
 	"localrmm/internal/windowsupdatesetup"
 )
 
+const downloadCoexistenceMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v9"
+
 const downloadWUAMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v8"
 
 const reusableWUAMutationVersion = "tracebolt.windows-coordinated-mutation-setup.v7"
@@ -59,6 +61,9 @@ type coordinatedMutationResult struct {
 
 func (p coordinatedMutationPlan) Digest() string {
 	b, _ := json.Marshal(p)
+	if p.Version == downloadCoexistenceMutationVersion {
+		return managed.Digest(append([]byte("Tracebolt fresh manual download and scheduled install coexistence setup v9\x00"), b...))
+	}
 	if p.Version == downloadWUAMutationVersion {
 		return managed.Digest(append([]byte("Tracebolt fresh manual WUA download setup v8\x00"), b...))
 	}
@@ -84,7 +89,8 @@ func (p coordinatedMutationPlan) Digest() string {
 }
 func (p coordinatedMutationPlan) Validate() error {
 	m, w := p.MSI, p.WUA
-	downloadWUA := p.Version == downloadWUAMutationVersion
+	downloadCoexistence := p.Version == downloadCoexistenceMutationVersion
+	downloadWUA := p.Version == downloadWUAMutationVersion || downloadCoexistence
 	reusableWUA := p.Version == reusableWUAMutationVersion || downloadWUA
 	scheduledMSI := p.Version == scheduledMSIMutationVersion || p.Version == scheduledMSIAndWUAMutationVersion || reusableWUA && m.Offer.Scheduled()
 	scheduled := p.Version == scheduledBackgroundMutationVersion || p.Version == scheduledMSIAndWUAMutationVersion || reusableWUA && w.ScheduleScope != ""
@@ -108,11 +114,18 @@ func (p coordinatedMutationPlan) Validate() error {
 		wuaVersion = windowsupdatesetup.ReusableBackgroundVersion
 	}
 	if downloadWUA {
-		if scheduled || scheduledMSI {
+		if downloadCoexistence != (scheduled || scheduledMSI) {
 			return managed.ErrAuthority
 		}
 		expectedDisclosure = windowsupdatesetup.DownloadBackgroundDisclosure + " " + job.DownloadDisclosure + " " + managed.ReusableDisclosure
 		wuaVersion = windowsupdatesetup.DownloadBackgroundVersion
+		if downloadCoexistence {
+			expectedDisclosure = windowsupdatesetup.DownloadCoexistenceBackgroundDisclosure + " " + job.DownloadDisclosure + " " + managed.ReusableDisclosure
+			wuaVersion = windowsupdatesetup.DownloadCoexistenceBackgroundVersion
+			if scheduled {
+				expectedDisclosure += " " + windowsupdatesetup.DownloadCoexistenceScheduleDisclosure
+			}
+		}
 	}
 	endpointVersion := "tracebolt.windows-managed-msi-endpoint-plan.v3"
 	if scheduledMSI {
@@ -134,7 +147,7 @@ func (p coordinatedMutationPlan) FencePlan() fence.Plan {
 	if p.Version == backgroundMutationVersion || p.Version == scheduledBackgroundMutationVersion || p.Version == scheduledMSIMutationVersion || p.Version == scheduledMSIAndWUAMutationVersion {
 		v = fence.BackgroundPlanVersion
 	}
-	if p.Version == reusableWUAMutationVersion || p.Version == downloadWUAMutationVersion {
+	if p.Version == reusableWUAMutationVersion || p.Version == downloadWUAMutationVersion || p.Version == downloadCoexistenceMutationVersion {
 		v = fence.ReusableWUAPlanVersion
 	}
 	return fence.Plan{Version: v, Identity: fence.Identity{ManagerID: b.ManagerID, DeviceID: b.DeviceID, IncarnationDigest: b.IncarnationDigest}, PlanDigest: p.Digest(), MSIOfferDigest: digest(p.MSI.Offer), WUAOfferDigest: digest(p.WUA.Offer), MSIArtifactDigest: digest(p.MSI.Artifact), WUAArtifactDigest: digest(p.WUA.Artifact)}
@@ -168,8 +181,8 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 	scheduleAck := f.Bool("acknowledge-scheduled-updates", false, "")
 	msiSchedule := f.Bool("allow-scheduled-msi", false, "")
 	msiScheduleAck := f.Bool("acknowledge-scheduled-msi", false, "")
-	if f.Parse(args) != nil || f.NArg() != 0 || ctx == nil || perform == nil || *mo == "" || *mi == "" || *mm == "" || *wo == "" || *wi == "" || *wm == "" || *apply != (*digest != "") || *ack != *apply || *delivery != *apply || (*install || *reusable) != *apply || *install && *reusable || *updates != *apply || *risk != *apply || *relay != *apply || *query != *apply || *backgroundAck != (*background && *apply) || *schedule && !*background || *scheduleAck != (*schedule && *apply) || *msiSchedule && !*background || *msiScheduleAck != (*msiSchedule && *apply) || *reusableUpdates && !*background || *reusableUpdatesAck != (*reusableUpdates && *apply) || *downloadUpdates && (!*background || !*reusableUpdates || *schedule || *msiSchedule) || *downloadUpdatesAck != (*downloadUpdates && *apply) {
-		fmt.Fprintln(stderr, "Use --coordinated-mutations-provision with both --msi-manager-offer, --msi-service-file, --msi-artifact-manifest and --update-manager-offer, --update-executor-file, --update-artifact-manifest. Review is read-only. Apply requires --apply --approve <exact review digest> and all acknowledgements: coordinated-mutations, managed-delivery, one-managed-install, selected-updates, localsystem-risk, observer-relay, observer-process-query. Fresh background setup additionally needs --background-updates and --acknowledge-background-updates on apply; scheduled background additionally needs --allow-scheduled-updates on review/apply and --acknowledge-scheduled-updates on apply. Fresh scheduled MSI additionally requires --allow-scheduled-msi on review/apply and --acknowledge-scheduled-msi on apply, with --background-updates. Fresh reusable cached-update jobs additionally require --reusable-update-jobs on review/apply and --acknowledge-reusable-update-jobs on apply, with --background-updates.")
+	if f.Parse(args) != nil || f.NArg() != 0 || ctx == nil || perform == nil || *mo == "" || *mi == "" || *mm == "" || *wo == "" || *wi == "" || *wm == "" || *apply != (*digest != "") || *ack != *apply || *delivery != *apply || (*install || *reusable) != *apply || *install && *reusable || *updates != *apply || *risk != *apply || *relay != *apply || *query != *apply || *backgroundAck != (*background && *apply) || *schedule && !*background || *scheduleAck != (*schedule && *apply) || *msiSchedule && !*background || *msiScheduleAck != (*msiSchedule && *apply) || *reusableUpdates && !*background || *reusableUpdatesAck != (*reusableUpdates && *apply) || *downloadUpdates && (!*background || !*reusableUpdates) || *downloadUpdatesAck != (*downloadUpdates && *apply) {
+		fmt.Fprintln(stderr, "Use --coordinated-mutations-provision with both --msi-manager-offer, --msi-service-file, --msi-artifact-manifest and --update-manager-offer, --update-executor-file, --update-artifact-manifest. Review is read-only. Apply requires --apply --approve <exact review digest> and all acknowledgements: coordinated-mutations, managed-delivery, one-managed-install, selected-updates, localsystem-risk, observer-relay, observer-process-query. Fresh background setup additionally needs --background-updates and --acknowledge-background-updates on apply; scheduled background additionally needs --allow-scheduled-updates on review/apply and --acknowledge-scheduled-updates on apply. Fresh scheduled MSI additionally requires --allow-scheduled-msi on review/apply and --acknowledge-scheduled-msi on apply, with --background-updates. Fresh reusable cached-update jobs additionally require --reusable-update-jobs on review/apply and --acknowledge-reusable-update-jobs on apply, with --background-updates. Fresh manual downloads additionally need --allow-update-downloads on review/apply and --acknowledge-update-downloads on apply. Combining downloads with either installation scheduler selects a new combined profile; each requested scheduler still requires its own acknowledgement and downloads remain manual.")
 		return 2
 	}
 	var input coordinatedMutationInput
@@ -215,7 +228,14 @@ func runCoordinatedMutationProvision(ctx context.Context, args []string, out, st
 		}
 	}
 	if *downloadUpdates {
-		fmt.Fprintln(stderr, windowsupdatesetup.DownloadBackgroundDisclosure+"\n"+job.DownloadDisclosure)
+		if *schedule || *msiSchedule {
+			fmt.Fprintln(stderr, windowsupdatesetup.DownloadCoexistenceBackgroundDisclosure+"\n"+job.DownloadDisclosure)
+			if *schedule {
+				fmt.Fprintln(stderr, windowsupdatesetup.DownloadCoexistenceScheduleDisclosure)
+			}
+		} else {
+			fmt.Fprintln(stderr, windowsupdatesetup.DownloadBackgroundDisclosure+"\n"+job.DownloadDisclosure)
+		}
 	} else if *reusableUpdates {
 		fmt.Fprintln(stderr, windowsupdatesetup.ReusableBackgroundDisclosure)
 		if *schedule {

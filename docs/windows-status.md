@@ -63,6 +63,12 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
   separate fresh combined consent, dedicated activated service and reusable-MSI
   shared fence. Exact readiness, named install/schedule authority, original
   fixed expiry and 32 lifetime approvals remain. Native acceptance is pending.
+- [Manual selected-update downloads](windows-selected-update-downloads.md): fresh
+  download-only review/approval with purpose-separated authority. A new combined
+  setup can also select each installation scheduler independently; download stays
+  manual and exact successful retirement precedes a fresh installation approval.
+  Shared fencing, fixed windows and no automatic reboot remain. Source only;
+  native acceptance is pending.
 - [Disk](windows-capacity-health.md), [CPU/RAM](windows-resource-health.md) and
   [selected-service checks](windows-service-health.md): independent default-off
   manager policies over already accepted observations. Missing data stays unknown.

@@ -137,6 +137,9 @@ export function windowsServiceIncidentReviewRoute({base,fixture,external,unexpec
   if(url.pathname==='/api/auth/session')return reply(fixture.session);
   if(url.pathname==='/api/session')return reply({csrfToken:fixture.session.csrfToken});
   if(url.pathname==='/api/overview')return reply(fixture.overview);
+  // The production device page reads enrollment on mount, even for a named
+  // operator. Keep that shell read intercepted and all enrollment writes blocked.
+  if(url.pathname==='/api/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:fixture.session.serverNow,enabled:false,platforms:[],recordLimit:25,items:[]});
   if(url.pathname===reviewPath){assert.equal(fixture.counts.review,0);fixture.counts.review++;return reply(fixture.review);}
   if(url.pathname===actionPath){pinned();assert.equal(fixture.counts.status,0);fixture.counts.status++;return reply(fixture.ready);}
   if(url.pathname==='/api/fleet/identities')return reply({schemaVersion:'tracebolt.fleet-identities.v2',serverNow:fixture.session.serverNow,items:[]});

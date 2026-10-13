@@ -247,6 +247,13 @@ func newPair(t *testing.T, reusable ...bool) *pairedDomains {
 		f.consent.DownloadScope = wua.DownloadScope
 		f.consent.DownloadAcknowledged = true
 	}
+	if len(reusable) > 6 && reusable[6] {
+		// Coexistence is a fresh complete consent; never put schedule flags on v7.
+		if f.consent.Version != wua.DownloadConsentVersion {
+			t.Fatal("coexistence fixture requires download scope")
+		}
+		f.consent.Version = wua.DownloadCoexistenceConsentVersion
+	}
 	f.shared = fence.NewIntegrationFence(t, plan, msi.MutationParticipant(f.grant), wua.MutationParticipant(f.consent), f.now)
 	f.msiSession = f.shared.Session(t, fence.ManagedMSI)
 	f.wuaSession = f.shared.Session(t, fence.CachedWUA)

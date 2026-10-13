@@ -7,6 +7,7 @@ import (
 	"localrmm/internal/windowsservicehealth"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +120,9 @@ func (h *operatorHandler) windowsServiceAPI(w http.ResponseWriter, r *http.Reque
 		if !recheck() {
 			return
 		}
-		state, err = m.store.ConfigureWindowsService(r.Context(), windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, policy.Enabled, policy.Services, policy.Expected, m.source.Now().UTC())
+		state, err = h.withWindowsServicePolicyAuthority(r, in, now, func(guard func(time.Time) error) (windowsservicehealth.State, error) {
+			return m.store.ConfigureWindowsServiceGuarded(r.Context(), windowsservicehealth.Input{Input: in.Input, Sample: in.Services}, policy.Enabled, policy.Services, policy.Expected, m.source.Now, guard)
+		})
 		if errors.Is(err, windowsservicehealth.ErrInvalid) {
 			fail(w, 409, "windows_service_conflict", "Policy changed or is unavailable. Refresh before saving again.")
 			return

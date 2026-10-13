@@ -16,16 +16,17 @@ import (
 )
 
 type updateProvisionInput struct {
-	coordinated *windowsupdatesetup.CoordinatedMaterial
-	offer       job.SetupOffer
-	artifact    windowspackage.Manifest
-	payload     []byte
-	download    bool
-	reusable    bool
-	background  bool
-	schedule    bool
-	apply       bool
-	approval    windowsupdatesetup.Approval
+	coordinated         *windowsupdatesetup.CoordinatedMaterial
+	offer               job.SetupOffer
+	artifact            windowspackage.Manifest
+	payload             []byte
+	download            bool
+	downloadCoexistence bool
+	reusable            bool
+	background          bool
+	schedule            bool
+	apply               bool
+	approval            windowsupdatesetup.Approval
 }
 type updateProvisionResult struct {
 	plan         windowsupdatesetup.Plan

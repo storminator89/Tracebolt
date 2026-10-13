@@ -37,9 +37,10 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		var m managedMSIResult
 		var w updateProvisionResult
 		// Caller cannot inject already generated material or a nested apply.
-		if in.MSI.apply || in.WUA.apply || in.WUA.reusable && !in.WUA.background || in.WUA.download && (!in.WUA.reusable || !in.WUA.background || in.WUA.schedule || in.MSI.schedule) || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
+		if in.MSI.apply || in.WUA.apply || in.WUA.reusable && !in.WUA.background || in.WUA.download && (!in.WUA.reusable || !in.WUA.background) || in.MSI.schedule != in.MSI.offer.Scheduled() || in.MSI.schedule && !in.WUA.background || in.MSI.coordinated != nil || in.WUA.coordinated != nil {
 			return nil, managed.ErrAuthority
 		}
+		in.WUA.downloadCoexistence = in.WUA.download && (in.WUA.schedule || in.MSI.schedule)
 		if _, e := nativeManagedMSIProvisionUnderLease(ctx, in.MSI, &m, receipt, lease); e != nil {
 			return nil, e
 		}
@@ -79,6 +80,16 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		if in.WUA.download {
 			plan.Version = downloadWUAMutationVersion
 			plan.Disclosure = windowsupdatesetup.DownloadBackgroundDisclosure + " " + job.DownloadDisclosure + " " + managed.ReusableDisclosure
+			if in.WUA.downloadCoexistence {
+				plan.Version = downloadCoexistenceMutationVersion
+				plan.Disclosure = windowsupdatesetup.DownloadCoexistenceBackgroundDisclosure + " " + job.DownloadDisclosure + " " + managed.ReusableDisclosure
+				if in.WUA.schedule {
+					plan.Disclosure += " " + windowsupdatesetup.DownloadCoexistenceScheduleDisclosure
+				}
+				if in.MSI.schedule {
+					plan.Disclosure += " " + managed.ScheduledDisclosure
+				}
+			}
 		}
 		if plan.Validate() != nil {
 			return nil, managed.ErrAuthority
@@ -159,6 +170,9 @@ func nativeCoordinatedMutationProvision(ctx context.Context, in coordinatedMutat
 		}
 		if in.WUA.download {
 			consent.Version = job.DownloadConsentVersion
+			if in.WUA.downloadCoexistence {
+				consent.Version = job.DownloadCoexistenceConsentVersion
+			}
 			consent.DownloadScope = job.DownloadScope
 			consent.DownloadAcknowledged = true
 		}

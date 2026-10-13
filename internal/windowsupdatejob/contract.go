@@ -96,8 +96,10 @@ type Consent struct {
 	ScheduleAcknowledged   bool    `json:"scheduleAcknowledged,omitempty"`
 }
 
-func (c Consent) Reusable() bool        { return c.Version == ReusableConsentVersion || c.DownloadEnabled() }
-func (c Consent) DownloadEnabled() bool { return c.Version == DownloadConsentVersion }
+func (c Consent) Reusable() bool { return c.Version == ReusableConsentVersion || c.DownloadEnabled() }
+func (c Consent) DownloadEnabled() bool {
+	return c.Version == DownloadConsentVersion || c.Version == DownloadCoexistenceConsentVersion
+}
 
 func (c Consent) Background() bool {
 	return c.Version == BackgroundConsentVersion || c.Version == ScheduledBackgroundConsentVersion || c.Reusable()
@@ -105,7 +107,7 @@ func (c Consent) Background() bool {
 
 func (c Consent) Validate() error {
 	if c.DownloadEnabled() {
-		if c.DownloadScope != DownloadScope || !c.DownloadAcknowledged || c.ScheduleScope != "" || c.ScheduleAcknowledged {
+		if c.DownloadScope != DownloadScope || !c.DownloadAcknowledged || c.Version == DownloadConsentVersion && (c.ScheduleScope != "" || c.ScheduleAcknowledged) {
 			return ErrInvalid
 		}
 	} else if c.DownloadScope != "" || c.DownloadAcknowledged {

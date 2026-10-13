@@ -58,3 +58,68 @@ describe('selected Windows download review',()=>{
   for(const origin of ['https://UPDATES.invalid','https://updates.invalid:443','https://user@updates.invalid','https://updates.invalid\nhttps://updates.invalid','https://b.invalid\nhttps://a.invalid','file://host'])expect(validDownloadOrigins(origin)).toBe(false);
  });
 });
+
+const coexisting=(value:UpdateJobView=view()):UpdateJobView=>({...value,backgroundScheduling:true,schedulingAvailable:true});
+const installationReview=(id:string):UpdateJobView=>{
+ const downloaded=preview(id),{purpose:_,downloadMetadataKnown:__,downloadOrigins:___,downloadMinBytes:____,downloadMaxBytes:_____,downloadSource:______,...readiness}=downloaded.readiness;
+ return {...coexisting(),available:true,job:{id,selection,state:'preview',reason:'ready',preview:{...downloaded,readiness:{...readiness,downloaded:'yes',canRequestUserInput:'no',canRequireSource:'no',requiresNetwork:'no',installerBusy:'no',rebootRequiredBefore:'no',rebootBehavior:'can'}},result:null}};
+};
+const scheduledInstallation=(id:string):UpdateJobView=>({...coexisting(),available:false,downloadAvailable:false,reason:'job_pending_or_intervention',job:{id,selection,state:'scheduled',reason:'schedule_waiting',preview:null,result:null,occurrence:'1',schedule:{version:'tracebolt.windows-selected-update-schedule.v1',digest,approvedAt:seconds,startAt:seconds+120,endAt:seconds+420,permitIssuedAt:0,revoked:false}}});
+function enableCoexistence(capabilities=['read','windows_update_install','windows_update_download','windows_update_schedule']){
+ session.capabilities=capabilities;
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:coexisting({...view(),available:true})) as never);
+ vi.mocked(mutateRaw).mockImplementation(async(path,body,_headers,_signal,_cap,beforeSend)=>{
+  if(beforeSend&&!beforeSend())throw Error('Canceled before send');const input=JSON.parse(body);
+  return structuredClone(path.endsWith('/request-download')?coexisting(reviewed(input.requestId)):path.endsWith('/approve-download')?coexisting(approved(input.previewId)):path.endsWith('/schedule')?scheduledInstallation(input.previewId):installationReview(input.requestId)) as never;
+ });
+}
+describe('manual downloads with separately scheduled installations',()=>{
+ it('admits independent profile capabilities without promoting old views or scheduled downloads',()=>{
+  const id=`update_${'a'.repeat(32)}`,manual=view(),original=JSON.stringify(manual);
+  for(const value of [manual,coexisting(),coexisting(reviewed(id)),coexisting(succeeded(id)),installationReview(id),scheduledInstallation(id),{...coexisting(),schedulingAvailable:false},{...coexisting(),schedulingAvailable:false,schedulingRevoked:true}])expect(validUpdateJobView(value,device,actor)).toBe(true);
+  expect(JSON.stringify(manual)).toBe(original);expect(manual).not.toHaveProperty('backgroundScheduling');
+  for(const patch of [{backgroundScheduling:false},{backgroundScheduling:undefined},{backgroundExecutor:undefined},{reusableJobs:undefined},{coordinated:undefined},{schedulingRevoked:true},{schedulingAvailable:'true'},{executorObservedAt:seconds-60},{downloadEnabled:undefined}])expect(validUpdateJobView({...coexisting(),...patch},device,actor)).toBe(false);
+  expect(validUpdateJobView({...view(),schedulingAvailable:true},device,actor)).toBe(false);
+  const schedule=scheduledInstallation(id).job!.schedule;
+  for(const value of [coexisting(reviewed(id)),coexisting(approved(id)),coexisting(succeeded(id))])expect(validUpdateJobView({...value,job:{...value.job!,schedule}},device,actor)).toBe(false);
+  expect(validUpdateJobView({...scheduledInstallation(id),job:{...scheduledInstallation(id).job!,purpose:'download'}},device,actor)).toBe(false);
+  expect(validUpdateJobView({...coexisting(succeeded(id)),available:true},device,actor)).toBe(false);
+  expect(validUpdateJobView({...coexisting(succeeded(id)),downloadAvailable:true},device,actor)).toBe(false);
+ });
+ it.each([
+  {caps:['windows_update_download'],install:false,download:true,schedule:false},
+  {caps:['windows_update_install'],install:true,download:false,schedule:false},
+  {caps:['windows_update_download','windows_update_schedule'],install:false,download:true,schedule:false},
+  {caps:['windows_update_install','windows_update_schedule'],install:true,download:false,schedule:true},
+  {caps:['windows_update_install','windows_update_download'],install:true,download:true,schedule:false},
+ ])('keeps operator affordances independent for $caps',async({caps,install,download,schedule})=>{
+  enableCoexistence(['read',...caps]);await open();fireEvent.change(screen.getByRole('combobox'),{target:{value:`${selection.updateId}:3`}});
+  expect(!!screen.queryByRole('button',{name:'Check readiness'})).toBe(install);expect(!!screen.queryByRole('button',{name:'Review download'})).toBe(download);expect(!!screen.queryByText('Revoke scheduling',{selector:'summary'})).toBe(schedule);expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it('does not promote scheduling-only permission into an update operation',async()=>{
+  session.capabilities=['read','windows_update_schedule'];vi.mocked(useOperator).mockReturnValue({...session,theme:'light',logout:vi.fn(),setTheme:vi.fn()} as never);await open();expect(screen.getByText('Update installation is inactive.')).toBeInTheDocument();expect(request).not.toHaveBeenCalled();expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it.each(['en','de'] as const)('keeps a coexistence download manual with unchecked consent in %s',async locale=>{
+  setLocale(locale,false);enableCoexistence();await open();await review(locale);const de=locale==='de';
+  expect(screen.getByText(de?/Downloads bleiben manuell/:/Downloads stay manual/)).toBeVisible();
+  expect(screen.queryByText(de?'Dieses Update planen':'Schedule this update',{selector:'summary'})).toBeNull();expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+  const ack=screen.getByRole('checkbox'),approve=screen.getByRole('button',{name:de?'Download einmal freigeben':'Approve download once'});expect(ack).not.toBeChecked();expect(approve).toBeDisabled();
+  fireEvent.click(ack);fireEvent.click(approve);await flush();expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([`/devices/${device}/windows-update-jobs/request-download`,`/devices/${device}/windows-update-jobs/approve-download`]);
+ });
+ it.each(['en','de'] as const)('requires fresh separate installation and UTC acknowledgements in %s',async locale=>{
+  setLocale(locale,false);enableCoexistence();resource.updates!.rows[0].downloaded=true;await open();const de=locale==='de';
+  fireEvent.change(screen.getByRole('combobox'),{target:{value:`${selection.updateId}:3`}});expect(screen.queryByRole('button',{name:de?'Download prüfen':'Review download'})).toBeNull();fireEvent.click(screen.getByRole('button',{name:de?'Bereitschaft prüfen':'Check readiness'}));await flush();
+  fireEvent.click(screen.getByText(de?'Dieses Update planen':'Schedule this update',{selector:'summary'}));fireEvent.change(screen.getByLabelText(de?'Beginn (UTC)':'Start (UTC)'),{target:{value:'2026-10-11T10:02'}});fireEvent.change(screen.getByLabelText(de?'Ende (UTC)':'End (UTC)'),{target:{value:'2026-10-11T10:07'}});
+  const manual=screen.getByRole('checkbox',{name:de?/Revision und mögliche Unterbrechungen/:/revision and its possible interruption/}),scheduled=screen.getByRole('checkbox',{name:de?/vorausschauend/:/prospectively/}),approve=screen.getByRole('button',{name:de?'Geplantes Update einmal freigeben':'Approve scheduled update once'});
+  expect(manual).not.toBeChecked();expect(scheduled).not.toBeChecked();expect(approve).toBeDisabled();fireEvent.click(manual);expect(scheduled).not.toBeChecked();expect(approve).toBeDisabled();fireEvent.click(manual);fireEvent.click(scheduled);fireEvent.click(approve);await flush();
+  expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([`/devices/${device}/windows-update-jobs/request`,`/devices/${device}/windows-update-jobs/schedule`]);expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[1][1])).toMatchObject({acknowledged:true,startAt:seconds+120,endAt:seconds+420});expect(screen.queryByRole('button',{name:de?'Download prüfen':'Review download'})).toBeNull();
+ });
+ it('does not substitute download permission when installation scheduling authority is removed',async()=>{
+  enableCoexistence();await open();fireEvent.change(screen.getByRole('combobox'),{target:{value:`${selection.updateId}:3`}});fireEvent.click(screen.getByRole('button',{name:'Check readiness'}));await flush();fireEvent.click(screen.getByText('Schedule this update',{selector:'summary'}));
+  fireEvent.change(screen.getByLabelText('Start (UTC)'),{target:{value:'2026-10-11T10:02'}});fireEvent.change(screen.getByLabelText('End (UTC)'),{target:{value:'2026-10-11T10:07'}});fireEvent.click(screen.getByRole('checkbox',{name:/prospectively/}));session.capabilities=['read','windows_update_download','windows_update_schedule'];fireEvent.click(screen.getByRole('button',{name:'Approve scheduled update once'}));await flush();expect(mutateRaw).toHaveBeenCalledTimes(1);expect(screen.getByRole('alert')).toBeVisible();
+ });
+ it('keeps successful download retirement ahead of any new installation schedule',async()=>{
+  enableCoexistence();const value=coexisting(succeeded(`update_${'b'.repeat(32)}`));vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:value) as never);await open();expect(screen.getByText(/Downloads stay manual/)).toBeVisible();expect(screen.queryByRole('combobox')).toBeNull();expect(screen.queryByText('Schedule this update',{selector:'summary'})).toBeNull();expect(screen.getByRole('button',{name:'Review completed job'})).toBeEnabled();expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it('keeps the coexistence explanation out of the legacy manual profile',async()=>{await open();expect(screen.queryByText(/Downloads stay manual/)).toBeNull();expect(mutateRaw).not.toHaveBeenCalled()});
+});

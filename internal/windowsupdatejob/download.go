@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+// Fresh paired coexistence only; v7 remains strictly manual-only. The optional
+// schedule fields still authorize installations only, never download dispatch.
+const DownloadCoexistenceConsentVersion = "tracebolt.windows-selected-update-consent.v8"
+
 const DownloadConsentVersion = "tracebolt.windows-selected-update-consent.v7"
 const DownloadPermitVersion = "tracebolt.windows-selected-update-download.v1"
 const DownloadRelayVersion = "tracebolt.windows-selected-update-download-relay.v1"

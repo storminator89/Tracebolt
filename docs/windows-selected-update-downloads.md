@@ -8,7 +8,7 @@ separately approved and pending.
 
 ## Fresh opt-in and independent operation authority
 
-Fresh paired background setup selects consent v7, background provision plan v4
+Fresh manual-only paired background setup selects consent v7, background provision plan v4
 and combined setup plan v8. The complete new consent remains pinned by the
 existing reusable v4 shared roster and background activation digests. All v1–v6
 consents, disclosures, signatures and byte shapes remain unchanged and cannot
@@ -19,7 +19,9 @@ Use the existing paired reusable background MSI/WUA source setup and add
 additionally requires the separately unchecked `--acknowledge-update-downloads`
 alongside `--background-updates --reusable-update-jobs` and all existing explicit
 paired, reusable-MSI, reusable-WUA, LocalSystem and observer-relay acknowledgements.
-This first download profile is manual only and rejects WUA/MSI scheduling flags.
+This original v7 download profile remains manual only; its consent and plan validators
+reject scheduling. Selecting download with installation scheduling uses the distinct
+fresh combined profile below, never changes an existing v7 profile.
 Both services remain disabled until their separately approved activation. The
 restricted LocalService observer receives no new native-provider or cache rights.
 
@@ -28,6 +30,51 @@ Neither implies the other and no operator receives either automatically. The
 new request/preview/approve/retire-download operator routes retain named-session,
 Origin, CSRF, current-leaf and final enrollment-commit checks. An operator with
 only download authority cannot approve installation or retire an install result.
+
+## Fresh manual-download and scheduled-install coexistence
+
+A fresh combined setup may explicitly select manual download alongside WUA
+installation scheduling, MSI installation scheduling, or both. This uses WUA
+consent v8, background provision plan v5 and paired setup plan v9. The same v4
+reusable-WUA roster binds the full new consent and independent MSI grant; no new
+service, scheduler, mutation fence or observer rights are added. All prior
+v1–v7 consent bytes, signatures and authority remain unchanged.
+
+Keep `--background-updates --reusable-update-jobs --allow-update-downloads` on
+review and apply. Add each desired installation scheduler explicitly:
+
+- WUA: `--allow-scheduled-updates`, with `--acknowledge-scheduled-updates` on apply
+- MSI: `--allow-scheduled-msi`, with `--acknowledge-scheduled-msi` on apply and
+  the existing fresh scheduled-MSI manager offer
+
+Apply also requires the exact newly reviewed combined digest, the separate
+`--acknowledge-update-downloads` and every original paired/background/reusable
+acknowledgement. Review accepts no acknowledgements. Missing, extra or mismatched
+acknowledgements fail before staging. Selecting only MSI scheduling leaves WUA
+scheduling scope absent. Selecting only WUA scheduling leaves MSI scheduling
+absent. No flags default on, existing state is never adopted, and services remain
+disabled until their separate authorized activation.
+
+Download stays manual. There is no scheduled-download capability, chained
+operation or deferred reuse of manual approval. The compact Updates view reports
+manual download beside installation scheduling only when both scopes exist.
+`windows_update_download`, `windows_update_install` and
+`windows_update_schedule` remain independent; WUA scheduling needs the latter
+two. MSI install/schedule capabilities remain in their separate domain.
+
+One WUA current occurrence remains occupied until exact successful retirement.
+After download, explicitly retire the accepted settled result, then obtain fresh
+installation readiness and independently approve a new immediate installation or
+one fixed UTC installation window. Reusing the download preview, approval or
+result cannot authorize installation. The shared monotonic WUA occurrence floor
+and original consent/current-leaf deadlines survive retirement.
+
+An independently approved MSI window can coexist with WUA download activity, but
+the same shared owner blocks overlapping native work. Busy, failed, partial or
+uncertain download evidence never shifts, extends or recreates the original MSI
+window. The scheduler can use only its one still-valid in-window readiness; if
+that readiness or window expires, the intent remains terminal. No automatic
+retry, rearm, cache cleanup, reboot or elapsed-time unlock is introduced.
 
 ## Review before a single download
 
@@ -91,7 +138,8 @@ an exact saved completion/retirement receipt, never repeat native work.
 
 With separate approval in a disposable Windows x64 non-domain-controller:
 
-1. Verify fresh setup, all missing-acknowledgement and mixed-version refusals,
+1. Verify all three fresh coexistence selections, unchanged v7 manual-only setup,
+   all missing-acknowledgement and mixed-version refusals,
    disabled staging and unchanged observer/key/state/cache protections.
 2. Inspect one cached, accepted-EULA, nonbundled update and the exact source,
    origin and DECIMAL metadata. Check unknown/changed facts and size ceilings.
@@ -101,6 +149,8 @@ With separate approval in a disposable Windows x64 non-domain-controller:
 4. Race MSI and download admission; expire/revoke authority during waits; interrupt
    native return, cleanup and result persistence. Verify no replay or elapsed unlock.
 5. Retire only the exact settled download, restart, and require a fresh independent
-   installation review. Verify both permanent sequence floors and unchanged expiry.
+   installation review/UTC approval. Verify both permanent sequence floors and unchanged expiry.
+6. Keep an independently approved MSI window fixed while download owns the fence.
+   Verify active/uncertain download blocks overlap and an expired window cannot revive.
 
 Source fixtures and cross-compilation exercise no native WUA/network operation.

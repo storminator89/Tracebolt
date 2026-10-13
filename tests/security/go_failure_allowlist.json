@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "a89ccdf94b0297ce4f5916d6f9de289b4d257421e923afd7a5a66ea97bd5dae9",
+  "goSourceSha256": "1fcd6aec8762f40aefe75eb2f42182453364f9cf30baba39194e605d269bd8fb",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -275,6 +275,8 @@
       "TestCurrentSetupPendingRejectsHistoricalReceiptAndConsent",
       "TestCurrentSetupPendingSnapshotCannotReplaceAuthoritativeCompletion",
       "TestCurrentSetupPendingSnapshotKeepsCanonicalAndProtectionFailuresClosed",
+      "TestDownloadCoexistenceCLIRequiresEverySelectedAcknowledgement",
+      "TestDownloadCoexistencePairPinsEachIndependentScheduler",
       "TestDownloadWUACLIRequiresFreshManualSelectionAndAck",
       "TestDownloadWUAPairedPlanPinsFreshManualScope",
       "TestEventConsentFlagsExplicitAndBounded",
@@ -1214,6 +1216,7 @@
       "TestWindowsServiceIncidentReviewSharedAdminCannotControl",
       "TestWindowsServiceIncidentReviewWireFixture",
       "TestWindowsServicePolicyAcceptsEightMaximumEscapedNames",
+      "TestWindowsServicePolicyAuthorityCommitGuards",
       "TestWindowsServicePolicyResponseLossDoesNotRepeatMutation",
       "TestWindowsServicePolicyStrictValidationAndNamedRead",
       "TestWindowsServiceResponseBoundIncludesFramingNewline",
@@ -1236,6 +1239,7 @@
       "TestWindowsUpdateDownloadAPIFinalLiveSessionGuard",
       "TestWindowsUpdateDownloadAPIIndependentCapabilityAndPurpose",
       "TestWindowsUpdateDownloadAPINoPromotionAndRequestGuards",
+      "TestWindowsUpdateDownloadCoexistenceAPIIndependentCapabilities",
       "TestWindowsUpdateDownloadOnlyActorCannotReadInstallPreview",
       "TestWindowsUpdateHistoryAndExactQueriesAreReadOnlyAndStrict",
       "TestWindowsUpdateJobAPIBodyReadDoesNotHoldSessionGate",
@@ -3797,6 +3801,8 @@
       "TestWindowsServiceFailedWritesAndCorruptionPreserveState",
       "TestWindowsServiceNeverTouchesHealthAnalysisOrAlarms",
       "TestWindowsServicePersistenceReadOnlyAndDefaultOff",
+      "TestWindowsServicePolicyGuardFinalAndValid",
+      "TestWindowsServicePolicyGuardSQLWait",
       "TestWindowsServiceStorageBoundAndInvalidIdentity"
     ],
     "localrmm/internal/systeminventory": [
@@ -4656,6 +4662,8 @@
       "TestBackgroundMSIAndWUAUseOneSharedOwner",
       "TestBoundedRetainedOwnersAndNoCrossDomainReceipt",
       "TestDomainDurabilityRequiredBeforeRelease",
+      "TestDownloadCoexistenceBlocksScheduledMSIWithoutMovingWindow",
+      "TestDownloadCoexistenceRetirementRequiresFreshScheduledInstallation",
       "TestDownloadFinalFenceAndCleanupFailureRetainOwner",
       "TestDownloadRetirementRequiresFreshIndependentInstallation",
       "TestExactSavedReceiptFinishesLostRelease",
@@ -5319,6 +5327,9 @@
       "TestCompleteSignedHistoryFitsCapacity",
       "TestCoordinatedApprovalRequiresFreshIdleStatusWithoutConsuming",
       "TestCurrentLeafRenewalDoesNotExtendOriginalPreview",
+      "TestDownloadCoexistenceConsentDoesNotPromoteManualV7",
+      "TestDownloadCoexistencePurposeCannotEnterScheduler",
+      "TestDownloadCoexistenceSchedulerScopesRemainIndependent",
       "TestDownloadExistingValidProfilesHaveNoAuthority",
       "TestDownloadFreshConsentAndRequiredMetadata",
       "TestDownloadPurposeCannotApproveOrClaimAsInstall",
@@ -5433,6 +5444,7 @@
       "TestBackgroundSetupMissingAckAndUncertainSCMStayFenced",
       "TestBackgroundSetupStagesDisabledWithFreshRegistration",
       "TestDownloadBackgroundRequiresSeparateFreshAcknowledgement",
+      "TestDownloadCoexistenceSetupPinsFreshConsentAndDisabledService",
       "TestFreshCoordinatedUpdateSetupPinsRosterAndPreservesStandalone",
       "TestFreshCoordinatedUpdateSetupRejectsPairDriftAndKeepsPartialFence",
       "TestFreshScheduledSetupNeverPromotesManualPlan",

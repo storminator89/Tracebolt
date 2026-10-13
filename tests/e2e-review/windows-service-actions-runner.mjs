@@ -26,7 +26,7 @@ const {createWindowsServiceActionHistoryFixture,windowsServiceActionHistoryRoute
 const {createWindowsUpdateScheduleFixture,windowsUpdateScheduleRoute,exerciseWindowsUpdateSchedule,windowsUpdateScheduleCaseName,windowsUpdateScheduleDisclosure,windowsUpdateScheduleFailureStage,requireWindowsUpdateScheduleEvidence,windowsBackgroundUpdateScheduleCaseName,windowsBackgroundUpdateScheduleDisclosure,requireWindowsBackgroundUpdateScheduleEvidence,createWindowsFleetUpdateScheduleFixture,exerciseWindowsFleetUpdateSchedule,windowsFleetUpdateScheduleCaseName,windowsFleetUpdateScheduleDisclosure,windowsFleetUpdateScheduleScenes,requireWindowsFleetUpdateScheduleEvidence,requireWindowsFleetUpdateScheduleDetails,windowsFleetUpdateScheduleFailureStep}=await bootstrap('imports',()=>import('./windows-update-schedule-browser.mjs'));
 const {createWindowsSoftwareJobsFixture,windowsSoftwareJobsRoute,exerciseWindowsSoftwareJobs,windowsSoftwareJobsCaseName,windowsSoftwareJobsDisclosure,windowsSoftwareJobsFailureStage,requireWindowsSoftwareJobsEvidence,requireWindowsSoftwareJobsDetails}=await bootstrap('imports',()=>import('./windows-software-jobs-browser.mjs'));
 const {createWindowsUpdateRetirementFixture,windowsUpdateRetirementRoute,exerciseWindowsUpdateRetirement,windowsUpdateRetirementCaseName,windowsUpdateRetirementDisclosure,windowsUpdateRetirementFailureStage,requireWindowsUpdateRetirementEvidence,requireWindowsUpdateRetirementDetails}=await bootstrap('imports',()=>import('./windows-update-retirement-browser.mjs'));
-const {createWindowsUpdateDownloadFixture,windowsUpdateDownloadRoute,exerciseWindowsUpdateDownload,windowsUpdateDownloadCaseName,windowsUpdateDownloadDisclosure,windowsUpdateDownloadFailureStage,requireWindowsUpdateDownloadEvidence,requireWindowsUpdateDownloadDetails}=await bootstrap('imports',()=>import('./windows-update-download-browser.mjs'));
+const {createWindowsUpdateDownloadFixture,windowsUpdateDownloadRoute,exerciseWindowsUpdateDownload,windowsUpdateDownloadCaseName,windowsUpdateDownloadDisclosure,windowsUpdateDownloadScenes,windowsUpdateDownloadFailureStage,requireWindowsUpdateDownloadEvidence,requireWindowsUpdateDownloadDetails}=await bootstrap('imports',()=>import('./windows-update-download-browser.mjs'));
 const {chromium,expect}=await bootstrap('dependencies',()=>require('@playwright/test'));
 const temporary=await bootstrap('temporary',()=>fs.mkdtemp(path.join(os.tmpdir(),'tracebolt-windows-actions-browser-')));
 const screenshots=[],historyScreenshots=[],updateScreenshots=[],variants=[],historyVariants=[],updateVariants=[];let browser,context,server,timer,errors=0,apiRequests=0,passed=false;
@@ -34,7 +34,7 @@ await fs.mkdir(out,{recursive:true});
 
 async function shot(page,name,fixtureDisclosure){
  const restore=diagnostic.checkpoint('screenshot');
- const isDownload=/^synthetic-windows-update-download-(review|result)-(1440|390)-(en|de)$/.test(name);
+ const isDownload=windowsUpdateDownloadScenes.some(scene=>['en','de'].some(locale=>[1440,390].some(width=>name===`synthetic-windows-update-download-${scene}-${width}-${locale}`)));
  const isRetirement=/^synthetic-windows-update-retirement-review-(1440|390)-(en|de)$/.test(name);
  const isFleetSchedule=windowsFleetUpdateScheduleScenes.some(scene=>['en','de'].some(locale=>[1440,390].some(width=>name===`synthetic-windows-fleet-update-schedule-${scene}-${width}-${locale}`)));
  const isSoftware=/^synthetic-windows-software-jobs-(review|result)-(1440|390)-(en|de)$/.test(name);

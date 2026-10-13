@@ -266,6 +266,10 @@ missing material rather than inventing credentials or weakening protection.
   Never promote observation/service permissions, retry uncertainty, download,
   accept EULAs or reboot. Native elevated executor/provisioning remain inactive.
 - Selected update downloading requires a separate fresh v7 paired background scope.
+  Fresh v8 consent/v9 paired setup additionally permits independently selected
+  installation schedulers; v7 remains manual-only. Never schedule download,
+  infer one scheduler/capability from another, reuse manual approval for install,
+  or move a fixed installation window while download owns the shared fence.
   Read `docs/windows-selected-update-downloads.md`. Keep download-only capability,
   signed purposes, bounded metadata-origin/size review and the shared MSI/WUA fence.
   Windows-managed delivery is not a hard byte quota or egress allowlist. Successful

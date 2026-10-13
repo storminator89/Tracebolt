@@ -74,7 +74,7 @@ func (s *Store) ConfigureWindowsService(ctx context.Context, input windowsservic
 		return state.Configure(input, enabled, names, expected, now)
 	})
 }
-func (s *Store) updateWindowsService(ctx context.Context, id string, update func(*windowsservicehealth.State) error) (windowsservicehealth.State, error) {
+func (s *Store) updateWindowsService(ctx context.Context, id string, update func(*windowsservicehealth.State) error, guards ...func(*sql.Tx) error) (windowsservicehealth.State, error) {
 	if !windowscontact.ValidDeviceID(id) {
 		return windowsservicehealth.State{}, windowsservicehealth.ErrInvalid
 	}
@@ -83,6 +83,11 @@ func (s *Store) updateWindowsService(ctx context.Context, id string, update func
 		return windowsservicehealth.State{}, err
 	}
 	defer tx.Rollback()
+	for _, guard := range guards {
+		if err = guard(tx); err != nil {
+			return windowsservicehealth.State{}, err
+		}
+	}
 	state := windowsservicehealth.New()
 	var count int
 	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM windows_service_devices").Scan(&count); err != nil {
@@ -121,6 +126,11 @@ func (s *Store) updateWindowsService(ctx context.Context, id string, update func
 	}
 	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, serviceNotificationEpisodes(state)); err != nil {
 		return windowsservicehealth.State{}, err
+	}
+	for _, guard := range guards {
+		if err = guard(tx); err != nil {
+			return windowsservicehealth.State{}, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return windowsservicehealth.State{}, err

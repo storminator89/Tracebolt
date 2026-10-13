@@ -35,7 +35,7 @@ func scheduleDigest(a ScheduleApproval) string {
 	return actionpermit.Digest(append([]byte("Tracebolt prospective cached WUA schedule v1\x00"), b...))
 }
 func (a ScheduleApproval) Validate() error {
-	if a.Version != ScheduleVersion || a.Baseline.Validate() != nil || a.Baseline.Readiness.Reason() != "ready" || a.ApprovedAt < a.Baseline.CreatedAt || a.ApprovedAt >= a.Baseline.ExpiresAt || a.StartAt <= a.ApprovedAt || a.StartAt-a.ApprovedAt > 86400 || !validTime(a.EndAt) || a.EndAt-a.StartAt < 60 || a.EndAt-a.StartAt > 3600 || !validTime(a.AuthorityExpiresAt) || a.EndAt > a.AuthorityExpiresAt || a.Generation != 1 || a.Digest != scheduleDigest(a) {
+	if a.Version != ScheduleVersion || a.Baseline.Validate() != nil || a.Baseline.Readiness.Purpose != "" || a.Baseline.Readiness.Reason() != "ready" || a.ApprovedAt < a.Baseline.CreatedAt || a.ApprovedAt >= a.Baseline.ExpiresAt || a.StartAt <= a.ApprovedAt || a.StartAt-a.ApprovedAt > 86400 || !validTime(a.EndAt) || a.EndAt-a.StartAt < 60 || a.EndAt-a.StartAt > 3600 || !validTime(a.AuthorityExpiresAt) || a.EndAt > a.AuthorityExpiresAt || a.Generation != 1 || a.Digest != scheduleDigest(a) {
 		return ErrInvalid
 	}
 	return nil
@@ -114,7 +114,7 @@ func (r Record) validateScheduleAuthority() error {
 func (r Record) validateScheduledJob(j Job) error {
 	s := j.Schedule
 	a := s.Approval
-	if !r.Consent.ScheduleAcknowledged || a.Validate() != nil || a.Baseline.ID != j.ID || a.Baseline.ActorID != j.ActorID || a.Baseline.Binding != r.Consent.Binding || a.Baseline.Readiness.Selection != j.Selection || a.ApprovedAt > r.ClockFloor || a.EndAt > r.Consent.ExpiresAt {
+	if j.Download() || !r.Consent.ScheduleAcknowledged || a.Validate() != nil || a.Baseline.ID != j.ID || a.Baseline.ActorID != j.ActorID || a.Baseline.Binding != r.Consent.Binding || a.Baseline.Readiness.Selection != j.Selection || a.ApprovedAt > r.ClockFloor || a.EndAt > r.Consent.ExpiresAt {
 		return ErrIntegrity
 	}
 	c, e := VerifyChallenge(s.BaselineChallenge, r.PublicKey)
@@ -203,7 +203,7 @@ func (m *Manager) Schedule(ctx context.Context, device, actor, id, d string, sta
 				}
 				return ErrConflict
 			}
-			if j.ActorID != actor || j.State != "preview" || j.Preview == nil || j.Preview.Digest != d || len(j.ReadinessReport) == 0 {
+			if j.Download() || j.ActorID != actor || j.State != "preview" || j.Preview == nil || j.Preview.Digest != d || len(j.ReadinessReport) == 0 {
 				return ErrConflict
 			}
 			if n >= j.Preview.ExpiresAt || m.blocked(n, id) {

@@ -55,7 +55,7 @@ test('new capture fixture preserves the real Go review binding and original shif
 });
 test('new named scene API reads and manual preview are fully intercepted and exact-pin guarded',async()=>{
  const base='http://127.0.0.1:19911',fixture=windowsServiceIncidentReviewFixture(sharedSession()),external=[],unexpected=[],handle=windowsServiceIncidentReviewRoute({base,fixture,external,unexpected}),item=fixture.review.incident,action=`/api/devices/${item.deviceId}/windows-service-actions`,pin={'x-tracebolt-windows-service-review':fixture.review.control.bindingDigest};
- for(const path of ['/api/auth/session','/api/session','/api/overview','/api/fleet/identities','/api/fleet/groups','/api/fleet/windows-incidents'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`]){const route=inertRoute(base+path);await handle(route);assert.ok(route.result.reply);assert.equal(route.result.continued,0);}
+ for(const path of ['/api/auth/session','/api/session','/api/overview','/api/enrollment','/api/fleet/identities','/api/fleet/groups','/api/fleet/windows-incidents'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`]){const route=inertRoute(base+path);await handle(route);assert.ok(route.result.reply);assert.equal(route.result.continued,0);}
  for(const value of [undefined,'sha256:'+'b'.repeat(64),fixture.review.control.bindingDigest+','+fixture.review.control.bindingDigest])await assert.rejects(()=>handle(inertRoute(base+action,{headers:{'x-tracebolt-windows-service-review':value}})));
  const status=inertRoute(base+action,{headers:pin});await handle(status);assert.deepEqual(status.result.reply,fixture.ready);assert.equal(fixture.counts.preview,0);
  for(const path of ['/api/fleet/windows-incidents'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`,action])await assert.rejects(()=>handle(inertRoute(base+path,{headers:pin})));
@@ -74,4 +74,35 @@ test('four new scenes exercise real compiled App selectors with blank operation 
  assert.equal(windowsIncidentInboxScenes.length,12);assert.equal(new Set(windowsIncidentInboxScenes.map(row=>row.name)).size,12);assert.deepEqual(windowsIncidentInboxScenes.filter(row=>row.fixtureDisclosure===windowsServiceIncidentReviewDisclosure).map(({locale,width})=>[locale,width]),[['en',1440],['en',1440],['de',390],['de',390]]);
  assert.match(helper,/serviceReviewCases.push\(await exerciseWindowsServiceIncidentReview/);assert.match(helper,/await page.goto\(base\+'\/#\/devices'\)/);assert.match(helper,/await expect\(choose\).toHaveValue\(''\)/);assert.match(helper,/await expect\(makePreview\).toBeDisabled\(\)/);assert.match(helper,/await choose.selectOption\('restart'\);await makePreview.click\(\)/);assert.match(helper,/await expect\(preview.getByRole\('checkbox'\)\).not.toBeChecked\(\)/);assert.match(helper,/approve:0,acknowledge:0,collection:0/);
  assert.match(runner,/windowsIncidentInboxScenes.find\(value=>value.name===name\)/);assert.match(runner,/screenshots.some\(value=>value.file===name\+'\.png'\)/);assert.match(runner,/path.join\(root,'web\/dist'\)/);assert.doesNotMatch(helper,/getByRole\('checkbox'\)\.check\(|getByRole\('button',\{name:de\?'Diese Aktion einmal freigeben':'Approve this action once',exact:true\}\)\.click\(/);
+});
+
+// Mount the actual production entry point: component-only route tests do not
+// discover the device page's enrollment read. JSDOM opens no browser or socket.
+test('named service scenes intercept the production App enrollment read without enabling enrollment',async()=>{
+ const {createRequire}=await import('node:module'),require=createRequire(new URL('../../web/package.json',import.meta.url));
+ const {JSDOM}=require('jsdom'),{build}=require('esbuild');
+ const compiled=await build({entryPoints:[new URL('../../web/src/main.tsx',import.meta.url).pathname],outdir:'memory-only',bundle:true,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},loader:{'.woff':'dataurl','.woff2':'dataurl'},write:false,logLevel:'silent'});
+ const script=compiled.outputFiles.find(file=>file.path.endsWith('.js')).text;
+ for(const locale of ['en','de']){
+  const base='http://127.0.0.1:19911',fixture=windowsServiceIncidentReviewFixture(sharedSession()),external=[],unexpected=[],reads=[],errors=[];
+  const handle=windowsServiceIncidentReviewRoute({base,fixture,external,unexpected});
+  const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:base+'/#/devices',runScripts:'outside-only',pretendToBeVisual:true});
+  try{
+   const w=dom.window;Object.assign(w,{TextEncoder,TextDecoder,structuredClone});w.localStorage.setItem('tracebolt.locale',locale);
+   w.addEventListener('error',event=>{errors.push(event.error?.name);event.preventDefault();});
+   w.fetch=async(url,options={})=>{
+    const absolute=new URL(url,w.location),route=inertRoute(absolute.href,{method:options.method??'GET',body:options.body??null,headers:Object.fromEntries(new Headers(options.headers))});
+    reads.push(absolute.pathname);await handle(route);assert.equal(route.result.aborted,0);assert.equal(route.result.continued,0);assert.ok(route.result.reply);
+    return new Response(JSON.stringify(route.result.reply),{status:200,headers:{'Content-Type':'application/json'}});
+   };
+   w.eval(script);
+   for(let i=0;i<100&&(!reads.includes('/api/enrollment')||!w.document.querySelector('.enrollment-actions .icon-button:not(:disabled)'));i++)await new Promise(resolve=>setTimeout(resolve,20));
+   assert.ok(w.document.querySelector('.windows-incident-inbox'));assert.equal(w.document.documentElement.lang,locale);
+   assert.equal(reads.filter(path=>path==='/api/enrollment').length,1);
+   const add=w.document.querySelector('.enrollment-actions .primary');assert.ok(add);assert.equal(add.disabled,true);
+   assert.deepEqual(external,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);assert.deepEqual(fixture.counts,{inbox:0,review:0,status:0,preview:0,approve:0,acknowledge:0,collection:0});
+  }finally{dom.window.close();}
+  for(const options of [{method:'POST',body:'{}'},{method:'GET',body:'{}'}]){const route=inertRoute(base+'/api/enrollment',options);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.reply,null);}
+  for(const suffix of ['?scope=all','/invitations']){const route=inertRoute(base+'/api/enrollment'+suffix);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.reply,null);}
+ }
 });
