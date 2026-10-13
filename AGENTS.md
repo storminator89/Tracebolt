@@ -34,6 +34,13 @@ missing material rather than inventing credentials or weakening protection.
   persistence and automatic renewal are not shipped. Read `docs/windows-status.md`
   for the exact released source and remaining native gates. `make run` is the synthetic developer
   manager, not the LAN startup command.
+- The macOS basic-TLS source candidate uses `enroll-agent` and `macos-agent`.
+  Read `docs/macos-status.md` before modifying it. Keep Darwin identity tokens
+  distinct from the public `macos` model label; never promote basic grants into
+  Linux managed or Windows inventory authority. Protected descriptor/ACL checks,
+  immutable original identity, exact pending bytes and renewal floors stay intact.
+  Cross-compiles and synthetic tests do not authorize native enrollment, launchd,
+  dedicated accounts, permission/TCC changes, installation or release acceptance.
 - Obtain the required approval for deployment exposure, persistent credential or
   trust changes, firewall/global settings, service installation and destructive
   actions. Stop at missing credentials/authorization; explain the exact blocker.

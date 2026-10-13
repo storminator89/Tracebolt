@@ -1,4 +1,4 @@
-// enroll-agent is the Linux guided enrollment client. It never installs a service.
+// enroll-agent is the Linux/macOS guided enrollment client. It never installs a service.
 package main
 
 import (
@@ -36,8 +36,16 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "Usage: enroll-agent --bootstrap ABS_PATH --state-directory ABS_PATH [--automatic-certificate-renewal] [--insecure-http-test] [--timeout 15m]. Invitation input is hidden; there is no invitation argument, environment or stdin mode.")
 		return 2
 	}
-	if runtime.GOOS != "linux" {
-		fmt.Fprintln(errOut, "Guided enrollment is currently Linux-only.")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		fmt.Fprintln(errOut, "Guided enrollment requires Linux or macOS.")
+		return 2
+	}
+	if runtime.GOOS == "darwin" && os.Geteuid() <= 0 {
+		fmt.Fprintln(errOut, "Run macOS enrollment as the intended nonroot reporting identity. No private state was opened.")
+		return 2
+	}
+	if runtime.GOOS == "darwin" && (*claimOnly || *validateService || *serviceIdentity != "") {
+		fmt.Fprintln(errOut, "macOS requires foreground enrollment before separately approved launchd setup.")
 		return 2
 	}
 	if *validateService && (*automaticRenewal || *claimOnly || *timeout != 15*time.Minute || !agentidentity.Validate(*serviceIdentity)) || !*validateService && *serviceIdentity != "" {
@@ -152,7 +160,11 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if !result.ServerAuthenticated {
 		fmt.Fprintln(out, "WARNING: HTTP-test activation was reported by an unauthenticated manager. This is not verified server activation.")
 	}
-	if _, e = fmt.Fprintf(out, "To start regular read-only reporting in the foreground:\nlan-agent --config %s --foreground\nNo service was installed. Stopping this command stops reporting.\n", shellQuote(result.ConfigPath)); e != nil {
+	command := "lan-agent"
+	if runtime.GOOS == "darwin" {
+		command = "macos-agent"
+	}
+	if _, e = fmt.Fprintf(out, "To start regular read-only reporting in the foreground:\n%s --config %s --foreground\nNo service was installed. Stopping this command stops reporting.\n", command, shellQuote(result.ConfigPath)); e != nil {
 		return 1
 	}
 	return 0

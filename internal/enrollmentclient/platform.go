@@ -17,6 +17,12 @@ func validatePlatformBootstrap(b Bootstrap, runningOS string) error {
 		if b.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 			return nil
 		}
+	case "darwin":
+		// macOS starts with the identifier-minimizing basic TLS profile only.
+		// Linux managed and Windows inventory grants never promote across OSes.
+		if b.Profile == "tls" && b.CollectionProfile == enrollmentcrypto.CollectionProfile {
+			return nil
+		}
 	case "windows":
 		if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || b.Profile == "tls" && b.CollectionProfile == enrollmentcrypto.CollectionProfile {
 			return nil

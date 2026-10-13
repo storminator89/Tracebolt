@@ -10,7 +10,7 @@ export interface EnrollmentSnapshot {
   intent:{intentID:string;requestID:string;serialHex:string;templateVersion:string;deviceID:string;keyFingerprint:string;notBefore:number;notAfter:number;at:number};
   issuance:{requestID:string;certificateHash:string;at:number}; activation:{requestID:string;at:number}; termination:{requestID:string;from:string;at:number};
 }
-export type EnrollmentPlatform = 'linux' | 'windows';
+export type EnrollmentPlatform = 'linux' | 'windows' | 'darwin';
 export type EnrollmentCollectionProfile = 'basic-readonly-v1' | 'managed-operations-v1' | 'managed-operations-v2' | 'managed-operations-v3' | 'windows-inventory-v1';
 export interface EnrollmentList {collectionProfile?:EnrollmentCollectionProfile;collectionPrivacy?:'metadata_labels_may_be_sensitive'|'package_source_metadata_may_be_sensitive'|'complete_system_inventory_metadata_may_be_sensitive'|'windows_inventory_metadata_may_be_sensitive';serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
 export interface EnrollmentBootstrap {
@@ -30,9 +30,13 @@ export function validSnapshot(value:unknown):value is EnrollmentSnapshot {
 export function validEnrollmentList(value:unknown,platform?:EnrollmentPlatform):value is EnrollmentList {
  if(!object(value))return false;
  const windows=value.collectionProfile==='windows-inventory-v1';
- // A Windows disclosure must match the separate Windows route and every retained identity.
- if((platform==='windows'&&!windows)||(platform==='linux'&&windows))return false;
+ const macOS=Array.isArray(value.platforms)&&value.platforms.includes('darwin');
+ // Each disclosure matches its route and every retained identity. macOS uses
+ // an isolated TLS/basic store; wider Linux/Windows profiles never promote it.
+ if((platform==='windows'&&!windows)||(platform==='linux'&&(windows||macOS))||(platform==='darwin'&&(!macOS||windows)))return false;
  if(windows&&(!Array.isArray(value.platforms)||value.platforms.length!==1||value.platforms[0]!=='windows'||!Array.isArray(value.items)||!value.items.every(item=>validSnapshot(item)&&item.platform==='windows'&&item.binding.collectionProfile==='windows-inventory-v1')))return false;
+ const darwin=macOS||Array.isArray(value.items)&&value.items.some(item=>object(item)&&item.platform==='darwin');
+ if(darwin&&((value.collectionProfile!==undefined&&value.collectionProfile!=='basic-readonly-v1')||!Array.isArray(value.platforms)||value.platforms.length!==1||value.platforms[0]!=='darwin'||!Array.isArray(value.items)||!value.items.every(item=>validSnapshot(item)&&item.platform==='darwin'&&item.binding.collectionProfile==='basic-readonly-v1'&&item.binding.profile==='tls')))return false;
  return object(value)&&validCollectionConsent(value)&&value.schemaVersion==='tracebolt.enrollment-operator.v2'&&validServerTime(value.serverNow)&&typeof value.enabled==='boolean'&&Array.isArray(value.platforms)&&value.platforms.every(text)&&Number.isSafeInteger(value.recordLimit)&&Number(value.recordLimit)>0&&Number(value.recordLimit)<=25&&Array.isArray(value.items)&&value.items.length<=Number(value.recordLimit)&&value.items.every(validSnapshot)&&new Set(value.items.map(item=>item.invitationID)).size===value.items.length;
 }
 function validCollectionConsent(value:Record<string,unknown>):boolean {

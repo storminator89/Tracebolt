@@ -50,9 +50,9 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 				enrollmentOperatorError(w, e)
 				return
 			}
-			platforms = []string{"linux"}
-			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
-				platforms = []string{"windows"}
+			platforms = enrollmentPlatforms(h.enrollment.Binding())
+			if h.enrollment.Platform() == "darwin" {
+				platforms = []string{"darwin"}
 			}
 		}
 		response := map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": enrollmentservice.MaxRecords, "items": items, "serverNow": serverNow}
@@ -69,6 +69,9 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 		if h.enrollment != nil && h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 			response["collectionProfile"] = enrollmentcrypto.CollectionProfileWindowsInventory
 			response["collectionPrivacy"] = "windows_inventory_metadata_may_be_sensitive"
+		}
+		if h.enrollment != nil && h.enrollment.Platform() == "darwin" {
+			response["collectionProfile"] = enrollmentcrypto.CollectionProfile
 		}
 		write(w, 200, response)
 		return
@@ -99,6 +102,10 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 	if r.URL.Path == "/api/enrollment/invitations" {
 		input, ok := readInvitationInput(w, r, h.enrollment.Binding().CollectionProfile)
 		if !ok {
+			return
+		}
+		if h.enrollment.Platform() == "darwin" && input.Platform != "darwin" || h.enrollment.Platform() == "" && input.Platform == "darwin" {
+			fail(w, 400, "enrollment_platform_mismatch", "Platform does not match the selected enrollment domain.")
 			return
 		}
 		if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && (input.Platform != "windows" || input.InsecureHTTPAcknowledged != h.insecureHTTPTest) {
@@ -493,4 +500,13 @@ func (h *operatorHandler) enrollmentRenewal(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	write(w, 200, result)
+}
+
+// The UI may only offer platforms that this configured store can enroll.
+// macOS does not reuse Linux managed or Windows inventory authority.
+func enrollmentPlatforms(binding enrollmentstate.Binding) []string {
+	if binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+		return []string{"windows"}
+	}
+	return []string{"linux"}
 }

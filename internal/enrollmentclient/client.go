@@ -463,6 +463,9 @@ func grow(d time.Duration) time.Duration {
 // Keep the transport allowlist bound to the same validated collection profile
 // that chooses the wire route family. Legacy clients retain legacy paths only.
 func newEnrollmentHTTPClient(b Bootstrap) (*http.Client, error) {
+	if runtime.GOOS == "darwin" {
+		return lanclient.NewMacOSBootstrapHTTPClient(b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM))
+	}
 	if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		return lanclient.NewWindowsBootstrapHTTPClient(b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM))
 	}

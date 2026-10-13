@@ -14,6 +14,15 @@ func NewBootstrapHTTPClient(origin, profile string, serverCAPEM []byte) (*http.C
 	return newBootstrapHTTPClient(origin, profile, serverCAPEM, "/v2/enrollment/")
 }
 
+// NewMacOSBootstrapHTTPClient pins only the fixed macOS basic-TLS enrollment
+// and same-key renewal routes. It does not enable enrollment or grant consent.
+func NewMacOSBootstrapHTTPClient(origin, profile string, serverCAPEM []byte) (*http.Client, error) {
+	if profile != "tls" {
+		return nil, ErrConfiguration
+	}
+	return newBootstrapHTTPClient(origin, profile, serverCAPEM, "/v2/macos/enrollment/")
+}
+
 // NewWindowsBootstrapHTTPClient pins only the five Windows inventory enrollment
 // routes. It does not enable enrollment, create an identity, or grant consent.
 // All destination, TLS, redirect, header and body restrictions are unchanged.

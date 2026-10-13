@@ -82,7 +82,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if enrollment != nil && (!enrollment.ValidFor(c) || enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory) {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
-	if c.WindowsInventoryEnabled && enrollment == nil {
+	if (c.WindowsInventoryEnabled || c.MacOSBasicEnabled) && enrollment == nil {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
 	if enrollment == nil && enrollmentconfig.RejectEnrollmentMode(c.StateDirectory) != nil {
@@ -113,6 +113,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
 	var enrolledIngress *enrollmenttransport.Ingress
+	var macosStore *enrollmentstore.Store
+	var macosService *enrollmentservice.Service
+	var macosIngress *enrollmenttransport.Ingress
 	var windowsStore *enrollmentstore.Store
 	var windowsService *enrollmentservice.Service
 	var windowsIngress *enrollmenttransport.Ingress
@@ -145,6 +148,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if windowsStore != nil {
 			windowsStore.Close()
 		}
+		if macosStore != nil {
+			macosStore.Close()
+		}
 		trustStore.Close()
 		return nil, err
 	}
@@ -174,6 +180,21 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		enrolledIngress, e = enrollmenttransport.New(enrolledStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, enrolledService.JournalCache())
 		if e != nil {
 			return fail(e)
+		}
+	}
+	if c.MacOSBasicEnabled {
+		var err error
+		macosStore, err = enrollment.OpenMacOSStore(c.StateDirectory)
+		if err != nil {
+			return fail(err)
+		}
+		macosService, err = enrollmentservice.New(macosStore, enrollment.Issuer(), nil)
+		if err != nil {
+			return fail(err)
+		}
+		macosIngress, err = enrollmenttransport.New(macosStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, macosService.JournalCache())
+		if err != nil {
+			return fail(err)
 		}
 	}
 	if c.WindowsInventoryEnabled {
@@ -481,6 +502,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 				_ = cveCache.Close()
 			}
 			appStore.Close()
+			if macosStore != nil {
+				macosStore.Close()
+			}
 			trustStore.Close()
 			if enrolledStore != nil {
 				enrolledStore.Close()
@@ -553,6 +577,18 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return mergedWindowsDevices(context.Background(), enrolledService, windowsService, time.Now().UTC())
 		}
 	}
+	if macosService != nil {
+		b := macosService.Binding()
+		operatorConfig.MacOSEnrollment = macosService
+		operatorConfig.MacOSEnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: b.InstanceID, Profile: b.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: b.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
+		if macosService.AutomaticRenewal() {
+			operatorConfig.MacOSEnrollmentBootstrap.SchemaVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
+			operatorConfig.MacOSEnrollmentBootstrap.RenewalPolicy = "same-key-v1"
+		}
+		operatorConfig.Devices = func() ([]model.Device, error) {
+			return mergedMacOSDevices(context.Background(), enrolledService, windowsService, macosService, time.Now().UTC())
+		}
+	}
 	operator, e := api.NewLANOperatorHandler(app, operatorConfig)
 	if e != nil {
 		closeAll()
@@ -573,6 +609,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if windowsIngress != nil {
 		agent = withWindowsIngress(agent, windowsIngress)
 	}
+	agent = withMacOSIngress(agent, macosIngress)
 	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,11 @@ func activatedRenewalFixture(t *testing.T, platform ...string) (*fixture, enroll
 	os := "linux"
 	if len(platform) == 1 {
 		os = platform[0]
+	}
+	if os == "darwin" {
+		f.config.Platform = "darwin"
+		f.path = filepath.Join(t.TempDir(), "private", "macos.db")
+		f.restart(t)
 	}
 	pending, key := claimForPlatform(t, f, os)
 	_, e := f.service.Approve(ctx, pending.InvitationID, id("request", 4), pending.Claim.KeyFingerprint, pending.Revision)

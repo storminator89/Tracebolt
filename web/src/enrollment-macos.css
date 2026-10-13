@@ -1,0 +1,3 @@
+.enrollment-macos p, .enrollment-macos li { line-height: 1.55; }
+.enrollment-macos ol { padding-left: 20px; }
+.enrollment-macos li + li { margin-top: 12px; }

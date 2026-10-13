@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -21,7 +22,14 @@ import (
 
 type windowsCollector func(context.Context, string) (windowsmanaged.Snapshot, model.Device, error)
 
-func telemetryPath(c Config) string {
+const MacOSTelemetryPath = "/v1/macos/telemetry"
+
+func telemetryPath(c Config) string { return telemetryPathForOS(c, runtime.GOOS) }
+
+func telemetryPathForOS(c Config, runningOS string) string {
+	if runningOS == "darwin" {
+		return MacOSTelemetryPath
+	}
 	if c.windowsInventory() {
 		return WindowsTelemetryPath
 	}

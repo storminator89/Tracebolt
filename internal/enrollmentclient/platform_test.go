@@ -15,7 +15,7 @@ func TestPlatformBootstrapAdmission(t *testing.T) {
 			for _, collection := range []string{enrollmentcrypto.CollectionProfile, enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete, enrollmentcrypto.CollectionProfileWindowsInventory, "unknown", ""} {
 				t.Run(runningOS+"/"+transport+"/"+collection, func(t *testing.T) {
 					b := Bootstrap{Profile: transport, CollectionProfile: collection}
-					allowed := (transport == "tls" || transport == "http-test") && enrollmentcrypto.ValidCollectionProfile(collection) && (runningOS == "linux" && collection != enrollmentcrypto.CollectionProfileWindowsInventory || runningOS == "windows" && (transport == "tls" && collection == enrollmentcrypto.CollectionProfile || collection == enrollmentcrypto.CollectionProfileWindowsInventory))
+					allowed := (transport == "tls" || transport == "http-test") && enrollmentcrypto.ValidCollectionProfile(collection) && (runningOS == "darwin" && transport == "tls" && collection == enrollmentcrypto.CollectionProfile || runningOS == "linux" && collection != enrollmentcrypto.CollectionProfileWindowsInventory || runningOS == "windows" && (transport == "tls" && collection == enrollmentcrypto.CollectionProfile || collection == enrollmentcrypto.CollectionProfileWindowsInventory))
 					err := validatePlatformBootstrap(b, runningOS)
 					if allowed && err != nil || !allowed && !errors.Is(err, ErrBootstrap) {
 						t.Fatalf("admission = %v, allowed = %v", err, allowed)
@@ -34,7 +34,7 @@ func TestSnapshotPlatformMustMatchTrustedRuntime(t *testing.T) {
 					t.Run(runningOS+"/"+remotePlatform+"/"+transport+"/"+collection, func(t *testing.T) {
 						b := Bootstrap{Profile: transport, CollectionProfile: collection}
 						v := enrollmentstate.Snapshot{Platform: remotePlatform}
-						allowed := remotePlatform == runningOS && (runningOS == "linux" && collection != enrollmentcrypto.CollectionProfileWindowsInventory || runningOS == "windows" && (transport == "tls" && collection == enrollmentcrypto.CollectionProfile || collection == enrollmentcrypto.CollectionProfileWindowsInventory))
+						allowed := remotePlatform == runningOS && (runningOS == "darwin" && transport == "tls" && collection == enrollmentcrypto.CollectionProfile || runningOS == "linux" && collection != enrollmentcrypto.CollectionProfileWindowsInventory || runningOS == "windows" && (transport == "tls" && collection == enrollmentcrypto.CollectionProfile || collection == enrollmentcrypto.CollectionProfileWindowsInventory))
 						err := validatePlatformSnapshot(v, b, runningOS)
 						if allowed && err != nil || !allowed && !errors.Is(err, ErrResponse) {
 							t.Fatalf("platform response = %v, allowed = %v", err, allowed)

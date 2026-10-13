@@ -21,3 +21,13 @@ run: build
 crosscheck:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -trimpath -o bin/agent-windows-amd64.exe ./cmd/agent
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath -o bin/agent-darwin-arm64 ./cmd/agent
+
+# Source compilation only. These targets never execute a macOS binary or install.
+.PHONY: macos-source
+macos-source:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath -o bin/enroll-agent-darwin-arm64 ./cmd/enroll-agent
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath -o bin/macos-agent-darwin-arm64 ./cmd/macos-agent
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -buildvcs=false -trimpath -o bin/enroll-agent-darwin-amd64 ./cmd/enroll-agent
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -buildvcs=false -trimpath -o bin/macos-agent-darwin-amd64 ./cmd/macos-agent
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath -o bin/macos-agent-service-darwin-arm64 ./cmd/macos-agent-service
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -buildvcs=false -trimpath -o bin/macos-agent-service-darwin-amd64 ./cmd/macos-agent-service

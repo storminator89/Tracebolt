@@ -115,6 +115,9 @@ func New(store *enrollmentstore.Store, issuerDER []byte, agentOrigin string, cac
 	if cfg.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		path = "/v1/windows/agent/telemetry"
 	}
+	if cfg.Platform == "darwin" {
+		path = "/v1/macos/telemetry"
+	}
 	h := &Ingress{telemetryPath: path, store: store, journal: cache, issuer: issuer, roots: roots, origin: agentOrigin, authority: authority, profile: cfg.Binding.Profile, slots: make(chan struct{}, MaxInFlight), admission: &certificateAdmission{active: make(map[[32]byte]bool)}, now: time.Now}
 	if h.journal == nil {
 		h.journal = journalcache.New(store, func() time.Time { return h.now() })
@@ -150,6 +153,10 @@ func (h *Ingress) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if !h.valid() {
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
+		return
+	}
+	if h.telemetryPath == "/v1/macos/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath) {
+		failure(w, http.StatusNotFound, "not_found")
 		return
 	}
 	if h.telemetryPath == "/v1/windows/agent/telemetry" && (r == nil || r.URL == nil || r.URL.Path != h.telemetryPath && !windowsEventPath(r.URL.Path) && !windowsHistoryPath(r.URL.Path) && !windowsfullserviceswire.ValidPath(r.URL.Path) && !windowsfullsoftwarewire.ValidPath(r.URL.Path) && !windowsusersoftwarewire.ValidPath(r.URL.Path) && !windowsfullprocesseswire.ValidPath(r.URL.Path) && !windowsnetworkcontextwire.ValidPath(r.URL.Path) && !strings.HasPrefix(r.URL.Path, "/v1/windows-service-actions/") && !strings.HasPrefix(r.URL.Path, windowsUpdateJobsPrefix) && !strings.HasPrefix(r.URL.Path, windowsSoftwareJobsPrefix) && !strings.HasPrefix(r.URL.Path, windowsManagedMSIPrefix)) {
@@ -461,7 +468,7 @@ func validRequest(r *http.Request, authority, profile string) bool {
 	return validRequestPath(r, authority, profile, signedhttp.Path)
 }
 func validRequestPath(r *http.Request, authority, profile, path string) bool {
-	if path != signedhttp.Path && path != "/v1/windows/agent/telemetry" {
+	if path != signedhttp.Path && path != "/v1/windows/agent/telemetry" && path != "/v1/macos/telemetry" || path == "/v1/macos/telemetry" && profile != "tls" {
 		return false
 	}
 	scheme := "https"

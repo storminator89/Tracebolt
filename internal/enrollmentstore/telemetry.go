@@ -56,7 +56,7 @@ func (s *Store) SaveObservation(ctx context.Context, invitationID, certificateHa
 		if err != nil {
 			return err
 		}
-		if !lanstore.FrameMatchesCollectionProfile(frame, snapshot.Binding.CollectionProfile) || frame.Observation.Observation.Platform != snapshot.Platform {
+		if !lanstore.FrameMatchesCollectionProfile(frame, snapshot.Binding.CollectionProfile) || frame.Observation.Observation.Platform != enrollmentstate.ObservationPlatform(snapshot.Platform) {
 			return enrollmentstate.ErrProof
 		}
 		if previous != (Replay{}) && (frame.Sequence <= previous.Sequence || !frame.Observation.GeneratedAt.After(previous.GeneratedAt) || !frame.Observation.Observation.LastSeen.After(previous.CollectedAt)) {

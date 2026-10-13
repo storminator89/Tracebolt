@@ -1,4 +1,4 @@
-// Package enrollmentclient implements the Linux guided enrollment handoff to the
+// Package enrollmentclient implements the guided enrollment handoff to the
 // existing foreground LAN sender. It installs no service and changes no OS trust.
 package enrollmentclient
 

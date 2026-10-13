@@ -81,6 +81,9 @@ func validBinding(b Binding) bool {
 }
 
 func validateConfig(c Config) error {
+	if c.Platform != "" && (c.Platform != "darwin" || c.Binding.Profile != "tls" || c.Binding.CollectionProfile != enrollmentcrypto.CollectionProfile) {
+		return ErrInvalid
+	}
 	if c.AutomaticRenewal && (c.Binding.Profile != "tls" || !validOrigin(c.RenewalAgentOrigin, "tls")) || !c.AutomaticRenewal && c.RenewalAgentOrigin != "" {
 		return ErrInvalid
 	}

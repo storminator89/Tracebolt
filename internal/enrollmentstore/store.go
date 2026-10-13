@@ -134,6 +134,28 @@ type transaction struct {
 // issuer is public preprovided DER, not a signing key. Config changes are refused
 // on reopen, including the manager instance, origins, issuer and quotas.
 func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store, error) {
+	return openStore(path, config, issuerDER, openOrCreate)
+}
+
+// OpenExisting never creates a missing ledger or its parent directory.
+func OpenExisting(path string, config enrollmentstate.Config, issuerDER []byte) (*Store, error) {
+	return openStore(path, config, issuerDER, existingOnly)
+}
+
+// Create opens only a brand-new ledger; an existing file is never adopted.
+func Create(path string, config enrollmentstate.Config, issuerDER []byte) (*Store, error) {
+	return openStore(path, config, issuerDER, createOnly)
+}
+
+type openPolicy uint8
+
+const (
+	openOrCreate openPolicy = iota
+	existingOnly
+	createOnly
+)
+
+func openStore(path string, config enrollmentstate.Config, issuerDER []byte, policy openPolicy) (*Store, error) {
 	if runtime.GOOS != "linux" || validateIssuer(config, issuerDER) != nil || (enrollmentcrypto.ManagedCollectionProfile(config.Binding.CollectionProfile) && config.RecordLimit > 25) {
 		return nil, ErrStorage
 	}
@@ -152,8 +174,10 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 			releaseProcessWriter()
 		}
 	}()
-	if err = os.MkdirAll(filepath.Dir(absolute), 0700); err != nil {
-		return nil, ErrStorage
+	if policy != existingOnly {
+		if err = os.MkdirAll(filepath.Dir(absolute), 0700); err != nil {
+			return nil, ErrStorage
+		}
 	}
 	if err = privateStateDirectory(filepath.Dir(absolute)); err != nil {
 		return nil, err
@@ -161,15 +185,25 @@ func Open(path string, config enrollmentstate.Config, issuerDER []byte) (*Store,
 	if err = checkFilesForProfile(absolute, config.Binding.CollectionProfile); err != nil {
 		return nil, err
 	}
+	// Creation-only cannot adopt any SQLite sidecar, even without a main file.
+	if policy == createOnly {
+		for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
+			if _, err := os.Lstat(absolute + suffix); err == nil || !os.IsNotExist(err) {
+				return nil, ErrStorage
+			}
+		}
+	}
 	created := false
-	file, err := os.OpenFile(absolute, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
-	if err == nil {
-		created = true
-		if file.Close() != nil {
+	if policy != existingOnly {
+		file, createErr := os.OpenFile(absolute, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+		if createErr == nil {
+			created = true
+			if file.Close() != nil {
+				return nil, ErrStorage
+			}
+		} else if policy == createOnly || !os.IsExist(createErr) {
 			return nil, ErrStorage
 		}
-	} else if !os.IsExist(err) {
-		return nil, ErrStorage
 	}
 	info, err := os.Lstat(absolute)
 	if err != nil || info.Size() > databaseCap(config.Binding.CollectionProfile) {
@@ -591,7 +625,7 @@ func (t *transaction) validMetadata(s enrollmentstate.Snapshot, c credential) bo
 	}
 	frame, err := t.validateFrame(c.Frame, r.ReceivedAt)
 	sum := sha256.Sum256(c.Frame)
-	if err != nil || !lanstore.FrameMatchesCollectionProfile(frame, s.Binding.CollectionProfile) || frame.Observation.Observation.Platform != s.Platform || hex.EncodeToString(sum[:]) != r.PayloadHash || frame.Sequence != r.Sequence || !frame.Observation.GeneratedAt.Equal(r.GeneratedAt) || !frame.Observation.Observation.LastSeen.Equal(r.CollectedAt) {
+	if err != nil || !lanstore.FrameMatchesCollectionProfile(frame, s.Binding.CollectionProfile) || frame.Observation.Observation.Platform != enrollmentstate.ObservationPlatform(s.Platform) || hex.EncodeToString(sum[:]) != r.PayloadHash || frame.Sequence != r.Sequence || !frame.Observation.GeneratedAt.Equal(r.GeneratedAt) || !frame.Observation.Observation.LastSeen.Equal(r.CollectedAt) {
 		return false
 	}
 

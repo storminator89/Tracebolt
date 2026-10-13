@@ -74,7 +74,7 @@ func makeCertificate(t *testing.T, template, parent *x509.Certificate, public ed
 func newFixture(t *testing.T, profile string, activate bool) *fixture {
 	return newCollectionFixture(t, profile, enrollmentcrypto.CollectionProfile, activate)
 }
-func newCollectionFixture(t *testing.T, profile, collection string, activate bool) *fixture {
+func newCollectionFixture(t *testing.T, profile, collection string, activate bool, platforms ...string) *fixture {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
 	rp, rk := key(t)
@@ -95,6 +95,9 @@ func newCollectionFixture(t *testing.T, profile, collection string, activate boo
 	}
 	cfg := enrollmentstate.DefaultConfig(enrollmentstate.Binding{InstanceID: id("manager", 1), Origin: origin, Profile: profile, CollectionProfile: collection, IssuerFingerprint: issuer.Fingerprint()})
 	cfg.RecordLimit, cfg.InvitationLimit, cfg.PendingLimit = MaxRecords, MaxRecords, MaxRecords
+	if len(platforms) == 1 {
+		cfg.Platform = platforms[0]
+	}
 	f := &fixture{path: filepath.Join(t.TempDir(), "private", "enrollment.sqlite"), config: cfg, issuer: issuer, root: root, rootKey: rk, now: now}
 	f.store, err = enrollmentstore.Open(f.path, cfg, issuer.IssuerDER())
 	if err != nil {
@@ -108,6 +111,9 @@ func newCollectionFixture(t *testing.T, profile, collection string, activate boo
 	platform := "linux"
 	if collection == enrollmentcrypto.CollectionProfileWindowsInventory {
 		platform = "windows"
+	}
+	if cfg.Platform != "" {
+		platform = cfg.Platform
 	}
 	f.snapshot, err = f.store.CreateInvitation(ctx, enrollmentstate.CreateCommand{InvitationID: id("invite", 1), RequestID: id("request", 1), InvitationHash: hex.EncodeToString(hash[:]), Platform: platform, Now: now.Unix()})
 	if err != nil {

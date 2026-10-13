@@ -76,10 +76,13 @@ func (h *operatorHandler) groupSources() []fleetGroupSource {
 	if h.windowsEnrollment != nil && h.windowsEnrollment.enrollment != nil && h.windowsEnrollment.enrollment != h.enrollment {
 		sources = append(sources, fleetEnrollmentSource{h.windowsEnrollment.enrollment})
 	}
+	if h.macosEnrollment != nil && h.macosEnrollment.enrollment != nil {
+		sources = append(sources, fleetEnrollmentSource{h.macosEnrollment.enrollment})
+	}
 	return sources
 }
 func fleetGroupAdmission(ctx context.Context, sources []fleetGroupSource) (string, time.Time, map[string]fleetGroupDevice, error) {
-	if len(sources) == 0 || len(sources) > 2 {
+	if len(sources) == 0 || len(sources) > 3 {
 		return "", time.Time{}, nil, store.ErrFleetGroupInvalid
 	}
 	// Scope the group catalog to this manager and transport, while retaining each
@@ -149,8 +152,8 @@ func fleetGroupAdmission(ctx context.Context, sources []fleetGroupSource) (strin
 			if renewal := d.AgentCertificate.Renewal; renewal != nil && renewal.AuthorityExpiresAt.Before(expires) {
 				expires = renewal.AuthorityExpiresAt
 			}
-			platform := snap.Platform
-			if platform != "windows" && platform != "linux" {
+			platform := enrollmentstate.ObservationPlatform(snap.Platform)
+			if platform != "windows" && platform != "linux" && platform != "macos" {
 				continue
 			}
 			if platform == "windows" {

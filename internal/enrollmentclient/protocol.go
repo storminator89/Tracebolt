@@ -17,6 +17,17 @@ import (
 )
 
 const WindowsEnrollmentPathPrefix = "/v2/windows/enrollment/"
+const MacOSEnrollmentPathPrefix = "/v2/macos/enrollment/"
+
+func enrollmentPathPrefix(collection, runningOS string) string {
+	if runningOS == "darwin" {
+		return MacOSEnrollmentPathPrefix
+	}
+	if collection == enrollmentcrypto.CollectionProfileWindowsInventory {
+		return WindowsEnrollmentPathPrefix
+	}
+	return "/v2/enrollment/"
+}
 
 type wireClient struct {
 	client            *http.Client
@@ -54,10 +65,7 @@ func (w *wireClient) post(ctx context.Context, path string, raw []byte) ([]byte,
 	default:
 		return nil, ErrResponse
 	}
-	prefix := "/v2/enrollment/"
-	if w.collectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
-		prefix = WindowsEnrollmentPathPrefix
-	}
+	prefix := enrollmentPathPrefix(w.collectionProfile, runtime.GOOS)
 	req, e := http.NewRequestWithContext(ctx, "POST", w.origin+prefix+path, bytes.NewReader(raw))
 	if e != nil {
 		return nil, ErrTransport
