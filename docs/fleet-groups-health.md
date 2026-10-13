@@ -37,8 +37,9 @@ caller-quota system-volume disk usage, observed-group CPU, and physical RAM.
 For each included policy, the administrator explicitly chooses enabled/disabled
 and a whole threshold from 50 through 99. Enable starts unchecked too. Unselected
 policies remain untouched. They select 1–25 exact current Windows devices, then
-review all chosen settings together. Contact is read-only in this workflow;
-service checks remain per-device because exact-name source admission differs.
+review all chosen settings together. Contact is read-only in this workflow. The separate reviewed
+[Apply service checks](fleet-group-service-checks.md) flow selects exact names
+individually for each existing group member from its bounded consented preview.
 Recipient configuration, external delivery and automatic responses are excluded.
 
 Review copies the optional group revision, exact device IDs/names, selected

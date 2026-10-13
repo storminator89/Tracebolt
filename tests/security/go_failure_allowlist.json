@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "1fcd6aec8762f40aefe75eb2f42182453364f9cf30baba39194e605d269bd8fb",
+  "goSourceSha256": "aed75f47d3caf85993d7deece5e507b1b3b0029f4bb058ad2df583164ee2b0f7",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -958,6 +958,9 @@
       "TestFleetGroupMaintenanceHandlerRoleOriginCSRFFinalResponse",
       "TestFleetGroupMaintenanceProjectionCountsBoundsAndAuthority",
       "TestFleetGroupMaintenanceProjectionMaximumBoundedMembers",
+      "TestFleetGroupServiceHandlerClosedRequestsAndRoles",
+      "TestFleetGroupServiceHandlerCommitBoundaries",
+      "TestFleetGroupServiceHandlerExactSelectionAndUnknown",
       "TestFleetGroupsLinuxAdmissionAndIssuerExpiry",
       "TestFleetGroupsOperatorCASRolesAndNoPolicyGrant",
       "TestFleetGroupsStableOriginalIdentityAndSafeProjection",
@@ -3727,6 +3730,11 @@
       "TestFleetGroupMaintenanceFinalGuardRollsBackAndExpiryStaysReadOnly",
       "TestFleetGroupMaintenanceNotificationSuppressionKeepsInflightTruthAndNoBacklog",
       "TestFleetGroupMaintenanceReloadsGroupAfterOperatorSQLWait",
+      "TestFleetGroupServiceExactSelectionAndPolicySemantics",
+      "TestFleetGroupServiceFinalGuardRollsBack",
+      "TestFleetGroupServiceFinalSourceAgeAndRollback",
+      "TestFleetGroupServicePreservesIncidentTruth",
+      "TestFleetGroupServiceRechecksAfterSQLWait",
       "TestFleetGroupsBoundedCASAndPrivateIdentity",
       "TestFleetGroupsCanonicalCorruptionAndBounds",
       "TestFleetMonitoringBoundedCanonicalAndNoNewMemberAdoption",

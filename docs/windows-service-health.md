@@ -8,6 +8,10 @@ manager policy starts disabled. It consumes existing accepted inventory only;
 it adds no collector, host read, permission, local grant, transport/profile field,
 service action, automatic restart, notification or AI export.
 
+For a reviewed one-time configuration across exact existing group members, see
+[group service checks](fleet-group-service-checks.md). Each member retains its own
+exact service selection and source admission; membership alone enables nothing.
+
 ## What the evidence means
 
 The existing native source is `EnumServicesStatusExW` for caller-visible Win32

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {fleetGroupsBrowserFixture,fleetGroupsPolicyFixture,fleetGroupsMonitoringFixture,fleetGroupsMaintenanceFixture,fleetGroupsMaintenanceEndFixture,fleetGroupsMaintenanceEndWrite,exerciseFleetGroupsMaintenanceEnd,fleetGroupsCaptureMatrix,fleetGroupsScenes,fleetGroupsCaptureName,fleetGroupIds,fleetGroupsCaseName,fleetGroupsDisclosure,requireFleetGroupsEvidence,guardFleetGroupsRoute,fleetGroupsRouteState} from './fleet-groups-browser.mjs';
+import {fleetGroupsBrowserFixture,fleetGroupsPolicyFixture,fleetGroupsMonitoringFixture,fleetGroupsMaintenanceFixture,fleetGroupsMaintenanceEndFixture,fleetGroupsMaintenanceEndWrite,exerciseFleetGroupsMaintenanceEnd,fleetGroupsCaptureMatrix,fleetGroupsScenes,fleetGroupsCaptureName,fleetGroupIds,fleetGroupsCaseName,fleetGroupsDisclosure,requireFleetGroupsEvidence,guardFleetGroupsRoute,fleetGroupsRouteState,fleetGroupsServiceChecksFixture,fleetGroupsServiceChecksRoute,exerciseFleetGroupsServiceChecks} from './fleet-groups-browser.mjs';
 const now='2026-10-11T12:00:10Z',expiry='2026-10-11T13:00:00Z';
 test('invented group fixture projects only public names and exact admitted IDs',()=>{
  const fixture=fleetGroupsBrowserFixture(now,expiry);assert.equal(fixture.view.groups[0].unavailableMembers,1);assert.equal(fixture.view.devices.length,3);assert.deepEqual(Object.keys(fixture.view.groups[0]).sort(),['id','memberIds','name','revision','unavailableMembers']);assert.ok(fixture.metadata.every(d=>d.agentCertificate.checkedAt===now));
@@ -89,7 +89,7 @@ test('group maintenance adds exactly four canonical views and original-identity 
 test('early-end captures add only four canonical source-bound views',()=>{
  const rows=fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('maintenance-end-'));
  assert.deepEqual(rows.map(({scene,locale,width})=>({scene,locale,width})),[{scene:'maintenance-end-unchecked',locale:'en',width:1440},{scene:'maintenance-end-review',locale:'de',width:390},{scene:'maintenance-end-results',locale:'en',width:1440},{scene:'maintenance-end-results',locale:'de',width:390}]);
- assert.equal(fleetGroupsCaptureMatrix.length,40);
+ assert.equal(fleetGroupsCaptureMatrix.length,44);
  for(const invalid of [['maintenance-end-unchecked',390,'en'],['maintenance-end-review',1440,'en'],['maintenance-end-results',1440,'de']])assert.throws(()=>fleetGroupsCaptureName(...invalid));
 });
 
@@ -153,4 +153,87 @@ test('production early-end dialog executes the exact EN/DE hosted selectors and 
   }finally{await React.act(async()=>ui.unmount());dom.window.close();}
  }}finally{for(const key of globals){const descriptor=previous.get(key);if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}}
  assert.deepEqual([...screenshots].sort(),fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('maintenance-end-')).map(row=>row.name).sort());
+});
+
+const serviceSession=()=>({mode:'lan',transport:'http',insecureTestMode:true,transportWarning:'unencrypted_lan_test',authenticationRequired:true,authenticated:true,csrfToken:'SYNTHETIC_GROUP_SERVICE_CSRF',serverNow:now,expiresAt:expiry,expiresInSeconds:3590,loginMode:'shared',actorId:null,capabilities:['read']});
+function serviceRoute(url,{method='GET',body=null,headers={}}={}){
+ const result={reply:null,status:null,aborted:0,continued:0};return{result,request:()=>({url:()=>url,method:()=>method,postData:()=>body,headers:()=>headers}),fulfill:async({body,status})=>{result.reply=JSON.parse(body);result.status=status;},abort:async()=>{result.aborted++;},continue:async()=>{result.continued++;}};
+}
+test('group service checks add exactly four canonical source-bound changed views',()=>{
+ const rows=fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('service-checks-'));
+ assert.deepEqual(rows.map(({scene,locale,width})=>({scene,locale,width})),['service-checks-review-unchecked','service-checks-partial-results'].flatMap(scene=>[{scene,locale:'en',width:1440},{scene,locale:'de',width:390}]));
+ assert.equal(fleetGroupsCaptureMatrix.length,44);
+ for(const scene of ['service-checks-review-unchecked','service-checks-partial-results'])for(const [width,locale]of [[390,'en'],[1440,'de']])assert.throws(()=>fleetGroupsCaptureName(scene,width,locale));
+ const helper=fs.readFileSync(new URL('./fleet-groups-browser.mjs',import.meta.url),'utf8'),runner=fs.readFileSync(new URL('./fleet-groups-runner.mjs',import.meta.url),'utf8');
+ assert.match(helper,/await page\.unroute\('\*\*\/\*'\)/);assert.match(helper,/fleetGroupsServiceChecksRoute\(\{base,fixture,external,unexpected\}\)/);assert.match(helper,/exerciseFleetGroupsServiceChecks\(\{page,expect,fixture,locale,width,shot,verifyLayout:verifyPolicyLayout\}\)/);
+ assert.match(runner,/fleetGroupsCaptureMatrix.find\(row=>row.name===name\)/);assert.match(runner,/requireFleetGroupsEvidence\(screenshots,sourceSha\)/);
+ const workflow=fs.readFileSync(new URL('../../.github/workflows/validate.yml',import.meta.url),'utf8');assert.match(workflow,/node --test tests\/e2e-review\/fleet-groups-fixtures.test.mjs/);assert.match(workflow,/run: node tests\/e2e-review\/fleet-groups-runner.mjs/);
+});
+test('service fixture preserves original shared-admin role, bounded partial source and lease on every read',async()=>{
+ const base='http://127.0.0.1:19909',fixture=fleetGroupsServiceChecksFixture(serviceSession()),external=[],unexpected=[],handle=fleetGroupsServiceChecksRoute({base,fixture,external,unexpected});
+ assert.equal(fixture.session.loginMode,'shared');assert.equal(fixture.session.actorId,null);assert.deepEqual(fixture.session.capabilities,['read']);assert.equal(fixture.view.members.length,3);assert.equal(fixture.view.excludedLinuxMembers,1);assert.equal(fixture.view.unavailableMembers,1);
+ assert.equal(Date.parse(fixture.view.authorityExpiresAt)-Date.parse(now),110000);
+ for(const choice of fixture.choices.values()){assert.equal(choice.member.inventory.quality,'partial');assert.equal(choice.member.inventory.observedCount,128);assert.equal(choice.member.inventory.complete,false);assert.equal(choice.member.inventory.countExact,false);assert.equal(choice.member.inventory.truncated,true);assert.equal(choice.member.inventory.services.length,3);assert.equal(Date.parse(choice.member.inventory.collectedAt),Date.parse(now)-10000);}
+ const before=JSON.stringify([...fixture.choices]),view=JSON.stringify(fixture.view),service=`/api/fleet/groups/${fixture.view.groupId}/service-checks`;
+ for(let repeat=0;repeat<2;repeat++)for(const routePath of ['/api/auth/session','/api/session','/api/overview','/api/enrollment','/api/fleet/identities','/api/fleet/groups',service,...fixture.view.members.map(m=>service+'/'+m.key)]){const route=serviceRoute(base+routePath);await handle(route);assert.equal(route.result.status,200);assert.equal(route.result.continued,0);assert.equal(route.result.aborted,0);}
+ assert.equal(JSON.stringify([...fixture.choices]),before);assert.equal(JSON.stringify(fixture.view),view);assert.equal(fixture.writes.length,0);assert.deepEqual(external,[]);assert.deepEqual(unexpected,[]);
+ for(const session of [{...serviceSession(),loginMode:'named',actorId:`operator_${'8'.repeat(32)}`},{...serviceSession(),capabilities:['read','windows_service_control']},{...serviceSession(),expiresAt:now}])assert.throws(()=>fleetGroupsServiceChecksFixture(session));
+});
+test('service capture routes fail closed for enrollment, collection, host control and widened requests',async()=>{
+ const base='http://127.0.0.1:19909',fixture=fleetGroupsServiceChecksFixture(serviceSession()),external=[],unexpected=[],handle=fleetGroupsServiceChecksRoute({base,fixture,external,unexpected}),service=`/api/fleet/groups/${fixture.view.groupId}/service-checks`,member=fixture.view.members[0];
+ for(const [routePath,options]of [['/api/enrollment',{method:'POST',body:'{}'}],['/api/enrollment?scope=all',{}],['/api/enrollment',{body:'{}'}],['/api/windows/enrollment',{}],[service+'/unknown',{}],[service+'?all=true',{}],[`/api/devices/${member.deviceId}/windows-full-services`,{}],[`/api/devices/${member.deviceId}/windows-service-actions/approve`,{method:'POST',body:'{}'}]]){const route=serviceRoute(base+routePath,options);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.continued,0);assert.equal(route.result.reply,null);}
+ for(const asset of ['/','/favicon.svg','/assets/synthetic.js']){const route=serviceRoute(base+asset);await handle(route);assert.equal(route.result.continued,1);assert.equal(route.result.reply,null);}
+ const externalRoute=serviceRoute('https://example.invalid/api/auth/session');await handle(externalRoute);assert.equal(externalRoute.result.aborted,1);assert.deepEqual(external,['external']);
+ const exact={groupRevision:fixture.view.groupRevision,expectedRevision:member.policy.revision,enabled:true,services:['Spooler'],consent:true},headers={origin:base,'x-csrf-token':fixture.session.csrfToken,'content-type':'application/json'};
+ for(const patch of [{consent:false},{services:['ReplacementService']},{expectedRevision:99},{groupRevision:99},{extra:true}])await assert.rejects(handle(serviceRoute(base+service+'/'+member.key,{method:'POST',body:JSON.stringify({...exact,...patch}),headers})));
+ assert.equal(fixture.writes.length,0);
+});
+
+// Boot the real production entry point, AuthBoundary and App with the exact
+// hosted route adapter. No browser, resource loader or live transport is used.
+// DOM checks establish wiring/selectors only; screenshot/layout acceptance is CI.
+test('compiled real App executes shared-admin service review and partial outcomes in EN and DE without live transport',async()=>{
+ const root=fileURLToPath(new URL('../../',import.meta.url)),require=createRequire(path.join(root,'web/package.json')),{JSDOM,VirtualConsole}=require('jsdom');
+ const compiled=await require('esbuild').build({entryPoints:[path.join(root,'web/src/main.tsx')],outdir:'memory-only',bundle:true,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},loader:{'.woff':'dataurl','.woff2':'dataurl'},write:false,logLevel:'silent'}),script=compiled.outputFiles.find(file=>file.path.endsWith('.js')).text;
+ const playwrightRoot=path.dirname(require.resolve('playwright-core/package.json'));assert.equal(require(path.join(playwrightRoot,'package.json')).version,'1.58.2');const {source}=require(path.join(playwrightRoot,'lib/generated/injectedScriptSource.js')),captures=[];
+ for(const [locale,width]of [['en',1440],['de',390]]){
+  const base='http://127.0.0.1:19909',fixture=fleetGroupsServiceChecksFixture(serviceSession()),external=[],unexpected=[],errors=[],transports=[],virtualConsole=new VirtualConsole();virtualConsole.on('jsdomError',error=>{if(!error.message.includes('getComputedStyle() method: with pseudo-elements'))errors.push(error.name);});
+  const handle=fleetGroupsServiceChecksRoute({base,fixture,external,unexpected}),dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:base+'/#/devices',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole});
+  try{
+   const w=dom.window;Object.assign(w,{TextEncoder,TextDecoder,structuredClone});w.localStorage.setItem('tracebolt.locale',locale);
+   const blocked=name=>function(){transports.push(name);throw new Error('Live transport is forbidden in this inert fixture');};
+   Object.assign(w,{XMLHttpRequest:blocked('XMLHttpRequest'),WebSocket:blocked('WebSocket'),EventSource:blocked('EventSource')});w.navigator.sendBeacon=blocked('sendBeacon');w.open=blocked('window.open');
+   w.addEventListener('error',event=>{errors.push(event.error?.name);event.preventDefault();});
+   w.fetch=async(url,options={})=>{
+    const absolute=new URL(url,w.location),headers=Object.fromEntries(new Headers(options.headers));if(options.method==='POST')headers.origin=base;
+    const route=serviceRoute(absolute.href,{method:options.method??'GET',body:options.body??null,headers});await handle(route);assert.equal(route.result.aborted,0);assert.equal(route.result.continued,0);assert.ok(route.result.reply);
+    return new Response(JSON.stringify(route.result.reply),{status:route.result.status,headers:{'Content-Type':'application/json'}});
+   };
+   const InjectedScript=w.eval('var module={exports:{}};'+source+'\nInjectedScript'),injected=new InjectedScript(w,{isUnderTest:true,sdkLanguage:'javascript',testIdAttributeName:'data-testid',customEngines:[],browserName:'chromium'});
+   const role=(name,options={})=>`internal:role=${name}${options.name===undefined?'':`[name=${options.name instanceof RegExp?options.name.toString():JSON.stringify(options.name)+(options.exact?'s':'i')}]`}`;
+   const query=selector=>Array.from(injected.querySelectorAll(injected.parseSelector(selector),w.document)),normalized=value=>value.replace(/\s+/g,' ').trim();
+   const eventually=async action=>{let failure;for(let i=0;i<150;i++){try{return action();}catch(error){failure=error;}await new Promise(resolve=>setTimeout(resolve,20));}throw failure;};
+   function locator(selector){return{selector,all:()=>query(selector),one(){const found=query(selector);assert.equal(found.length,1,selector);return found[0];},locator:next=>locator(`${selector} >> ${next}`),getByRole:(name,options)=>locator(`${selector} >> ${role(name,options)}`),nth:index=>locator(`${selector} >> nth=${index}`),first:()=>locator(`${selector} >> nth=0`),last:()=>locator(`${selector} >> nth=-1`),async click(){const el=await eventually(()=>this.one());assert.notEqual(el.disabled,true);el.click();await new Promise(resolve=>setTimeout(resolve,20));},async check(){const el=await eventually(()=>this.one());assert.equal(el.type,'checkbox');assert.equal(el.disabled,false);assert.equal(el.checked,false);await this.click();},async selectOption(value){const el=await eventually(()=>this.one());assert.equal(el.tagName,'SELECT');assert.ok([...el.options].some(option=>option.value===value));el.value=value;el.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,20));},async scrollIntoViewIfNeeded(){await eventually(()=>this.one());}};}
+   function expect(actual){function match(negate=false){return{toBe:value=>assert.equal(actual,value),toEqual:value=>assert.deepEqual(actual,value),toHaveCount:value=>eventually(()=>assert.equal(actual.all().length,value,actual.selector)),toBeDisabled:()=>eventually(()=>assert.equal(actual.one().disabled,!negate,actual.selector)),toBeChecked:()=>eventually(()=>assert.equal(actual.one().checked,!negate,actual.selector)),toHaveText:value=>eventually(()=>assert.equal(normalized(actual.one().textContent),normalized(value),actual.selector)),toContainText:value=>eventually(()=>assert.equal(normalized(actual.one().textContent).includes(normalized(value)),!negate,`${actual.selector}: ${value}`)),get not(){return match(true);}};}return match();}
+   const page={getByRole:(name,options)=>locator(role(name,options))};w.eval(script);
+   await eventually(()=>{assert.ok(w.document.querySelector('.app-shell'));assert.ok(w.document.querySelector('.enrollment-actions .icon-button:not(:disabled)'));});
+   assert.equal(w.document.documentElement.lang,locale);assert.equal(w.document.querySelector('.enrollment-actions .primary').disabled,true);
+   await exerciseFleetGroupsServiceChecks({page,expect,fixture,locale,width,verifyLayout:async()=>{assert.equal(query('internal:role=dialog >> internal:role=table').length,1);},shot:async(_page,name,disclosure)=>{assert.equal(disclosure,fleetGroupsDisclosure);if(name.includes('review-unchecked')){const checks=query('internal:role=dialog >> internal:role=checkbox');assert.equal(checks.length,1);assert.equal(checks[0].checked,false);assert.equal(fixture.writes.length,0);}else assert.equal(fixture.writes.length,2);captures.push(name);}});
+   for(const startup of ['/api/auth/session','/api/overview','/api/enrollment','/api/fleet/identities','/api/fleet/groups'])assert.ok(fixture.reads.includes(startup),startup);
+   assert.equal(fixture.reads.filter(route=>route==='/api/enrollment').length,1);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(transports,[]);
+  }finally{dom.window.close();}
+ }
+ assert.deepEqual(captures.sort(),fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('service-checks-')).map(row=>row.name).sort());
+});
+
+test('actual hosted screenshot function admits all four new names and rejects mismatched metadata',async()=>{
+ const runner=fs.readFileSync(new URL('./fleet-groups-runner.mjs',import.meta.url),'utf8'),start=runner.indexOf('async function shot('),end=runner.indexOf('\nasync function login(',start);assert.ok(start>=0&&end>start);
+ const screenshots=[],paths=[],sourceSha='b'.repeat(40),shot=new Function('fleetGroupsCaptureMatrix','fleetGroupsDisclosure','fleetGroupsCaseName','path','out','screenshots','sourceSha','safeFailure',`return (${runner.slice(start,end)});`)(fleetGroupsCaptureMatrix,fleetGroupsDisclosure,fleetGroupsCaseName,path,'inert-no-output',screenshots,sourceSha,()=>new Error('rejected'));
+ const fakePage=row=>({viewportSize:()=>({width:row.width,height:row.height}),locator:()=>({getAttribute:async()=>row.locale}),screenshot:async options=>{paths.push(options);}});
+ for(const row of fleetGroupsCaptureMatrix.filter(row=>row.scene.startsWith('service-checks-'))){
+  await shot(fakePage(row),row.name,fleetGroupsDisclosure);assert.equal(screenshots.at(-1).file,row.file);assert.equal(screenshots.at(-1).sourceSha,sourceSha);assert.equal(paths.at(-1).fullPage,false);
+  for(const bad of [{...row,width:800},{...row,height:800},{...row,locale:'fr'}])await assert.rejects(shot(fakePage(bad),row.name,fleetGroupsDisclosure));
+  await assert.rejects(shot(fakePage(row),row.name+'-extra',fleetGroupsDisclosure));await assert.rejects(shot(fakePage(row),row.name,'native acceptance'));
+ }
+ assert.equal(screenshots.length,4);assert.equal(paths.length,4);
 });

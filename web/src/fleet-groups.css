@@ -43,3 +43,4 @@
 .fleet-inheritance-status-row>div{min-width:0;flex:1}.fleet-inheritance-status-row small{display:block;font-size:11px}
 .fleet-inheritance-details{margin-top:14px}.fleet-inheritance-details summary{cursor:pointer}.fleet-inheritance-status summary>span{font-size:11px}
 .fleet-inheritance>.button{margin-top:12px}
+.fleet-service-device{min-width:0;border:1px solid var(--line);border-radius:6px;padding:12px;margin:12px 0}.fleet-service-device>summary{cursor:pointer}.fleet-service-device .windows-service-picker{min-width:0}.fleet-service-device .windows-service-options{max-height:220px}.fleet-service-names{list-style:none;padding:0;margin:5px 0;overflow-wrap:anywhere}.fleet-service-names code{white-space:pre-wrap}.fleet-service-device .fleet-group-enable{align-items:flex-start}
