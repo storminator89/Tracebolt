@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "bc63c6a3e145191668521bb5df2d78afd046f3317249fe9b0e71edd0e0e2db89",
+  "goSourceSha256": "c6e60fbd9ea0a948bf59dba5cdf45c03e584789b4189e03bd3a540d9b8e14d81",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -938,6 +938,10 @@
       "TestCompleteServiceHealthRecorderAuthorityAndClosedRequests",
       "TestCompleteServiceHealthRecorderEvaluatorGuards",
       "TestCompleteServiceHealthRecorderSelectionAndMonitor",
+      "TestCompleteServiceIncidentReviewExactSourceAndManualPreview",
+      "TestCompleteServiceIncidentReviewFinalLeaseAndRoutes",
+      "TestCompleteServiceIncidentReviewUnsupportedAndUnknown",
+      "TestCompleteServiceIncidentReviewWireFixture",
       "TestCompleteUpdatesFinalOutputRechecksAfterEncodingAndSession",
       "TestCompleteUpdatesGoDTOFixture",
       "TestCompleteUpdatesOperatorGuardsAndBoundedUnknown",

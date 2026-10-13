@@ -18,6 +18,11 @@ export interface WindowsServiceIncidentReviewView {
     incident: WindowsIncidentItem; observation: WindowsServiceIncidentObservation | null;
     control: { status: 'matched' | 'not_configured' | 'unavailable' | 'target_mismatch' | 'operator_capability_required'; binding: WindowsActionBinding | null; bindingDigest: string | null };
 }
+/** Common in-memory action pin; each version keeps its own closed decoder. */
+export interface WindowsServiceReviewContext {
+    view: { serverNow: string; authorityExpiresAt: string; incident: { deviceId: string; serviceName: string }; control: { status: string; binding: WindowsActionBinding | null; bindingDigest: string | null } };
+    sessionKey: string; anchor: { mono: number; wall: number; epoch: number };
+}
 /** In-memory review evidence, never a grant or a route/storage payload. */
 export interface WindowsServiceIncidentReviewContext {
     view: WindowsServiceIncidentReviewView; sessionKey: string;
@@ -41,15 +46,15 @@ export function validWindowsServiceIncidentReview(value: unknown, incidentKey: s
     if (control.status === 'matched' ? !validWindowsActionBinding(control.binding, deviceId) || control.binding.target !== serviceName || !digest(control.bindingDigest) : control.binding !== null || control.bindingDigest !== null) return false;
     return new TextEncoder().encode(JSON.stringify(value)).byteLength <= WINDOWS_SERVICE_INCIDENT_REVIEW_BYTES;
 }
-export function windowsServiceReviewRequestElapsed(context: WindowsServiceIncidentReviewContext): number {
+export function windowsServiceReviewRequestElapsed(context: WindowsServiceReviewContext): number {
     const mono = performance.now() - context.anchor.mono, wall = Date.now() - context.anchor.wall;
     return context.anchor.epoch === getProtectedRequestEpoch() && Number.isFinite(mono) && mono >= 0 && Number.isFinite(wall) && Math.abs(wall - mono) <= 1500 ? mono : Infinity;
 }
 export function windowsServiceReviewClockKey(sessionKey: string): string { return JSON.stringify(['windows-service-incident-review', sessionKey]); }
-export function windowsServiceReviewElapsed(context: WindowsServiceIncidentReviewContext): number {
+export function windowsServiceReviewElapsed(context: WindowsServiceReviewContext): number {
     return windowsHealthElapsed(windowsServiceReviewClockKey(context.sessionKey), context.anchor.epoch, context.view.serverNow, windowsServiceReviewRequestElapsed(context));
 }
-export function windowsServiceReviewCurrent(context: WindowsServiceIncidentReviewContext): boolean {
+export function windowsServiceReviewCurrent(context: WindowsServiceReviewContext): boolean {
     const age = windowsServiceReviewElapsed(context);
     return document.visibilityState !== 'hidden' && age < 120000 && inventoryAge(context.view.authorityExpiresAt, context.view.serverNow) > age && inventoryAge(context.sessionKey, context.view.serverNow) > age;
 }

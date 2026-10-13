@@ -71,7 +71,10 @@ export async function capture({ browser, expect, output, sourceSha }) {
             await page.getByRole('button', { name: de ? 'Windows-Vorfälle' : 'Windows incidents', exact: true }).click();
             await expect(page.locator('.windows-incident-service')).toHaveText(data.view.items[0].serviceName);
             await expect(page.getByText(de ? 'Quelle: Vollständiges Dienstinventar' : 'Source: Complete service inventory', { exact: true })).toBeVisible();
-            await expect(page.getByRole('button', { name: /Review service|Dienst prüfen/ })).toHaveCount(0);
+            await expect(page.getByRole('button', { name: /Review service|Dienst prüfen/ })).toHaveCount(1);
+            await expect(page.getByRole('button', { name: /Review service|Dienst prüfen/ })).toBeEnabled();
+            // Keep the review closed: the route rejects any service-review or action read.
+            await expect(page.locator('.windows-complete-service-incident-review')).toHaveCount(0);
             if (scene === 'unknown') {
                 await expect(page.getByText(de ? 'Quellstatus: Unbekannt' : 'Source status: Unknown', { exact: true })).toBeVisible();
                 await page.getByText(de ? 'Zeiten und Evidenz' : 'Times and evidence', { exact: true }).click();
@@ -112,8 +115,11 @@ export async function check() {
         let response; const fake = (method, target, body = null) => ({ request: () => ({ url: () => target.startsWith('https:') ? target : origin + target, method: () => method, postData: () => body }), fulfill: value => { response = value; }, abort: () => {} });
         await route(fake('GET', '/api/fleet/windows-incidents/complete?scope=active&ack=all&offset=0&limit=25')); assert(m.validWindowsCompleteIncidentInboxView(JSON.parse(response.body), 'active', 'all', 0));
         for (const target of ['/api/fleet/windows-incidents/complete/acknowledge', '/api/devices/fixture/windows-services/complete/policy', '/api/devices/fixture/windows-service-actions/preview']) await route(fake('POST', target, '{}'));
-        await route(fake('GET', '/api/fleet/windows-incidents?scope=active')); await route(fake('GET', 'https://untrusted.invalid/'));
-        assert.deepEqual(state, { external: 1, writes: 3, unexpected: 1, reads: 1 });
+        await route(fake('GET', '/api/fleet/windows-incidents?scope=active'));
+        // An unclicked review is not an allowed read in an inbox-only scene.
+        await route(fake('GET', `/api/fleet/windows-incidents/complete/${data.view.items[0].key}/service-review`));
+        await route(fake('GET', 'https://untrusted.invalid/'));
+        assert.deepEqual(state, { external: 1, writes: 3, unexpected: 2, reads: 1 });
     }
     return { sourceDigest: compiled.sourceDigest, scenes, browserExecuted: false, nativeAcceptance: false, disclosure };
 }

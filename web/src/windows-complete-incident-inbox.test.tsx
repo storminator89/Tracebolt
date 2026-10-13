@@ -36,21 +36,21 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(LOGOUT_INTENT_KEY); sessionStorage.removeItem(LOGOUT_INTENT_KEY); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('complete service incident inbox adapter', () => {
-    it.each(['en', 'de'] as const)('renders compact source and expandable native provenance in %s without control review', async locale => {
+    it.each(['en', 'de'] as const)('renders compact source and expandable native provenance in %s with deliberate review', async locale => {
         const de = locale === 'de'; setLocale(locale, false); render(<Harness/>); expect(request).not.toHaveBeenCalled(); await open(de);
         expect(reads()).toHaveLength(1); expect(reads()[0][2]).toBe(256 * 1024); expect(screen.getByText(view.items[0].serviceName)).toBeVisible();
-        expect(screen.getByText(de ? 'Quelle: Vollständiges Dienstinventar' : 'Source: Complete service inventory')).toBeVisible(); expect(screen.queryByRole('button', { name: /Review service|Dienst prüfen/ })).toBeNull();
+        expect(screen.getByText(de ? 'Quelle: Vollständiges Dienstinventar' : 'Source: Complete service inventory')).toBeVisible(); expect(screen.getByRole('button', { name: /Review service|Dienst prüfen/ })).toBeEnabled();
         const evidence = document.querySelector('.windows-incident-meta > details')!; expect(evidence).not.toHaveAttribute('open'); fireEvent.click(evidence.querySelector('summary')!);
         const opening = within(evidence as HTMLElement).getByText(de ? 'Quelle bei Eröffnung' : 'Opening source'); fireEvent.click(opening);
         expect(within(opening.parentElement!).getByText(view.items[0].openingSource!.generationId)).toBeVisible(); expect(within(opening.parentElement!).getByText('2051')).toBeVisible();
         expect(screen.getByRole('link', { name: de ? 'Complete device · Health-Details' : 'Complete device · Health details' })).toHaveAttribute('href', `#/devices/${view.items[0].deviceId}/health`);
     });
-    it('keeps legacy service review only on its explicitly tagged v1 row in the combined inbox', async () => {
+    it('offers separate review links for tagged v1 and complete rows in the combined inbox', async () => {
         const legacy = legacyWire.active.items.map(item => ({ ...item, status: 'unknown', statusValidUntil: null, sourceKind: 'assessment_v1', openingSource: null, lastBadSource: null, recoverySource: null, currentSource: null }));
         const combined = { ...view, items: [...view.items, ...legacy], total: view.total + legacy.length, counts: { active: view.counts.active + legacyWire.active.counts.active, resolved: 0, acknowledged: legacyWire.active.counts.acknowledged, unacknowledged: view.counts.unacknowledged + legacyWire.active.counts.unacknowledged, total: view.counts.total + legacy.length } };
         if (!validWindowsCompleteIncidentInboxView(combined, 'active', 'all', 0)) throw new Error('Invalid combined Go fixture'); view = combined;
-        render(<Harness/>); await open(); expect(screen.getAllByRole('button', { name: /^Review service:/ })).toHaveLength(1);
-        const fullRow = screen.getByText(completeIncidentFixture('active', now).items[0].serviceName).closest('li')!; expect(within(fullRow).queryByRole('button', { name: /^Review service:/ })).toBeNull(); expect(document.querySelectorAll('.windows-incident-row')).toHaveLength(6);
+        render(<Harness/>); await open(); expect(screen.getAllByRole('button', { name: /^Review service:/ })).toHaveLength(2);
+        const fullRow = screen.getByText(completeIncidentFixture('active', now).items[0].serviceName).closest('li')!; expect(within(fullRow).getByRole('button', { name: /^Review service:/ })).toBeEnabled(); expect(document.querySelectorAll('.windows-incident-row')).toHaveLength(6);
     });
     it('writes exact v2 key with CSRF once and reconciles by GET without closing the episode', async () => {
         render(<Harness/>); await open(); fireEvent.click(screen.getByRole('button', { name: /^Mark seen:/ })); await flush();

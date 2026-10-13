@@ -80,6 +80,11 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'web/scripts/capture-windows-complete-service-review.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-service-review-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-review-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-review-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-review-scenes.json': {'windows-service-actions'},
     'web/scripts/capture-windows-complete-notifications.mjs': {'windows-service-actions'},
     'web/scripts/check-windows-complete-notifications-evidence.mjs': {'windows-service-actions'},
     'web/scripts/windows-complete-notifications-contract.mjs': {'windows-service-actions'},
@@ -126,9 +131,15 @@ DOMAIN_SCRIPTS = {
     'web/scripts/run-windows-msi-catalogue-ci.mjs': {'windows-fleet-msi'},
     'web/scripts/windows-msi-catalogue-scenes.json': {'windows-fleet-msi'},
 }
-# These existing UI names do not match the older domain aliases. Keep them in
-# the normal changed/related Vitest path while selecting their verified owner.
+# These exact UI names and the reviewed Go-produced JSON fixture need a more
+# specific owner than the older aliases. Keep their real changed/related Vitest
+# dependency path; unreviewed JSON fixtures retain the broad fallback.
 DOMAIN_UI = {
+    'web/src/windows-complete-service-incident-review.tsx': {'windows-service-actions'},
+    'web/src/windows-complete-service-incident-review-types.ts': {'windows-service-actions'},
+    'web/src/windows-complete-service-incident-review.test.tsx': {'windows-service-actions'},
+    'web/src/windows-complete-service-review-fixture.ts': {'windows-service-actions'},
+    'web/src/windows-complete-service-review-go-fixture.json': {'windows-service-actions'},
     'web/src/windows-complete-notifications.tsx': {'windows-service-actions'},
     'web/src/windows-complete-notifications-resource.ts': {'windows-service-actions'},
     'web/src/windows-complete-notifications-types.ts': {'windows-service-actions'},
@@ -140,8 +151,10 @@ DOMAIN_UI = {
     'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
     'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
 }
-# Exact reviewed complete-notification Go owners preserve dependency discovery.
+# Exact reviewed complete-source Go owners preserve dependency discovery.
 DOMAIN_GO = {
+    'internal/api/windows_complete_service_incident_review.go': {'windows-service-actions'},
+    'internal/api/windows_complete_service_incident_review_test.go': {'windows-service-actions'},
     'internal/api/windows_complete_notifications.go': {'windows-service-actions'},
     'internal/api/windows_complete_notifications_test.go': {'windows-service-actions'},
     'internal/store/windows_complete_notifications.go': {'windows-service-actions'},
@@ -305,7 +318,7 @@ def select(changes, packages, files, sha, runnable=None, generated_allowlist_ver
             flows |= domain
             if not domain:
                 unmapped |= files[path]
-        elif path.startswith('web/src/') and Path(path).suffix in {'.ts', '.tsx', '.css'}:
+        elif path.startswith('web/src/') and (path in DOMAIN_UI or Path(path).suffix in {'.ts', '.tsx', '.css'}):
             web.add(path.removeprefix('web/'))
             domain = DOMAIN_UI.get(path, set()) or flow_names(path)
             flows |= domain
@@ -485,6 +498,8 @@ def web_checks(plan):
     if 'windows-incident-inbox' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/windows-incident-inbox-fixtures.test.mjs'], stage='ui-incident-inbox-contract')
     if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-windows-complete-service-review.mjs', '--check'], stage='ui-complete-service-review-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-service-review-contract.node.mjs'], stage='ui-complete-service-review-evidence-contract')
         run(['node', 'web/scripts/capture-windows-complete-notifications.mjs', '--check'], stage='ui-complete-notifications-contract')
         run(['node', '--test', 'web/scripts/windows-complete-notifications-contract.node.mjs'], stage='ui-complete-notifications-evidence-contract')
         run(['node', 'web/scripts/capture-windows-complete-incident-inbox.mjs', '--check'], stage='ui-complete-incident-contract')
@@ -963,6 +978,8 @@ def browser_checks(plan):
                 stage='browser-complete-incident-evidence', env=env)
             run(['node', 'web/scripts/check-windows-complete-notifications-evidence.mjs', plan['sha']],
                 stage='browser-complete-notifications-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-service-review-evidence.mjs', plan['sha']],
+                stage='browser-complete-service-review-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

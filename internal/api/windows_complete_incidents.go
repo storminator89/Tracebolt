@@ -207,6 +207,10 @@ func projectWindowsCompleteInbox(snapshot store.WindowsCompleteIncidentSnapshot,
 }
 
 func (h *operatorHandler) windowsCompleteIncidentsAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := windowsCompleteServiceIncidentReviewKey(r); ok {
+		h.windowsCompleteServiceIncidentReview(w, r)
+		return
+	}
 	mutation := r.URL.Path == "/api/fleet/windows-incidents/complete/acknowledge"
 	if r.URL.Path != "/api/fleet/windows-incidents/complete" && !mutation {
 		fail(w, 404, "not_found", "Windows incidents are unavailable.")

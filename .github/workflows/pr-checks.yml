@@ -160,6 +160,15 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-complete-service-review-manifest.json
+            artifacts/review/complete-service-review-matched-preview-unchecked-en-1440.png
+            artifacts/review/complete-service-review-matched-read-en-390.png
+            artifacts/review/complete-service-review-matched-selected-blank-en-390.png
+            artifacts/review/complete-service-review-unsupported-en-390.png
+            artifacts/review/complete-service-review-matched-selected-blank-de-1440.png
+            artifacts/review/complete-service-review-unknown-de-1440.png
+            artifacts/review/complete-service-review-matched-preview-unchecked-de-390.png
+            artifacts/review/complete-service-review-unknown-de-390.png
             artifacts/review/windows-complete-notifications-manifest.json
             artifacts/review/complete-notifications-review-en-1440.png
             artifacts/review/complete-notifications-unknown-en-1440.png

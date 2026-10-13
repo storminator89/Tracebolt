@@ -16,8 +16,8 @@ windows_full_services`, `domain: service-complete`, and original opening,
 last-bad, optional recovery and independently qualified current provenance.
 Original capture start/end, final manager receipt, grant/revision, generation,
 sequence, digest and row count remain separate. Native service name limits remain
-256 UTF-16 code units / 1,024 UTF-8 bytes; a complete name is not passed to the old
-preview-only service-control review contract.
+256 UTF-16 code units / 1,024 UTF-8 bytes; complete names are read through the
+separate v2 service review and never widen the old control-target contract.
 
 Current confidence comes from the complete service engine's existing qualified
 view. Its deadline is the earliest of current evaluation +120 seconds, current
@@ -80,8 +80,10 @@ race remains uncertain and reconciles through GET only; the UI never retries POS
 
 Counts precede filters, ordering remains newest opening then key, and paging is a
 current snapshot rather than an immutable cursor. Complete rows show their source
-label and expandable provenance. Old supported service rows retain their separately
-approved control-review link; complete rows do not receive it. Complete episodes
+label and expandable provenance. Old supported service rows retain their v1 review
+link. Complete rows offer the [separate v2 exact service review](windows-service-incident-review.md#explicit-complete-source-v2-review),
+with full native-name read support and unchanged separately approved control
+limits. Complete episodes
 remain excluded from old external notification policies and Linux/AI exports.
 The independently opted-in [complete-service notification bridge](windows-complete-service-notifications.md) uses separate approval and the shared Windows outbox.
 

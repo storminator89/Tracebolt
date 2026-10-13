@@ -213,6 +213,11 @@ class SelectionTests(unittest.TestCase):
 
     def test_exact_retirement_fixture_selects_its_existing_update_owner(self):
         expected = {'tests/e2e-review/windows-update-retirement-browser.mjs',
+                    'web/scripts/capture-windows-complete-service-review.mjs',
+                    'web/scripts/check-windows-complete-service-review-evidence.mjs',
+                    'web/scripts/windows-complete-service-review-contract.mjs',
+                    'web/scripts/windows-complete-service-review-contract.node.mjs',
+                    'web/scripts/windows-complete-service-review-scenes.json',
                     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs',
                     'tests/e2e-review/windows-update-download-browser.mjs',
                     'tests/e2e-review/windows-update-download-fixtures.test.mjs',
@@ -265,6 +270,7 @@ class SelectionTests(unittest.TestCase):
             ['node', 'web/scripts/check-windows-complete-service-health-evidence.mjs', SHA],
             ['node', 'web/scripts/check-windows-complete-incident-inbox-evidence.mjs', SHA],
             ['node', 'web/scripts/check-windows-complete-notifications-evidence.mjs', SHA],
+            ['node', 'web/scripts/check-windows-complete-service-review-evidence.mjs', SHA],
         ])
         report.assert_called_once_with('windows-service-actions', SHA)
 
@@ -365,7 +371,10 @@ class SelectionTests(unittest.TestCase):
                     'windows-complete-notifications-types.ts', 'windows-complete-notifications-fixture.ts',
                     'windows-complete-notifications.test.tsx']
         self.assertEqual({path for path, flows in p.DOMAIN_UI.items() if 'windows-service-actions' in flows},
-                         {'web/src/' + name for name in complete + ['windows-notifications.tsx', 'windows-maintenance.css']})
+                         {'web/src/' + name for name in complete + ['windows-notifications.tsx', 'windows-maintenance.css',
+                          'windows-complete-service-incident-review.tsx', 'windows-complete-service-incident-review-types.ts',
+                          'windows-complete-service-incident-review.test.tsx', 'windows-complete-service-review-fixture.ts',
+                          'windows-complete-service-review-go-fixture.json']})
         for filename in complete + ['windows-notifications.tsx', 'windows-maintenance.css']:
             for status in ['A', 'M']:
                 plan = self.select((status, 'web/src/' + filename))
@@ -393,6 +402,8 @@ class SelectionTests(unittest.TestCase):
                 plan = p.select([(status, source)], packages, files, SHA)
                 self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
         self.assertEqual(set(p.DOMAIN_GO), {
+            'internal/api/windows_complete_service_incident_review.go',
+            'internal/api/windows_complete_service_incident_review_test.go',
             'internal/api/windows_complete_notifications.go', 'internal/api/windows_complete_notifications_test.go',
             'internal/store/windows_complete_notifications.go', 'internal/store/windows_complete_notifications_test.go'})
         plan = self.select(('M', 'web/scripts/capture-windows-complete-notifications.mjs'))
@@ -415,6 +426,109 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('node web/scripts/capture-windows-complete-notifications.mjs --check', full)
         self.assertIn('node --test web/scripts/windows-complete-notifications-contract.node.mjs', full)
         self.assertIn('node web/scripts/check-windows-complete-notifications-evidence.mjs "$TRACEBOLT_SOURCE_SHA"', full)
+
+    def test_complete_service_review_exact_sources_keep_affected_dependencies(self):
+        sources = ['windows-complete-service-incident-review.tsx',
+                   'windows-complete-service-incident-review-types.ts',
+                   'windows-complete-service-incident-review.test.tsx',
+                   'windows-complete-service-review-fixture.ts',
+                   'windows-complete-service-review-go-fixture.json']
+        self.assertEqual({path for path in p.DOMAIN_UI if 'complete-service' in path},
+                         {'web/src/' + name for name in sources})
+        for filename in sources:
+            source = 'web/src/' + filename
+            self.assertTrue((ROOT / source).is_file())
+            for status in ['A', 'M']:
+                with self.subTest(source=source, status=status):
+                    plan = self.select((status, source))
+                    self.assertEqual(plan['flows'], ['windows-service-actions'])
+                    self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                    self.assertEqual(plan['web'], ['src/' + filename])
+            for status in ['D', 'R100', 'T']:
+                plan = self.select((status, source))
+                self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+        owners = {'internal/api/windows_complete_service_incident_review.go',
+                  'internal/api/windows_complete_service_incident_review_test.go'}
+        self.assertEqual({path for path in p.DOMAIN_GO if 'complete_service' in path}, owners)
+        for source in owners:
+            self.assertTrue((ROOT / source).is_file())
+            self.assertEqual(p.flow_names(source), {'windows-service-actions'})
+            package = 'localrmm/internal/api'
+            packages = {**self.packages, 'localrmm/cmd/service-review-dependent': {package}}
+            files = {**self.files, source: {package}}
+            for status in ['A', 'M']:
+                plan = p.select([(status, source)], packages, files, SHA)
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['flows'], ['windows-service-actions'])
+                self.assertIn(package, plan['packages'])
+                self.assertIn('localrmm/cmd/service-review-dependent', plan['packages'])
+                self.assertIn('localrmm/cmd/manager', plan['packages'])
+                self.assertNotIn('localrmm/internal/independent', plan['packages'])
+            for status in ['D', 'R100', 'T']:
+                plan = p.select([(status, source)], packages, files, SHA)
+                self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+        for source in ['web/scripts/capture-windows-complete-service-review-future.mjs',
+                       'web/scripts/windows-complete-service-review-new-helper.mjs',
+                       'web/src/windows-complete-service-review-new-fixture.json',
+                       'tests/fixtures/windows-complete-service-review-view.json']:
+            plan = self.select(('M', source))
+            self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+        # The shared v1 controls, types and inbox retain their existing owners.
+        for filename, flows in [
+                ('windows-service-incident-review-types.ts', ['lan']),
+                ('windows-service-actions.tsx', ['windows-service-actions']),
+                ('windows-incident-inbox.tsx', ['windows-incident-inbox', 'windows-service-actions'])]:
+            self.assertEqual(self.select(('M', 'web/src/' + filename))['flows'], flows)
+
+    def test_complete_service_review_reuses_browser_and_requires_both_contract_gates(self):
+        plan = self.select(('M', 'web/scripts/capture-windows-complete-service-review.mjs'))
+        with patch.object(p, 'run') as run:
+            p.web_checks(plan)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands.count(['node', 'web/scripts/capture-windows-complete-service-review.mjs', '--check']), 1)
+        self.assertEqual(commands.count(['node', '--test', 'web/scripts/windows-complete-service-review-contract.node.mjs']), 1)
+        with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+            p.browser_checks(plan)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands.count(['node', 'tests/e2e-review/windows-service-actions-runner.mjs']), 1)
+        self.assertEqual(commands.count(['node', 'web/scripts/check-windows-complete-service-review-evidence.mjs', SHA]), 1)
+        self.assertLess(commands.index(['node', 'tests/e2e-review/windows-service-actions-runner.mjs']),
+                        commands.index(['node', 'web/scripts/check-windows-complete-service-review-evidence.mjs', SHA]))
+        report.assert_called_once_with('windows-service-actions', SHA)
+        runner = (ROOT / 'tests/e2e-review/windows-service-actions-runner.mjs').read_text()
+        self.assertEqual(runner.count('chromium.launch('), 1)
+        self.assertIn("timer=setTimeout(()=>reject(failure()),120000)", runner)
+        self.assertEqual(runner.count('await captureCompleteServiceReview({browser,expect,output:out,sourceSha})'), 1)
+        self.assertIn("diagnostic.begin('runner',null,null,'complete-service-review')", runner)
+        self.assertIn('completeServiceReview:passed?completeServiceReviewEvidenceSummary():null', runner)
+        self.assertIn("fs.writeFile(path.join(out,'windows-complete-service-review-manifest.json')", runner)
+        for capture in ['captureCompleteServiceHealth', 'captureCompleteIncidentInbox', 'captureCompleteNotifications']:
+            self.assertEqual(runner.count('await ' + capture + '('), 1)
+            self.assertLess(runner.index('await ' + capture + '('), runner.index('await captureCompleteServiceReview('))
+        diagnostics = json.loads((ROOT / 'tests/e2e-review/windows-service-actions-diagnostics.json').read_text())
+        self.assertEqual(diagnostics['cases']['runner'].count('complete-service-review'), 1)
+        full = (ROOT / '.github/workflows/validate.yml').read_text()
+        for command in ['node web/scripts/capture-windows-complete-service-review.mjs --check',
+                        'node --test web/scripts/windows-complete-service-review-contract.node.mjs',
+                        'node web/scripts/check-windows-complete-service-review-evidence.mjs "$TRACEBOLT_SOURCE_SHA"']:
+            self.assertEqual(full.count(command), 1)
+
+    def test_complete_service_review_artifacts_are_exact_compact_representatives(self):
+        expected = ['windows-complete-service-review-manifest.json',
+                    'complete-service-review-matched-preview-unchecked-en-1440.png',
+                    'complete-service-review-matched-read-en-390.png',
+                    'complete-service-review-matched-selected-blank-en-390.png',
+                    'complete-service-review-unsupported-en-390.png',
+                    'complete-service-review-matched-selected-blank-de-1440.png',
+                    'complete-service-review-unknown-de-1440.png',
+                    'complete-service-review-matched-preview-unchecked-de-390.png',
+                    'complete-service-review-unknown-de-390.png']
+        for workflow in ['pr-checks.yml', 'validate.yml']:
+            text = (ROOT / '.github/workflows' / workflow).read_text()
+            actual = re.findall(r'^\s+artifacts/review/((?:windows-)?complete-service-review[^/\s]*)\s*$', text, re.M)
+            self.assertEqual(actual, expected)
+        # These 8 files are representatives, while the scene contract owns all 20 assertions.
+        self.assertEqual(len(expected) - 1, 8)
 
     def test_fleet_software_owns_focused_node_and_hosted_evidence_contracts(self):
         for filename in ['check-windows-fleet-software-evidence.mjs', 'capture-windows-fleet-software.mjs',

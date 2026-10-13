@@ -12,6 +12,7 @@
       "complete-service-health",
       "complete-incident-inbox",
       "complete-notifications",
+      "complete-service-review",
       "evidence",
       "close-context",
       "close-browser",

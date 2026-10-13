@@ -654,6 +654,8 @@ jobs:
       - name: Complete-service component source and evidence contracts
         working-directory: .
         run: |
+          node web/scripts/capture-windows-complete-service-review.mjs --check
+          node --test web/scripts/windows-complete-service-review-contract.node.mjs
           node web/scripts/capture-windows-complete-notifications.mjs --check
           node --test web/scripts/windows-complete-notifications-contract.node.mjs
           node web/scripts/capture-windows-complete-incident-inbox.mjs --check
@@ -728,6 +730,7 @@ jobs:
           node web/scripts/check-windows-complete-service-health-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
           node web/scripts/check-windows-complete-incident-inbox-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
           node web/scripts/check-windows-complete-notifications-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
+          node web/scripts/check-windows-complete-service-review-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic central MSI separate-stage browser gate (16 captures)
         if: ${{ !cancelled() }}
         env:
@@ -1063,6 +1066,15 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-complete-service-review-manifest.json
+            artifacts/review/complete-service-review-matched-preview-unchecked-en-1440.png
+            artifacts/review/complete-service-review-matched-read-en-390.png
+            artifacts/review/complete-service-review-matched-selected-blank-en-390.png
+            artifacts/review/complete-service-review-unsupported-en-390.png
+            artifacts/review/complete-service-review-matched-selected-blank-de-1440.png
+            artifacts/review/complete-service-review-unknown-de-1440.png
+            artifacts/review/complete-service-review-matched-preview-unchecked-de-390.png
+            artifacts/review/complete-service-review-unknown-de-390.png
             artifacts/review/windows-complete-notifications-manifest.json
             artifacts/review/complete-notifications-review-en-1440.png
             artifacts/review/complete-notifications-unknown-en-1440.png
