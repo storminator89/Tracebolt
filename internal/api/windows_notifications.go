@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"localrmm/internal/alarmdelivery"
@@ -89,6 +90,10 @@ func projectWindowsNotifications(snapshot store.WindowsNotificationSnapshot, mai
 	return v, nil
 }
 func (h *operatorHandler) windowsNotificationsAPI(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/fleet/windows-notifications/complete" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-notifications/complete/") {
+		h.windowsCompleteNotificationsAPI(w, r)
+		return
+	}
 	const route = "/api/fleet/windows-notifications"
 	mutation := r.URL.Path == route+"/policy"
 	if r.URL.Path != route && !mutation {

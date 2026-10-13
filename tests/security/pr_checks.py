@@ -80,6 +80,18 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'web/scripts/capture-windows-complete-notifications.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-notifications-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-notifications-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-notifications-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-notifications-scenes.json': {'windows-service-actions'},
+    'tests/e2e-review/windows-incident-inbox-browser.mjs': {'windows-incident-inbox'},
+    'tests/e2e-review/windows-incident-inbox-fixtures.test.mjs': {'windows-incident-inbox'},
+    'web/scripts/capture-windows-complete-incident-inbox.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-incident-inbox-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-incident-inbox-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-incident-inbox-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-incident-inbox-scenes.json': {'windows-service-actions'},
     'tests/e2e-review/fleet-groups-browser.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-evidence.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-fixtures.test.mjs': {'fleet-groups'},
@@ -117,9 +129,23 @@ DOMAIN_SCRIPTS = {
 # These existing UI names do not match the older domain aliases. Keep them in
 # the normal changed/related Vitest path while selecting their verified owner.
 DOMAIN_UI = {
+    'web/src/windows-complete-notifications.tsx': {'windows-service-actions'},
+    'web/src/windows-complete-notifications-resource.ts': {'windows-service-actions'},
+    'web/src/windows-complete-notifications-types.ts': {'windows-service-actions'},
+    'web/src/windows-complete-notifications-fixture.ts': {'windows-service-actions'},
+    'web/src/windows-complete-notifications.test.tsx': {'windows-service-actions'},
+    'web/src/windows-notifications.tsx': {'windows-maintenance', 'windows-service-actions'},
+    'web/src/windows-maintenance.css': {'windows-maintenance', 'windows-service-actions'},
     'web/src/windows-fleet-managed-msi.css': {'windows-fleet-msi'},
     'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
     'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
+}
+# Exact reviewed complete-notification Go owners preserve dependency discovery.
+DOMAIN_GO = {
+    'internal/api/windows_complete_notifications.go': {'windows-service-actions'},
+    'internal/api/windows_complete_notifications_test.go': {'windows-service-actions'},
+    'internal/store/windows_complete_notifications.go': {'windows-service-actions'},
+    'internal/store/windows_complete_notifications_test.go': {'windows-service-actions'},
 }
 ALIASES = {'windowsfullservices': ['windows-full-services', 'windows-service-actions'],
            'fleetgroups': ['fleet-groups', 'windows-service-actions'],
@@ -144,6 +170,8 @@ ALIASES = {'windowsfullservices': ['windows-full-services', 'windows-service-act
            'windowshealth': ['lan'], 'windowsnetwork': ['lan'], 'windowsinventory': ['lan'],
            'windowssecurity': ['lan'], 'windowspatch': ['lan'], 'windowsstorage': ['lan'],
            'windowshardware': ['lan'], 'windowssession': ['lan'], 'windowsadapter': ['lan'],
+           'windowscompleteincident': ['windows-incident-inbox', 'windows-service-actions'],
+           'windowsincidentinbox': ['windows-incident-inbox', 'windows-service-actions'],
            'windowsserviceaction': ['windows-service-actions'],
            'windowsservicehealthcomplete': ['lan', 'windows-service-actions'],
            'windowscompleteservice': ['lan', 'windows-service-actions'],
@@ -205,6 +233,8 @@ def affected(packages, seeds):
 
 
 def flow_names(path):
+    if path in DOMAIN_GO:
+        return DOMAIN_GO[path]
     name = Path(path).stem.replace('_', '-').lower()
     compact = name.replace('-', '')
     # One longest-prefix table: a richer domain alias must win over a shorter
@@ -450,7 +480,15 @@ def web_checks(plan):
     if 'linux-cve-update-review' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
         run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
+    if 'windows-maintenance' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-maintenance-fixtures.test.mjs'], stage='ui-maintenance-notification-contract')
+    if 'windows-incident-inbox' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-incident-inbox-fixtures.test.mjs'], stage='ui-incident-inbox-contract')
     if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-windows-complete-notifications.mjs', '--check'], stage='ui-complete-notifications-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-notifications-contract.node.mjs'], stage='ui-complete-notifications-evidence-contract')
+        run(['node', 'web/scripts/capture-windows-complete-incident-inbox.mjs', '--check'], stage='ui-complete-incident-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-incident-inbox-contract.node.mjs'], stage='ui-complete-incident-evidence-contract')
         run(['node', 'web/scripts/capture-windows-complete-service-health.mjs', '--check'], stage='ui-complete-service-contract')
         run(['node', '--test', 'web/scripts/windows-complete-service-health-contract.node.mjs'], stage='ui-complete-service-evidence-contract')
         run(['node', '--test', 'tests/e2e-review/windows-update-download-fixtures.test.mjs'], stage='ui-windows-update-download-contract')
@@ -921,6 +959,10 @@ def browser_checks(plan):
                 stage='browser-update-download-evidence', env=env)
             run(['node', 'web/scripts/check-windows-complete-service-health-evidence.mjs', plan['sha']],
                 stage='browser-complete-service-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-incident-inbox-evidence.mjs', plan['sha']],
+                stage='browser-complete-incident-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-notifications-evidence.mjs', plan['sha']],
+                stage='browser-complete-notifications-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

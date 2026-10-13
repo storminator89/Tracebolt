@@ -316,6 +316,10 @@ missing material rather than inventing credentials or weakening protection.
   old v1 ledgers, no-backfill, genuine recovery pairing, final enrollment/policy/
   time guards, durable uncertainty and the existing public HTTPS transport.
   Source fixtures never authorize a recipient, credentials or external delivery.
+  The independent complete-service notification bridge requires
+  `docs/windows-complete-service-notifications.md`; keep separate default-off
+  grant/health-revision/recipient approval, tagged v2 episode keys, actual complete
+  source lease, shared queue bounds and service-maintenance suppression.
 - Windows CPU and physical-RAM policies are independent default-off manager scopes.
   Read `docs/windows-resource-health.md` before changing their shared percentage
   engine, tagged storage, API or UI. Preserve disk v1 bytes, exact observed-group
@@ -370,7 +374,10 @@ missing material rather than inventing credentials or weakening protection.
   It grants no complete-generation monitoring or inheritance. The separate explicit
   complete-source v2 chooser and evaluator use `docs/windows-complete-service-health.md`;
   retain strict v1 bytes and independent complete provenance, with no automatic
-  source conversion. Missing/duplicate rows never prove down;
+  source conversion. The explicit fleet history/seen bridge uses
+  `docs/windows-complete-incident-inbox.md`; preserve separate source-qualified
+  targets, current-leaf/source leases and strict legacy notification/control
+  boundaries. Missing/duplicate rows never prove down;
   preserve positive partial-row scope, original capture, authority and durable floors.
 - Follow Go/Node versions and dependency locks in this revision. Validate commands
   against actual flags/config. Distinguish runtime tests from cross-builds, skipped

@@ -4,7 +4,9 @@ import (
 	"context"
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/store"
+	"localrmm/internal/windowscapacity"
 	"localrmm/internal/windowscontact"
+	"localrmm/internal/windowsservicehealth"
 	"time"
 )
 
@@ -40,6 +42,9 @@ func (q *WindowsNotificationQueue) ClaimAlarm(ctx context.Context, b alarmdelive
 	if e != nil || c == nil {
 		return nil, e
 	}
+	if c.CompleteTarget != nil {
+		ctx = windowsservicehealth.WithCompleteSelections(ctx, map[string][]string{c.Target.DeviceID: {c.Subject}})
+	}
 	inputs, e := q.source.WindowsCapacityInputs(ctx, started)
 	if e != nil {
 		return nil, e
@@ -51,6 +56,9 @@ func (q *WindowsNotificationQueue) ClaimAlarm(ctx context.Context, b alarmdelive
 	in, ok := authority[c.Target.DeviceID]
 	if !ok || !in.Authorized || in.InvitationID != c.Target.InvitationID || in.CertificateHash != c.Target.CertificateHash {
 		return nil, q.Store.SuppressWindowsNotification(ctx, c.ID, started)
+	}
+	if c.CompleteTarget != nil {
+		return q.claimComplete(ctx, b, *c, in, started)
 	}
 	lease, ok := q.source.(windowsNotificationAuthoritySource)
 	if !ok {
@@ -71,8 +79,45 @@ func (q *WindowsNotificationQueue) ClaimAlarm(ctx context.Context, b alarmdelive
 	return attempt, e
 }
 func (q *WindowsNotificationQueue) CompleteAlarm(ctx context.Context, b alarmdelivery.Binding, a alarmdelivery.Attempt, r alarmdelivery.Result, now time.Time) error {
-	if a.Payload.SchemaVersion == store.WindowsNotificationSchema {
+	if a.Payload.SchemaVersion == store.WindowsNotificationSchema || a.Payload.SchemaVersion == store.WindowsCompleteNotificationSchema {
 		return q.Store.CompleteWindowsNotification(ctx, b, a, r, now)
 	}
 	return q.Store.CompleteAlarm(ctx, b, a, r, now)
+}
+
+// A complete notification uses the actual source lease, never the history/seen
+// lease that deliberately permits missing grants. Exactly one candidate name is
+// selected, and the original generation remains pinned through the SQL claim.
+func (q *WindowsNotificationQueue) claimComplete(ctx context.Context, binding alarmdelivery.Binding, candidate store.WindowsNotificationCandidate, in windowscapacity.Input, started time.Time) (*alarmdelivery.Attempt, error) {
+	source := completeInboxCurrentSource(in, started)
+	if source == nil {
+		return nil, q.Store.DeferWindowsNotification(ctx, candidate.ID, started)
+	}
+	lease, ok := q.source.(windowsCompleteServiceAuthoritySource)
+	if !ok {
+		return nil, store.ErrWindowsNotificationConflict
+	}
+	input := windowsservicehealth.Input{Input: in.Input, Sample: in.Services, Complete: true, CurrentLeaf: in.CurrentLeaf, Selection: source}
+	var attempt *alarmdelivery.Attempt
+	err := lease.WithWindowsCompleteServiceAuthority(ctx, input, func(authority func(time.Time) error) error {
+		last := started
+		var e error
+		attempt, e = q.Store.ClaimWindowsCompleteNotification(ctx, binding, candidate, input, q.since, q.source.Now, func(sampled time.Time) error {
+			at := q.source.Now().UTC()
+			if at.Before(sampled) || at.Before(last) || !contactReadTime(started, at) || !at.Before(input.AuthorityUntil) || !source.Fresh(at) || ctx.Err() != nil {
+				return store.ErrWindowsNotificationConflict
+			}
+			if e := authority(at); e != nil {
+				return store.ErrWindowsNotificationConflict
+			}
+			final := q.source.Now().UTC()
+			if final.Before(at) || !contactReadTime(started, final) || !final.Before(input.AuthorityUntil) || !source.Fresh(final) || ctx.Err() != nil {
+				return store.ErrWindowsNotificationConflict
+			}
+			last = final
+			return nil
+		})
+		return e
+	})
+	return attempt, err
 }

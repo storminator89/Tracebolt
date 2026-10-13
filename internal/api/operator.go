@@ -407,7 +407,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_framing", "Chunked request bodies are not accepted.")
 		return
 	}
-	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !windowsInboxQueryAllowed(r.URL) && !windowsUpdateQueryAllowed(r.URL) && !windowsSoftwareQueryAllowed(r.URL) && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
+	if strings.Contains(r.URL.Path, "//") || strings.Contains(r.URL.Path, "\\") || strings.Contains(r.URL.EscapedPath(), "%") || (r.URL.Path != "/api/investigations" && !windowsInboxQueryAllowed(r.URL) && !windowsCompleteInboxQueryAllowed(r.URL) && !windowsUpdateQueryAllowed(r.URL) && !windowsSoftwareQueryAllowed(r.URL) && !resourceHistoryQueryAllowed(r.URL) && r.URL.RawQuery != "") || r.URL.ForceQuery {
 		fail(w, 400, "invalid_path", "Path is not canonical.")
 		return
 	}
@@ -571,7 +571,11 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/api/fleet/windows-incidents" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-incidents/") {
-		h.windowsIncidentsAPI(w, r)
+		if strings.HasPrefix(r.URL.Path, "/api/fleet/windows-incidents/complete") {
+			h.windowsCompleteIncidentsAPI(w, r)
+		} else {
+			h.windowsIncidentsAPI(w, r)
+		}
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") && strings.Contains(r.URL.Path, "/service-checks") {

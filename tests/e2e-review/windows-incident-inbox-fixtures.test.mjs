@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {windowsIncidentInboxBrowserFixture,windowsIncidentInboxTargetKey,windowsIncidentInboxQuery,windowsIncidentInboxCaseName,windowsIncidentInboxDisclosure,requireWindowsIncidentInboxEvidence,guardWindowsIncidentInboxRoute,windowsIncidentInboxRouteState,windowsIncidentInboxScenes,windowsServiceIncidentReviewDisclosure,windowsServiceIncidentReviewFixture,windowsServiceIncidentReviewRoute} from './windows-incident-inbox-browser.mjs';
+import {completeAssessmentInbox,windowsIncidentInboxBrowserFixture,windowsIncidentInboxTargetKey,windowsIncidentInboxQuery,windowsIncidentInboxCaseName,windowsIncidentInboxDisclosure,requireWindowsIncidentInboxEvidence,guardWindowsIncidentInboxRoute,windowsIncidentInboxRouteState,windowsIncidentInboxScenes,windowsServiceIncidentReviewDisclosure,windowsServiceIncidentReviewFixture,windowsServiceIncidentReviewRoute} from './windows-incident-inbox-browser.mjs';
 const now='2026-10-12T12:00:00Z',expiry='2026-10-12T13:00:00Z',later='2026-10-12T12:00:01Z';
 const read=file=>fs.readFileSync(new URL(file,import.meta.url),'utf8');
 test('invented five-domain inbox preserves historical evidence across one explicit seen readback',()=>{
@@ -55,17 +55,17 @@ test('new capture fixture preserves the real Go review binding and original shif
 });
 test('new named scene API reads and manual preview are fully intercepted and exact-pin guarded',async()=>{
  const base='http://127.0.0.1:19911',fixture=windowsServiceIncidentReviewFixture(sharedSession()),external=[],unexpected=[],handle=windowsServiceIncidentReviewRoute({base,fixture,external,unexpected}),item=fixture.review.incident,action=`/api/devices/${item.deviceId}/windows-service-actions`,pin={'x-tracebolt-windows-service-review':fixture.review.control.bindingDigest};
- for(const path of ['/api/auth/session','/api/session','/api/overview','/api/enrollment','/api/fleet/identities','/api/fleet/groups','/api/fleet/windows-incidents'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`]){const route=inertRoute(base+path);await handle(route);assert.ok(route.result.reply);assert.equal(route.result.continued,0);}
+ for(const path of ['/api/auth/session','/api/session','/api/overview','/api/enrollment','/api/fleet/identities','/api/fleet/groups','/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`]){const route=inertRoute(base+path);await handle(route);assert.ok(route.result.reply);assert.equal(route.result.continued,0);}
  for(const value of [undefined,'sha256:'+'b'.repeat(64),fixture.review.control.bindingDigest+','+fixture.review.control.bindingDigest])await assert.rejects(()=>handle(inertRoute(base+action,{headers:{'x-tracebolt-windows-service-review':value}})));
  const status=inertRoute(base+action,{headers:pin});await handle(status);assert.deepEqual(status.result.reply,fixture.ready);assert.equal(fixture.counts.preview,0);
- for(const path of ['/api/fleet/windows-incidents'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`,action])await assert.rejects(()=>handle(inertRoute(base+path,{headers:pin})));
+ for(const path of ['/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery,`/api/fleet/windows-incidents/${item.key}/service-review`,action])await assert.rejects(()=>handle(inertRoute(base+path,{headers:pin})));
  const headers={...pin,origin:base,'x-csrf-token':fixture.session.csrfToken,'content-type':'application/json'},body=JSON.stringify({target:item.serviceName,operation:'restart'});
  for(const patch of [{method:'GET'},{headers:{...headers,'x-tracebolt-windows-service-review':'sha256:'+'b'.repeat(64)}},{headers:{...headers,origin:'https://external.invalid'}},{headers:{...headers,'x-csrf-token':'wrong'}},{body:JSON.stringify({target:'ReplacementService',operation:'restart'})},{body:JSON.stringify({target:item.serviceName,operation:'stop'})}])await assert.rejects(()=>handle(inertRoute(base+action+'/preview',{method:'POST',headers,body,...patch})));
  const preview=inertRoute(base+action+'/preview',{method:'POST',headers,body});await handle(preview);assert.deepEqual(preview.result.reply,fixture.preview);await assert.rejects(()=>handle(inertRoute(base+action+'/preview',{method:'POST',headers,body})));assert.deepEqual(fixture.counts,{inbox:1,review:1,status:1,preview:1,approve:0,acknowledge:0,collection:0});assert.deepEqual(external,[]);assert.deepEqual(unexpected,[]);
 });
 test('new scenes reject every approval, acknowledgement, collection and external fallback',async()=>{
  const base='http://127.0.0.1:19911',fixture=windowsServiceIncidentReviewFixture(sharedSession()),external=[],unexpected=[],handle=windowsServiceIncidentReviewRoute({base,fixture,external,unexpected}),action=`/api/devices/${fixture.review.incident.deviceId}/windows-service-actions`;
- for(const path of [action+'/approve','/api/fleet/windows-incidents/acknowledge','/api/devices/'+fixture.review.incident.deviceId+'/windows-event-content/request']){const route=inertRoute(base+path,{method:'POST',body:'{}'});await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.continued,0);assert.equal(route.result.reply,null);}
+ for(const path of [action+'/approve','/api/fleet/windows-incidents/complete/acknowledge','/api/devices/'+fixture.review.incident.deviceId+'/windows-event-content/request']){const route=inertRoute(base+path,{method:'POST',body:'{}'});await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.continued,0);assert.equal(route.result.reply,null);}
  const outside=inertRoute('https://external.invalid/api/session');await handle(outside);assert.equal(outside.result.aborted,1);assert.deepEqual(external,['external']);assert.equal(unexpected.length,3);assert.deepEqual(fixture.counts,{inbox:0,review:0,status:0,preview:0,approve:1,acknowledge:1,collection:1});
  const wrong=inertRoute(base+'/api/fleet/windows-incidents/'+'0'.repeat(64)+'/service-review');await handle(wrong);assert.equal(wrong.result.aborted,1);assert.equal(wrong.result.continued,0);
 });
@@ -100,9 +100,27 @@ test('named service scenes intercept the production App enrollment read without 
    assert.ok(w.document.querySelector('.windows-incident-inbox'));assert.equal(w.document.documentElement.lang,locale);
    assert.equal(reads.filter(path=>path==='/api/enrollment').length,1);
    const add=w.document.querySelector('.enrollment-actions .primary');assert.ok(add);assert.equal(add.disabled,true);
-   assert.deepEqual(external,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);assert.deepEqual(fixture.counts,{inbox:0,review:0,status:0,preview:0,approve:0,acknowledge:0,collection:0});
+   const toggle=w.document.querySelector('.windows-incident-toggle');toggle.click();
+   for(let i=0;i<100&&!w.document.querySelector('.windows-incident-row');i++)await new Promise(resolve=>setTimeout(resolve,20));
+   assert.equal(reads.filter(path=>path==='/api/fleet/windows-incidents/complete').length,1);
+   assert.equal(reads.filter(path=>path==='/api/fleet/windows-incidents').length,0);
+   const row=w.document.querySelector('.windows-incident-row');assert.ok(row);assert.ok(row.textContent.includes(fixture.review.incident.serviceName));
+   assert.ok(row.textContent.includes(locale==='de'?'Bestehende Bewertung':'Existing assessment'));
+   const review=row.querySelector('.windows-incident-action button');assert.ok(review);review.click();
+   for(let i=0;i<100&&(!w.document.querySelector('.windows-service-actions')||fixture.counts.status!==1);i++)await new Promise(resolve=>setTimeout(resolve,20));
+   assert.ok(w.document.querySelector('.windows-service-actions'));
+   assert.deepEqual(external,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);assert.deepEqual(fixture.counts,{inbox:1,review:1,status:1,preview:0,approve:0,acknowledge:0,collection:0});
   }finally{dom.window.close();}
   for(const options of [{method:'POST',body:'{}'},{method:'GET',body:'{}'}]){const route=inertRoute(base+'/api/enrollment',options);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.reply,null);}
   for(const suffix of ['?scope=all','/invitations']){const route=inertRoute(base+'/api/enrollment'+suffix);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.reply,null);}
  }
+});
+
+test('v2 hosted envelope preserves every legacy field and rejects silent v1 route fallback',async()=>{
+ const view=windowsIncidentInboxBrowserFixture(now,expiry).view,before=JSON.stringify(view),combined=completeAssessmentInbox(view);
+ assert.equal(combined.schemaVersion,'tracebolt.windows-incident-inbox.v2');
+ const restored={...combined,schemaVersion:'tracebolt.windows-incident-inbox.v1',items:combined.items.map(({sourceKind,openingSource,lastBadSource,recoverySource,currentSource,...item})=>{assert.equal(sourceKind,'assessment_v1');assert.deepEqual([openingSource,lastBadSource,recoverySource,currentSource],[null,null,null,null]);return item;})};
+ assert.deepEqual(restored,view);assert.equal(JSON.stringify(view),before);
+ const base='http://127.0.0.1:19911',fixture=windowsServiceIncidentReviewFixture(sharedSession()),external=[],unexpected=[],handle=windowsServiceIncidentReviewRoute({base,fixture,external,unexpected});
+ const route=inertRoute(base+'/api/fleet/windows-incidents'+windowsIncidentInboxQuery);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.reply,null);assert.equal(fixture.counts.inbox,0);
 });

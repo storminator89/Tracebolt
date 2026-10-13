@@ -71,10 +71,11 @@ func readWindowsNotificationPolicies(ctx context.Context, tx *sql.Tx) ([]Windows
 }
 
 type WindowsNotificationSnapshot struct {
-	Policies        []WindowsNotificationPolicy
-	Binding         string
-	DeliveryEnabled bool
-	Counts          AlarmStatus
+	Policies         []WindowsNotificationPolicy
+	CompletePolicies []WindowsCompleteNotificationPolicy
+	Binding          string
+	DeliveryEnabled  bool
+	Counts           AlarmStatus
 }
 
 func (s *Store) WindowsNotifications(ctx context.Context) (WindowsNotificationSnapshot, error) {
@@ -85,6 +86,10 @@ func (s *Store) WindowsNotifications(ctx context.Context) (WindowsNotificationSn
 	defer tx.Rollback()
 	var v WindowsNotificationSnapshot
 	v.Policies, e = readWindowsNotificationPolicies(ctx, tx)
+	if e != nil {
+		return v, e
+	}
+	v.CompletePolicies, e = readWindowsCompleteNotificationPolicies(ctx, tx)
 	if e != nil {
 		return v, e
 	}
@@ -357,6 +362,12 @@ func pruneWindowsNotifications(ctx context.Context, tx *sql.Tx, at time.Time) er
 	}
 	keys := []string{}
 	for key := range snapshot.Targets() {
+		keys = append(keys, key)
+	}
+	// Complete retention uses source episodes only. Seen metadata never needs
+	// decoding on the evaluator/notification capture path.
+	complete := WindowsCompleteIncidentSnapshot{WindowsIncidentSnapshot: snapshot}
+	for key := range complete.CompleteTargets() {
 		keys = append(keys, key)
 	}
 	raw, _ := json.Marshal(keys)

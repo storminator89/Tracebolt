@@ -10,6 +10,8 @@
       "server",
       "launch",
       "complete-service-health",
+      "complete-incident-inbox",
+      "complete-notifications",
       "evidence",
       "close-context",
       "close-browser",

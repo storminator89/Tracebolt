@@ -12,6 +12,10 @@ device/domain windows separately. It does not suppress or alter this inbox or jo
 mutable device ID. Notification dispatch suppression uses exact original identity
 and domain in its separate transaction.
 
+The additive [complete-source v2 inbox](windows-complete-incident-inbox.md) is
+now the fleet UI's explicit combined projection. It preserves the v1 contract below
+and adds separately source-qualified complete-service history and acknowledgements.
+
 ## Seen is independent of closed
 
 A shared administrator can explicitly acknowledge one exact retained episode.

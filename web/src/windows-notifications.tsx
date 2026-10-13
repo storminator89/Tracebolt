@@ -7,14 +7,29 @@ import { windowsDeviceLabel } from './windows-device-label';
 import { WindowsLocalTime } from './windows-local-time';
 import { useWindowsNotifications } from './windows-notifications-resource';
 import type { WindowsNotificationChange } from './windows-notifications-types';
+import { WindowsCompleteNotifications } from './windows-complete-notifications';
 import './windows-maintenance.css';
 const copy = {
     en: { title: 'Windows notifications', source: 'Device and check', choose: 'Choose a source', contact: 'Contact', cpu: 'CPU', disk: 'System volume', memory: 'Physical RAM', service: 'Selected services', off: 'Off', on: 'On', reviewNeeded: 'Review destination', maintenance: 'Muted for maintenance until', enable: 'Review enablement', disable: 'Review disablement', save: 'Confirm change', cancel: 'Cancel', refresh: 'Refresh', pending: 'Pending', accepted: 'Provider accepted', suppressed: 'Suppressed', failed: 'Failed', uncertain: 'Uncertain', dropped: 'Dropped', details: 'Details', setup: 'Configure and enable the destination in Settings → Alarm setup first.', payload: 'Send future opening and genuine recovery events for this source to the destination shown: device and incident IDs, check and selected service name, transition, fixed reason and original timestamps. No history backfill.', approval: 'I approve this Windows incident data being sent to this destination.', disabling: 'Stop new sends for this source. An in-flight request cannot be recalled.', about: 'Maintenance consumes matching notifications; checks, incidents and evidence continue. Ending maintenance sends no backlog. Seen does not mean resolved. Provider acceptance does not mean a person received it.', changed: 'Policy saved.', unconfirmed: 'Change unconfirmed. Refresh to reconcile; the write is not retried.', failedRead: 'Notifications are unavailable or expired. Refresh before changing them.', loading: 'Loading…', readOnly: 'Shared administrator required to change source policies.', unnamed: 'Windows device', destination: 'Destination', revision: 'Revision', counts: 'Retained Windows delivery counts' },
     de: { title: 'Windows-Benachrichtigungen', source: 'Gerät und Prüfung', choose: 'Quelle auswählen', contact: 'Kontakt', cpu: 'CPU', disk: 'Systemvolume', memory: 'Physischer RAM', service: 'Ausgewählte Dienste', off: 'Aus', on: 'Ein', reviewNeeded: 'Ziel prüfen', maintenance: 'Wegen Wartung stumm bis', enable: 'Aktivierung prüfen', disable: 'Deaktivierung prüfen', save: 'Änderung bestätigen', cancel: 'Abbrechen', refresh: 'Aktualisieren', pending: 'Ausstehend', accepted: 'Vom Anbieter angenommen', suppressed: 'Unterdrückt', failed: 'Fehlgeschlagen', uncertain: 'Ungewiss', dropped: 'Verworfen', details: 'Details', setup: 'Zuerst das Ziel unter Einstellungen → Alarmeinrichtung konfigurieren und aktivieren.', payload: 'Künftige Eröffnungen und echte Erholungen dieser Quelle an das angezeigte Ziel senden: Geräte- und Vorfall-IDs, Prüfung und ausgewählter Dienstname, Übergang, fester Grund und ursprüngliche Zeitstempel. Kein Nachsenden des Verlaufs.', approval: 'Ich erlaube das Senden dieser Windows-Vorfalldaten an dieses Ziel.', disabling: 'Neue Sendungen dieser Quelle stoppen. Eine bereits laufende Anfrage kann nicht zurückgerufen werden.', about: 'Wartung unterdrückt passende Benachrichtigungen; Prüfungen, Vorfälle und Belege laufen weiter. Nach Wartungsende wird nichts nachgesendet. Gesehen bedeutet nicht behoben. Die Annahme durch den Anbieter bestätigt keinen Empfang durch eine Person.', changed: 'Richtlinie gespeichert.', unconfirmed: 'Änderung unbestätigt. Zum Abgleichen aktualisieren; der Schreibvorgang wird nicht wiederholt.', failedRead: 'Benachrichtigungen sind nicht verfügbar oder abgelaufen. Vor Änderungen aktualisieren.', loading: 'Wird geladen …', readOnly: 'Nur der gemeinsame Administrator kann Quellenrichtlinien ändern.', unnamed: 'Windows-Gerät', destination: 'Ziel', revision: 'Version', counts: 'Gespeicherte Windows-Sendezähler' },
 };
-export function WindowsNotifications({ devices, sessionKey, admin }: { devices: Device[]; sessionKey: string | null; admin: boolean }) {
+type Props = { devices: Device[]; sessionKey: string | null; admin: boolean };
+export function WindowsNotifications(props: Props) {
+    const [locale] = useLocale(), c = copy[locale], de = locale === 'de';
+    const [open, setOpen] = useState(false), [source, setSource] = useState<'preview' | 'complete'>('preview');
+    return <section className="windows-notifications" aria-label={c.title}>
+        <button className="text-button windows-maintenance-toggle" aria-expanded={open} onClick={() => setOpen(value => !value)}><Bell size={15}/>{c.title}{open ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
+        {open && <div className="windows-notifications-sources" role="group" aria-label={de ? 'Benachrichtigungsquelle' : 'Notification source'}>
+            <button className="text-button" aria-pressed={source === 'preview'} onClick={() => setSource('preview')}>{de ? 'Vorschau' : 'Preview'}</button>
+            <button className="text-button" aria-pressed={source === 'complete'} onClick={() => setSource('complete')}>{de ? 'Vollständig' : 'Complete'}</button>
+        </div>}
+        <WindowsPreviewNotifications {...props} open={open && source === 'preview'}/>
+        <WindowsCompleteNotifications {...props} open={open && source === 'complete'}/>
+    </section>;
+}
+function WindowsPreviewNotifications({ devices, sessionKey, admin, open }: Props & { open: boolean }) {
     const [locale] = useLocale(), c = copy[locale];
-    const [open, setOpen] = useState(false), [selected, setSelected] = useState(''), [review, setReview] = useState<{ generation: number; body: WindowsNotificationChange } | null>(null), [approved, setApproved] = useState(false);
+    const [selected, setSelected] = useState(''), [review, setReview] = useState<{ generation: number; body: WindowsNotificationChange } | null>(null), [approved, setApproved] = useState(false);
     const resource = useWindowsNotifications(open, sessionKey, admin), view = resource.view, target = view?.targets.find(t => t.key === selected);
     useEffect(() => { setReview(null); setApproved(false); }, [resource.generation, selected]);
     const names = new Map(devices.filter(d => d.platform === 'windows' && d.source === 'lan' && !d.synthetic).map(d => [d.id, d.name]));
@@ -23,9 +38,7 @@ export function WindowsNotifications({ devices, sessionKey, admin }: { devices: 
     const reviewing = review && review.generation === resource.generation && target?.key === review.body.key && target.revision === review.body.revision ? review : null;
     const blocked = !target || resource.writing || resource.isUncertain(target) || target.revision >= Number.MAX_SAFE_INTEGER;
     const begin = (enabled: boolean) => { if (!target || !view || blocked) return; setApproved(false); setReview({ generation: resource.generation, body: { key: target.key, revision: target.revision, enabled, destinationBinding: enabled ? view.destinationBinding : '', payloadAcknowledged: enabled } }); };
-    return <section className="windows-notifications" aria-label={c.title}>
-        <button className="text-button windows-maintenance-toggle" aria-expanded={open} onClick={() => { setReview(null); setApproved(false); setOpen(v => !v); }}><Bell size={15}/>{c.title}{open ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
-        {open && <div className="windows-maintenance-content">
+    return open && <div className="windows-maintenance-content">
             <button className="text-button" disabled={resource.loading || resource.writing} onClick={resource.refresh}><RefreshCw size={14}/>{c.refresh}</button>
             {resource.loading && <p role="status">{c.loading}</p>}{resource.error && <p role="alert">{c.failedRead}</p>}{resource.notice && <p role="status">{resource.notice === 'changed' ? c.changed : c.unconfirmed}</p>}
             {view && <>
@@ -39,6 +52,5 @@ export function WindowsNotifications({ devices, sessionKey, admin }: { devices: 
                 {!view.deliveryEnabled && <p>{c.setup}</p>}
                 <details className="windows-maintenance-about"><summary>{c.details}</summary><p>{c.about}</p><p>{c.destination}: {view.destinationHost || c.off}</p><p>{c.failed}: {view.counts.failed} · {c.uncertain}: {view.counts.uncertain} · {c.dropped}: {view.counts.dropped}</p>{target && <p>{target.deviceId} · {c.revision}: {target.revision}</p>}</details>
             </>}
-        </div>}
-    </section>;
+        </div>;
 }

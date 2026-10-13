@@ -10,7 +10,8 @@ import (
 	"localrmm/internal/windowsservicehealth"
 )
 
-// This isolated table never feeds health analyses or alarm delivery.
+// This isolated ledger never feeds Linux health or AI. Separately approved
+// Windows notifications capture transitions in the same operator transaction.
 const windowsServiceSchema = `CREATE TABLE IF NOT EXISTS windows_service_devices(id TEXT PRIMARY KEY, body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=262144 AND json_valid(body)))`
 
 func decodeWindowsService(id string, raw []byte) (windowsservicehealth.State, error) {
@@ -111,6 +112,8 @@ func (s *Store) updateWindowsService(ctx context.Context, id string, update func
 		}
 	}
 	beforeNotifications := serviceNotificationEpisodes(state)
+	beforeCompleteNotifications := completeServiceNotificationEpisodes(state)
+	beforePolicyRevision := state.Policy.Revision
 	if err = update(&state); err != nil {
 		return windowsservicehealth.State{}, err
 	}
@@ -125,6 +128,14 @@ func (s *Store) updateWindowsService(ctx context.Context, id string, update func
 		return windowsservicehealth.State{}, err
 	}
 	if err = enqueueWindowsNotifications(ctx, tx, beforeNotifications, serviceNotificationEpisodes(state)); err != nil {
+		return windowsservicehealth.State{}, err
+	}
+	if state.SchemaVersion == windowsservicehealth.CompleteStateSchema && state.Policy.Revision != beforePolicyRevision {
+		if _, err = tx.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN state='queued' THEN 'suppressed' ELSE state END,stop_retry=1,code='health_policy_changed',finished=CASE WHEN state='queued' THEN ? ELSE finished END WHERE device=? AND domain='service-complete' AND json_extract(target,'$.target.invitationId')=? AND json_extract(target,'$.target.certificateHash')=? AND state IN ('queued','in_flight')`, state.PolicyChangedAt.UnixMilli(), state.DeviceID, state.InvitationID, state.CertificateHash); err != nil {
+			return windowsservicehealth.State{}, err
+		}
+	}
+	if err = enqueueWindowsCompleteNotifications(ctx, tx, beforeCompleteNotifications, completeServiceNotificationEpisodes(state)); err != nil {
 		return windowsservicehealth.State{}, err
 	}
 	for _, guard := range guards {
