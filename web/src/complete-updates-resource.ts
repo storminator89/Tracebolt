@@ -137,7 +137,9 @@ export function useCompleteUpdates(deviceId: string, metadataOnly = false, autoR
         alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden';
         const lock = () => { locked.current = true; clear('session'); query.current = ''; setSearch(''); };
         const suspend = () => { suspended.current = true; clear(); };
-        const restore = () => { if (locked.current || document.visibilityState === 'hidden') return; suspended.current = false; if (autoResume) void read(true); };
+        // A browser return can emit visibility, focus and pageshow together.
+        // Resume once so later notifications cannot abort/restart the fresh read.
+        const restore = () => { if (locked.current || !suspended.current || document.visibilityState === 'hidden') return; suspended.current = false; if (autoResume) void read(true); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended.current) restore(); };
         const navigate = () => { suspended.current = true; clear(); };

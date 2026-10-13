@@ -133,7 +133,9 @@ export function useWindowsServiceHealth(deviceId: string, enabled: boolean, sess
             }
         };
         const suspend = () => { suspended = true; setDraftGeneration(n => n + 1); clear(); };
-        const restore = () => { if (!alive || locked || document.visibilityState === 'hidden') return; suspended = false; void read(); };
+        // A browser return can emit visibility, focus and pageshow together.
+        // Resume once so later notifications cannot abort/restart the fresh read.
+        const restore = () => { if (!alive || locked || !suspended || document.visibilityState === 'hidden') return; suspended = false; void read(); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended) restore(); };
         clear(); refreshRef.current = () => { void read(); }; saveRef.current = intent => { void save(intent); };

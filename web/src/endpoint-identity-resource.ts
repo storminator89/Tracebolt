@@ -68,7 +68,9 @@ export function useEndpointIdentity(deviceId: string, enabled: boolean, sessionK
         if (!enabled) return () => { alive.current = false; clear(); };
         const lock = () => { locked.current = true; clear('session'); };
         const suspend = () => { suspended.current = true; clear(); };
-        const restore = () => { if (locked.current || document.visibilityState === 'hidden') return; suspended.current = false; void read(); };
+        // A browser return can emit visibility, focus and pageshow together.
+        // Resume once so later notifications cannot abort/restart the fresh read.
+        const restore = () => { if (locked.current || !suspended.current || document.visibilityState === 'hidden') return; suspended.current = false; void read(); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const show = (event: PageTransitionEvent) => { if (event.persisted || suspended.current) restore(); };
         window.addEventListener(AUTH_REQUIRED_EVENT, lock); window.addEventListener('pagehide', suspend); window.addEventListener('pageshow', show); window.addEventListener('blur', suspend); window.addEventListener('focus', restore); window.addEventListener('hashchange', suspend); document.addEventListener('visibilitychange', visibility);
