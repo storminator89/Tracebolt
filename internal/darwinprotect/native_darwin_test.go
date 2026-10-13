@@ -21,6 +21,13 @@ func TestNativeDarwinACLAndDurabilityFixtures(t *testing.T) {
 	if os.WriteFile(path, []byte("synthetic fixture"), 0600) != nil {
 		t.Fatal("fixture file")
 	}
+	// Remove only this fixture's added ACL before TempDir removes the file.
+	// In particular, the deny-delete entry must not obstruct test cleanup.
+	t.Cleanup(func() {
+		if exec.Command("/bin/chmod", "-N", path).Run() != nil {
+			t.Error("fixture ACL cleanup")
+		}
+	})
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatal("fixture open")

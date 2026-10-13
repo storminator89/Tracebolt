@@ -4,6 +4,7 @@ package macosinventorysender
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -77,9 +78,12 @@ func TestStorageDarwinRoundTripAndNoop(t *testing.T) {
 }
 func TestStorageDarwinCrossProcessLock(t *testing.T) {
 	_, path, _, _, _ := storageDarwinFixture(t)
-	cmd := exec.Command(os.Args[0], "-test.run=^TestStorageDarwinLockChild$")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStorageDarwinLockChild$", "-test.timeout=20s", "-test.v")
 	cmd.Env = append(os.Environ(), "TRACEBOLT_SYNTHETIC_INVENTORY_LOCK_PATH="+path)
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil || !bytes.Contains(output, []byte("--- PASS: TestStorageDarwinLockChild (")) {
 		t.Fatal("cross-process exclusion fixture")
 	}
 }
