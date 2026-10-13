@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 import subprocess
 import tempfile
@@ -754,6 +755,83 @@ def cve_review_failure_location(sha):
         return None
 
 
+
+# This source vocabulary is shared with the Windows producer, never loaded from
+# the runtime report directory (including when ROOT points at captured artifacts).
+WINDOWS_ACTION_DIAGNOSTICS_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/windows-service-actions-diagnostics.json'
+WINDOWS_ACTION_DIAGNOSTICS_SCHEMA = 'tracebolt.windows-action-browser-failure.v1'
+WINDOWS_ACTION_INVOCATION = re.compile(r'[0-9a-f]{32}\Z')
+
+
+def windows_action_diagnostic_contract():
+    """Admit only bounded source-owned labels, shared with the runner."""
+    with os.fdopen(reporter.open_log(WINDOWS_ACTION_DIAGNOSTICS_SOURCE), 'rb') as stream:
+        metadata = os.fstat(stream.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 16384:
+            raise ValueError('invalid Windows action diagnostic contract')
+        raw = stream.read(16385)
+    if len(raw) > 16384:
+        raise ValueError('invalid Windows action diagnostic contract')
+    value = reporter.decode(raw)
+    if (type(value) is not dict or set(value) != {'schemaVersion', 'cases'}
+            or value['schemaVersion'] != WINDOWS_ACTION_DIAGNOSTICS_SCHEMA
+            or type(value['cases']) is not dict or not 1 <= len(value['cases']) <= 32
+            or 'runner' not in value['cases']):
+        raise ValueError('invalid Windows action diagnostic contract')
+    for case, steps in value['cases'].items():
+        if (type(case) is not str or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', case)
+                or type(steps) is not list or not 1 <= len(steps) <= 128
+                or any(type(step) is not str or not re.fullmatch(r'[a-z][a-z0-9-]{0,63}', step)
+                       for step in steps) or len(set(steps)) != len(steps)):
+            raise ValueError('invalid Windows action diagnostic contract')
+    return value['cases']
+
+
+def windows_action_failure_location(sha, invocation):
+    """Project only finite labels from this exact source and runner invocation."""
+    try:
+        if (type(sha) is not str or not HEX.fullmatch(sha)
+                or type(invocation) is not str or not WINDOWS_ACTION_INVOCATION.fullmatch(invocation)):
+            return None
+        path = ROOT / 'artifacts/review/windows-service-actions-failure.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4096:
+                return None
+            raw = stream.read(4097)
+        if len(raw) > 4096:
+            return None
+        value = reporter.decode(raw)
+        keys = {'schemaVersion', 'sourceSha', 'invocation', 'status', 'browserAcceptance',
+                'nativeAcceptance', 'case', 'locale', 'width', 'step'}
+        if (type(value) is not dict or set(value) != keys
+                or value['schemaVersion'] != WINDOWS_ACTION_DIAGNOSTICS_SCHEMA
+                or type(value['sourceSha']) is not str or value['sourceSha'] != sha
+                or type(value['invocation']) is not str or value['invocation'] != invocation
+                or value['status'] != 'FAIL' or value['browserAcceptance'] is not False
+                or value['nativeAcceptance'] is not False
+                or type(value['case']) is not str or type(value['step']) is not str):
+            return None
+        cases = windows_action_diagnostic_contract()
+        if value['case'] not in cases or value['step'] not in cases[value['case']]:
+            return None
+        # Select the emitted strings from source, not from report values.
+        case = next(name for name in cases if name == value['case'])
+        step = next(name for name in cases[case] if name == value['step'])
+        locale, width = value['locale'], value['width']
+        if case == 'runner':
+            if locale is not None or width is not None:
+                return None
+            return 'case=runner step=%s locale=- width=-' % step
+        if type(locale) is not str or locale not in ['en', 'de'] or type(width) is not int or width not in [1440, 390]:
+            return None
+        locale = next(name for name in ['en', 'de'] if name == locale)
+        width = next(size for size in [1440, 390] if size == width)
+        return 'case=%s step=%s locale=%s width=%d' % (case, step, locale, width)
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -761,6 +839,11 @@ def browser_checks(plan):
     for flow in sorted(plan['flows'], key=lambda value: (value != 'shell', value)):
         print('Running selected browser flow: ' + flow, flush=True)
         env = {**os.environ, 'TRACEBOLT_REVIEW_QUARANTINED': '1', 'TRACEBOLT_REVIEW_LIFECYCLE_REPEATS': '5', 'TRACEBOLT_REVIEW_AI': '1'}
+        # A same-head report from an earlier run must never describe this run.
+        env.pop('TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN', None)
+        if flow == 'windows-service-actions':
+            invocation = secrets.token_hex(16)
+            env['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'] = invocation
         if flow == 'fleet-identity':
             # This legacy runner otherwise guesses /usr/bin/chromium. Bind only
             # this invocation to the locked Playwright browser installed by CI.
@@ -783,6 +866,10 @@ def browser_checks(plan):
                 location = fleet_msi_failure_location(plan['sha'])
                 if location is not None:
                     print('FAIL fleet MSI location: ' + location, flush=True)
+            if flow == 'windows-service-actions':
+                location = windows_action_failure_location(plan['sha'], invocation)
+                if location is not None:
+                    print('FAIL Windows action location: ' + location, flush=True)
             raise  # Diagnostics never turn a failed browser flow into success.
         if flow == 'windows-fleet-msi':
             # Three bounded changed flows accompany the existing MSI selection;

@@ -179,3 +179,66 @@ test('hosted variant gate requires frozen two-target independent readback and ze
  assert.throws(()=>requireWindowsUpdateWorklistDetails({...details,secondDeviceMutations:{...details.secondDeviceMutations,other:0}}));assert.throws(()=>requireWindowsUpdateWorklistDetails(null));
  const helper=read('./windows-update-jobs-browser.mjs');assert.ok(helper.indexOf("await capture('result')")<helper.indexOf("stage='worklist'"));assert.match(helper,/await expect\(choices.getByRole\('checkbox'\)\).toHaveCount\(2\)/);assert.match(helper,/await expect\(worklist.locator\('\.windows-update-jobs'\)\).toHaveCount\(0\)/);assert.match(helper,/await expect\(secondSummary\).not.toContainText\(resultText\)/);assert.match(helper,/document.documentElement.scrollWidth<=innerWidth\+1/);assert.doesNotMatch(helper,/setViewportSize|addStyleTag|chromium\.launch|createServer|writeFile|execFile|spawn\(|fetch\(|page\.request|newContext\(/);
 });
+
+
+test('failure coordinates are closed, source/run bound and contain no exception or fixture values',async()=>{
+ const {createWindowsActionDiagnostic,windowsActionFailureContract:contract}=await import('./windows-service-actions-diagnostics.mjs');
+ const sourceSha='a'.repeat(40),invocation='b'.repeat(32);
+ for(const [name,steps] of Object.entries(contract.cases))for(const step of steps)for(const [locale,width] of name==='runner'?[[null,null]]:[['en',1440],['en',390],['de',1440],['de',390]]){
+  const diagnostic=createWindowsActionDiagnostic(sourceSha,invocation);diagnostic.begin(name,locale,width,step);
+  assert.deepEqual(diagnostic.report(),{schemaVersion:contract.schemaVersion,sourceSha,invocation,status:'FAIL',browserAcceptance:false,nativeAcceptance:false,case:name,locale,width,step});
+ }
+ for(const [sha,token] of [[sourceSha+'\n',invocation],[sourceSha,invocation+'\n'],[null,invocation],[true,invocation],[sourceSha,null],[sourceSha,'private']])assert.equal(createWindowsActionDiagnostic(sha,token).report(),null);
+ const diagnostic=createWindowsActionDiagnostic(sourceSha,invocation);diagnostic.begin('fleet-schedule','de',390,'context');let step='cached-metadata';diagnostic.track(()=>step);
+ assert.equal(diagnostic.report().step,step);const restore=diagnostic.checkpoint('screenshot');assert.equal(diagnostic.report().step,'screenshot');restore();assert.equal(diagnostic.report().step,step);
+ for(const value of ['private exception',{},null,true,4]){step=value;assert.equal(diagnostic.report(),null)}
+ for(const args of [['private','en',1440,'context'],['runner','en',1440,'launch'],['update-jobs','en',true,'context'],['update-jobs','xx',1440,'context'],[{},'en',1440,'context'],['update-jobs','en',1440,'private']])assert.throws(()=>diagnostic.begin(...args),/^Error: Invalid source diagnostic coordinate$/);
+});
+
+test('runner and detailed fleet/history steps use the finite source contract without budget changes',async()=>{
+ const {windowsActionFailureContract:contract}=await import('./windows-service-actions-diagnostics.mjs');
+ const runner=read('./windows-service-actions-runner.mjs'),fleet=read('./windows-update-schedule-browser.mjs'),history=read('./windows-service-action-history-browser.mjs');
+ const common=['fixture','context','guards','close','screenshot'];
+ assert.deepEqual([...new Set([...fleet.matchAll(/fleetStep='([^']+)'/g)].map(match=>match[1]))].sort(),contract.cases['fleet-schedule'].filter(step=>!common.includes(step)).sort());
+ for(const step of new Set([...history.matchAll(/stage='([^']+)'/g)].map(match=>match[1])))assert.ok(step==='setup'||contract.cases['action-history'].includes(step));
+ for(const getter of ['windowsServiceActionsFailureStage','windowsServiceActionHistoryFailureStage','windowsUpdateJobsFailureStage','windowsUpdateRetirementFailureStage','windowsUpdateScheduleFailureStage','windowsFleetUpdateScheduleFailureStep','windowsSoftwareJobsFailureStage'])assert.ok(runner.includes('diagnostic.track('+getter+')'));
+ assert.equal((runner.match(/120000/g)||[]).length,1);assert.ok(runner.includes('firstFailure??diagnostic.report()'));assert.ok(runner.includes('process.exitCode=passed?0:1'));
+ assert.doesNotMatch(runner,/catch\s*\([^)]+\)|setDefaultTimeout|ignoreHTTPSErrors|executablePath/);
+ assert.ok(runner.includes("diagnostic.begin('runner',null,null,'report')"));assert.ok(runner.includes("bootstrap('imports',()=>import("));assert.ok(runner.includes('TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'));
+});
+
+// Full compiled App and real intercepted API fixture, no browser or listener.
+// This test proves strict selector cardinality only, never layout or screenshots.
+test('frozen worklist heading stays unique with the nested cached-triage heading in EN/DE',async()=>{
+ const {createRequire}=await import('node:module'),path=await import('node:path');
+ const require=createRequire(new URL('../../web/package.json',import.meta.url)),{JSDOM}=require('jsdom');
+ const {compile}=await import('../../web/scripts/capture-linux-cve-update-review.mjs');
+ const {createWindowsUpdateJobsFixture,windowsUpdateJobsRoute,windowsUpdateJobsOrigin,windowsUpdateWorklistFrozenHeadingSelector,exerciseWindowsUpdateJobs}=await import('./windows-update-jobs-browser.mjs');
+ const root=path.dirname(require.resolve('playwright-core/package.json')),{source}=require(path.join(root,'lib/generated/injectedScriptSource.js'));
+ const {Locator}=require(path.join(root,'lib/client/locator.js')),{getByRoleSelector}=require(path.join(root,'lib/utils/isomorphic/locatorUtils.js'));
+ const compiled=await compile();assert.ok(exerciseWindowsUpdateJobs.toString().includes('worklist.locator(windowsUpdateWorklistFrozenHeadingSelector)'));
+ for(const locale of ['en','de']){
+  const fixture=createWindowsUpdateJobsFixture(),state={blocked:[],external:[]},errors=[];
+  const dom=new JSDOM(compiled.assets.get('/').body,{url:windowsUpdateJobsOrigin+'/#/devices',runScripts:'outside-only',pretendToBeVisual:true});
+  try{
+   const window=dom.window;Object.assign(window,{TextEncoder,TextDecoder,structuredClone});window.localStorage.setItem('tracebolt.locale',locale);
+   const NativeDate=window.Date,now=Date.parse(fixture.now)+100;window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};window.performance.now=()=>100;
+   window.addEventListener('error',event=>{errors.push(event.error?.name);event.preventDefault()});
+   const handler=windowsUpdateJobsRoute({base:windowsUpdateJobsOrigin,fixture,state,asset:async(route,name)=>{const asset=compiled.assets.get(name);assert.ok(asset);await route.fulfill({status:200,...asset})}});
+   window.fetch=async(input,options={})=>{let response;const headers=Object.fromEntries(new Headers(options.headers));if((options.method??'GET')!=='GET')headers.origin=windowsUpdateJobsOrigin;
+    await handler({request:()=>({url:()=>new URL(String(input),window.location).href,method:()=>options.method??'GET',postData:()=>options.body??null,headers:()=>headers}),fulfill:value=>{response=new Response(value.body,{status:value.status,headers:{'Content-Type':value.contentType}})},abort:()=>{throw new Error('Inert fixture blocked a request')},continue:()=>{throw new Error('Network forbidden')}});return response;};
+   const computed=window.getComputedStyle.bind(window);window.getComputedStyle=element=>computed(element);
+   window.eval(compiled.assets.get('/app.js').body.toString());window.module={exports:{}};window.eval(source+'\nthis.injected=new InjectedScript(window,{isUnderTest:true,sdkLanguage:"javascript",testIdAttributeName:"data-testid",stableRafCount:1,browserName:"chromium",customEngines:[]});');
+   const frame={_platform:{}},query=locator=>window.injected.querySelectorAll(window.injected.parseSelector(locator._selector),window.document);
+   const worklist=new Locator(frame,getByRoleSelector('region',{name:locale==='de'?'Windows-Updatearbeitsliste':'Windows update worklist',exact:true}));
+   const eventually=async locator=>{for(let i=0;i<100;i++){const found=query(locator);if(found.length===1)return found[0];await new Promise(resolve=>setTimeout(resolve,10))}assert.fail('Expected unique production fixture element')};
+   (await eventually(worklist.getByRole('button',{name:locale==='de'?'Windows-Updatearbeitsliste':'Windows update worklist',exact:true}))).click();
+   for(const device of [fixture.device,fixture.secondDevice]){const checkbox=await eventually(worklist.getByRole('checkbox',{name:new RegExp(device.name)}));assert.equal(checkbox.checked,false);checkbox.click();await new Promise(resolve=>setTimeout(resolve,0));}
+   (await eventually(worklist.getByRole('button',{name:locale==='de'?'Geräteauswahl festhalten':'Freeze device selection',exact:true}))).click();
+   await eventually(worklist.locator('.windows-fleet-update-triage'));
+   assert.equal(query(worklist.locator('.windows-fleet-update-heading')).length,2,'Original broad locator must reproduce strict-mode ambiguity');
+   const headings=query(worklist.locator(windowsUpdateWorklistFrozenHeadingSelector));assert.equal(headings.length,1);assert.ok(headings[0].textContent.includes((locale==='de'?'Festgehaltene Auswahl':'Frozen selection')+' · 2'));
+   assert.equal(query(worklist.locator('.windows-fleet-update-list > li')).length,2);assert.deepEqual(state,{blocked:[],external:[]});assert.deepEqual(errors,[]);assert.equal(fixture.updateCounts.request,0);assert.deepEqual(fixture.secondPostAttempts,{request:0,preview:0,approve:0,other:0});
+  }finally{dom.window.close();}
+ }
+});

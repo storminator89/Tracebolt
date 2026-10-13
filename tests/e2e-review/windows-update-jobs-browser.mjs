@@ -8,6 +8,7 @@ const require=createRequire(new URL('../../web/package.json',import.meta.url));
 const built=require('esbuild').buildSync({stdin:{contents:"export {validUpdateJobView,validUpdateJobHistory} from './windows-update-jobs-types';",resolveDir:fileURLToPath(new URL('../../web/src/',import.meta.url)),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
 const {validUpdateJobView,validUpdateJobHistory}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 export const windowsUpdateJobsOrigin='https://windows-update-jobs.invalid';
+export const windowsUpdateWorklistFrozenHeadingSelector='.windows-fleet-update-content > .windows-fleet-update-heading';
 export const windowsUpdateJobsCaseName='Synthetic Windows update readiness, explicit approval and saved result in the compiled UI';
 export const windowsUpdateJobsDisclosure='Entirely intercepted invented TLS-session, cached update, readiness and result metadata in the compiled UI. Manual unchecked approval and saved readback only in an in-memory fixture. No actual TLS authority, host grant, elevated executor, native WUA, real manager write, download, EULA acceptance, installation or reboot. Source/browser evidence is not native patching.';
 const stages=new Set(['setup','document','request','readiness','review','approve','saved-result','reload','worklist','complete']);let stage='setup';
@@ -117,7 +118,7 @@ export async function exerciseWindowsUpdateJobs({page,expect,base,fixture,locale
  await title.click();const choices=worklist.getByRole('group',{name:de?'Geräte auswählen':'Select devices',exact:true}),freeze=worklist.getByRole('button',{name:de?'Geräteauswahl festhalten':'Freeze device selection',exact:true});
  await expect(choices.getByRole('checkbox')).toHaveCount(2);await expect(freeze).toBeDisabled();
  for(const device of [fixture.device,fixture.secondDevice]){const choice=choices.getByRole('checkbox',{name:new RegExp(device.name)});await expect(choice).not.toBeChecked();await choice.check();}
- await freeze.click();await expect(choices).toHaveCount(0);await expect(worklist.locator('.windows-fleet-update-heading')).toContainText((de?'Festgehaltene Auswahl':'Frozen selection')+' · 2');
+ await freeze.click();await expect(choices).toHaveCount(0);await expect(worklist.locator(windowsUpdateWorklistFrozenHeadingSelector)).toContainText((de?'Festgehaltene Auswahl':'Frozen selection')+' · 2');
  const rows=worklist.locator('.windows-fleet-update-list > li'),firstRow=rows.filter({hasText:fixture.device.name}),secondRow=rows.filter({hasText:fixture.secondDevice.name}),firstSummary=firstRow.locator('.windows-fleet-update-row'),secondSummary=secondRow.locator('.windows-fleet-update-row');
  const openDevice=(row,device)=>row.getByRole('button',{name:(de?'Gerät öffnen: ':'Open device: ')+device.name,exact:true}),closeDevice=(row,device)=>row.getByRole('button',{name:(de?'Gerät schließen: ':'Close device: ')+device.name,exact:true});
  const resultText=de?'WUA hat Erfolg gemeldet':'WUA reported success',pendingText=de?'Abgeholt; Installation unbestätigt':'Claimed; installation unconfirmed';

@@ -873,6 +873,260 @@ class LANFailureTests(unittest.TestCase):
             validate.assert_not_called()
 
 
+class WindowsActionFailureTests(unittest.TestCase):
+    TOKEN = 'b' * 32
+    MARKER = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD\n::error::injected'
+
+    def report(self, case=None, step=None, locale='en', width=1440):
+        cases = p.windows_action_diagnostic_contract()
+        case = case or next(name for name in cases if name != 'runner')
+        step = step or cases[case][0]
+        return {'schemaVersion': p.WINDOWS_ACTION_DIAGNOSTICS_SCHEMA, 'sourceSha': SHA,
+                'invocation': self.TOKEN, 'status': 'FAIL', 'browserAcceptance': False,
+                'nativeAcceptance': False, 'case': case, 'step': step, 'locale': locale, 'width': width}
+
+    def target(self, root):
+        target = root / 'artifacts/review/windows-service-actions-failure.json'
+        target.parent.mkdir(parents=True)
+        return target
+
+    def test_all_closed_source_coordinates_and_viewports(self):
+        cases = p.windows_action_diagnostic_contract()
+        source = ROOT / 'tests/e2e-review/windows-service-actions-diagnostics.json'
+        self.assertEqual(p.WINDOWS_ACTION_DIAGNOSTICS_SOURCE, source)
+        self.assertEqual(cases, json.loads(source.read_bytes())['cases'])
+        self.assertIn('service-actions', cases)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = self.target(root)
+            with patch.object(p, 'ROOT', root):
+                for case, steps in cases.items():
+                    for step in steps:
+                        viewports = [(None, None)] if case == 'runner' else [
+                            (locale, width) for locale in ['en', 'de'] for width in [1440, 390]]
+                        for locale, width in viewports:
+                            target.write_text(json.dumps(self.report(case, step, locale, width)))
+                            with self.subTest(case=case, step=step, locale=locale, width=width):
+                                expected = 'case=%s step=%s locale=%s width=%s' % (case, step, locale or '-', width or '-')
+                                self.assertEqual(p.windows_action_failure_location(SHA, self.TOKEN), expected)
+
+    def test_javascript_producer_and_python_projection_share_the_source_vocabulary(self):
+        cases = p.windows_action_diagnostic_contract()
+        helper = (ROOT / 'tests/e2e-review/windows-service-actions-diagnostics.mjs').read_text()
+        runner = (ROOT / p.FLOWS['windows-service-actions']).read_text()
+        self.assertIn("import contract from './windows-service-actions-diagnostics.json' with {type:'json'}", helper)
+        self.assertIn("import {createWindowsActionDiagnostic} from './windows-service-actions-diagnostics.mjs'", runner)
+        self.assertIn('process.env.TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN', runner)
+        self.assertIn("'windows-service-actions-failure.json'", runner)
+        fixtures = {
+            'service-actions': ('windows-service-actions-browser.mjs', 'exerciseWindowsServiceActions', 'windowsServiceActionsFailureStage', 'stage'),
+            'action-history': ('windows-service-action-history-browser.mjs', 'exerciseWindowsServiceActionHistory', 'windowsServiceActionHistoryFailureStage', 'stage'),
+            'update-jobs': ('windows-update-jobs-browser.mjs', 'exerciseWindowsUpdateJobs', 'windowsUpdateJobsFailureStage', 'stage'),
+            'update-retirement': ('windows-update-retirement-browser.mjs', 'exerciseWindowsUpdateRetirement', 'windowsUpdateRetirementFailureStage', 'stage'),
+            'update-schedule': ('windows-update-schedule-browser.mjs', 'exerciseWindowsUpdateSchedule', 'windowsUpdateScheduleFailureStage', 'stage'),
+            'background-schedule': ('windows-update-schedule-browser.mjs', 'exerciseWindowsUpdateSchedule', 'windowsUpdateScheduleFailureStage', 'stage'),
+            'fleet-schedule': ('windows-update-schedule-browser.mjs', 'exerciseWindowsFleetUpdateSchedule', 'windowsFleetUpdateScheduleFailureStep', 'fleetStep'),
+            'software-jobs': ('windows-software-jobs-browser.mjs', 'exerciseWindowsSoftwareJobs', 'windowsSoftwareJobsFailureStage', 'stage'),
+        }
+        self.assertEqual(set(cases), {'runner'} | set(fixtures))
+        wrappers = {'fixture', 'context', 'guards', 'close', 'screenshot'}
+        for case, (filename, function, getter, variable) in fixtures.items():
+            with self.subTest(case=case):
+                source = (ROOT / 'tests/e2e-review' / filename).read_text()
+                body = source.split('export async function ' + function + '(', 1)[1].split('\nexport ', 1)[0]
+                stages = set(re.findall(r'\b' + variable + r"\s*=\s*'([^']+)'", body))
+                self.assertTrue(stages)
+                self.assertEqual(set(cases[case]), wrappers | stages)
+                self.assertIn("'" + case + "'", runner)
+                self.assertIn('diagnostic.track(' + getter + ')', runner)
+                self.assertIn('await ' + function + '(', runner)
+                self.assertIn('export const ' + getter + '=', source)
+        runner_steps = set(re.findall(r"diagnostic.begin\('runner',null,null,'([^']+)'\)", runner))
+        runner_steps.update(re.findall(r"await bootstrap\('([^']+)'", runner))
+        runner_steps.update(re.findall(r"diagnostic.set\('([^']+)'\)", runner.split("for(const locale of ['en','de'])", 1)[0]))
+        self.assertLessEqual({'setup'} | runner_steps, set(cases['runner']))
+
+    def test_rejects_noncanonical_types_shapes_coordinates_and_private_values(self):
+        good = self.report()
+        cases = []
+        for key in good:
+            for value in [None, True, False, 0, 1, 1440.0, [], {}, self.MARKER]:
+                if type(value) is type(good[key]) and value == good[key]:
+                    continue
+                cases.append((key, {**good, key: value}))
+            missing = dict(good); del missing[key]; cases.append(('missing-' + key, missing))
+        for key, value in [('schemaVersion', 'tracebolt.windows-action-browser-failure.v2'),
+                           ('sourceSha', 'c' * 40), ('sourceSha', SHA.upper()), ('sourceSha', SHA + '\n'),
+                           ('invocation', 'c' * 32), ('invocation', self.TOKEN.upper()),
+                           ('invocation', self.TOKEN + '\n'), ('status', 'PASS'), ('status', 'fail'),
+                           ('case', 'unknown'), ('case', good['case'] + '\n'), ('step', 'unknown'),
+                           ('step', good['step'] + '\n'), ('locale', 'fr'), ('locale', 'EN'), ('locale', 'en\n'),
+                           ('width', 1440.0), ('width', 390.0), ('width', 0), ('width', 1441), ('width', '1440'),
+                           ('extra', self.MARKER), ('error', {'raw': self.MARKER})]:
+            cases.append((key, {**good, key: value}))
+        runner = self.report('runner', locale=None, width=None)
+        for locale, width in [('en', 1440), ('en', None), (None, 390), ('', None), (None, False)]:
+            cases.append(('runner-viewport', {**runner, 'locale': locale, 'width': width}))
+        vocabulary = p.windows_action_diagnostic_contract()
+        for case, steps in vocabulary.items():
+            for other, other_steps in vocabulary.items():
+                if case == other: continue
+                for step in set(other_steps) - set(steps):
+                    base = runner if case == 'runner' else good
+                    cases.append(('foreign-step', {**base, 'case': case, 'step': step}))
+        cases.extend(('root', value) for value in [None, [], True, 1, self.MARKER])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = self.target(root)
+            with patch.object(p, 'ROOT', root):
+                for index, (label, value) in enumerate(cases):
+                    target.write_text(json.dumps(value))
+                    with self.subTest(index=index, field=label):
+                        self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                target.write_text(json.dumps(good))
+                for sha in [None, True, 1, [], {}, '', SHA.upper(), SHA + '\n', 'c' * 40, self.MARKER]:
+                    self.assertIsNone(p.windows_action_failure_location(sha, self.TOKEN))
+                for token in [None, True, 1, [], {}, '', self.TOKEN.upper(), self.TOKEN + '\n', 'c' * 32, self.MARKER]:
+                    self.assertIsNone(p.windows_action_failure_location(SHA, token))
+
+    def test_strict_json_size_regular_file_and_nofollow_guards(self):
+        report = self.report(); good = json.dumps(report).encode()
+        raw_values = [b'', b'{', b'\xff', b'[]', good + b'{}', b' ' * 4097,
+                      good.replace(b'1440', b'NaN'), good.replace(b'1440', b'Infinity'),
+                      good.replace(b'1440', b'-Infinity')]
+        for key, value in report.items():
+            member = json.dumps(key).encode() + b': ' + json.dumps(value).encode()
+            raw_values.append(good.replace(member, member + b', ' + member, 1))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = self.target(root)
+            with patch.object(p, 'ROOT', root):
+                self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                for raw in raw_values:
+                    target.write_bytes(raw)
+                    self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                target.write_bytes(good + b' ' * (4096 - len(good)))
+                self.assertIsNotNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                target.write_bytes(good + b' ' * (4097 - len(good)))
+                self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                # Size growth after fstat cannot escape the bounded read guard.
+                with patch.object(p.os, 'fstat', return_value=SimpleNamespace(st_mode=0o100600, st_size=1)):
+                    self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                target.unlink(); target.mkdir()
+                self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN)); target.rmdir()
+                backing = root / 'backing.json'; backing.write_bytes(good)
+                target.symlink_to(backing)
+                self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN)); target.unlink()
+                target.parent.rmdir(); target.parent.symlink_to(root, target_is_directory=True)
+                (root / target.name).write_bytes(good)
+                self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                with patch.object(p.reporter, 'open_log', side_effect=PermissionError(self.MARKER)):
+                    self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+
+    def test_contract_is_source_relative_bounded_and_fail_closed(self):
+        good = self.report()
+        source_contract = p.WINDOWS_ACTION_DIAGNOSTICS_SOURCE
+        contract = json.loads(source_contract.read_bytes())
+        malformed = [None, [], {}, {**contract, 'schemaVersion': 1}, {**contract, 'extra': self.MARKER},
+                     {**contract, 'cases': {}}, {**contract, 'cases': []},
+                     {**contract, 'cases': {'private': ['step']}},
+                     {**contract, 'cases': {'runner': []}},
+                     {**contract, 'cases': {'runner': ['step', 'step']}},
+                     {**contract, 'cases': {'runner': [self.MARKER]}},
+                     {**contract, 'cases': {'runner': [True]}},
+                     {**contract, 'cases': {'runner': 'step'}},
+                     {**contract, 'cases': {'runner': ['step'], self.MARKER: ['step']}},
+                     {**contract, 'cases': {'runner': ['step'], 'other': ['x' * 65]}},
+                     {**contract, 'cases': {'runner': ['step'] * 129}},
+                     {**contract, 'cases': {'runner': ['step'], **{'case-%d' % i: ['step'] for i in range(32)}}}]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = self.target(root)
+            target.write_text(json.dumps(good))
+            forged = root / 'tests/e2e-review/windows-service-actions-diagnostics.json'
+            forged.parent.mkdir(parents=True)
+            forged.write_text(json.dumps({**contract, 'cases': {'runner': ['step'], 'forged': ['private']}}))
+            with patch.object(p, 'ROOT', root):
+                self.assertIsNotNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                target.write_text(json.dumps({**good, 'case': 'forged', 'step': 'private'}))
+                self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                target.write_text(json.dumps(good))
+                with patch.object(p, 'WINDOWS_ACTION_DIAGNOSTICS_SOURCE', forged):
+                    for value in malformed:
+                        forged.write_text(json.dumps(value))
+                        self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                    for raw in [b'{', b'\xff', b'x' * 16385,
+                                json.dumps(contract).replace('"cases":', '"cases": {}, "cases":').encode()]:
+                        forged.write_bytes(raw)
+                        self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                    forged.unlink()
+                    self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+                    forged.symlink_to(source_contract)
+                    self.assertIsNone(p.windows_action_failure_location(SHA, self.TOKEN))
+
+    def test_failure_projection_preserves_original_exception_and_never_validates_pass(self):
+        original = ValueError(self.MARKER)
+        plan = {'flows': ['windows-service-actions'], 'sha': SHA}
+        output = io.StringIO()
+        with patch.object(p, 'run', side_effect=[None, original]) as run, \
+             patch.object(p.secrets, 'token_hex', return_value=self.TOKEN) as token, \
+             patch.object(p, 'windows_action_failure_location', return_value='case=runner step=launch locale=- width=-') as location, \
+             patch.object(p, 'browser_report') as report, redirect_stdout(output):
+            with self.assertRaises(ValueError) as failure: p.browser_checks(plan)
+        self.assertIs(failure.exception, original)
+        token.assert_called_once_with(16)
+        location.assert_called_once_with(SHA, self.TOKEN)
+        self.assertEqual(run.call_args_list[1].kwargs['env']['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'], self.TOKEN)
+        self.assertEqual(run.call_count, 2); report.assert_not_called()
+        self.assertIn('FAIL Windows action location: case=runner step=launch locale=- width=-', output.getvalue())
+        self.assertNotIn(self.MARKER, output.getvalue()); self.assertNotIn(self.TOKEN, output.getvalue())
+        self.assertNotIn('PASS:', output.getvalue())
+
+    def test_real_projection_withholds_process_output_and_rejects_same_head_previous_invocation(self):
+        report = self.report()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = self.target(root)
+            def process(args, **kwargs):
+                kwargs['stdout'].write(self.MARKER.encode())
+                if args == ['node', p.FLOWS['windows-service-actions']]:
+                    if not target.exists():
+                        target.write_text(json.dumps({**report, 'invocation': kwargs['env']['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN']}))
+                    return SimpleNamespace(returncode=1)
+                return SimpleNamespace(returncode=0)
+            with patch.object(p, 'ROOT', root), patch.object(p.subprocess, 'run', side_effect=process), \
+                 patch.object(p.secrets, 'token_hex', side_effect=[self.TOKEN, 'c' * 32]), \
+                 patch.object(p, 'browser_report') as validate:
+                for index in range(2):
+                    output = io.StringIO()
+                    with redirect_stdout(output), self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                        p.browser_checks({'flows': ['windows-service-actions'], 'sha': SHA})
+                    self.assertIn('FAIL stage: browser-windows-service-actions', output.getvalue())
+                    self.assertEqual('FAIL Windows action location:' in output.getvalue(), index == 0)
+                    self.assertNotIn(self.MARKER, output.getvalue()); self.assertNotIn(self.TOKEN, output.getvalue())
+                    self.assertNotIn(SHA, output.getvalue()); self.assertNotIn('PASS:', output.getvalue())
+                validate.assert_not_called()
+
+    def test_diagnostics_skip_smoke_other_flows_success_and_evidence_validation(self):
+        for flow, failures, expected_tokens in [
+                ('windows-service-actions', [ValueError('smoke')], 0),
+                ('shell', [None, ValueError('other')], 0),
+                ('windows-service-actions', [None, None, ValueError('evidence')], 1)]:
+            with self.subTest(flow=flow, failures=len(failures)), \
+                 patch.object(p, 'run', side_effect=failures), patch.object(p.secrets, 'token_hex') as token, \
+                 patch.object(p, 'windows_action_failure_location') as location:
+                with self.assertRaises(ValueError): p.browser_checks({'flows': [flow], 'sha': SHA})
+                location.assert_not_called(); self.assertEqual(token.call_count, expected_tokens)
+        for flow in ['windows-service-actions', 'shell']:
+            with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report, \
+                 patch.object(p.secrets, 'token_hex', return_value=self.TOKEN) as token, \
+                 patch.object(p, 'windows_action_failure_location') as location, \
+                 patch.dict(os.environ, {'TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN': 'stale'}):
+                p.browser_checks({'flows': [flow], 'sha': SHA})
+            location.assert_not_called(); report.assert_called_once_with(flow, SHA)
+            if flow == 'windows-service-actions':
+                token.assert_called_once_with(16)
+                self.assertEqual(run.call_args_list[1].kwargs['env']['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'], self.TOKEN)
+            else:
+                token.assert_not_called()
+                self.assertNotIn('TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN', run.call_args_list[1].kwargs['env'])
+
+
 class VitestFailureTests(unittest.TestCase):
     def fixture(self, root, marker='PRIVATE_RAW_VALUE'):
         source = root / 'web/src/exact.test.tsx'; source.parent.mkdir(parents=True, exist_ok=True)
