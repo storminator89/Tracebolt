@@ -893,5 +893,321 @@ class DecoderTests(unittest.TestCase):
         self.assertFalse(p.validate_result(failed))
 
 
+class DiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        self.block_process = patch.object(p.subprocess, "Popen", side_effect=AssertionError("native execution forbidden"))
+        self.block_process.start()
+        self.addCleanup(self.block_process.stop)
+
+    assert_closed = GateTests.assert_closed
+
+    def failure(self, row=None, *, raw=None, index=1):
+        def modify(which, out, err, options):
+            if which == index:
+                out = raw if raw is not None else encode("ndjson" if index == 2 else "json", [row])
+            return out, err, options
+        world = World(modify)
+        result = world.execute()
+        self.assert_closed(result)
+        self.assertEqual(len(world.calls), index + 1)
+        self.assertTrue(all(child.waited for child in world.children))
+        query = result["queries"][index - 1]
+        self.assertEqual(query["fields"], {})
+        self.assertTrue(all(v is None for v in query["observations"].values()))
+        return result, query["diagnostic"]
+
+    def assert_no_metadata(self, diagnostic, code):
+        self.assertEqual(diagnostic, dict(p._diagnostic_template(), code=code))
+
+    def test_schema_version_is_explicit_and_old_shape_not_reinterpreted(self):
+        result = p.result_template()
+        self.assertEqual(result["schemaVersion"], 2)
+        result["schemaVersion"] = 1
+        self.assertFalse(p.validate_result(result))
+        for q in result["queries"]:
+            del q["diagnostic"]
+        self.assertFalse(p.validate_result(result))
+
+    def test_pass_and_inconclusive_do_not_use_failure_metadata(self):
+        passed = World().execute()
+        self.assertEqual(passed["status"], "passed")
+        for q in passed["queries"]:
+            self.assert_no_metadata(q["diagnostic"], "none")
+        def modify(index, out, err, options):
+            return (encode("ndjson" if index == 2 else "json", []) if index else out), err, options
+        result = World(modify).execute()
+        self.assertEqual(result["status"], "inconclusive_not_observed")
+        for q in result["queries"]:
+            self.assert_no_metadata(q["diagnostic"], "none")
+
+    def test_extra_keys_count_but_never_name_value_or_path(self):
+        for index in (1, 2):
+            row = rows()[0]
+            row["SENSITIVE_DYNAMIC_KEY /private/path"] = {"SENSITIVE_NESTED_NAME": "SENSITIVE_VALUE"}
+            row["SENSITIVE_SECOND_KEY"] = 17
+            result, d = self.failure(row, index=index)
+            self.assertEqual(result["reason"], "unsupported_schema")
+            self.assertEqual(d["code"], "extra_event_keys")
+            self.assertTrue(d["syntheticAttributionVerified"])
+            self.assertEqual(d["unknownKeyCount"], 2)
+            self.assertEqual(set(d["knownFieldTypes"]), set(rows()[0]))
+            self.assertEqual(d["knownFieldTypes"]["processImagePath"], "string")
+            self.assertEqual(d["knownFieldTypes"]["backtrace"], "object")
+
+    def test_all_exact_synthetic_messages_can_anchor_metadata(self):
+        for private in (False, True):
+            for row in rows(private=private):
+                row["SENSITIVE_UNKNOWN"] = None
+                _, d = self.failure(row)
+                self.assertTrue(d["syntheticAttributionVerified"])
+                self.assertEqual(d["unknownKeyCount"], 1)
+
+    def test_top_level_unknown_count_is_bounded_and_not_nested_count(self):
+        row = rows()[0]
+        for number in range(p.MAX_KEYS - len(row)):
+            row["SENSITIVE_KEY_" + str(number)] = {"SENSITIVE_NESTED": 1}
+        _, d = self.failure(row)
+        self.assertEqual(d["unknownKeyCount"], p.MAX_KEYS - len(rows()[0]))
+        self.assertEqual(len(d["knownFieldTypes"]) + d["unknownKeyCount"], p.MAX_KEYS)
+        row["SENSITIVE_OVERFLOW"] = 1
+        result, d = self.failure(row)
+        self.assertEqual(result["reason"], "key_limit")
+        self.assert_no_metadata(d, "none")
+
+    def test_missing_any_required_key_discloses_only_fixed_code(self):
+        for name in p.REQUIRED_FIELDS:
+            row = rows()[0]
+            del row[name]
+            row["SENSITIVE_UNKNOWN"] = "SENSITIVE_VALUE"
+            result, d = self.failure(row)
+            self.assertEqual(result["reason"], "unsupported_schema")
+            self.assert_no_metadata(d, "missing_required")
+
+    def test_inexact_attribution_cannot_disclose_metadata(self):
+        for name, value in (("subsystem", "SENSITIVE"), ("subsystem", None),
+                            ("category", "SENSITIVE"), ("processID", True), ("processID", 4101),
+                            ("eventMessage", p.PUBLIC_MESSAGE + "SENSITIVE"),
+                            ("eventMessage", []), ("eventMessage", None)):
+            row = rows()[0]
+            row[name] = value
+            row["SENSITIVE_UNKNOWN"] = "SENSITIVE_VALUE"
+            result, d = self.failure(row)
+            self.assertEqual(result["reason"], "unrelated_event")
+            self.assert_no_metadata(d, "attribution")
+
+    def test_invalid_or_out_of_window_timestamp_suppresses_metadata(self):
+        stamps = ("SENSITIVE", "2023-11-31 22:13:22.000000+0000", None, 17,
+                  rows(stamp=1700000007)[0]["timestamp"], rows(stamp=1699999998)[0]["timestamp"])
+        for stamp in stamps:
+            row = rows()[0]
+            row["timestamp"] = stamp
+            row["SENSITIVE_UNKNOWN"] = "SENSITIVE_VALUE"
+            result, d = self.failure(row)
+            self.assertEqual(result["reason"], "unsupported_schema")
+            self.assert_no_metadata(d, "extra_event_keys")
+
+    def test_types_are_closed_and_do_not_relax_acceptance(self):
+        for value, kind in ((False, "boolean"), ([], "array"), ({}, "object"), (17, "integer")):
+            row = rows()[0]
+            row["processImagePath"] = value
+            result, d = self.failure(row)
+            self.assertEqual(result["reason"], "unsupported_schema")
+            self.assertEqual(d["code"], "known_field_type")
+            self.assertTrue(d["syntheticAttributionVerified"])
+            self.assertEqual(d["unknownKeyCount"], 0)
+            self.assertEqual(d["knownFieldTypes"]["processImagePath"], kind)
+
+    def test_event_type_and_message_type_have_separate_fixed_codes(self):
+        for name, code in (("eventType", "event_type"), ("messageType", "message_type")):
+            for value, kind in (("SENSITIVE_LITERAL", "string"), (False, "boolean"), (None, "null")):
+                row = rows()[0]
+                row[name] = value
+                result, d = self.failure(row)
+                self.assertEqual(result["status"], "unsupported")
+                self.assertEqual(d["code"], code)
+                self.assertTrue(d["syntheticAttributionVerified"])
+                self.assertEqual(d["knownFieldTypes"][name], kind)
+
+    def test_backtrace_shapes_share_code_without_nested_names_or_values(self):
+        variants = ({"SENSITIVE_NESTED": []}, {"frames": False}, {"frames": [False]},
+                    {"frames": [{"imageOffset": 1, "imageUUID": "SENSITIVE", "SENSITIVE": 2}]},
+                    {"frames": [{"imageOffset": True, "imageUUID": "SENSITIVE"}]},
+                    {"frames": [{"imageOffset": 1, "imageUUID": None}]},
+                    {"frames": [] , "SENSITIVE": 1}, {"frames": [{}] * 65})
+        for backtrace in variants:
+            row = rows()[0]
+            row["backtrace"] = backtrace
+            result, d = self.failure(row)
+            self.assertEqual(result["reason"], "unsupported_schema")
+            self.assertEqual(d["code"], "backtrace_shape")
+            self.assertTrue(d["syntheticAttributionVerified"])
+            self.assertEqual(d["knownFieldTypes"]["backtrace"], "object")
+            self.assertEqual(d["unknownKeyCount"], 0)
+        # A later bad field must not erase the first backtrace branch's evidence.
+        row = rows()[0]
+        row["backtrace"] = {"SENSITIVE": []}
+        row["formatString"] = False
+        result, d = self.failure(row)
+        self.assertEqual(d["code"], "backtrace_shape")
+        self.assertEqual(d["knownFieldTypes"]["formatString"], "boolean")
+
+    def test_decoding_rejects_only_with_fixed_codes_before_attribution(self):
+        cases = ((b'[{"SENSITIVE":1,"SENSITIVE":2}]', "duplicate_keys"),
+                 (b'[{"SENSITIVE":"\\ud800"}]', "decode_json"),
+                 (b'[{"SENSITIVE":\xff}]', "decode_json"),
+                 (b'[{"SENSITIVE":NaN}]', "numeric_encoding"),
+                 (b'[{"SENSITIVE":1.5}]', "numeric_encoding"),
+                 (b'[{"SENSITIVE":]}]', "structural_json"),
+                 (b'[] SENSITIVE', "framing"))
+        for raw, code in cases:
+            _, d = self.failure(raw=raw)
+            self.assert_no_metadata(d, code)
+        row = rows()[0]
+        row["SENSITIVE_UNKNOWN"] = 1.5
+        _, d = self.failure(row)
+        self.assert_no_metadata(d, "numeric_encoding")
+
+    def test_empty_stdout_retains_framing_failure_without_event_metadata(self):
+        for index in (1, 2, 3):
+            result, d = self.failure(raw=b"", index=index)
+            self.assertEqual(result["reason"], "malformed_framing")
+            self.assertEqual(result["queries"][index - 1]["eventCount"], 0)
+            self.assert_no_metadata(d, "framing")
+
+    def test_projector_rechecks_attribution_independently(self):
+        events = p._Events(SUBSYSTEM, 4100, 1700000000, 1700000010, False)
+        for key in p.ATTRIBUTION_FIELDS:
+            row = rows()[0]
+            row[key] = "SENSITIVE_INEXACT"
+            row["SENSITIVE_UNKNOWN"] = 17
+            with self.assertRaises(p._Failure) as caught:
+                events.reject_schema(row, "extra_event_keys")
+            self.assert_no_metadata(caught.exception.diagnostic, "extra_event_keys")
+        events.negative = True
+        with self.assertRaises(p._Failure) as caught:
+            events.reject_schema(dict(rows()[0], SENSITIVE_UNKNOWN=17), "extra_event_keys")
+        self.assert_no_metadata(caught.exception.diagnostic, "extra_event_keys")
+
+    def test_terminal_failure_never_reuses_prior_event_metadata(self):
+        raw = encode("ndjson", rows(), terminal=False) + b'{"finished":false,"SENSITIVE":17}\n'
+        _, d = self.failure(raw=raw, index=2)
+        self.assert_no_metadata(d, "terminal_shape")
+
+    def test_later_unrelated_event_cannot_reuse_prior_attribution(self):
+        values = rows()
+        values[1]["eventMessage"] = "SENSITIVE_MESSAGE"
+        values[1]["SENSITIVE_UNKNOWN"] = 17
+        _, d = self.failure(raw=encode("json", values))
+        self.assert_no_metadata(d, "attribution")
+
+    def test_negative_query_has_no_event_metadata_even_for_exact_synthetic_row(self):
+        row = rows()[0]
+        row["SENSITIVE_UNKNOWN"] = 17
+        _, d = self.failure(row, index=3)
+        self.assert_no_metadata(d, "negative_event")
+
+    def test_timestamp_and_duplicate_failures_remain_fixed_only(self):
+        row = rows()[0]
+        row["timestamp"] = "SENSITIVE_TIME"
+        _, d = self.failure(row)
+        self.assert_no_metadata(d, "timestamp_shape")
+        _, d = self.failure(rows(stamp=1700000010)[0])
+        self.assert_no_metadata(d, "outside_window")
+        _, d = self.failure(raw=encode("json", [rows()[0], rows()[0]]))
+        self.assert_no_metadata(d, "duplicate_marker")
+
+    def test_cleanup_failure_clears_diagnostic_and_preserves_reap_truth(self):
+        def modify(index, out, err, options):
+            if index == 1:
+                row = rows()[0]
+                row["SENSITIVE_UNKNOWN"] = 17
+                out = encode("json", [row])
+                options["fail_reap"] = True
+            return out, err, options
+        result = World(modify).execute()
+        self.assert_closed(result)
+        q = result["queries"][0]
+        self.assertEqual(q["reason"], "reap_failed")
+        self.assertFalse(q["reaped"])
+        self.assert_no_metadata(q["diagnostic"], "none")
+
+    def test_cleanup_cancellation_clears_diagnostic(self):
+        original = Child.wait
+        interrupted = []
+        def wait(child, timeout):
+            if child.kind == "query" and not interrupted:
+                interrupted.append(True)
+                raise p._Cancelled()
+            return original(child, timeout)
+        row = rows()[0]
+        row["SENSITIVE_UNKNOWN"] = 17
+        with patch.object(Child, "wait", wait):
+            result, d = self.failure(row)
+        self.assertNotEqual(result["status"], "passed")
+        self.assertEqual(result["queries"][0]["reason"], "cancelled")
+        self.assert_no_metadata(d, "none")
+
+    def test_diagnostic_validator_rejects_arbitrary_shape_types_and_inferences(self):
+        row = rows()[0]
+        row["SENSITIVE_UNKNOWN"] = 17
+        base, _ = self.failure(row)
+        changes = (("code", "SENSITIVE_CODE"), ("code", []), ("code", "none"),
+                   ("code", "missing_required"), ("syntheticAttributionVerified", 1),
+                   ("syntheticAttributionVerified", False), ("unknownKeyCount", True),
+                   ("unknownKeyCount", -1), ("unknownKeyCount", p.MAX_KEYS + 1),
+                   ("unknownKeyCount", p.MAX_KEYS), ("unknownKeyCount", None),
+                   ("unknownKeyCount", 0), ("knownFieldTypes", {"SENSITIVE": "string"}))
+        for key, value in changes:
+            altered = copy.deepcopy(base)
+            altered["queries"][0]["diagnostic"][key] = value
+            self.assertFalse(p.validate_result(altered), key)
+        for key, value in (("SENSITIVE_FIELD", "string"), ("source", "SENSITIVE_TYPE"),
+                           ("processID", "boolean"), ("timestamp", "integer")):
+            altered = copy.deepcopy(base)
+            altered["queries"][0]["diagnostic"]["knownFieldTypes"][key] = value
+            self.assertFalse(p.validate_result(altered), key)
+        for key in p.REQUIRED_FIELDS:
+            altered = copy.deepcopy(base)
+            del altered["queries"][0]["diagnostic"]["knownFieldTypes"][key]
+            self.assertFalse(p.validate_result(altered), key)
+        altered = copy.deepcopy(base)
+        altered["queries"][0]["diagnostic"]["raw"] = "SENSITIVE"
+        self.assertFalse(p.validate_result(altered))
+        altered = copy.deepcopy(base)
+        altered["queries"][0]["status"] = "passed"
+        self.assertFalse(p.validate_result(altered))
+        altered = copy.deepcopy(base)
+        altered["queries"][0]["eventCount"] = 0
+        self.assertFalse(p.validate_result(altered))
+        passed = World().execute()
+        passed["queries"][0]["diagnostic"] = base["queries"][0]["diagnostic"]
+        self.assertFalse(p.validate_result(passed))
+
+    def test_failure_metadata_cannot_be_attached_to_fixed_only_codes(self):
+        row = rows()[0]
+        row["SENSITIVE_UNKNOWN"] = 17
+        base, _ = self.failure(row)
+        for code, reason in p.DIAGNOSTIC_REASONS.items():
+            if code in p.ATTRIBUTED_SCHEMA_CODES:
+                continue
+            altered = copy.deepcopy(base)
+            q = altered["queries"][0]
+            q["diagnostic"]["code"] = code
+            q["reason"] = reason
+            q["status"] = "unsupported" if reason == "unsupported_schema" else "failed"
+            self.assertFalse(p.validate_result(altered), code)
+
+    def test_diagnostic_report_remains_below_export_budget(self):
+        row = rows()[0]
+        for name, kind in p.FIELD_TYPES.items():
+            if name not in row:
+                row[name] = 1 if kind == "integer" else "SENSITIVE_KNOWN_VALUE"
+        for number in range(p.MAX_KEYS - len(row)):
+            row["SENSITIVE_UNKNOWN_" + str(number)] = "SENSITIVE_VALUE"
+        result, _ = self.failure(row)
+        self.assertLess(len(json.dumps(result, ensure_ascii=True).encode("ascii")), 65536)
+        self.assertEqual(set(result["queries"][0]["diagnostic"]["knownFieldTypes"]), set(p.FIELD_TYPES))
+
+
 if __name__ == "__main__":
     unittest.main()

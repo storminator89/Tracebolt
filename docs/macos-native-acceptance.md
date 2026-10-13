@@ -1,8 +1,11 @@
 # macOS manual native evidence candidate
 
-**Source-only, default-off, not yet approved or executed.** This harness is not a
-Tracebolt agent, production log adapter, host grant, installation, release or
-proof of normal non-admin access. Existing fixture workflows remain unchanged.
+**Source candidate, default-off, not production acceptance.** The first separately
+approved native run is recorded in [2026-10-13 evidence](macos-native-evidence-20261013.md).
+It does not authorize another run. The version-2 diagnostic change below is
+source-only and has not been executed natively. This harness is not a Tracebolt
+agent, production log adapter, host grant, installation, release or proof of
+normal non-admin access. Existing fixture workflows remain unchanged.
 Publishing or merging these files does not authorize a dispatch. Independently
 review the exact assembled commit/tree and source digest, then obtain separate
 approval of the selected gates, two hosts and public evidence upload before a run.
@@ -75,8 +78,9 @@ the clang executable hash and numeric version, numeric SDK version and
 `SDKSettings.json` hash; paths and full version text are discarded. It compiles
 the reviewed emitter with `-O0 -Wall -Wextra -Werror`, explicit selected
 `-isysroot`, and a fixed task-owned output path. No install, signing identity or
-entitlement is involved. Missing compiler/SDK blocks preparation. This source
-slice has not run that compiler. Toolchain/compiler binary hashing allows
+entitlement is involved. Missing compiler/SDK blocks preparation. The new
+diagnostic revision has not run that compiler; first-run preparation is recorded
+separately. Toolchain/compiler binary hashing allows
 256 MiB in five seconds; fixed OS executable hashes allow 32 MiB in five seconds.
 SDK settings hashing allows 1 MiB in five seconds.
 
@@ -163,6 +167,75 @@ All expected messages in both positive formats and a complete empty negative
 query are required. Private-canary visibility is a sample observation, never a
 general privacy/redaction guarantee. Boundary inclusivity, retention, broad query
 performance, non-admin visibility and a production adapter remain unproved.
+
+### Source-only rejection diagnostics (synthetic result version 2)
+
+The nested `syntheticLog.schemaVersion` is explicitly **2**. Its query rows add
+one closed `diagnostic` object; the supervisor report version is unchanged.
+Version-1 reports remain immutable first-run evidence and must be interpreted
+with their original reviewed validator. They are not rewritten or silently
+accepted as version 2. The first run established only `unsupported_schema` on
+one decoded object per architecture; it did not identify the missing, extra or
+mismatched field, its name, type or value.
+
+`diagnostic.code` is one fixed source constant: `none`, `duplicate_keys`,
+`structural_json`, `decode_json`, `numeric_encoding`, `object_shape`, `framing`,
+`terminal_shape`, `missing_required`, `extra_event_keys`, `event_type`,
+`message_type`, `known_field_type`, `backtrace_shape`, `attribution`,
+`negative_event`, `duplicate_marker`, `timestamp_shape` or `outside_window`.
+Codes distinguish parser branches without copying native text. Existing failure
+reasons, including literal `unsupported_schema`, remain authoritative. Fixed
+limit reasons continue unchanged, with `code: none`. A code is not evidence that
+a rejected event or its schema was accepted.
+
+Event-derived diagnostic metadata is available only on a positive query's
+rejected event after the exact fresh subsystem, `schema` category, owned emitter
+PID, one of the exact fixed synthetic messages, and valid timestamp inside the
+original fixed window have all been verified. Only then can
+`syntheticAttributionVerified` be true, `knownFieldTypes` contain present names
+from the existing `FIELD_TYPES` allowlist with closed JSON type labels, and
+`unknownKeyCount` contain a 0–64 top-level count. Known plus unknown keys cannot
+exceed 64. Unknown names, nested names, values, paths, identifiers, message text
+and raw bytes are never copied. No candidate field names are added to either
+the accepted schema or the diagnostic allowlist. Nested backtrace rejection gets
+only its fixed code plus eligible top-level metadata, never a nested projection.
+
+Missing any required field, inexact attribution, invalid/out-of-window timestamp,
+decode/framing/terminal failure, negative-query events and duplicate markers
+produce no event-derived diagnostic metadata: false attribution flag, empty
+known-field map, null unknown-key count. Schema failures retain their original
+precedence even if a timestamp also fails; timestamp checking is an additional
+disclosure guard, not a reason to accept an unknown schema. Failed-query success
+fields and observations remain empty. Cleanup cancellation or unproven query
+reap clears its diagnostic. Strict output validation binds codes to failure
+reason/status and allows no diagnostic to establish success.
+
+This change does not alter the three fixed query forms, matching rules, native
+bounds, cancellation, emitter, installed-manual pin, configuration guard, stdout
+handling or pass criteria. Inert parser and fake-process tests are source checks,
+not evidence about Apple schema or native access.
+
+### Proposed separately approved diagnostic repeat
+
+No new native workflow is created and no dispatch or rerun is authorized by this text.
+After review of the assembled new commit/tree/source digest, the narrow proposed
+scope is one **new** manual first-attempt dispatch of the existing workflow with
+`gate_a: false` and `gate_b: true`, on the same standard GitHub-hosted `macos-15`
+ARM64 and `macos-15-intel` X64 labels. Gate A's inventory reads are not repeated.
+Each host compiles the unchanged emitter under the same preparation rules,
+writes its same three synthetic messages once, and runs up to the original three
+fixed queries, stopping on the first failure. There is no re-emission, query
+retry, time widening, schema relaxation or host privilege change.
+
+The requested additional public evidence is only the version-2 rejection codes
+and attribution/window-gated metadata described above, within the same one
+strict JSON report per architecture, 64-KiB limit and 14-day public Actions
+artifact retention. The original report/provenance, identity metadata, fixed
+manual/configuration checks, bounds and cleanup scope remain as documented.
+Fresh execution and the additional metadata disclosure require explicit approval
+after source review; the failed first run and its version-1 artifacts are retained
+unchanged. The review must provide the final exact commit and source digest,
+which cannot be specified before the complete candidate is assembled.
 
 ## Environment, public output and cleanup
 

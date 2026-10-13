@@ -122,6 +122,13 @@ expiry are bounded defaults pending native performance acceptance. Full, partial
 denied and unknown sources remain separate from fresh/stale/expired data age.
 The compact English/German UI labels each source and its limitations explicitly.
 
+The first separately approved [native collector/log probe](macos-native-evidence-20261013.md)
+ran on standard ARM64 and Intel macOS 15.7.9 runners. Hardware, receipt IDs and
+process snapshots passed; both interface-family parsers rejected metadata, and
+the first synthetic log query rejected its event schema. Both jobs failed with
+bounded metadata-only evidence and verified cleanup. This partial native result
+does not establish foreground endpoint enrollment/reporting or a release.
+
 Only the distinct fresh `--macos-read-inventory` enrollment path can create this
 scope. It requires typed local acknowledgement before keys, state or network, a
 new identity and the independent protected inventory used/checkpoint/ready state.
@@ -141,8 +148,9 @@ runtime composition, not by broader collection or authority.
 The [bounded log-window contract](macos-log-window-contract.md) prepares canonical
 internal requests and projections with synthetic fixtures only. It adds no Apple
 raw-format parser, native provider, content grant, runtime route or UI. Actual
-Apple flags/schema and visibility under the intended non-admin identity remain
-unverified; log collection remains unavailable.
+Apple schema acceptance and visibility under the intended non-admin identity
+remain unverified; log collection remains unavailable. The separate synthetic
+native probe rejected its first event schema; it did not activate this contract.
 
 ## Remaining scopes and native gates
 
