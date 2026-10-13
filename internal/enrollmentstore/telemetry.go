@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"localrmm/internal/macosinventorywire"
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
@@ -179,10 +181,17 @@ type Observation struct {
 
 // LatestObservations is an operator-side inspection result. Receipt timestamps
 // are historical facts and must not be presented as evidence of a live service.
+// MacOSInventoryContact contains historical accepted timestamps only, never
+// inventory rows, source counts, labels, addresses or inferred health.
+type MacOSInventoryContact struct {
+	CollectedAt time.Time
+	ReceivedAt  time.Time
+}
 type DeviceView struct {
-	Snapshot    enrollmentstate.Snapshot
-	Observation *Observation
-	Renewal     *RenewalView
+	MacOSInventoryContact *MacOSInventoryContact
+	Snapshot              enrollmentstate.Snapshot
+	Observation           *Observation
+	Renewal               *RenewalView
 }
 
 // DeviceViews joins identity state and current observation in one validated
@@ -202,6 +211,19 @@ func (s *Store) DeviceViews(ctx context.Context) ([]DeviceView, error) {
 					renewal.Status = "revoked"
 				}
 				view.Renewal = &renewal
+			}
+			if ok && c.MacOSInventoryInitialized {
+				record, err := readMacOSInventoryRecord(ctx, t, snapshot.InvitationID)
+				if err != nil {
+					return err
+				}
+				if record != nil && record.Latest != nil {
+					var receipt macosinventorywire.Receipt
+					if json.Unmarshal(record.Latest.Receipt, &receipt) != nil {
+						return ErrStorage
+					}
+					view.MacOSInventoryContact = &MacOSInventoryContact{CollectedAt: record.Latest.CollectedAt, ReceivedAt: receipt.ReceivedAt}
+				}
 			}
 			if !ok || len(c.Frame) == 0 {
 				out = append(out, view)

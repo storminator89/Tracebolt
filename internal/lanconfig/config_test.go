@@ -168,3 +168,27 @@ func TestCoordinatedWindowsMutationActivationKeepsBothReferences(t *testing.T) {
 		t.Fatal("unrelated activation field changed")
 	}
 }
+
+func TestMacOSInventoryConfigurationDefaultOffTLSOnly(t *testing.T) {
+	c := Config{SchemaVersion: SchemaVersion, Profile: TLS, OperatorListen: "127.0.0.1:8080", AgentListen: "127.0.0.1:8081", OperatorOrigin: "https://manager.invalid:8080", AgentOrigin: "https://manager.invalid:8081", TLSCertificateFile: "/tmp/cert", TLSPrivateKeyFile: "/tmp/key", AgentClientCAFile: "/tmp/ca", OperatorAuthFile: "/tmp/auth", StateDirectory: "/tmp/state", WebDirectory: "/tmp/web"}
+	before, _ := json.Marshal(c)
+	if c.Validate() != nil || c.MacOSInventoryEnabled || strings.Contains(string(before), "macosInventoryEnabled") {
+		t.Fatal("inventory defaults changed")
+	}
+	c.MacOSInventoryEnabled = true
+	if c.Validate() != nil {
+		t.Fatal("explicit TLS inventory rejected")
+	}
+	c.Profile = HTTPTest
+	c.OperatorOrigin = "http://manager.invalid:8080"
+	c.AgentOrigin = "http://manager.invalid:8081"
+	c.TLSCertificateFile, c.TLSPrivateKeyFile = "", ""
+	c.InsecureHTTPAcknowledged = true
+	if c.Validate() == nil {
+		t.Fatal("plaintext inventory admitted")
+	}
+	c.MacOSInventoryEnabled = false
+	if c.Validate() != nil {
+		t.Fatal("historical HTTP fixture changed")
+	}
+}

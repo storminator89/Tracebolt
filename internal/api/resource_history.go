@@ -54,6 +54,9 @@ func (h *operatorHandler) resourceHistory(w http.ResponseWriter, r *http.Request
 	if h.macosEnrollment != nil {
 		sources = append(sources, h.macosEnrollment.enrollment)
 	}
+	if h.macosInventoryEnrollment != nil {
+		sources = append(sources, h.macosInventoryEnrollment.enrollment)
+	}
 	var source *enrollmentservice.Service
 	var view enrollmentstore.ResourceHistoryView
 	for _, candidate := range sources {

@@ -77,11 +77,11 @@ func validOrigin(s, profile string) bool {
 }
 
 func validBinding(b Binding) bool {
-	return validID(b.InstanceID, "manager") && (b.Profile == "tls" || b.Profile == "http-test") && validOrigin(b.Origin, b.Profile) && enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) && validHash(b.IssuerFingerprint)
+	return validID(b.InstanceID, "manager") && (b.Profile == "tls" || b.Profile == "http-test") && validOrigin(b.Origin, b.Profile) && enrollmentcrypto.ValidCollectionTransportProfile(b.Profile, b.CollectionProfile) && validHash(b.IssuerFingerprint)
 }
 
 func validateConfig(c Config) error {
-	if c.Platform != "" && (c.Platform != "darwin" || c.Binding.Profile != "tls" || c.Binding.CollectionProfile != enrollmentcrypto.CollectionProfile) {
+	if c.Platform != "" && (c.Platform != "darwin" || !enrollmentcrypto.ValidPlatformCollectionProfile(c.Platform, c.Binding.Profile, c.Binding.CollectionProfile)) || c.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory && c.Platform != "darwin" {
 		return ErrInvalid
 	}
 	if c.AutomaticRenewal && (c.Binding.Profile != "tls" || !validOrigin(c.RenewalAgentOrigin, "tls")) || !c.AutomaticRenewal && c.RenewalAgentOrigin != "" {
@@ -170,7 +170,7 @@ func ValidateSnapshot(s Snapshot) error {
 	if s.Version != SnapshotVersion || !validBinding(s.Binding) || !validID(s.InvitationID, "invite") || !validID(s.CreateRequestID, "request") || !validPlatform(s.Platform) || s.Revision < 1 || s.Revision > MaxRevision || !validTime(s.CreatedAt) || !validTime(s.DeadlineAt) || !validTime(s.UpdatedAt) || s.UpdatedAt < s.CreatedAt {
 		return ErrInvalid
 	}
-	if s.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && (s.Platform != "windows" || s.Binding.Profile != "tls" && s.Binding.Profile != "http-test") {
+	if !enrollmentcrypto.ValidPlatformCollectionProfile(s.Platform, s.Binding.Profile, s.Binding.CollectionProfile) {
 		return ErrInvalid
 	}
 	n := stage(s.State)

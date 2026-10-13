@@ -9,24 +9,13 @@ import (
 // runtime.GOOS, never a platform claimed by bootstrap data or a remote response.
 // It precedes opening private state, generating keys or making any request.
 func validatePlatformBootstrap(b Bootstrap, runningOS string) error {
-	if (b.Profile != "tls" && b.Profile != "http-test") || !enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) {
+	// The manager domain and inert sender contract do not grant this generic
+	// enrollment entry point fresh local inventory consent or a client schema.
+	if b.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
 		return ErrBootstrap
 	}
-	switch runningOS {
-	case "linux":
-		if b.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
-			return nil
-		}
-	case "darwin":
-		// macOS starts with the identifier-minimizing basic TLS profile only.
-		// Linux managed and Windows inventory grants never promote across OSes.
-		if b.Profile == "tls" && b.CollectionProfile == enrollmentcrypto.CollectionProfile {
-			return nil
-		}
-	case "windows":
-		if b.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || b.Profile == "tls" && b.CollectionProfile == enrollmentcrypto.CollectionProfile {
-			return nil
-		}
+	if enrollmentcrypto.ValidPlatformCollectionProfile(runningOS, b.Profile, b.CollectionProfile) {
+		return nil
 	}
 	return ErrBootstrap
 }

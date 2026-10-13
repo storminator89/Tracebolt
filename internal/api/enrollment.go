@@ -71,7 +71,10 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 			response["collectionPrivacy"] = "windows_inventory_metadata_may_be_sensitive"
 		}
 		if h.enrollment != nil && h.enrollment.Platform() == "darwin" {
-			response["collectionProfile"] = enrollmentcrypto.CollectionProfile
+			response["collectionProfile"] = h.enrollment.Binding().CollectionProfile
+			if h.enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+				response["collectionPrivacy"] = "macos_inventory_metadata_may_be_sensitive"
+			}
 		}
 		write(w, 200, response)
 		return
@@ -427,7 +430,7 @@ func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string)
 	case enrollmentcrypto.CollectionProfile:
 	case enrollmentcrypto.CollectionProfileWindowsInventory:
 		fields = append(fields, "collectionAcknowledged", "insecureHTTPAcknowledged")
-	case enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete:
+	case enrollmentcrypto.CollectionProfileOperational, enrollmentcrypto.CollectionProfilePackages, enrollmentcrypto.CollectionProfileComplete, enrollmentcrypto.CollectionProfileMacOSInventory:
 		fields = append(fields, "collectionAcknowledged")
 	default:
 		fail(w, 503, "enrollment_unavailable", "Enrollment is not configured.")
@@ -436,7 +439,7 @@ func readInvitationInput(w http.ResponseWriter, r *http.Request, profile string)
 	if !readObject(w, r, 1024, fields, &input) {
 		return input, false
 	}
-	if (enrollmentcrypto.ManagedCollectionProfile(profile) || profile == enrollmentcrypto.CollectionProfileWindowsInventory) && !input.CollectionAcknowledged {
+	if (enrollmentcrypto.ManagedCollectionProfile(profile) || profile == enrollmentcrypto.CollectionProfileWindowsInventory || profile == enrollmentcrypto.CollectionProfileMacOSInventory) && !input.CollectionAcknowledged {
 		fail(w, 400, "collection_consent_required", "Explicit collection profile acknowledgement is required.")
 		return input, false
 	}
@@ -505,6 +508,12 @@ func (h *operatorHandler) enrollmentRenewal(w http.ResponseWriter, r *http.Reque
 // The UI may only offer platforms that this configured store can enroll.
 // macOS does not reuse Linux managed or Windows inventory authority.
 func enrollmentPlatforms(binding enrollmentstate.Binding) []string {
+	if binding.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+		if binding.Profile == "tls" {
+			return []string{"darwin"}
+		}
+		return []string{}
+	}
 	if binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
 		return []string{"windows"}
 	}

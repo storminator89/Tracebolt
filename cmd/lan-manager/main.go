@@ -47,14 +47,15 @@ import (
 )
 
 type prepared struct {
-	operator, agent       http.Handler
-	operatorTLS, agentTLS *tls.Config
-	close                 func()
-	maintenance           *enrollmentservice.Service
-	windowsMaintenance    *enrollmentservice.Service
-	health                *api.Server
-	alarms                *alarmdelivery.Settings
-	applicationChecks     *applicationcheck.Settings
+	operator, agent           http.Handler
+	operatorTLS, agentTLS     *tls.Config
+	close                     func()
+	maintenance               *enrollmentservice.Service
+	windowsMaintenance        *enrollmentservice.Service
+	macosInventoryMaintenance *enrollmentservice.Service
+	health                    *api.Server
+	alarms                    *alarmdelivery.Settings
+	applicationChecks         *applicationcheck.Settings
 }
 
 func prepare(m lanconfig.Material) (*prepared, error) { return prepareWithEnrollment(m, nil) }
@@ -79,10 +80,10 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if e := c.Validate(); e != nil {
 		return nil, e
 	}
-	if enrollment != nil && (!enrollment.ValidFor(c) || enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory) {
+	if enrollment != nil && (!enrollment.ValidFor(c) || (enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory || enrollment.StoreConfig().Binding.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory)) {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
-	if (c.WindowsInventoryEnabled || c.MacOSBasicEnabled) && enrollment == nil {
+	if (c.WindowsInventoryEnabled || c.MacOSBasicEnabled || c.MacOSInventoryEnabled) && enrollment == nil {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
 	if enrollment == nil && enrollmentconfig.RejectEnrollmentMode(c.StateDirectory) != nil {
@@ -113,6 +114,10 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	var enrolledStore *enrollmentstore.Store
 	var enrolledService *enrollmentservice.Service
 	var enrolledIngress *enrollmenttransport.Ingress
+	var macosInventoryStore *enrollmentstore.Store
+	var macosInventoryService *enrollmentservice.Service
+	var macosInventoryMaintenance *enrollmentservice.Service
+	var macosInventoryIngress *enrollmenttransport.Ingress
 	var macosStore *enrollmentstore.Store
 	var macosService *enrollmentservice.Service
 	var macosIngress *enrollmenttransport.Ingress
@@ -147,6 +152,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		}
 		if windowsStore != nil {
 			windowsStore.Close()
+		}
+		if macosInventoryStore != nil {
+			macosInventoryStore.Close()
 		}
 		if macosStore != nil {
 			macosStore.Close()
@@ -194,6 +202,40 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		}
 		macosIngress, err = enrollmenttransport.New(macosStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, macosService.JournalCache())
 		if err != nil {
+			return fail(err)
+		}
+	}
+	if c.MacOSInventoryEnabled {
+		var err error
+		macosInventoryStore, err = enrollment.OpenMacOSInventoryStore(c.StateDirectory)
+		if err != nil {
+			return fail(err)
+		}
+		macosInventoryService, err = enrollmentservice.New(macosInventoryStore, enrollment.Issuer(), nil)
+		if err != nil {
+			return fail(err)
+		}
+		macosInventoryMaintenance = macosInventoryService
+		macosInventoryIngress, err = enrollmenttransport.New(macosInventoryStore, enrollment.Issuer().IssuerDER(), c.AgentOrigin, macosInventoryService.JournalCache())
+		if err != nil {
+			return fail(err)
+		}
+	}
+	if !c.MacOSInventoryEnabled && enrollment != nil {
+		var err error
+		macosInventoryStore, err = enrollment.OpenRetainedMacOSInventoryStore(c.StateDirectory)
+		if err != nil {
+			return fail(err)
+		}
+		if macosInventoryStore != nil {
+			macosInventoryMaintenance, err = enrollmentservice.New(macosInventoryStore, enrollment.Issuer(), nil)
+			if err != nil {
+				return fail(err)
+			}
+		}
+	}
+	if macosInventoryMaintenance != nil {
+		if err := macosInventoryMaintenance.MaintainMacOSInventory(context.Background(), macosInventoryMaintenance.Now().UTC()); err != nil {
 			return fail(err)
 		}
 	}
@@ -502,6 +544,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 				_ = cveCache.Close()
 			}
 			appStore.Close()
+			if macosInventoryStore != nil {
+				macosInventoryStore.Close()
+			}
 			if macosStore != nil {
 				macosStore.Close()
 			}
@@ -589,6 +634,18 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return mergedMacOSDevices(context.Background(), enrolledService, windowsService, macosService, time.Now().UTC())
 		}
 	}
+	if macosInventoryService != nil {
+		b := macosInventoryService.Binding()
+		operatorConfig.MacOSInventoryEnrollment = macosInventoryService
+		operatorConfig.MacOSInventoryEnrollmentBootstrap = api.EnrollmentBootstrap{SchemaVersion: "tracebolt.enrollment-bootstrap.v2", ManagerInstanceID: b.InstanceID, Profile: b.Profile, EnrollmentOrigin: c.OperatorOrigin, AgentOrigin: c.AgentOrigin, CollectionProfile: b.CollectionProfile, ServerCAPEM: enrollment.ServerCAPEM(), IssuerRootPEM: enrollment.RootPEM(), IssuerPEM: enrollment.IssuerPEM()}
+		if macosInventoryService.AutomaticRenewal() {
+			operatorConfig.MacOSInventoryEnrollmentBootstrap.SchemaVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
+			operatorConfig.MacOSInventoryEnrollmentBootstrap.RenewalPolicy = "same-key-v1"
+		}
+		operatorConfig.Devices = func() ([]model.Device, error) {
+			return mergedMacOSInventoryDevices(context.Background(), enrolledService, windowsService, macosService, macosInventoryService, time.Now().UTC())
+		}
+	}
 	operator, e := api.NewLANOperatorHandler(app, operatorConfig)
 	if e != nil {
 		closeAll()
@@ -610,7 +667,12 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		agent = withWindowsIngress(agent, windowsIngress)
 	}
 	agent = withMacOSIngress(agent, macosIngress)
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
+	if macosInventoryIngress != nil {
+		agent = withMacOSInventoryIngress(agent, macosInventoryIngress)
+	} else {
+		agent = withMacOSInventoryIngress(agent, nil)
+	}
+	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, macosInventoryMaintenance: macosInventoryMaintenance, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -707,6 +769,17 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 			defer close(maintenanceDone)
 			_ = runWindowsEventMaintenance(maintenanceCtx, p.windowsMaintenance, func() {
 				log.Print("Windows inventory/content maintenance is unavailable; retained data remains protected.")
+			})
+		}()
+		defer func() { stopMaintenance(); <-maintenanceDone }()
+	}
+	if p.macosInventoryMaintenance != nil {
+		maintenanceCtx, stopMaintenance := context.WithCancel(ctx)
+		maintenanceDone := make(chan struct{})
+		go func() {
+			defer close(maintenanceDone)
+			_ = p.macosInventoryMaintenance.RunMacOSInventoryMaintenance(maintenanceCtx, func() {
+				log.Print("macOS inventory maintenance is unavailable; retained data remains protected.")
 			})
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()

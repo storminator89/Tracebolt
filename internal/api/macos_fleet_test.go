@@ -37,3 +37,40 @@ func TestMacOSMixedFleetLookupKeepsPlatformAndRejectsAmbiguity(t *testing.T) {
 		t.Fatal("ambiguous cross-store ID admitted")
 	}
 }
+
+func TestMacOSInventoryFourthFleetDomainKeepsOriginalIdentity(t *testing.T) {
+	sources := make([]fleetGroupSource, 0, 4)
+	profiles := []string{enrollmentcrypto.CollectionProfileWindowsInventory, enrollmentcrypto.CollectionProfileComplete, enrollmentcrypto.CollectionProfile, enrollmentcrypto.CollectionProfileMacOSInventory}
+	platforms := []string{"windows", "linux", "darwin", "darwin"}
+	for i, profile := range profiles {
+		f := newFleetGroupSource()
+		f.binding.CollectionProfile = profile
+		f.snapshots[0].Binding = f.binding
+		f.snapshots[0].Platform = platforms[i]
+		id := "agent_" + strings.Repeat(string(rune('1'+i)), 32)
+		f.snapshots[0].Approval.DeviceID = id
+		f.devices[0].ID = id
+		f.inputs[0].DeviceID = id
+		if len(sources) > 0 {
+			f.now = sources[0].Now()
+		}
+		sources = append(sources, f)
+	}
+	_, _, devices, err := fleetGroupAdmission(context.Background(), sources)
+	if err != nil || len(devices) != 4 {
+		t.Fatal("four enrollment domains did not coexist", err, len(devices))
+	}
+	basic := sources[2].(*fixtureFleetGroupSource)
+	inventory := sources[3].(*fixtureFleetGroupSource)
+	if devices[inventory.devices[0].ID].Platform != "macos" || devices[basic.devices[0].ID].identity == devices[inventory.devices[0].ID].identity {
+		t.Fatal("fresh scope identity was conflated")
+	}
+	inventory.snapshots[0].Approval.DeviceID = basic.snapshots[0].Approval.DeviceID
+	inventory.devices[0].ID = basic.devices[0].ID
+	if _, _, _, err = fleetGroupAdmission(context.Background(), sources); err == nil {
+		t.Fatal("basic and expanded identity collision admitted")
+	}
+	if _, _, _, err = fleetGroupAdmission(context.Background(), append(sources, newFleetGroupSource())); err == nil {
+		t.Fatal("fifth unbounded domain admitted")
+	}
+}

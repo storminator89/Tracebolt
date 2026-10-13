@@ -98,7 +98,7 @@ func validContext(c ChallengeContext, now time.Time) bool {
 	if c.RenewalPolicy != "" && (c.RenewalPolicy != RenewalPolicySameKey || c.Profile != "tls" || !canonicalOrigin(c.AgentOrigin, "tls")) || c.RenewalPolicy == "" && c.AgentOrigin != "" {
 		return false
 	}
-	if now.Unix() <= 0 || now.Unix() > 253402300499 || !ValidID(c.ManagerInstanceID, "manager_") || !ValidID(c.InvitationID, "invite_") || !ValidID(c.ClaimID, "claim_") || !ValidCollectionProfile(c.CollectionProfile) || !canonicalOrigin(c.Origin, c.Profile) || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Unix()+300 {
+	if now.Unix() <= 0 || now.Unix() > 253402300499 || !ValidID(c.ManagerInstanceID, "manager_") || !ValidID(c.InvitationID, "invite_") || !ValidID(c.ClaimID, "claim_") || !ValidCollectionTransportProfile(c.Profile, c.CollectionProfile) || !canonicalOrigin(c.Origin, c.Profile) || c.ExpiresAt <= now.Unix() || c.ExpiresAt > now.Unix()+300 {
 		return false
 	}
 	b, e := secretBytes(c.Challenge)
