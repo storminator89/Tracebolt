@@ -25,6 +25,7 @@ COPY tests/fixtures/windows-service-action-view.json /src/tests/fixtures/windows
 COPY tests/fixtures/windows-service-action-history.json /src/tests/fixtures/windows-service-action-history.json
 # Exact synthetic Windows incident inbox projection used by TypeScript.
 COPY tests/fixtures/windows-incident-inbox-view.json /src/tests/fixtures/windows-incident-inbox-view.json
+COPY tests/fixtures/windows-service-incident-review.json /src/tests/fixtures/windows-service-incident-review.json
 # Shared proactive identity contract and its TypeScript declaration; no test runner.
 COPY tests/e2e-review/proactive-ai-browser.mjs tests/e2e-review/proactive-ai-browser.d.mts /src/tests/e2e-review/
 # Preserve the exact synthetic central-delivery fixture source in the build stage only.

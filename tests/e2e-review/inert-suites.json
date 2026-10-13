@@ -62,7 +62,8 @@
     "windows-resource-context-fixtures.test.mjs",
     "windows-update-schedule-fixtures.test.mjs",
     "windows-software-jobs-fixtures.test.mjs",
-    "windows-update-retirement-fixtures.test.mjs"
+    "windows-update-retirement-fixtures.test.mjs",
+    "windows-update-download-fixtures.test.mjs"
   ],
   "excluded": []
 }
