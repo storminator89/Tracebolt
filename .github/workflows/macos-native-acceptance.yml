@@ -1,0 +1,83 @@
+name: macOS manually approved native evidence
+
+# Source-only addition: creating this workflow is not permission to dispatch it.
+on:
+  workflow_dispatch:
+    inputs:
+      gate_a:
+        description: 'Approved one-shot fixed inventory reads on both standard VMs'
+        type: boolean
+        default: false
+        required: true
+      gate_b:
+        description: 'Approved three synthetic OSLog writes and three filtered queries'
+        type: boolean
+        default: false
+        required: true
+      reviewed_commit:
+        description: 'Exact independently reviewed current commit (40 lowercase hex)'
+        type: string
+        required: true
+      reviewed_source_sha256:
+        description: 'Exact sourceSHA256 from inert run.py --check after independent review'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-native-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-evidence:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+          github.repository == 'storminator89/Tracebolt' &&
+          github.event.repository.private == false &&
+          github.run_attempt == 1 && (inputs.gate_a || inputs.gate_b) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+      GOFLAGS: '-mod=readonly'
+      CGO_ENABLED: '0'
+      GO_DOWNLOAD_BASE_URL: ''
+      TRACEBOLT_RUNNER_LABEL: ${{ matrix.runner }}
+      TRACEBOLT_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+      TRACEBOLT_SELECT_GATE_A: ${{ inputs.gate_a }}
+      TRACEBOLT_SELECT_GATE_B: ${{ inputs.gate_b }}
+      TRACEBOLT_REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+      TRACEBOLT_REVIEWED_SOURCE_SHA256: ${{ inputs.reviewed_source_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check exact manual source selection before toolchain preparation
+        run: python3 -I -B tests/macosnativeacceptance/run.py --verify-dispatch
+      - if: ${{ inputs.gate_a }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.1'
+          token: ''
+          cache: false
+          check-latest: false
+      - name: Build reviewed probes and execute only explicitly selected gates
+        id: native
+        run: python3 -I -B tests/macosnativeacceptance/run.py --execute
+      - name: Keep one bounded content-free report only
+        if: ${{ always() && !cancelled() && steps.native.outputs.report_ready == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-native-evidence-${{ matrix.runner }}-${{ github.sha }}
+          path: artifacts/review/macos-native-acceptance.json
+          if-no-files-found: warn
+          retention-days: 14
+          include-hidden-files: false
