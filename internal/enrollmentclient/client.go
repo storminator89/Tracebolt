@@ -94,9 +94,19 @@ const renewableLedgerVersion = "tracebolt.enrollment-client-state.renewable.v1"
 
 type session struct{ *sessionData }
 
+// enrollmentStorage keeps the native protected store contract while allowing
+// inert in-memory authority tests without keys or state on a real host.
+type enrollmentStorage interface {
+	Read(string) ([]byte, error)
+	Write(string, []byte) error
+	TelemetryExists() (bool, error)
+	EnsureTelemetry() error
+	Close() error
+}
+
 type sessionData struct {
 	renewalNow                func() time.Time // trusted test clock; production uses time.Now
-	store                     *localStore
+	store                     enrollmentStorage
 	l                         ledger
 	opts                      Options
 	key                       ed25519.PrivateKey

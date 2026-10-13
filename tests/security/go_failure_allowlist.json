@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "c49c1218dad63c660be749be0cf4af8901f8916f152995e47d599dac5e0b8b81",
+  "goSourceSha256": "65478a5987a6ccac20f302f1391930e3fd3ddbccf4c0a01d1811831d0dc5795b",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -208,6 +208,8 @@
     "localrmm/cmd/macos-agent-service": [
       "TestCLIRefusesMutationAndSecretsBeforeInspection",
       "TestDefaultCLIInspectsAndReportsBlocker",
+      "TestInstallNativeUnavailableWithoutAnyHostInspection",
+      "TestProfileSelectionAndInvalidCombinations",
       "TestRenderOnlyCLIAndHelpDoNotReadHost"
     ],
     "localrmm/cmd/manager": [
@@ -1595,6 +1597,10 @@
       "TestMacOSInventoryPendingExpiryKeepsMaintenanceAlive",
       "TestMacOSInventoryRenewalKeepsExactPendingBytesAndFloors",
       "TestMacOSInventoryReopenedTrustAndExhaustedAuthority",
+      "TestMacOSInventoryServicePreflightCurrentSuccessorKeepsOriginalState",
+      "TestMacOSInventoryServicePreflightRechecksContextAndAuthority",
+      "TestMacOSInventoryServicePreflightRequiresLiveLocalAuthority",
+      "TestMacOSInventoryServicePreflightStorageAndCloseFailures",
       "TestMacOSRouteSelectionUsesTrustedRuntimeOnly",
       "TestPendingCancellationAndBoundedTimeout",
       "TestPendingResumePreservesIdentityAndSenderState",
@@ -3563,15 +3569,27 @@
       "TestBasicTLSConfigBoundToExactFixedPaths",
       "TestBinaryRequiresExactNativeMachORoleArchitecture",
       "TestCancellationAndInvalidRequestAvoidInspection",
+      "TestCanonicalOwnershipAndReceiptDecoders",
+      "TestCloseFailureAndCancellationRetainEvidence",
+      "TestCreateOnlyLifecycleHappyPathAndReadOnlyRecheck",
       "TestDirectoryOwnershipPolicy",
+      "TestEachTransitionRevalidatesSelection",
+      "TestEveryUncertainWriteStopsAndNeverReplays",
+      "TestExplicitProfileNeverPromotesBasicOrInventory",
+      "TestFreshCollisionsAndMissingEvidenceBlockAllWrites",
+      "TestImmutableOwnershipCannotAdoptReplacement",
+      "TestInventoryPlanIsExplicitAndHasFixedMinuteCadence",
       "TestNativeAccountOutputIsBounded",
+      "TestNativeBackendDoesNotExposeLifecycleMutation",
       "TestPlanDeterministicInertPlist",
       "TestPreflightRequiresCompleteOrderedEvidence",
+      "TestReceiptCorruptionAndRuntimeDriftNeverRepair",
       "TestRenderNeverInspects",
       "TestRenewableBasicTLSUsesExactManifestWithoutScopeExpansion",
       "TestRequestStrict",
       "TestSnapshotDetectsIdentityAndMetadataChanges",
-      "TestSourceHashIsBoundedExactAndCancelable"
+      "TestSourceHashIsBoundedExactAndCancelable",
+      "TestUnavailableAndInvalidRequestsNeverInspect"
     ],
     "localrmm/internal/model": [],
     "localrmm/internal/mutationfence": [

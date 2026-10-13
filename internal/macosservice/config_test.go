@@ -85,3 +85,82 @@ func TestRenewableBasicTLSUsesExactManifestWithoutScopeExpansion(t *testing.T) {
 		}
 	}
 }
+
+func inventoryFixture() lanclient.MacOSInventoryConfig {
+	c := basicFixture()
+	c.SchemaVersion = lanclient.MacOSInventoryConfigVersion
+	c.CollectionProfile = InventoryProfile
+	return lanclient.MacOSInventoryConfig{Config: c, ConsentFile: EnrollmentDirectory + "/" + lanclient.MacOSInventoryConsentName, OriginalEnableFile: EnrollmentDirectory + "/" + lanclient.MacOSInventoryEnableName}
+}
+func TestExplicitProfileNeverPromotesBasicOrInventory(t *testing.T) {
+	basic, _ := json.Marshal(basicFixture())
+	inventory, _ := json.MarshalIndent(inventoryFixture(), "", "  ")
+	for _, profile := range []string{BasicProfile, InventoryProfile} {
+		raw := basic
+		if profile == InventoryProfile {
+			raw = inventory
+		}
+		calls := []string{}
+		basicValidator := func(p string) error {
+			if p != ConfigPath {
+				t.Fatal("override")
+			}
+			calls = append(calls, "basic")
+			return nil
+		}
+		inventoryValidator := func(p string) error {
+			if p != ConfigPath {
+				t.Fatal("override")
+			}
+			calls = append(calls, "inventory")
+			return nil
+		}
+		if validateSelectedHandoff(raw, profile, basicValidator, inventoryValidator) != nil || len(calls) != 1 {
+			t.Fatal("selected handoff rejected")
+		}
+		if profile == BasicProfile && calls[0] != "basic" || profile == InventoryProfile && calls[0] != "inventory" {
+			t.Fatal("wrong authority")
+		}
+		other := InventoryProfile
+		if profile == InventoryProfile {
+			other = BasicProfile
+		}
+		calls = nil
+		if validateSelectedHandoff(raw, other, basicValidator, inventoryValidator) == nil || len(calls) != 0 {
+			t.Fatal("profile silently widened")
+		}
+		if validateSelectedHandoff(raw, profile, nil, nil) == nil {
+			t.Fatal("syntax became authority")
+		}
+	}
+	for _, profile := range []string{"", "macos", "read-admin", "http-test"} {
+		if validateSelectedConfig(inventory, profile) == nil {
+			t.Fatal("implicit profile")
+		}
+	}
+	if validateSelectedConfig(append(inventory, '\n'), InventoryProfile) == nil {
+		t.Fatal("noncanonical inventory")
+	}
+	for _, change := range []func(*lanclient.MacOSInventoryConfig){
+		func(c *lanclient.MacOSInventoryConfig) { c.ConsentFile = "/Users/test/consent.json" },
+		func(c *lanclient.MacOSInventoryConfig) { c.OriginalEnableFile = "/Users/test/enable.json" },
+		func(c *lanclient.MacOSInventoryConfig) { c.CollectionProfile = BasicProfile },
+		func(c *lanclient.MacOSInventoryConfig) { c.InsecureHTTPAcknowledged = true },
+		func(c *lanclient.MacOSInventoryConfig) {
+			c.RenewalManifestFile = "/private/other/renewal-manifest.json"
+		},
+	} {
+		c := inventoryFixture()
+		change(&c)
+		raw, _ := json.MarshalIndent(c, "", "  ")
+		if validateSelectedConfig(raw, InventoryProfile) == nil {
+			t.Fatal("inventory scope/path expansion")
+		}
+	}
+	c := inventoryFixture()
+	c.RenewalManifestFile = EnrollmentDirectory + "/" + renewalidentity.ManifestName
+	raw, _ := json.MarshalIndent(c, "", "  ")
+	if validateSelectedConfig(raw, InventoryProfile) != nil {
+		t.Fatal("explicit exact renewable inventory rejected")
+	}
+}

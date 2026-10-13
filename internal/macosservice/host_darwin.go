@@ -7,6 +7,7 @@ import (
 	"context"
 	"golang.org/x/sys/unix"
 	"localrmm/internal/agentidentity"
+	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/lanclient"
 	"localrmm/internal/lanconfig"
 	"path"
@@ -74,7 +75,7 @@ func (nativeBackend) Inspect(ctx context.Context, r Request) ([]Check, error) {
 	if !check("source-artifact", "Require an independently selected SHA-256 for the bounded protected root-owned source archive; it is never extracted or executed and does not prove reproducible builds.", sourceOK) {
 		return fail()
 	}
-	if !check("activated-enrollment", "Require an existing activated guided-v2 or explicitly renewable-v6 basic TLS handoff at the exact fixed paths, valid current certificate and existing bound sender ledger. No enrollment, network, collection, key or ledger creation occurs.", validateEnrollment() == nil) {
+	if !check("activated-enrollment", "Require the explicitly selected existing activated basic or fresh inventory TLS handoff at the exact fixed paths, valid current certificate and original protected sender state. No enrollment, network, collection, key or ledger creation occurs.", validateEnrollment(ctx, selectedProfile(r)) == nil) {
 		return fail()
 	}
 	parent := dirs[len(dirs)-1]
@@ -92,19 +93,22 @@ func (nativeBackend) Inspect(ctx context.Context, r Request) ([]Check, error) {
 	return checks, nil
 }
 
-func validateEnrollment() error {
+func validateEnrollment(ctx context.Context, profile string) error {
+	if ctx == nil || ctx.Err() != nil {
+		return ErrPreflight
+	}
 	raw, err := lanconfig.ReadProtected(ConfigPath, true, 16384)
 	if err != nil {
 		return ErrPreflight
 	}
-	if validateBasicConfig(raw) != nil {
-		return ErrPreflight
+	inventory := func(path string) error {
+		return enrollmentclient.ValidateMacOSInventoryServicePreflight(ctx, path)
 	}
-	if lanclient.ValidateGuidedHandoff(ConfigPath) != nil {
+	if validateSelectedHandoff(raw, profile, lanclient.ValidateGuidedHandoff, inventory) != nil {
 		return ErrPreflight
 	}
 	after, err := lanconfig.ReadProtected(ConfigPath, true, 16384)
-	if err != nil || !bytes.Equal(raw, after) {
+	if err != nil || !bytes.Equal(raw, after) || ctx.Err() != nil {
 		return ErrPreflight
 	}
 	return nil
