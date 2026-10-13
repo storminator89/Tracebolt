@@ -666,6 +666,10 @@ LAN_STAGE_CASES = {
     'proactive-ai', 'investigations', 'cve-detail-pages',
 }
 LAN_FAILURE_STAGES = {
+    'windows-inventory': {stage: stage for stage in (
+        'services-source', 'services-disabled', 'services-pending', 'services-attention',
+        'services-unknown', 'services-recovered', 'services-policy-changed',
+    )},
     'cve-detail-pages': {stage: stage.replace(' ', '-') for stage in (
         'advancing empty scan', 'changed binding', 'desktop layout', 'device navigation isolation',
         'expired retained input', 'final guards', 'fixture setup', 'fresh login isolation',

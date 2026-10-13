@@ -845,6 +845,13 @@ class LANFailureTests(unittest.TestCase):
                              'fresh login isolation', 'final guards'})
         for stage in p.LAN_FAILURE_STAGES['cve-detail-pages']: self.assertIn("'" + stage + "'", source)
 
+    def test_windows_inventory_service_stages_are_closed_source_vocabulary(self):
+        source = (ROOT / 'tests/e2e-review/windows-service-health-browser.mjs').read_text()
+        expected = {'services-source', 'services-disabled', 'services-pending', 'services-attention',
+                    'services-unknown', 'services-recovered', 'services-policy-changed'}
+        self.assertEqual(p.LAN_FAILURE_STAGES['windows-inventory'], {name: name for name in expected})
+        for name in expected: self.assertIn("'" + name + "'", source)
+
     def test_lan_all_reviewed_case_stage_coordinates_and_generic_flags(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'

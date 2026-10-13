@@ -6,8 +6,8 @@ import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
 const {build}=require('esbuild');
-const built=await build({stdin:{contents:"export {windowsServiceHealthView,windowsServiceHealthIncident} from './windows-service-health-fixture'; export {validWindowsServiceHealthView} from './windows-service-health-types'; export {windowsServiceHealthCopy} from './windows-service-health-copy'; export {windowsNow,windowsDeviceId} from './windows-inventory-fixture';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
-const {windowsServiceHealthView,windowsServiceHealthIncident,validWindowsServiceHealthView,windowsServiceHealthCopy,windowsNow,windowsDeviceId}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+const built=await build({stdin:{contents:"export {windowsServiceHealthView,windowsServiceHealthIncident} from './windows-service-health-fixture'; export {validWindowsServiceHealthView} from './windows-service-health-types'; export {windowsServiceHealthCopy} from './windows-service-health-copy'; export {completeServicePickerCopy} from './windows-service-health-complete-copy'; export {windowsNow,windowsDeviceId} from './windows-inventory-fixture';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {windowsServiceHealthView,windowsServiceHealthIncident,validWindowsServiceHealthView,windowsServiceHealthCopy,completeServicePickerCopy,windowsNow,windowsDeviceId}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 export const windowsServiceHealthDisclosure='Invented default-off selected Windows service policy with a bounded reported-name chooser and original state observations in the compiled UI. Running is a reported SCM state, not application health. Policy phases are injected through read-only fixtures; no policy save, native Windows read, service start/restart, new grant, AI call, notification or deployment.';
 export const windowsServiceHealthStageNames=Object.freeze(['services-disabled','services-pending','services-attention','services-unknown','services-recovered','services-policy-changed']);
 export const windowsServiceHealthFixturePath=(pathname,prefix)=>pathname===prefix+'/windows-services';
@@ -29,8 +29,17 @@ export function createWindowsServiceHealthFixtureState(){
   view(at){const value=windowsServiceHealthBrowserFixture(at,origin??at,phase);if(closedAt&&phase==='services-policy-changed')value.incidents[0].resolvedAt=closedAt;return value;},
  };
 }
+/** This walkthrough retains the v1 policy source, including its disabled state.
+ * The new default complete view may probe status but cannot convert that ledger. */
+export async function windowsServiceHealthCompleteLegacyRead({route,base,prefix}){
+ const request=route.request(),url=new URL(request.url());
+ if(prefix!=='/api/devices/'+windowsDeviceId||url.origin!==base||url.pathname!==prefix+'/windows-services/complete'||url.search||request.method()!=='GET'||request.postData()!==null)throw new Error('Unexpected synthetic complete service status request');
+ return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'windows_service_source_conflict',message:'This policy uses another explicit source version.'}})});
+}
 export async function exerciseWindowsServiceHealth({page,expect,locale,width,shot,setPhase,mark}){
- const de=locale==='de',c=windowsServiceHealthCopy[locale],panel=page.locator('.windows-service-health'),refresh=panel.getByRole('button',{name:c.refresh,exact:true});
+ const de=locale==='de',c=windowsServiceHealthCopy[locale];
+ mark('services-source');await page.getByRole('combobox',{name:completeServicePickerCopy[locale].sourceLabel,exact:true}).selectOption('preview');
+ const panel=page.locator('.windows-service-health'),refresh=panel.getByRole('button',{name:c.refresh,exact:true});
  const metadata=page.getByRole('button',{name:de?'Gerätedaten aktualisieren':'Refresh device metadata',exact:true});
  const read=async phase=>{mark(phase);setPhase(phase);await metadata.click();await expect(metadata).toBeEnabled();await refresh.click();await expect(refresh).toBeEnabled();};
  const capture=async label=>{expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await panel.scrollIntoViewIfNeeded();await shot(page,`synthetic-windows-service-health-${label}-${width}-${locale}`,windowsServiceHealthDisclosure);};
