@@ -19,6 +19,7 @@ import (
 type fixtureGroupMaintenanceSource struct {
 	*fixtureMonitoringSource
 	beforeLease func()
+	afterLease  func()
 	onNow       func(int) time.Time
 	nowReads    int
 }
@@ -35,7 +36,11 @@ func (f *fixtureGroupMaintenanceSource) WithWindowsIncidentAuthority(ctx context
 	if f.beforeLease != nil {
 		f.beforeLease()
 	}
-	return f.WithWindowsMonitoringAuthority(ctx, []windowscontact.Input{in}, fn)
+	err := f.WithWindowsMonitoringAuthority(ctx, []windowscontact.Input{in}, fn)
+	if err == nil && f.afterLease != nil {
+		f.afterLease()
+	}
+	return err
 }
 
 // Direct handler units deliberately do not claim TLS/listener acceptance. They

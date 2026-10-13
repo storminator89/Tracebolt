@@ -41,6 +41,10 @@ bounded transport/store. See [frame bounds](windows-storage-io.md#worker-transpo
 
 ## Separate optional features
 
+- [Fleet machine-software lookup](windows-fleet-software-lookup.md): search reported
+  application names and versions across already-consented HKLM generations, with
+  per-device coverage and exact read-only detail. Missing fields and unavailable
+  captures never prove absence; selected-user/Store software is excluded.
 - [Selected event messages](windows-event-content-runtime.md): request exact
   reported headers under a separate local grant. Message text expires in the
   originating operator session's private cache; it is not retained-history or AI export.

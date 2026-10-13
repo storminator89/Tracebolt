@@ -16,7 +16,9 @@ There is no recurrence, future-start calendar, automatic response or generic sch
 A separate [reviewed group-maintenance flow](fleet-group-maintenance.md) selects
 exact current Windows members from one original-identity group projection. It
 uses the same single-target maintenance transactions with an additional exact
-group revision/membership guard; each reviewed target has the same fixed end.
+group revision/membership guard; each reviewed start has the same fixed end. Its
+separate early-end review selects exact active windows and retains their original
+ends, with per-window partial outcomes and no automatic retry.
 
 ## Deliberate, bounded windows
 

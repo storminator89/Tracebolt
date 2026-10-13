@@ -6,6 +6,11 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+Read-only [fleet machine-software lookup](docs/windows-fleet-software-lookup.md)
+finds reported application names/versions in existing complete HKLM generations,
+with per-device source/age/coverage and identity-bound detail. No new collection,
+selected-user inventory or installation authority is introduced.
+
 Saved MSI worklists can review one shared UTC installation window for multiple
 exact devices and one selected catalogue package. Fresh per-device scheduled
 authority remains required; sequential approvals retain independent outcomes and

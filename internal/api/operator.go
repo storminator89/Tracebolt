@@ -695,6 +695,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.investigations(w, r)
 		return
 	}
+	if r.URL.Path == "/api/fleet/windows-software/query" {
+		h.windowsFleetSoftwareQuery(w, r)
+		return
+	}
 	if r.URL.Path == "/api/fleet/identities" {
 		h.fleetIdentities(w, r)
 		return

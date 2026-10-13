@@ -19,6 +19,9 @@ func namedReadRoute(r *http.Request) bool {
 	if r.Method != "POST" {
 		return false
 	}
+	if r.URL.Path == "/api/fleet/windows-software/query" && r.URL.RawQuery == "" {
+		return true
+	}
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 6 || parts[1] != "api" || parts[2] != "devices" || !enrollmentcrypto.ValidID(parts[3], "agent_") {
 		return false

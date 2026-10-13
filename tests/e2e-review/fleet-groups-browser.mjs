@@ -11,7 +11,7 @@ const {windowsCapacityDevice,windowsCapacityView,windowsResourceView,validFleetG
 export const fleetGroupIds={first:`agent_${'7'.repeat(32)}`,second:`agent_${'2'.repeat(32)}`,linux:`agent_${'3'.repeat(32)}`,group:`group_${'4'.repeat(32)}`,created:`group_${'5'.repeat(32)}`};
 let stage='setup',failures=0,pending=0;
 export const fleetGroupsRouteState=()=>({failures,pending});
-export const fleetGroupsFailureStage=()=>new Set(['setup','login','groups','review','apply','conflict','uncertain','uncertain-review','uncertain-apply','uncertain-result','uncertain-remaining','uncertain-count','uncertain-close','stop','layout','inheritance','maintenance','complete']).has(stage)?stage:'setup';
+export const fleetGroupsFailureStage=()=>new Set(['setup','login','groups','review','apply','conflict','uncertain','uncertain-review','uncertain-apply','uncertain-result','uncertain-remaining','uncertain-count','uncertain-close','stop','layout','inheritance','maintenance','maintenance-end','complete']).has(stage)?stage:'setup';
 export function guardFleetGroupsRoute(route,handler){pending++;return Promise.resolve().then(()=>handler(route)).catch(async()=>{failures++;try{await route.abort('failed');}catch{/* Teardown already ended the request. */}}).finally(()=>{pending--;});}
 export function fleetGroupsBrowserFixture(serverNow,expiresAt){
  const source=windowsCapacityDevice(),devices=[{id:fleetGroupIds.first,name:'Synthetic Desk One',platform:'windows'},{id:fleetGroupIds.second,name:'Synthetic Desk Two',platform:'windows'},{id:fleetGroupIds.linux,name:'Synthetic Linux',platform:'linux'}];
@@ -34,9 +34,58 @@ export function fleetGroupsMaintenanceFixture(serverNow,groupRevision=2,groupNam
  const devices=fleetGroupsBrowserFixture(serverNow,new Date(Date.parse(serverNow)+3600000).toISOString()).view.devices.filter(d=>d.platform==='windows').sort((a,b)=>a.id.localeCompare(b.id));
  const view={schemaVersion:'tracebolt.fleet-group-maintenance.v1',serverNow,authorityExpiresAt:new Date(Date.parse(serverNow)+120000).toISOString().replace(/\.000Z$/,'Z').replace(/(\.\d*?[1-9])0+Z$/,'$1Z'),groupId:fleetGroupIds.group,groupName,groupRevision,excludedLinuxMembers:1,unavailableMembers:1,members:devices.map((d,i)=>({deviceId:d.id,name:d.name,targets:['all','contact','cpu','disk','memory','service'].map((domain,j)=>({key:(i*6+j+1).toString(16).padStart(64,'0'),deviceId:d.id,domain,revision:0,changedAt:null,windows:[]}))}))};assert.ok(validGroupMaintenanceView(view,fleetGroupIds.group));return view;
 }
+/** Invented mixed-domain windows; an all-domain window never overlaps another
+ * active domain on the same device. Historical originals remain visible only
+ * in metadata, never offered as new early-end selections. */
+export function fleetGroupsMaintenanceEndFixture(serverNow,groupRevision=2,groupName='Synthetic Office'){
+ const view=fleetGroupsMaintenanceFixture(serverNow,groupRevision,groupName);
+ const at=offset=>new Date(Date.parse(serverNow)+offset).toISOString().replace(/\.000Z$/,'Z').replace(/(\.\d*?[1-9])0+Z$/,'$1Z');
+ for(const [index,member]of view.members.entries())for(const [domainIndex,target]of member.targets.entries()){
+  if(index===0?target.domain!=='all':target.domain==='all')continue;
+  const id=3+domainIndex*2;
+  Object.assign(target,{revision:id,changedAt:at(-60000),windows:[{id,startedAt:at(-60000),endsAt:at(1800000+domainIndex*60000),endedAt:null,intent:'planned-work'},{id:id-2,startedAt:at(-240000),endsAt:at(600000),endedAt:at(-120000),intent:'investigation'}]});
+ }
+ // Non-active latest windows also must not appear in the selection list.
+ const ended=view.members[0].targets[1],expired=view.members[0].targets[2];
+ Object.assign(ended,{revision:2,changedAt:at(-120000),windows:[{id:1,startedAt:at(-240000),endsAt:at(600000),endedAt:at(-120000),intent:'other'}]});
+ Object.assign(expired,{revision:1,changedAt:at(-240000),windows:[{id:1,startedAt:at(-240000),endsAt:at(-120000),endedAt:null,intent:'other'}]});
+ assert.ok(validGroupMaintenanceView(view,fleetGroupIds.group));return view;
+}
+/** Pure fixture transition only. Reject any widening of the exact end request. */
+export function fleetGroupsMaintenanceEndWrite(original,body,serverNow){
+ assert.deepEqual(Object.keys(body).sort(),['groupRevision','key','revision','windowId']);assert.equal(body.groupRevision,original.groupRevision);
+ const view=structuredClone(original),target=view.members.flatMap(member=>member.targets).find(target=>target.key===body.key),window=target?.windows[0];
+ assert.ok(target&&window);assert.equal(body.revision,target.revision);assert.equal(body.windowId,window.id);assert.equal(window.endedAt,null);assert.ok(Date.parse(window.endsAt)>Date.parse(serverNow));
+ window.endedAt=serverNow;target.revision++;target.changedAt=serverNow;view.serverNow=serverNow;
+ assert.ok(validGroupMaintenanceView(view,view.groupId));return view;
+}
+/** Run against the existing production dialog and canonical screenshot sink.
+ * The source/DOM tests use the same selectors without claiming rendered pixels. */
+export async function exerciseFleetGroupsMaintenanceEnd({page,expect,width,locale,fixture,shot,verifyLayout,state}){
+ const de=locale==='de',labels=de?{all:'Alle Windows-Prüfungen',contact:'Kontakt',cpu:'CPU-Prozentwert',disk:'Kapazität des Systemvolumes',memory:'Physischer RAM-Prozentwert',service:'Prüfungen ausgewählter Dienste'}:{all:'All Windows checks',contact:'Contact',cpu:'CPU percentage',disk:'System-volume capacity',memory:'Physical RAM percentage',service:'Selected-service checks'};
+ const dialog=page.getByRole('dialog',{name:de?'Gruppenwartung beenden':'End group maintenance',exact:true}),review=dialog.getByRole('button',{name:de?'Vorzeitige Enden prüfen':'Review early ends',exact:true}),before=state().posts;
+ const active=fixture.members.flatMap(member=>member.targets.filter(target=>target.windows[0]?.endedAt===null&&Date.parse(target.windows[0].endsAt)>Date.parse(fixture.serverNow)).map(target=>({name:member.name,deviceId:member.deviceId,target}))),selected=active.slice(0,3);
+ const checkboxName=row=>`${row.name} ${row.deviceId} ${labels[row.target.domain]} ${row.target.windows[0].id}`;
+ const capture=async scene=>{if(fleetGroupsCaptureMatrix.some(row=>row.scene===scene&&row.width===width&&row.locale===locale)){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await shot(page,fleetGroupsCaptureName(scene,width,locale),fleetGroupsDisclosure);}};
+ await expect(review).toBeDisabled();await expect(dialog.getByRole('checkbox')).toHaveCount(active.length);
+ for(const row of active)await expect(dialog.getByRole('checkbox',{name:checkboxName(row),exact:true})).not.toBeChecked();
+ await expect(dialog).toContainText((de?'Ausgeschlossene Linux-Mitglieder':'Excluded Linux members')+': 1');await expect(dialog).toContainText((de?'Nicht verfügbare Mitglieder':'Unavailable members')+': 1');expect(state().posts).toBe(before);await capture('maintenance-end-unchecked');
+ for(const row of selected)await dialog.getByRole('checkbox',{name:checkboxName(row),exact:true}).check();await review.click();
+ const table=dialog.getByRole('table',{name:de?'Vorzeitige Enden prüfen':'Review early ends',exact:true}),apply=dialog.getByRole('button',{name:de?'Geprüfte Fenster beenden':'End reviewed windows',exact:true}),consent=dialog.getByRole('checkbox',{name:de?'Nur diese exakten aktiven Fenster jetzt beenden. Jedes ursprüngliche Ende bleibt im Verlauf.':'End only these exact active windows now. Keep each original end in history.',exact:true});
+ await expect(table.getByRole('row')).toHaveCount(4);await expect(table.getByRole('columnheader')).toHaveText(de?['Gerät / exakte ID','Umfang','Ursprüngliches Ende','Wartungsversion']:['Device / exact ID','Scope','Original end','Maintenance revision']);await expect(apply).toBeDisabled();await expect(consent).not.toBeChecked();expect(state().posts).toBe(before);
+ const details=dialog.locator('details');await expect(details).not.toHaveAttribute('open','');await details.locator('summary').click();
+ for(const [index,row]of selected.entries()){await expect(details).toContainText(row.target.key);await expect(details).toContainText(row.target.windows[0].endsAt);await expect(details).toContainText((de?'Fenster-ID':'Window ID')+': '+row.target.windows[0].id+' · '+(de?'Wartungsversion':'Maintenance revision')+': '+row.target.revision);await expect(table.locator('tbody time').nth(index)).toHaveAttribute('datetime',row.target.windows[0].endsAt);}
+ await details.locator('summary').click();await expect(details).not.toHaveAttribute('open','');await verifyLayout();await capture('maintenance-end-review');
+ await consent.check();await apply.click();
+ const results=dialog.getByRole('table',{name:de?'Wartungsergebnisse je Fenster':'Per-window maintenance results',exact:true});await expect(results.getByRole('row')).toHaveCount(4);await expect(results.getByRole('columnheader')).toHaveText(de?['Gerät / exakte ID','Umfang','Ursprüngliches Ende','Wartungsversion','Ergebnis']:['Device / exact ID','Scope','Original end','Maintenance revision','Outcome']);
+ for(const [index,row]of selected.entries()){const result=results.getByRole('row').nth(index+1);await expect(result).toContainText(row.deviceId);await expect(result).toContainText(labels[row.target.domain]);await expect(result.locator('time')).toHaveAttribute('datetime',row.target.windows[0].endsAt);await expect(result.getByRole('cell').last()).toContainText(index===0?(de?'Beendet · bestätigte Antwort':'Ended · confirmed response'):index===1?(de?'Gesperrt / Konflikt':'Blocked / conflict'):(de?'Nicht versucht':'Not attempted'));}
+ expect(state().posts).toBe(before+2);expect(state().bodies).toEqual(selected.slice(0,2).map(row=>({groupRevision:fixture.groupRevision,key:row.target.key,revision:row.target.revision,windowId:row.target.windows[0].id})));
+ for(const member of fixture.members)for(const target of member.targets){const current=state().view.members.flatMap(row=>row.targets).find(row=>row.key===target.key);if(target.key===selected[0].target.key){expect(current.revision).toBe(target.revision+1);expect(current.windows[0].endedAt===null).toBe(false);expect({...current.windows[0],endedAt:null}).toEqual(target.windows[0]);expect(current.windows.slice(1)).toEqual(target.windows.slice(1));}else expect(current).toEqual(target);}
+ await expect(apply).toHaveCount(0);await verifyLayout();await capture('maintenance-end-results');await dialog.getByRole('button',{name:de?'Wartung schließen':'Close maintenance',exact:true}).click();
+}
 export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
  stage='login';failures=0;pending=0;await login(page);
- let groupRows=[],policies=new Map(),policyPosts=0,groupPosts=0,monitoring=null,monitoringPosts=0,maintenance=null,maintenancePosts=0,maintenanceBodies=[],mode='normal',release=null,held=false;
+ let groupRows=[],policies=new Map(),policyPosts=0,groupPosts=0,monitoring=null,monitoringPosts=0,maintenance=null,maintenancePosts=0,maintenanceBodies=[],maintenanceEndPosts=0,maintenanceEndBodies=[],maintenanceEndExpected=[],mode='normal',release=null,held=false;
  const external=[],unexpected=[],ids=fleetGroupIds;
  const getSession=async()=>{const response=await page.request.get(base+'/api/auth/session',{maxRedirects:0,timeout:5000});try{assert.equal(response.status(),200);const session=await response.json();assert.equal(session.authenticated,true);assert.equal(session.loginMode,'shared');return session;}finally{await response.dispose();}};
  const fulfill=(route,value,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(value)});
@@ -68,13 +117,19 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
    }
    assert.ok(validGroupMonitoringView(monitoring,ids.group));return fulfill(route,monitoring);
   }
-  if(url.pathname===`/api/fleet/groups/${ids.group}/maintenance`||url.pathname===`/api/fleet/groups/${ids.group}/maintenance/start`){
-   assert.equal(url.search,'');const starting=url.pathname.endsWith('/start');assert.equal(req.method(),starting?'POST':'GET');const session=await getSession(),group=groupRows.find(g=>g.id===ids.group);
+  if(url.pathname===`/api/fleet/groups/${ids.group}/maintenance`||url.pathname===`/api/fleet/groups/${ids.group}/maintenance/start`||url.pathname===`/api/fleet/groups/${ids.group}/maintenance/end`){
+   assert.equal(url.search,'');const starting=url.pathname.endsWith('/start'),ending=url.pathname.endsWith('/end');assert.equal(req.method(),starting||ending?'POST':'GET');const session=await getSession(),group=groupRows.find(g=>g.id===ids.group);
    maintenance??=fleetGroupsMaintenanceFixture(session.serverNow,group.revision,group.name);maintenance.serverNow=session.serverNow;
    if(starting){
     assert.equal(req.headers()['x-csrf-token'],session.csrfToken);const body=JSON.parse(req.postData());assert.deepEqual(Object.keys(body).sort(),['endsAt','groupRevision','intent','key','revision']);assert.equal(body.groupRevision,group.revision);assert.equal(body.intent,'planned-work');assert.equal(body.revision,0);const target=maintenance.members.flatMap(m=>m.targets).find(t=>t.key===body.key);assert.ok(target);assert.equal(target.domain,'all');maintenancePosts++;maintenanceBodies.push(body);
     if(maintenanceBodies.length===2){assert.equal(body.endsAt,maintenanceBodies[0].endsAt);return fulfill(route,{error:{code:'windows_maintenance_conflict'}},409);}
     assert.equal(maintenanceBodies.length,1);target.revision++;target.changedAt=session.serverNow;target.windows=[{id:target.revision,startedAt:session.serverNow,endsAt:body.endsAt,endedAt:null,intent:body.intent}];
+   }
+   if(ending){
+    assert.equal(req.headers()['x-csrf-token'],session.csrfToken);const body=JSON.parse(req.postData());assert.equal(body.groupRevision,group.revision);assert.deepEqual(body,maintenanceEndExpected[maintenanceEndBodies.length]);
+    const next=fleetGroupsMaintenanceEndWrite(maintenance,body,session.serverNow);maintenanceEndPosts++;maintenanceEndBodies.push(body);
+    if(maintenanceEndBodies.length===2)return fulfill(route,{error:{code:'windows_maintenance_conflict'}},409);
+    assert.equal(maintenanceEndBodies.length,1);maintenance=next;
    }
    assert.ok(validGroupMaintenanceView(maintenance,ids.group));return fulfill(route,maintenance);
   }
@@ -107,7 +162,7 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
   for(const cell of layout.cells){expect(cell.left).toBeGreaterThanOrEqual(-1);expect(cell.right).toBeGreaterThanOrEqual(-1);expect(cell.overflow).toBeLessThanOrEqual(1);}
  };
  for(const locale of ['en','de'])for(const width of [1440,390]){
-  const de=locale==='de';await page.setViewportSize({width,height:width===390?844:1000});await page.getByRole('combobox',{name:/Language|Sprache/}).selectOption(locale);const session=await getSession();groupRows=fleetGroupsBrowserFixture(session.serverNow,session.expiresAt).view.groups;policies=new Map([[ids.second+':cpu',{enabled:true,thresholdPercent:90,revision:1}]]);mode='normal';monitoring=null;maintenance=null;maintenanceBodies=[];await page.reload();await expect(page.locator('.app-shell')).toBeVisible();
+  const de=locale==='de';await page.setViewportSize({width,height:width===390?844:1000});await page.getByRole('combobox',{name:/Language|Sprache/}).selectOption(locale);const session=await getSession();groupRows=fleetGroupsBrowserFixture(session.serverNow,session.expiresAt).view.groups;policies=new Map([[ids.second+':cpu',{enabled:true,thresholdPercent:90,revision:1}]]);mode='normal';monitoring=null;maintenance=null;maintenanceBodies=[];maintenanceEndBodies=[];maintenanceEndExpected=[];await page.reload();await expect(page.locator('.app-shell')).toBeVisible();
   stage='groups';await page.getByRole('button',{name:de?'Flottengruppen':'Fleet groups',exact:true}).click();const manage=page.getByRole('button',{name:de?'Gruppen verwalten':'Manage groups',exact:true});await expect(manage).toBeEnabled();
   await manage.click();await page.getByRole('button',{name:de?'Gruppe erstellen':'Create group',exact:true}).click();await page.getByRole('textbox',{name:de?'Gruppenname':'Group name'}).fill('Synthetic Temporary');await page.getByRole('checkbox',{name:`Synthetic Desk One Windows · ${ids.first}`,exact:true}).check();const beforeCreate=groupPosts;await page.getByRole('button',{name:de?'Gruppenänderungen prüfen':'Review group changes',exact:true}).click();expect(groupPosts).toBe(beforeCreate);await page.getByRole('button',{name:de?'Geprüfte Gruppe speichern':'Save reviewed group',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect(groupPosts).toBe(beforeCreate+1);
   await manage.click();await page.getByRole('button',{name:'Synthetic Temporary',exact:true}).click();await page.getByRole('button',{name:de?'Gruppe löschen':'Delete group',exact:true}).click();expect(groupPosts).toBe(beforeCreate+1);await page.getByRole('button',{name:de?'Löschen der Gruppe bestätigen':'Confirm group deletion',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect(groupPosts).toBe(beforeCreate+2);
@@ -148,6 +203,10 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
   const maintenanceApply=maintenanceDialog.getByRole('button',{name:de?'Geprüfte Wartung starten':'Start reviewed maintenance',exact:true}),maintenanceConsent=maintenanceDialog.getByRole('checkbox',{name:de?'Diesen exakten Wartungsumfang für diese gewählten Mitglieder bis zum oben angezeigten festen Ende starten.':'Start this exact maintenance scope for these selected members until the fixed end shown above.',exact:true});
   await expect(maintenanceApply).toBeDisabled();await expect(maintenanceConsent).not.toBeChecked();expect(maintenancePosts).toBe(maintenanceBefore);await verifyPolicyLayout();await maintenanceShot('maintenance-review');
   await maintenanceConsent.check();await maintenanceApply.click();const maintenanceResult=maintenanceDialog.getByRole('table',{name:de?'Wartungsergebnisse je Gerät':'Per-device maintenance results',exact:true});await expect(maintenanceResult).toContainText(de?'Gestartet · bestätigte Antwort':'Started · confirmed response');await expect(maintenanceResult).toContainText(de?'Gesperrt / Konflikt':'Blocked / conflict');expect(maintenancePosts).toBe(maintenanceBefore+2);expect(maintenanceBodies[0].endsAt).toBe(maintenanceBodies[1].endsAt);await verifyPolicyLayout();await maintenanceShot('maintenance-results');await maintenanceDialog.getByRole('button',{name:de?'Wartung schließen':'Close maintenance',exact:true}).click();
+  stage='maintenance-end';const endSession=await getSession(),endGroup=groupRows.find(group=>group.id===ids.group);maintenance=fleetGroupsMaintenanceEndFixture(endSession.serverNow,endGroup.revision,endGroup.name);const endFixture=structuredClone(maintenance);
+  maintenanceEndExpected=endFixture.members.flatMap(member=>member.targets.filter(target=>target.windows[0]?.endedAt===null&&Date.parse(target.windows[0].endsAt)>Date.parse(endFixture.serverNow))).slice(0,3).map(target=>({groupRevision:endFixture.groupRevision,key:target.key,revision:target.revision,windowId:target.windows[0].id}));
+  await page.getByRole('button',{name:de?'Gruppenwartung beenden':'End group maintenance',exact:true}).click();
+  await exerciseFleetGroupsMaintenanceEnd({page,expect,width,locale,fixture:endFixture,shot,verifyLayout:verifyPolicyLayout,state:()=>({posts:maintenanceEndPosts,bodies:maintenanceEndBodies,view:maintenance})});
   // Failure outcomes use the same production dialog and exact routes; never loosen routing.
   if(locale==='en'&&width===1440){
    stage='conflict';mode='conflict';await prepare('disk');const previous=policyPosts;await apply();await expect(page.getByText('Conflict · review again',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(previous+1);await close();
@@ -163,5 +222,5 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
    stage='stop';mode='hold';await prepare('disk');const stoppedBefore=policyPosts;await apply();await expect.poll(()=>held).toBe(true);await page.getByRole('button',{name:'Stop remaining writes',exact:true}).click();assert.ok(release);release();release=null;await expect(page.getByText('Unconfirmed · write may have happened',{exact:true})).toBeVisible();await expect(page.getByText('Not attempted',{exact:true})).toBeVisible();expect(policyPosts).toBe(stoppedBefore+1);await close();mode='normal';
   }
  }
- await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);expect(external).toEqual([]);expect(unexpected).toEqual([]);expect(failures).toBe(0);stage='complete';return{screens:fleetGroupsCaptureMatrix.length,groupWrites:groupPosts,policyWrites:policyPosts,monitoringWrites:monitoringPosts,maintenanceWrites:maintenancePosts,nativeAcceptance:false,liveStoreAcceptance:false};
+ await expect.poll(()=>fleetGroupsRouteState().pending).toBe(0);expect(external).toEqual([]);expect(unexpected).toEqual([]);expect(failures).toBe(0);stage='complete';return{screens:fleetGroupsCaptureMatrix.length,groupWrites:groupPosts,policyWrites:policyPosts,monitoringWrites:monitoringPosts,maintenanceWrites:maintenancePosts,maintenanceEndWrites:maintenanceEndPosts,nativeAcceptance:false,liveStoreAcceptance:false};
 }
