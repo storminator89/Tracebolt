@@ -284,7 +284,10 @@ missing material rather than inventing credentials or weakening protection.
 - The Windows fleet incident inbox and operator acknowledgement are manager-only.
   Read `docs/windows-incident-inbox.md` before changing identity/domain keys, source
   deadlines or the enrollment-to-operator commit lease. Seen never means resolved;
-  keep all v1 histories, Linux alarms and AI admission unchanged.
+  keep all v1 histories, Linux alarms and AI admission unchanged. For the exact
+  service review bridge read `docs/windows-service-incident-review.md`; preserve
+  the original-identity projection and transaction-time expected-binding guard.
+  Opening a review must never choose an operation or create a preview/grant.
 - Bounded Windows planned maintenance is separate manager-owned metadata. Read
   `docs/windows-maintenance.md`. Preserve original identity, revision, immutable
   end, current enrollment lease and final clock/session guards. It suppresses

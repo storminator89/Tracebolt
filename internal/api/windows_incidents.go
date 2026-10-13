@@ -341,6 +341,11 @@ func projectWindowsInbox(snapshot store.WindowsIncidentSnapshot, authority map[s
 // The fleet route is distinct from Linux investigations and every v1 per-device
 // view. Only a shared administrator can deliberately mark an exact episode seen.
 func (h *operatorHandler) windowsIncidentsAPI(w http.ResponseWriter, r *http.Request) {
+	if _, ok := windowsServiceIncidentReviewKey(r); ok {
+		h.windowsServiceIncidentReview(w, r)
+		return
+	}
+
 	mutation := r.URL.Path == "/api/fleet/windows-incidents/acknowledge"
 	if r.URL.Path != "/api/fleet/windows-incidents" && !mutation {
 		fail(w, 404, "not_found", "Windows incidents are unavailable.")

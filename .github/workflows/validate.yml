@@ -782,7 +782,7 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/fleet-groups-runner.mjs
-      - name: Windows incident inbox and seen readback (8 required screenshots)
+      - name: Windows incident inbox, seen readback and exact service review (12 required screenshots)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
         env:

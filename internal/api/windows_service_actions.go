@@ -21,6 +21,13 @@ type windowsServiceActionManager interface {
 	TransportProfile() string
 	Available() bool
 }
+
+// Optional extension: old v1 callers and their response/body contracts are unchanged.
+type windowsServiceReviewActionManager interface {
+	ViewExpectedAt(context.Context, string, string) (windowsactionjob.Record, time.Time, error)
+	PreviewExpected(context.Context, string, string, string, string, string) (windowsactionjob.Record, error)
+}
+
 type windowsServiceActionJob struct {
 	Identity      windowsaction.Identity `json:"identity"`
 	Target        string                 `json:"target"`
@@ -100,7 +107,16 @@ func (h *operatorHandler) windowsServiceActions(w http.ResponseWriter, r *http.R
 		if !readObject(w, r, 512, []string{"target", "operation"}, &in) {
 			return
 		}
-		_, e = h.windowsActions.Preview(r.Context(), device, actor, in.Target, in.Operation)
+		if expected := r.Header.Get(windowsServiceReviewHeader); expected != "" {
+			manager, ok := h.windowsActions.(windowsServiceReviewActionManager)
+			if !ok {
+				e = windowsaction.ErrUnavailable
+			} else {
+				_, e = manager.PreviewExpected(r.Context(), device, actor, in.Target, in.Operation, expected)
+			}
+		} else {
+			_, e = h.windowsActions.Preview(r.Context(), device, actor, in.Target, in.Operation)
+		}
 	} else {
 		var in struct {
 			PreviewID     string `json:"previewId"`
@@ -120,6 +136,10 @@ func (h *operatorHandler) windowsServiceActions(w http.ResponseWriter, r *http.R
 }
 func (h *operatorHandler) writeWindowsServiceActions(w http.ResponseWriter, r *http.Request, device string) {
 	v := windowsServiceActionView{SchemaVersion: "tracebolt.windows-service-action-view.v1", DeviceID: device, ServerNow: h.auth.Now().UTC(), Reason: "not_configured"}
+	if h.windowsActions == nil && r.Header.Get(windowsServiceReviewHeader) != "" {
+		windowsServiceActionError(w, windowsaction.ErrUnavailable)
+		return
+	}
 	if h.windowsActions == nil {
 		devices, e := h.app.devices()
 		if e != nil {
@@ -137,7 +157,19 @@ func (h *operatorHandler) writeWindowsServiceActions(w http.ResponseWriter, r *h
 			return
 		}
 	} else {
-		record, now, e := h.windowsActions.ViewAt(r.Context(), device)
+		var record windowsactionjob.Record
+		var now time.Time
+		var e error
+		if expected := r.Header.Get(windowsServiceReviewHeader); expected != "" {
+			manager, ok := h.windowsActions.(windowsServiceReviewActionManager)
+			if !ok {
+				e = windowsaction.ErrUnavailable
+			} else {
+				record, now, e = manager.ViewExpectedAt(r.Context(), device, expected)
+			}
+		} else {
+			record, now, e = h.windowsActions.ViewAt(r.Context(), device)
+		}
 		if e != nil {
 			windowsServiceActionError(w, e)
 			return

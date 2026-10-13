@@ -135,7 +135,7 @@ export async function mutate<T>(path: string, data: unknown, signal?: AbortSigna
  * This helper retains the protected epoch across the CSRF read and never accepts
  * caller-supplied credentials or a destination other than the existing API path. */
 export async function mutateRaw<T>(path: string, rawJson: string, headers: Record<string, string> = {}, signal?: AbortSignal, maxResponseBytes = 32768, beforeSend?: () => boolean): Promise<T> {
-    if (typeof rawJson !== 'string' || new TextEncoder().encode(rawJson).byteLength > 2097152 || Object.keys(headers).some(key => key !== 'X-Tracebolt-Catalog-Revision'))
+    if (typeof rawJson !== 'string' || new TextEncoder().encode(rawJson).byteLength > 2097152 || Object.keys(headers).some(key => key !== 'X-Tracebolt-Catalog-Revision' && !(key === 'X-Tracebolt-Windows-Service-Review' && /^\/devices\/agent_[a-f0-9]{32}\/windows-service-actions\/preview$/.test(path) && /^sha256:[a-f0-9]{64}$/.test(headers[key]))))
         throw new APIError(t("Die Anfrage konnte nicht geladen werden (HTTP {0}).", { "0": 400 }), 400);
     const epoch = protectedEpoch;
     const { csrfToken } = await request<{ csrfToken: string }>('/session', { signal }, Math.min(maxResponseBytes, 32768));

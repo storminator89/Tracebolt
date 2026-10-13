@@ -48,7 +48,9 @@ Coverage counts distinguish currently admitted Windows devices, unavailable
 identities, unknown checks and disabled policies. No rows or zero active incidents
 is not a whole-fleet health assertion. Missing/revoked/replaced identities expose
 no retained rows. An unavailable/corrupt source returns an unavailable inbox,
-never a fabricated empty success. The row links to the existing device Health tab. The Status filter separates
+never a fabricated empty success. The row links to the existing device Health tab. Service episodes also offer an
+[identity-bound service review](windows-service-incident-review.md) with the existing
+independently approved controls; opening the review creates no action preview or grant. The Status filter separates
 active/closed/recent/all retained views. Compact opening dates include the local
 UTC offset; expandable evidence retains every original exact timestamp and the
 full device ID. Coverage and unknown source status remain visible.
