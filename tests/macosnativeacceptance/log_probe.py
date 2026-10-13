@@ -72,12 +72,37 @@ REASONS = frozenset(("not_admitted", "not_run", "accepted", "not_observed",
     "incomplete_markers", "timestamp_shape", "outside_window", "clock_regression",
     "window_limit", "emitter_unavailable", "emitter_protocol", "emitter_timeout",
     "reap_failed", "cancelled", "internal_error"))
+# Version 2 adds rejection-only diagnostics. Codes are source constants, never
+# field names, messages, exception strings or values obtained from native output.
+DIAGNOSTIC_REASONS = {
+    "duplicate_keys": "invalid_json", "structural_json": "invalid_json",
+    "decode_json": "invalid_json", "numeric_encoding": "unsupported_schema",
+    "object_shape": "unsupported_schema", "framing": "malformed_framing",
+    "terminal_shape": "unsupported_schema", "missing_required": "unsupported_schema",
+    "extra_event_keys": "unsupported_schema", "event_type": "unsupported_schema",
+    "message_type": "unsupported_schema", "known_field_type": "unsupported_schema",
+    "backtrace_shape": "unsupported_schema", "attribution": "unrelated_event",
+    "negative_event": "unrelated_event", "duplicate_marker": "duplicate_event",
+    "timestamp_shape": "timestamp_shape", "outside_window": "outside_window",
+}
+ATTRIBUTED_SCHEMA_CODES = frozenset(("extra_event_keys", "event_type", "message_type",
+                                    "known_field_type", "backtrace_shape"))
+DIAGNOSTIC_TYPES = frozenset(("null", "string", "integer", "number", "boolean", "array", "object"))
+ATTRIBUTION_FIELDS = frozenset(("subsystem", "category", "processID", "eventMessage", "timestamp"))
 _ADMISSION = ContextVar("synthetic_oslog_admission", default=None)
 
 
+def _diagnostic_template():
+    return dict(code="none", syntheticAttributionVerified=False,
+                knownFieldTypes={}, unknownKeyCount=None)
+
+
 class _Failure(Exception):
-    def __init__(self, reason):
+    def __init__(self, reason, code="none"):
         self.reason = reason if reason in REASONS else "internal_error"
+        self.diagnostic = _diagnostic_template()
+        if DIAGNOSTIC_REASONS.get(code) == self.reason:
+            self.diagnostic["code"] = code
         super().__init__(self.reason)
 
 
@@ -93,7 +118,7 @@ def _query_template(index):
     return dict(id=QUERY_IDS[index], status="not_run", reason="not_run", exitCode=None,
                 stdoutBytes=0, stderrBytes=0, elapsedMilliseconds=0, eventCount=0,
                 started=False, reaped=False, timedOut=False, bounded=True, framingComplete=False,
-                terminalFinished=False, fields={},
+                terminalFinished=False, fields={}, diagnostic=_diagnostic_template(),
                 observations={name: None for name in OBSERVATION_KEYS})
 
 
@@ -101,7 +126,7 @@ def result_template(reason="not_admitted"):
     """Closed failure result; caller text can never be copied into it."""
     if reason not in REASONS:
         reason = "internal_error"
-    return dict(schemaVersion=1, gate="synthetic_oslog_schema", status="blocked",
+    return dict(schemaVersion=2, gate="synthetic_oslog_schema", status="blocked",
                 reason=reason, emitter=dict(started=False, reaped=False,
                 deadlineExceeded=False, stdoutBytes=0, stderrBytes=0),
                 queries=[_query_template(i) for i in range(3)])
@@ -112,7 +137,7 @@ def validate_result(value):
     try:
         if type(value) is not dict or set(value) != set(result_template()):
             return False
-        if type(value["schemaVersion"]) is not int or value["schemaVersion"] != 1:
+        if type(value["schemaVersion"]) is not int or value["schemaVersion"] != 2:
             return False
         if value["gate"] != "synthetic_oslog_schema" or value["status"] not in STATUSES - {"not_run"} or value["reason"] not in REASONS:
             return False
@@ -148,6 +173,8 @@ def validate_result(value):
             if type(q["fields"]) is not dict or (q["fields"] and set(q["fields"]) != set(FIELD_TYPES)):
                 return False
             if q["status"] not in ("passed", "inconclusive_not_observed") and (q["fields"] or any(v is not None for v in q["observations"].values())):
+                return False
+            if not _validate_diagnostic(q, i):
                 return False
             if q["reaped"] and not q["started"]:
                 return False
@@ -206,6 +233,55 @@ def validate_result(value):
         return len(json.dumps(value, ensure_ascii=True).encode("ascii")) <= 65536
     except BaseException:
         return False
+
+
+def _validate_diagnostic(q, index):
+    """Closed rejection metadata; this never contributes to passing a query."""
+    d = q["diagnostic"]
+    if type(d) is not dict or set(d) != set(_diagnostic_template()):
+        return False
+    if type(d["syntheticAttributionVerified"]) is not bool or type(d["knownFieldTypes"]) is not dict:
+        return False
+    code = d["code"]
+    if code == "none":
+        return d == _diagnostic_template()
+    if (code not in DIAGNOSTIC_REASONS or q["reason"] != DIAGNOSTIC_REASONS[code]
+            or q["status"] != ("unsupported" if q["reason"] == "unsupported_schema" else "failed")
+            or not q["started"] or (not q["stdoutBytes"] and code != "framing")):
+        return False
+    event_codes = ATTRIBUTED_SCHEMA_CODES | {"missing_required", "attribution", "negative_event",
+                                           "duplicate_marker", "timestamp_shape", "outside_window"}
+    if code in event_codes and not q["eventCount"]:
+        return False
+    if (code == "negative_event") != (index == 2 and code in event_codes):
+        return False
+    if not d["syntheticAttributionVerified"]:
+        return not d["knownFieldTypes"] and d["unknownKeyCount"] is None
+    if code not in ATTRIBUTED_SCHEMA_CODES or index == 2:
+        return False
+    fields, unknown = d["knownFieldTypes"], d["unknownKeyCount"]
+    if not REQUIRED_FIELDS <= fields.keys() <= FIELD_TYPES.keys():
+        return False
+    if any(type(v) is not str or v not in DIAGNOSTIC_TYPES for v in fields.values()):
+        return False
+    if any(fields[name] != FIELD_TYPES[name] for name in ATTRIBUTION_FIELDS):
+        return False
+    if not _integer(unknown, MAX_KEYS) or len(fields) + unknown > MAX_KEYS:
+        return False
+    if (unknown > 0) != (code == "extra_event_keys"):
+        return False
+    if code in {"message_type", "known_field_type", "backtrace_shape"} and fields["eventType"] != "string":
+        return False
+    if code in {"known_field_type", "backtrace_shape"}:
+        if fields["messageType"] != "string":
+            return False
+        invalid = any(kind != FIELD_TYPES[name] and not (kind == "null" and name not in REQUIRED_FIELDS)
+                      for name, kind in fields.items())
+        if code == "known_field_type" and not invalid:
+            return False
+        if code == "backtrace_shape" and fields.get("backtrace") != "object":
+            return False
+    return True
 
 
 @contextmanager
@@ -308,13 +384,13 @@ def _pairs(pairs):
     out = {}
     for key, value in pairs:
         if key in out:
-            raise _Failure("invalid_json")
+            raise _Failure("invalid_json", "duplicate_keys")
         out[key] = value
     return out
 
 
 def _reject_number(_value):
-    raise _Failure("unsupported_schema")
+    raise _Failure("unsupported_schema", "numeric_encoding")
 
 
 def _elapsed_milliseconds(begun):
@@ -351,31 +427,31 @@ class _ObjectScanner:
             self.stack.append([byte, 0])
         elif byte == 58:
             if not self.stack or self.stack[-1][0] != 123:
-                raise _Failure("invalid_json")
+                raise _Failure("invalid_json", "structural_json")
             if self.stack[-1][1] >= MAX_KEYS:
                 raise _Failure("key_limit")
             self.stack[-1][1] += 1
         elif byte in (125, 93):
             if not self.stack or self.stack[-1][0] != (123 if byte == 125 else 91):
-                raise _Failure("invalid_json")
+                raise _Failure("invalid_json", "structural_json")
             self.stack.pop()
             self.done = not self.stack
         self.raw.append(byte)
 
     def decode(self):
         if not self.done or self.string or self.stack:
-            raise _Failure("malformed_framing")
+            raise _Failure("malformed_framing", "framing")
         try:
             value = json.loads(self.raw.decode("utf-8", "strict"), object_pairs_hook=_pairs,
                                parse_float=_reject_number, parse_constant=_reject_number)
             self._unicode(value)
             if type(value) is not dict:
-                raise _Failure("unsupported_schema")
+                raise _Failure("unsupported_schema", "object_shape")
             return value
         except _Failure:
             raise
         except (ValueError, UnicodeError, RecursionError):
-            raise _Failure("invalid_json") from None
+            raise _Failure("invalid_json", "decode_json") from None
         finally:
             self.raw.clear()
 
@@ -406,13 +482,14 @@ class _Events:
             raise _Failure("event_limit")
         self.count += 1
         if self.negative:
-            raise _Failure("unrelated_event")
+            raise _Failure("unrelated_event", "negative_event")
         # Do not derive/output any field-name/type observations until attribution.
         if not REQUIRED_FIELDS <= value.keys():
-            raise _Failure("unsupported_schema")
+            # Missing attribution/time fields cannot yield field/type metadata.
+            raise _Failure("unsupported_schema", "missing_required")
         if (value["subsystem"] != self.subsystem or value["category"] != "schema"
                 or type(value["processID"]) is not int or value["processID"] != self.pid):
-            raise _Failure("unrelated_event")
+            raise _Failure("unrelated_event", "attribution")
         message = value["eventMessage"]
         if message == PUBLIC_MESSAGE:
             marker = "public"
@@ -422,33 +499,26 @@ class _Events:
             marker = "private"
             self.private_visible = message == PRIVATE_PREFIX + _PRIVATE_CANARY
         else:
-            raise _Failure("unrelated_event")
+            raise _Failure("unrelated_event", "attribution")
         if marker in self.markers:
-            raise _Failure("duplicate_event")
+            raise _Failure("duplicate_event", "duplicate_marker")
         if not value.keys() <= FIELD_TYPES.keys():
-            raise _Failure("unsupported_schema")
-        if value["eventType"] != "logEvent" or value["messageType"] != "Default":
-            raise _Failure("unsupported_schema")
+            self.reject_schema(value, "extra_event_keys")
+        if value["eventType"] != "logEvent":
+            self.reject_schema(value, "event_type")
+        if value["messageType"] != "Default":
+            self.reject_schema(value, "message_type")
         for name, field in value.items():
             kind = _type_name(field)
             if kind != FIELD_TYPES[name] and not (field is None and name not in REQUIRED_FIELDS):
-                raise _Failure("unsupported_schema")
+                self.reject_schema(value, "known_field_type")
             if name == "backtrace" and field is not None:
                 if set(field) != {"frames"} or type(field["frames"]) is not list or len(field["frames"]) > 64:
-                    raise _Failure("unsupported_schema")
+                    self.reject_schema(value, "backtrace_shape")
                 for frame in field["frames"]:
                     if type(frame) is not dict or set(frame) != {"imageOffset", "imageUUID"} or type(frame["imageOffset"]) is not int or type(frame["imageUUID"]) is not str:
-                        raise _Failure("unsupported_schema")
-        stamp = value["timestamp"]
-        if type(stamp) is not str or not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}[+-]\d{4}", stamp):
-            raise _Failure("timestamp_shape")
-        try:
-            instant = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
-        except ValueError:
-            raise _Failure("timestamp_shape") from None
-        # Observation only; no claim about the utility's boundary inclusivity.
-        if not self.start <= instant < self.end:
-            raise _Failure("outside_window")
+                        self.reject_schema(value, "backtrace_shape")
+        self.timestamp(value)
         self.markers.add(marker)
         for name, field in value.items():
             row = self.fields[name]
@@ -456,6 +526,55 @@ class _Events:
             row["null"] += field is None
             row["empty"] += type(field) is str and field == ""
             row["types"].add(_type_name(field))
+
+    def timestamp(self, value):
+        stamp = value["timestamp"]
+        if type(stamp) is not str or not re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}[+-]\d{4}", stamp):
+            raise _Failure("timestamp_shape", "timestamp_shape")
+        try:
+            instant = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
+        except ValueError:
+            raise _Failure("timestamp_shape", "timestamp_shape") from None
+        # Observation only; no claim about the utility's boundary inclusivity.
+        if not self.start <= instant < self.end:
+            raise _Failure("outside_window", "outside_window")
+
+    def reject_schema(self, value, code):
+        """Called only after exact subsystem/category/owned PID/message matching.
+
+        A failed timestamp/window check suppresses ALL event-derived metadata.
+        Preserve the original schema failure and ordering rather than admitting
+        an unknown field or replacing its reason with a timestamp failure.
+        """
+        failure = _Failure("unsupported_schema", code)
+        # Repeat the attribution guard locally so future call-site changes cannot
+        # accidentally turn the diagnostic projector into an unguarded exporter.
+        if (self.negative or type(value) is not dict or not REQUIRED_FIELDS <= value.keys()
+                or value["subsystem"] != self.subsystem or value["category"] != "schema"
+                or type(value["processID"]) is not int or value["processID"] != self.pid
+                or value["eventMessage"] not in (PUBLIC_MESSAGE, SPECIAL_MESSAGE,
+                    PRIVATE_PREFIX + _PRIVATE_CANARY, PRIVATE_PREFIX + "<private>")):
+            raise failure
+        try:
+            self.timestamp(value)
+        except _Failure:
+            raise failure from None
+        fields = {}
+        kinds = {str: "string", int: "integer", float: "number", bool: "boolean",
+                 dict: "object", list: "array", type(None): "null"}
+        # Iterate only source-constant names, never copy a key from native input.
+        for name in FIELD_TYPES:
+            if name in value:
+                kind = kinds.get(type(value[name]))
+                if kind is None:
+                    raise failure
+                fields[name] = kind
+        unknown = len(value) - len(fields)
+        if not _integer(unknown, MAX_KEYS) or len(value) > MAX_KEYS:
+            raise failure
+        failure.diagnostic.update(syntheticAttributionVerified=True,
+                                  knownFieldTypes=fields, unknownKeyCount=unknown)
+        raise failure
 
     def observations(self):
         return dict(publicMarker="public" in self.markers, specialMarker="special" in self.markers,
@@ -485,17 +604,17 @@ class _Decoder:
                         raise _Failure("object_limit")
                     self.line_bytes += 1
                     if self.finished:
-                        raise _Failure("malformed_framing")
+                        raise _Failure("malformed_framing", "framing")
                     if self.object is None:
                         if byte in b" \t\r":
                             continue
                         if byte != 123:
-                            raise _Failure("malformed_framing")
+                            raise _Failure("malformed_framing", "framing")
                         self.object = _ObjectScanner()
                     elif self.line_complete:
                         if byte in b" \t\r":
                             continue
-                        raise _Failure("malformed_framing")
+                        raise _Failure("malformed_framing", "framing")
                     self.object.feed_byte(byte)
                     self.line_complete = self.object.done
             return
@@ -521,11 +640,11 @@ class _Decoder:
                 self.object = _ObjectScanner()
                 self.object.feed_byte(byte)
             else:
-                raise _Failure("malformed_framing")
+                raise _Failure("malformed_framing", "framing")
 
     def _line(self):
         if not self.line_bytes or self.finished or self.object is None:
-            raise _Failure("malformed_framing")
+            raise _Failure("malformed_framing", "framing")
         value = self.object.decode()
         self.object = None
         self.line_bytes = 0
@@ -534,7 +653,7 @@ class _Decoder:
             # The manual specifies presence, not a terminal value/type schema.
             # This deliberately narrow hypothesis fails unsupported if different.
             if set(value) != {"finished"} or value["finished"] is not True:
-                raise _Failure("unsupported_schema")
+                raise _Failure("unsupported_schema", "terminal_shape")
             self.finished = True
         else:
             self.events.accept(value)
@@ -544,9 +663,9 @@ class _Decoder:
             if self.line_bytes:
                 self._line()
             if not self.finished:
-                raise _Failure("malformed_framing")
+                raise _Failure("malformed_framing", "framing")
         elif self.state != "done" or self.object is not None:
-            raise _Failure("malformed_framing")
+            raise _Failure("malformed_framing", "framing")
 
 
 def _argv(style, subsystem, pid, start, end, negative=False):
@@ -683,6 +802,7 @@ class _Runtime:
                 if child["query"] is not None:
                     child["query"]["status"], child["query"]["reason"] = "failed", "cancelled"
                     child["query"]["fields"] = {}
+                    child["query"]["diagnostic"] = _diagnostic_template()
                     child["query"]["observations"] = {k: None for k in OBSERVATION_KEYS}
             # Bounded last retry is cleanup only, never a query/emission retry.
             try:
@@ -758,6 +878,7 @@ class _Runtime:
         except _Failure as failure:
             q["status"] = "unsupported" if failure.reason == "unsupported_schema" else "failed"
             q["reason"] = failure.reason
+            q["diagnostic"] = failure.diagnostic
             q["bounded"] = failure.reason not in {"timeout", "byte_limit", "object_limit", "event_limit", "depth_limit", "key_limit", "emitter_timeout"}
             raise
         except _Cancelled:
@@ -775,6 +896,7 @@ class _Runtime:
                 if not self.stop(child):
                     q["status"], q["reason"] = "failed", "reap_failed"
                     q["fields"] = {}
+                    q["diagnostic"] = _diagnostic_template()
                     q["observations"] = {k: None for k in OBSERVATION_KEYS}
 
     def close(self):
