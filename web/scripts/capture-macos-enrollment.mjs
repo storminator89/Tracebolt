@@ -7,6 +7,7 @@ import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {captureDiagnostic} from './macos-enrollment-diagnostics.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url)),require=createRequire(new URL('../package.json',import.meta.url));
 export const origin='https://macos-enrollment.invalid';
 export const disclosure='Synthetic macOS TLS/basic enrollment DTOs; actual compiled EnrollmentSection and protected request code, not the whole App. All requests intercepted. No real login, network, invitation, key, endpoint, host action, service or native acceptance.';
@@ -26,7 +27,7 @@ export async function compile(){
  const assets=new Map(result.outputFiles.map(file=>[`/${path.basename(file.path)}`,{body:Buffer.from(file.contents),contentType:file.path.endsWith('.css')?'text/css':'text/javascript'}]));
  assert(assets.has('/app.js')&&assets.has('/app.css'));
  assets.set('/',{contentType:'text/html',body:'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/app.css"><title>Synthetic macOS enrollment</title></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>'});
- const files=[...new Set([...Object.keys(fixtures.metafile.inputs),...Object.keys(result.metafile.inputs)].filter(file=>file.startsWith('web/src/')).concat(['web/scripts/capture-macos-enrollment.mjs','web/scripts/macos-enrollment-scenes.json','web/scripts/run-macos-enrollment-ci.mjs','web/scripts/check-macos-enrollment-evidence.mjs']))].sort();
+ const files=[...new Set([...Object.keys(fixtures.metafile.inputs),...Object.keys(result.metafile.inputs)].filter(file=>file.startsWith('web/src/')).concat(['web/scripts/capture-macos-enrollment.mjs','web/scripts/macos-enrollment-scenes.json','web/scripts/run-macos-enrollment-ci.mjs','web/scripts/check-macos-enrollment-evidence.mjs','web/scripts/macos-enrollment-diagnostics.mjs']))].sort();
  const sourceInputs=await Promise.all(files.map(async file=>({file,sha256:hash(await readFile(path.join(root,file)))})));
  return {assets,data,sourceInputs,sourceDigest:hash(JSON.stringify(sourceInputs))};
 }
@@ -63,48 +64,55 @@ export async function check(){
  assert.deepEqual(state,{external:1,unexpected:0,writes:1,reads:1,syntheticCreates:0});
  return {sourceDigest:compiled.sourceDigest,scenes:contract.scenes.length,screenshots:captureMatrix.length,browserExecuted:false,nativeAcceptance:false,disclosure};
 }
-export async function capture({browser,expect,output}){
- const compiled=await compile(),captures=[];await mkdir(output,{recursive:true});
- for(const {locale,width,height,scene,file} of captureMatrix){
-  const de=locale==='de',state={external:0,unexpected:0,writes:0,reads:0,syntheticCreates:0},errors=[];
-  const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce',locale:de?'de-DE':'en-US',serviceWorkers:'block'});
+/** Scope controls to the review dialog: expanded history also has a checkbox. */
+export function reviewControls(page,de){
+ const dialog=page.getByRole('dialog',{name:de?'Einladung prüfen':'Review invitation',exact:true});
+ return {comparison:dialog.getByRole('checkbox'),approve:dialog.getByRole('button',{name:de?'Gerät freigeben':'Approve device',exact:true})};
+}
+export async function capture({browser,expect,output,onStage=()=>{}}){
+ const mark=(stage,index=null)=>onStage(captureDiagnostic(stage,index));
+ mark('compile');const compiled=await compile(),captures=[];mark('prepare-output');await mkdir(output,{recursive:true});
+ for(const [index,{locale,width,height,scene,file}] of captureMatrix.entries()){
+  const de=locale==='de',state={external:0,unexpected:0,writes:0,reads:0,syntheticCreates:0};let runtimeErrors=0,completed=false;
+  mark('new-context',index);const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce',locale:de?'de-DE':'en-US',serviceWorkers:'block'});
   try{
-   await context.route('**/*',routeFixture(compiled,scene,state));await context.addInitScript(locale=>{window.__MACOS_LOCALE__=locale;},locale);
-   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));await page.goto(origin+'/');
-   await expect(page.getByRole('button',{name:de?'Enrollment-Status aktualisieren':'Refresh enrollment status',exact:true})).toBeEnabled();
-   await page.getByRole('combobox').selectOption('darwin');
+   mark('route',index);await context.route('**/*',routeFixture(compiled,scene,state));await context.addInitScript(locale=>{window.__MACOS_LOCALE__=locale;},locale);
+   mark('new-page',index);const page=await context.newPage();page.on('pageerror',()=>{runtimeErrors++;});mark('navigate',index);await page.goto(origin+'/');
+   mark('initial-status',index);await expect(page.getByRole('button',{name:de?'Enrollment-Status aktualisieren':'Refresh enrollment status',exact:true})).toBeEnabled();
+   mark('select-macos',index);await page.getByRole('combobox').selectOption('darwin');
    const add=page.getByRole('button',{name:de?'Gerät hinzufügen':'Add device',exact:true});
-   if(scene==='unavailable'){await expect(add).toBeDisabled();await expect(page.getByText(de?/Dieser Manager bietet kein macOS-Enrollment an/:/This manager does not offer macOS enrollment/)).toBeVisible();}
+   if(scene==='unavailable'){mark('unavailable-state',index);await expect(add).toBeDisabled();await expect(page.getByText(de?/Dieser Manager bietet kein macOS-Enrollment an/:/This manager does not offer macOS enrollment/)).toBeVisible();}
    else if(scene==='review'){
-    await page.getByRole('button',{name:de?/Einladungen/:/Invitations/}).click();await page.getByRole('button',{name:de?`Einladung ${compiled.data.macOSFixtureInvitation} prüfen`:`Review invitation ${compiled.data.macOSFixtureInvitation}`,exact:true}).click();
-    await expect(page.getByRole('checkbox')).not.toBeChecked();await expect(page.getByRole('button',{name:de?'Gerät freigeben':'Approve device',exact:true})).toBeDisabled();
+    mark('open-history',index);await page.getByRole('button',{name:de?/Einladungen/:/Invitations/}).click();mark('open-review',index);await page.getByRole('button',{name:de?`Einladung ${compiled.data.macOSFixtureInvitation} prüfen`:`Review invitation ${compiled.data.macOSFixtureInvitation}`,exact:true}).click();
+    const {comparison,approve}=reviewControls(page,de);
+    mark('review-consent',index);await expect(comparison).not.toBeChecked();mark('review-approval',index);await expect(approve).toBeDisabled();
    }else{
-    await expect(add).toBeEnabled();await add.click();
-    if(scene==='ready'){await page.getByText(de?'Erfassungsgrenzen':'Collection limits',{exact:true}).click();await expect(page.getByRole('button',{name:de?'Einladung erstellen':'Create invitation',exact:true})).toBeEnabled();}
+    mark('wait-add',index);await expect(add).toBeEnabled();mark('open-create',index);await add.click();
+    if(scene==='ready'){mark('open-scope',index);await page.getByText(de?'Erfassungsgrenzen':'Collection limits',{exact:true}).click();mark('create-ready',index);await expect(page.getByRole('button',{name:de?'Einladung erstellen':'Create invitation',exact:true})).toBeEnabled();}
     else{
-     await page.getByRole('button',{name:de?'Einladung erstellen':'Create invitation',exact:true}).click();const input=page.getByLabel(de?'Einmaliger Einladungsschlüssel':'One-time invitation secret',{exact:true});await expect(input).toHaveAttribute('type','password');
+     mark('submit-create',index);await page.getByRole('button',{name:de?'Einladung erstellen':'Create invitation',exact:true}).click();const input=page.getByLabel(de?'Einmaliger Einladungsschlüssel':'One-time invitation secret',{exact:true});mark('secret-masked',index);await expect(input).toHaveAttribute('type','password');
      // Exercise interruption cleanup before capture; even the inert synthetic
      // invitation value is excluded from screenshot DOM and exported evidence.
-     await page.evaluate(()=>{window.dispatchEvent(new Event('pagehide'));window.dispatchEvent(new Event('pageshow'));});await expect(input).toHaveCount(0);await expect(page.getByRole('button',{name:de?'Enrollment-Status aktualisieren':'Refresh enrollment status',exact:true})).toBeEnabled();
-     await page.getByText(de?'Lokale Schritte & Voraussetzungen':'Local steps & prerequisites',{exact:true}).click();
-     await expect(page.getByRole('dialog')).toContainText('--foreground');
+     mark('interrupt-clear',index);await page.evaluate(()=>{window.dispatchEvent(new Event('pagehide'));window.dispatchEvent(new Event('pageshow'));});await expect(input).toHaveCount(0);mark('refresh-restored',index);await expect(page.getByRole('button',{name:de?'Enrollment-Status aktualisieren':'Refresh enrollment status',exact:true})).toBeEnabled();
+     mark('open-source-steps',index);await page.getByText(de?'Lokale Schritte & Voraussetzungen':'Local steps & prerequisites',{exact:true}).click();
+     mark('source-instructions',index);await expect(page.getByRole('dialog')).toContainText('--foreground');
     }
    }
-   await page.evaluate(()=>document.fonts.ready);
-   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-   const visible=await page.evaluate(()=>document.body.innerText+'\n'+[...document.querySelectorAll('input')].map(input=>input.value).join('\n'));
-   assert(!visible.includes(compiled.data.macOSFixtureSecret));assert(!visible.includes('agent-service'));assert(!visible.includes('systemd'));
-   await page.screenshot({path:path.join(output,file),animations:'disabled',fullPage:false});
-   assert.deepEqual(errors,[]);assert.equal(state.external+state.unexpected+state.writes,0);assert.equal(state.syntheticCreates,scene==='created'?1:0);
-   captures.push({file,scene,locale,width,height,synthetic:true,publicSafe:true,fullPage:false,sha256:hash(await readFile(path.join(output,file))),sourceDigest:compiled.sourceDigest,syntheticCreates:state.syntheticCreates});
-  }finally{await context.close();}
+   mark('fonts',index);await page.evaluate(()=>document.fonts.ready);
+   mark('no-overflow',index);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+   mark('secret-excluded',index);const visible=await page.evaluate(()=>document.body.innerText+'\n'+[...document.querySelectorAll('input')].map(input=>input.value).join('\n'));assert(!visible.includes(compiled.data.macOSFixtureSecret));
+   mark('linux-command-excluded',index);assert(!visible.includes('agent-service'));assert(!visible.includes('systemd'));
+   mark('screenshot',index);await page.screenshot({path:path.join(output,file),animations:'disabled',fullPage:false});
+   mark('runtime-errors',index);assert.equal(runtimeErrors,0);mark('route-boundary',index);assert.equal(state.external+state.unexpected+state.writes,0);mark('creation-count',index);assert.equal(state.syntheticCreates,scene==='created'?1:0);
+   mark('image-hash',index);captures.push({file,scene,locale,width,height,synthetic:true,publicSafe:true,fullPage:false,sha256:hash(await readFile(path.join(output,file))),sourceDigest:compiled.sourceDigest,syntheticCreates:state.syntheticCreates});completed=true;
+  }finally{if(completed)mark('close-context',index);await context.close();}
  }
  return {sourceInputs:compiled.sourceInputs,sourceDigest:compiled.sourceDigest,captures,disclosure,browserExecuted:true,appMounted:false,nativeAcceptance:false,actualMutationRequests:0,requestsToRealAPI:0};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  if(process.argv.includes('--check'))console.log(JSON.stringify(await check()));
  else if(process.argv.includes('--capture')){
-  const {chromium,expect}=require('@playwright/test'),browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
-  try{const output=path.resolve(process.env.TRACEBOLT_CAPTURE_OUTPUT??path.join(root,'artifacts/macos-enrollment'));const manifest=await capture({browser,expect,output});await writeFile(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');console.log(`PASS: ${manifest.captures.length} synthetic macOS source captures; no actual mutations or native acceptance.`);}finally{await browser.close();}
+  const {chromium,expect}=require('@playwright/test');let browser,tag=captureDiagnostic('launch'),failure=null;
+  try{browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});const output=path.resolve(process.env.TRACEBOLT_CAPTURE_OUTPUT??path.join(root,'artifacts/macos-enrollment'));const manifest=await capture({browser,expect,output,onStage:value=>{tag=value;}});tag=captureDiagnostic('manifest');await writeFile(path.join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');console.log(`PASS: ${manifest.captures.length} synthetic macOS source captures; no actual mutations or native acceptance.`);}catch{failure=tag;process.exitCode=1;}finally{try{await browser?.close();}catch{failure??=captureDiagnostic('close-browser');process.exitCode=1;}if(failure)console.log(`FAIL: synthetic macOS UI gate ${JSON.stringify(failure)}; raw diagnostics withheld.`);}
  }else throw new Error('Use --check for inert validation or --capture for the isolated synthetic UI.');
 }

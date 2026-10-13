@@ -14,3 +14,20 @@ test('only unavailable scene disables the Mac store',async()=>{const h=harness('
 test('creates one inert fixture only after exact body and CSRF, never a second invite',async()=>{const h=harness('created');const first=await h.request('POST','/api/macos/enrollment/invitations',body,headers);assert.equal(first.aborted,false);assert.equal(JSON.parse(first.response.body).snapshot.platform,'darwin');assert.equal((await h.request('POST','/api/macos/enrollment/invitations',body,headers)).aborted,true);assert.equal(h.state.syntheticCreates,1);});
 test('rejects wrong platform, unexpected fields, wrong CSRF and absent request ID',async()=>{for(const [payload,requestHeaders] of [[{...body,platform:'linux'},headers],[{...body,collectionAcknowledged:true},headers],[body,{}],[{platform:'darwin'},headers]]){const h=harness('created');assert.equal((await h.request('POST','/api/macos/enrollment/invitations',payload,requestHeaders)).aborted,true);assert.equal(h.state.syntheticCreates,0);}});
 test('blocks actual approval, termination, other-origin, query and unknown routes',async()=>{const h=harness('review');for(const [method,path] of [['POST','/api/macos/enrollment/invite_1/approve'],['POST','/api/macos/enrollment/invite_1/terminate'],['GET','https://external.invalid/'],['GET','/api/macos/enrollment?token=unsafe'],['GET','/api/windows/enrollment']])assert.equal((await h.request(method,path,method==='POST'?{}:undefined)).aborted,true);assert.equal(h.state.syntheticCreates,0);assert.equal(h.state.external,1);assert.equal(h.state.writes,2);assert.equal(h.state.unexpected,2);});
+
+test('review controls are scoped to the named dialog rather than both page checkboxes',async()=>{
+ const {reviewControls}=await import('./capture-macos-enrollment.mjs');
+ for(const de of [false,true]){
+  const calls=[],comparison={},approve={},dialog={getByRole:(role,options)=>{calls.push({scope:'dialog',role,options});if(role==='checkbox')return comparison;assert.equal(role,'button');assert.deepEqual(options,{name:de?'Gerät freigeben':'Approve device',exact:true});return approve;}};
+  const page={getByRole:(role,options)=>{assert.equal(role,'dialog','Page-wide checkbox lookup is ambiguous');assert.deepEqual(options,{name:de?'Einladung prüfen':'Review invitation',exact:true});return dialog;}};
+  assert.deepEqual(reviewControls(page,de),{comparison,approve});assert.deepEqual(calls.map(call=>[call.scope,call.role]),[['dialog','checkbox'],['dialog','button']]);
+ }
+});
+test('diagnostic tags accept only fixed stage names and canonical scene metadata',async()=>{
+ const {captureDiagnostic,captureStages}=await import('./macos-enrollment-diagnostics.mjs');
+ assert.deepEqual(captureDiagnostic('launch'),{stage:'launch',scene:null,locale:null,width:null});
+ for(const [index,row] of captureMatrix.entries())for(const stage of captureStages)assert.deepEqual(captureDiagnostic(stage,index),{stage,scene:row.scene,locale:row.locale,width:row.width});
+ for(const value of ['secret or page error','https://external.invalid/',{},null,undefined,0])assert.throws(()=>captureDiagnostic(value));
+ for(const index of [-1,16,Infinity,NaN,0.5,'3',{},[]])assert.throws(()=>captureDiagnostic('screenshot',index));
+ assert.equal(JSON.stringify(captureDiagnostic('review-consent',3)).includes('SYNTHETIC_ONLY'),false);
+});

@@ -84,3 +84,14 @@ describe('macOS review transport boundary',()=>{
   let finish!:(value:EnrollmentSnapshot)=>void,signal:AbortSignal|undefined;vi.mocked(mutate).mockImplementation(async(_path,_body,pendingSignal)=>new Promise(resolve=>{finish=resolve;signal=pendingSignal;}));const dialog=await review(record());fireEvent.click(within(dialog).getByRole('button',{name:'Cancel invitation'}));fireEvent.click(within(dialog).getByRole('button',{name:'Confirm termination'}));if(event==='switch')select('linux');else act(()=>window.dispatchEvent(new Event('hashchange')));expect(signal?.aborted).toBe(true);await act(async()=>finish(record('canceled',2)));expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(changed).not.toHaveBeenCalled();
  });
 });
+
+describe('macOS browser capture selector regression',()=>{
+ it('keeps review approval distinct from the background history checkbox',async()=>{
+  const dialog=await review(record('claimed_pending',2));
+  expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  expect(within(dialog).getAllByRole('checkbox')).toHaveLength(1);
+  expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
+  expect(within(dialog).getByRole('button',{name:'Approve device'})).toBeDisabled();
+  expect(mutate).not.toHaveBeenCalled();
+ });
+});
