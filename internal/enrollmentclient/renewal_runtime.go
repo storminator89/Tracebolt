@@ -151,7 +151,7 @@ func runRenewalCycleMode(ctx context.Context, state string, activate bool) (time
 	if strictJSON(raw, &l) != nil || l.Version != renewableLedgerVersion || l.Bootstrap.RenewalPolicy != renewalidentity.Policy || !l.Activated || !l.HandoffPrepared || !l.SenderInitializationStarted {
 		return 0, ErrState
 	}
-	s := &session{&sessionData{store: st, opts: Options{StateDirectory: state, ResumeOnly: true, renewalReconcile: true}}}
+	s := &session{&sessionData{store: st, opts: Options{StateDirectory: state, ResumeOnly: true, renewalReconcile: true, inventoryEnrollment: l.MacOSInventory != nil, inventoryAuthorityReading: l.MacOSInventory != nil}}}
 	defer func() { clear(s.key) }()
 	if e = s.load(l.Bootstrap); e != nil {
 		return 0, e
@@ -175,7 +175,14 @@ func runRenewalCycleMode(ctx context.Context, state string, activate bool) (time
 		c, files, _, err := s.handoff()
 		clearArtifacts(files)
 		anchor, decodeErr := decode64(s.l.CertificateDER, 8192)
-		if err != nil || decodeErr != nil || lanclient.ValidateRenewalSenderState(c, anchor) != nil {
+		validSender := func() bool {
+			if s.l.MacOSInventory != nil {
+				c, _, enable, e := s.macOSInventoryOriginal()
+				return e == nil && validateMacOSInventoryStorage(c.StateDirectory, enable) == nil
+			}
+			return lanclient.ValidateRenewalSenderState(c, anchor) == nil
+		}
+		if err != nil || decodeErr != nil || !validSender() {
 			return 0, ErrState
 		}
 	}

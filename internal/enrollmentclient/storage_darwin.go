@@ -60,7 +60,7 @@ type localStoreData struct {
 
 func storeDataName(name string) bool {
 	switch name {
-	case "renewal-manifest.json", "renewal-transaction.json", "ledger.json", "agent-key.pem", "agent-cert.pem", "server-ca.pem", "agent.json", "ready.json", "service-enrollment.json":
+	case "macos-inventory-consent.json", "macos-inventory-enable.json", "renewal-manifest.json", "renewal-transaction.json", "ledger.json", "agent-key.pem", "agent-cert.pem", "server-ca.pem", "agent.json", "ready.json", "service-enrollment.json":
 		return true
 	}
 	return false
@@ -261,8 +261,8 @@ func (s *localStore) entries() (map[string]bool, error) {
 	}
 	f := os.NewFile(uintptr(fd), "enrollment-directory-entries")
 	defer f.Close()
-	entries, err := f.ReadDir(13)
-	if (err != nil && !errors.Is(err, io.EOF)) || len(entries) > 12 {
+	entries, err := f.ReadDir(15)
+	if (err != nil && !errors.Is(err, io.EOF)) || len(entries) > 14 {
 		return nil, ErrState
 	}
 	names := make(map[string]bool, len(entries))

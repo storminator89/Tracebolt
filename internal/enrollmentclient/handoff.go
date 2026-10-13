@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/renewalidentity"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 type artifact struct {
@@ -19,6 +20,9 @@ type artifact struct {
 }
 
 func (s *session) handoff() (lanclient.Config, []artifact, []byte, error) {
+	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+		return s.macOSInventoryHandoff()
+	}
 	fail := func() (lanclient.Config, []artifact, []byte, error) { return lanclient.Config{}, nil, nil, ErrState }
 	if !s.l.Activated {
 		return fail()
@@ -96,6 +100,16 @@ func clearArtifacts(files []artifact) {
 // request. HandoffPrepared protects telemetry continuity independently of the
 // final ready marker, including interrupted marker publication and deletion.
 func (s *session) validateArtifacts() error {
+	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+		return s.validateMacOSInventoryArtifacts()
+	}
+	if runtime.GOOS == "darwin" {
+		for _, name := range []string{lanclient.MacOSInventoryConsentName, lanclient.MacOSInventoryEnableName} {
+			if _, e := s.store.Read(name); !errors.Is(e, os.ErrNotExist) {
+				return ErrState
+			}
+		}
+	}
 	if s.l.Bootstrap.RenewalPolicy == "" {
 		for _, name := range []string{renewalidentity.ManifestName, renewalidentity.LedgerName} {
 			if _, e := s.store.Read(name); !errors.Is(e, os.ErrNotExist) {
@@ -155,6 +169,9 @@ func (s *session) validateArtifacts() error {
 	return nil
 }
 func (s *session) publish() (Result, error) {
+	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
+		return s.publishMacOSInventory()
+	}
 	if e := s.validateArtifacts(); e != nil {
 		return Result{}, e
 	}

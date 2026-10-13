@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "3438b74d29b531e0bca650d52b5e8e437196682442c7c4f3b407da53294cd07a",
+  "goSourceSha256": "c49c1218dad63c660be749be0cf4af8901f8916f152995e47d599dac5e0b8b81",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -201,7 +201,9 @@
     "localrmm/cmd/macos-agent": [
       "TestMacOSAgentForegroundUsesRenewableSchedulerAndCancellation",
       "TestMacOSAgentReadOnlyValidationAndSafeFailure",
-      "TestMacOSAgentRejectsBeforeStateAccess"
+      "TestMacOSAgentRejectsBeforeStateAccess",
+      "TestMacOSInventoryCommandNeverFallsThroughToBasic",
+      "TestMacOSInventoryCommandRejectsCustomCadence"
     ],
     "localrmm/cmd/macos-agent-service": [
       "TestCLIRefusesMutationAndSecretsBeforeInspection",
@@ -1583,6 +1585,16 @@
       "TestGuidedSenderBoundaryRejectsLostOrChangedDomainBeforeNetwork",
       "TestGuidedSenderLockBlocksEnrollmentResume",
       "TestInitializedSenderResumesInterruptedPublicationWithoutReset",
+      "TestMacOSInventoryArtifactPublicationInterruption",
+      "TestMacOSInventoryExplicitApprovalBeforePrivateState",
+      "TestMacOSInventoryInitializationFenceNeverRecreatesUsedState",
+      "TestMacOSInventoryLegacyLedgerBytesStayUnchanged",
+      "TestMacOSInventoryLoopCancellationAndObserverFailure",
+      "TestMacOSInventoryLoopMaintainsExpiredAuthorityAndFixedCadence",
+      "TestMacOSInventoryOriginalGrantAndDistinctHandoff",
+      "TestMacOSInventoryPendingExpiryKeepsMaintenanceAlive",
+      "TestMacOSInventoryRenewalKeepsExactPendingBytesAndFloors",
+      "TestMacOSInventoryReopenedTrustAndExhaustedAuthority",
       "TestMacOSRouteSelectionUsesTrustedRuntimeOnly",
       "TestPendingCancellationAndBoundedTimeout",
       "TestPendingResumePreservesIdentityAndSenderState",
@@ -2722,6 +2734,9 @@
       "TestLANConfigPlatformMatrixHasNoForeignProfileFallback",
       "TestMacOSConfigAdmitsOnlyBasicGuidedTLS",
       "TestMacOSFixedBootstrapAndTelemetryRoutes",
+      "TestMacOSInventoryConfigIsSeparateStrictFreshDomain",
+      "TestMacOSInventoryExchangeCancellationAndReceiptBounds",
+      "TestMacOSInventoryExchangeFixedFramingAndNoImplicitRetry",
       "TestMalformedOrEncodedReceiptRetainsPending",
       "TestManagedMSIExpiredReadinessReportDoesNotStarveExplicitFreshSequence",
       "TestManagedMSIOnlyReportConflictAllowsFreshPollClassification",

@@ -871,6 +871,75 @@ def windows_action_failure_location(sha, invocation):
         return None
 
 
+JOURNAL_COORDINATES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/journal-browser-coordinates.json'
+
+
+def journal_failure_location(path, sha):
+    """Release fixed numeric coordinates only from this invocation's private file."""
+    try:
+        with os.fdopen(reporter.open_log(JOURNAL_COORDINATES_SOURCE), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 16384:
+                return None
+            contract_raw = stream.read(16385)
+        if len(contract_raw) > 16384:
+            return None
+        contract = reporter.decode(contract_raw)
+        if (type(contract) is not dict or set(contract) != {'schemaVersion', 'cases', 'stages'}
+                or contract['schemaVersion'] != 'tracebolt.journal-browser-coordinates.v1'
+                or type(contract['cases']) is not list or len(contract['cases']) != 7
+                or type(contract['stages']) is not list or not 0 < len(contract['stages']) <= 128):
+            return None
+        for values in [contract['cases'], contract['stages']]:
+            if any(type(item) is not str or not 0 < len(item) <= 160 for item in values) or len(set(values)) != len(values):
+                return None
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        if (not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schemaVersion', 'sourceSha', 'failures', 'setupFailure', 'runtimeFailure', 'finalCheckpoint'}
+                or value['schemaVersion'] != 'tracebolt.journal-browser-failure.v1' or value['sourceSha'] != sha
+                or any(type(value[key]) is not bool for key in ['setupFailure', 'runtimeFailure'])
+                or type(value['finalCheckpoint']) is not int or not 0 <= value['finalCheckpoint'] < len(contract['stages'])
+                or type(value['failures']) is not list or len(value['failures']) > len(contract['cases'])):
+            return None
+        previous, locations = 0, []
+        for row in value['failures']:
+            if (type(row) is not dict or set(row) != {'case', 'checkpoint'}
+                    or type(row['case']) is not int or not previous < row['case'] <= len(contract['cases'])
+                    or type(row['checkpoint']) is not int or not 0 <= row['checkpoint'] < len(contract['stages'])):
+                return None
+            previous = row['case']
+            locations.append('case=%d checkpoint=%d' % (row['case'], row['checkpoint']))
+        if value['setupFailure']:
+            locations.append('setup-checkpoint=%d' % value['finalCheckpoint'])
+        if value['runtimeFailure']:
+            locations.append('runtime-errors')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_journal_browser(env, sha):
+    # Fresh exclusive path per invocation, never under artifacts and always
+    # removed. A previous same-head run cannot supply this run's diagnostic.
+    with tempfile.TemporaryDirectory(prefix='tracebolt-private-journal-') as private:
+        path = Path(private) / 'coordinates.json'
+        try:
+            run(['node', FLOWS['journal']], stage='browser-journal',
+                env={**env, 'TRACEBOLT_JOURNAL_DIAGNOSTICS_PATH': str(path)})
+        except ValueError:
+            location = journal_failure_location(path, sha)
+            if location is not None:
+                print('FAIL journal location: ' + location, flush=True)
+            raise  # Original failure and withheld raw process output stay intact.
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -891,7 +960,10 @@ def browser_checks(plan):
                 raise ValueError('installed browser unavailable')
             env['CHROMIUM_PATH'] = executable
         try:
-            run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
+            if flow == 'journal':
+                run_journal_browser(env, plan['sha'])
+            else:
+                run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
         except ValueError:
             if flow == 'linux-cve-update-review':
                 location = cve_review_failure_location(plan['sha'])

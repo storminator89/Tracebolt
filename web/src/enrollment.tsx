@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowRight, Check, ChevronDown, Copy, Eye, EyeOff, Fingerprint, Info, KeyRound, LoaderCircle, Monitor, Plus, RefreshCw, ShieldCheck, Terminal, TriangleAlert, X } from 'lucide-react';
 import { APIError, mutate, request } from './api';
 import './enrollment-windows.css';
-import { MacOSScope, MacOSSourceInstructions, macOSCopy } from './enrollment-macos';
+import { MacOSScope, MacOSSourceInstructions, macOSCopy, macInventoryCopy } from './enrollment-macos';
 import { selectEnrollmentCommand, verifiedLinuxDownloadAvailable } from './verified-download-command';
 import { Dialog } from './components';
 import { TransportWarning, useOperator } from './auth';
@@ -118,14 +118,16 @@ function EnrollmentStatus({item,now}:{item:EnrollmentSnapshot;now:number|null}){
 type EnrollmentSectionProps={onChanged:()=>void;onDevice:(id:string)=>void;deviceIds:string[]};
 export function EnrollmentSection(props:EnrollmentSectionProps) {
  const [platform,setPlatform]=useState<EnrollmentPlatform>('linux');
+ const [macProfile,setMacProfile]=useState<'basic-readonly-v1'|'macos-read-inventory-v1'>('basic-readonly-v1');
  const session=useRef(new AbortController());
  const selectPlatform=(next:EnrollmentPlatform)=>{if((next!=='linux'&&next!=='windows'&&next!=='darwin')||next===platform)return;session.current.abort();session.current=new AbortController();setPlatform(next);};
- return <EnrollmentPlatformSection key={platform} {...props} platform={platform} sessionSignal={session.current.signal} onSelectPlatform={selectPlatform}/>;
+ const selectMacProfile=(next:typeof macProfile)=>{if(!['basic-readonly-v1','macos-read-inventory-v1'].includes(next)||next===macProfile)return;session.current.abort();session.current=new AbortController();setMacProfile(next);};
+ return <EnrollmentPlatformSection key={`${platform}:${macProfile}`} macProfile={macProfile} onSelectMacProfile={selectMacProfile} {...props} platform={platform} sessionSignal={session.current.signal} onSelectPlatform={selectPlatform}/>;
 }
-function EnrollmentPlatformSection({onChanged,onDevice,deviceIds,platform,sessionSignal,onSelectPlatform}:EnrollmentSectionProps&{platform:EnrollmentPlatform;sessionSignal:AbortSignal;onSelectPlatform:(platform:EnrollmentPlatform)=>void}) {
+function EnrollmentPlatformSection({onChanged,onDevice,deviceIds,platform,sessionSignal,onSelectPlatform,macProfile,onSelectMacProfile}:EnrollmentSectionProps&{platform:EnrollmentPlatform;macProfile:'basic-readonly-v1'|'macos-read-inventory-v1';onSelectMacProfile:(profile:'basic-readonly-v1'|'macos-read-inventory-v1')=>void;sessionSignal:AbortSignal;onSelectPlatform:(platform:EnrollmentPlatform)=>void}) {
  const operator=useOperator();
  const [locale]=useLocale();
- const enrollmentPath=platform==='windows'?'/windows/enrollment':platform==='darwin'?'/macos/enrollment':'/enrollment';
+ const enrollmentPath=platform==='windows'?'/windows/enrollment':platform==='darwin'?(macProfile==='macos-read-inventory-v1'?'/macos-inventory/enrollment':'/macos/enrollment'):'/enrollment';
  const [data,setData]=useState<EnrollmentList|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[loading,setLoading]=useState(false),[expanded,setExpanded]=useState(false),[all,setAll]=useState(false);
  const [missingCapability,setMissingCapability]=useState(false);
  const [dialog,setDialog]=useState<{kind:'create'}|{kind:'record';id:string}|null>(null);
@@ -147,12 +149,12 @@ function EnrollmentPlatformSection({onChanged,onDevice,deviceIds,platform,sessio
  const active=useRef(true),fetcher=useRef<AbortController|null>(null),lastState=useRef(''),lastConfiguration=useRef(''),changed=useRef(onChanged);changed.current=onChanged;
  const load=useCallback(async()=>{
   fetcher.current?.abort();if(clock.current&&currentTime()===null)invalidateConfiguration();const controller=new AbortController();fetcher.current=controller;const startedAt=captureClock();setLoading(true);setError('');setMissingCapability(false);
-  try{const next=await request<EnrollmentList>(enrollmentPath,{signal:controller.signal});if(!active.current||controller.signal.aborted||fetcher.current!==controller)return;if(!validEnrollmentList(next,platform))throw new Error('invalid enrollment contract');
+  try{const next=await request<EnrollmentList>(enrollmentPath,{signal:controller.signal});if(!active.current||controller.signal.aborted||fetcher.current!==controller)return;if(!validEnrollmentList(next,platform,macProfile))throw new Error('invalid enrollment contract');
    const configuration=JSON.stringify([next.enabled,next.platforms,next.recordLimit,enrollmentCollectionProfile(next),next.collectionPrivacy??null]);if(lastConfiguration.current&&configuration!==lastConfiguration.current)invalidateConfiguration();lastConfiguration.current=configuration;
    syncClock(next.serverNow,startedAt);if(configurationContext.current.signal.aborted)configurationContext.current=new AbortController();const signature=next.items.map(item=>`${item.invitationID}:${item.revision}`).join('|');if(lastState.current&&signature!==lastState.current)changed.current();lastState.current=signature;setData(next);
   }catch(error){if(active.current&&!controller.signal.aborted&&fetcher.current===controller){invalidateConfiguration();if(platform==='darwin'&&error instanceof APIError&&error.status===404)setMissingCapability(true);else setError(t('Enrollment-Status nicht verfügbar. Es werden keine Ersatzdaten angezeigt.'));}}
   finally{if(active.current&&!controller.signal.aborted&&fetcher.current===controller)setLoading(false);}
- },[syncClock,invalidateConfiguration,currentTime,enrollmentPath,platform]);
+ },[syncClock,invalidateConfiguration,currentTime,enrollmentPath,platform,macProfile]);
  useEffect(()=>{active.current=true;void load();return()=>{active.current=false;fetcher.current?.abort();configurationContext.current.abort();};},[load]);
  useEffect(()=>{const invalidateSession=()=>{fetcher.current?.abort();invalidateConfiguration();};sessionSignal.addEventListener('abort',invalidateSession);if(sessionSignal.aborted)invalidateSession();return()=>sessionSignal.removeEventListener('abort',invalidateSession);},[sessionSignal,invalidateConfiguration]);
  useEffect(()=>{const close=()=>setDialog(null);window.addEventListener('hashchange',close);return()=>window.removeEventListener('hashchange',close);},[]);
@@ -164,14 +166,15 @@ function EnrollmentPlatformSection({onChanged,onDevice,deviceIds,platform,sessio
  const platformItems=data?.items.filter(item=>item.platform===platform)||[];
  const selected=dialog?.kind==='record'?platformItems.find(item=>item.invitationID===dialog.id):undefined;
  const currentCreation=dialog?.kind==='create'?data?.items:undefined;
- const supported=Boolean(data?.enabled&&data.platforms.includes(platform)&&(platform!=='darwin'||enrollmentCollectionProfile(data)==='basic-readonly-v1'&&macOSTransportAvailable(Boolean(operator?.insecureTestMode))));
+ const supported=Boolean(data?.enabled&&data.platforms.includes(platform)&&(platform!=='darwin'||enrollmentCollectionProfile(data)===macProfile&&macOSTransportAvailable(Boolean(operator?.insecureTestMode))));
  const collectionProfile=data?enrollmentCollectionProfile(data):null;
  const records=platformItems.filter(item=>all||!terminal(item.state));
  const pending=platformItems.filter(item=>item.state==='claimed_pending').length;
  return <section className="panel enrollment-panel" aria-label={t('Geräte hinzufügen')}>
   <label className="enrollment-platform-picker"><span>{locale==='de'?'Betriebssystem':'Operating system'}</span><select value={platform} onChange={event=>onSelectPlatform(event.target.value as EnrollmentPlatform)}><option value="linux">Linux</option><option value="windows">Windows</option><option value="darwin">macOS</option></select></label>
+  {platform==='darwin'&&<label className="enrollment-platform-picker"><span>{locale==='de'?'macOS-Erfassungsumfang':'macOS collection scope'}</span><select value={macProfile} onChange={event=>onSelectMacProfile(event.target.value as typeof macProfile)}><option value="basic-readonly-v1">{locale==='de'?'Basis · nur lesend':'Basic · read-only'}</option><option value="macos-read-inventory-v1">{locale==='de'?'Inventar · neue explizite Zustimmung':'Inventory · fresh explicit approval'}</option></select></label>}
   <div className="enrollment-toolbar"><span className="enrollment-symbol"><Monitor size={19}/></span><div className="enrollment-heading"><h2>{t('Geräte hinzufügen')}{pending>0&&<span className="count">{pending}</span>}</h2><p>{error?t('Status unbekannt'):missingCapability?t('Enrollment ist auf diesem Manager nicht eingerichtet.'):!data?t('Status wird geprüft …'):supported?(platform==='darwin'?(locale==='de'?'macOS · Einzelne Einladung · Manuelle Freigabe':'macOS · Single invitation · Manual approval'):platform==='windows'?(locale==='de'?'Windows · Einzelne Einladung · Manuelle Freigabe':'Windows · Single invitation · Manual approval'):t('Linux · Einzelne Einladung · Manuelle Freigabe')):t('Enrollment ist auf diesem Manager nicht eingerichtet.')}</p></div><div className="enrollment-actions"><button className="icon-button" aria-label={t('Enrollment-Status aktualisieren')} title={t('Enrollment-Status aktualisieren')} onClick={()=>void load()} disabled={loading}><RefreshCw size={15} className={loading?'spin':''}/></button>{platformItems.length>0&&<button className="button" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{t('Einladungen')}<span>{platformItems.length}</span><ChevronDown size={14}/></button>}<button className="button primary" disabled={!supported||now===null||loading||Boolean(error)||data!.items.length>=data!.recordLimit} onClick={()=>setDialog({kind:'create'})}><Plus size={15}/>{t('Gerät hinzufügen')}</button></div></div>
-  {platform==='darwin'&&<div className="enrollment-message" role="status"><Info size={15}/><span>{(missingCapability||data&&!supported)?macOSCopy[locale].unavailable:macOSCopy[locale].availability} {macOSCopy[locale].release}</span></div>}
+  {platform==='darwin'&&<div className="enrollment-message" role="status"><Info size={15}/><span>{(missingCapability||data&&!supported)?(macProfile==='macos-read-inventory-v1'?macInventoryCopy[locale].unavailable:macOSCopy[locale].unavailable):(macProfile==='macos-read-inventory-v1'?macInventoryCopy[locale].availability:macOSCopy[locale].availability)} {macOSCopy[locale].release}</span></div>}
   {notice&&<div className="enrollment-message" role="status"><Info size={15}/><span>{ui(notice)}</span></div>}
   {error&&<div className="enrollment-message" role="alert"><TriangleAlert size={15}/><span>{ui(error)}</span></div>}
   {data&&data.items.length>=data.recordLimit&&<div className="enrollment-message" role="status"><Info size={15}/><span>{t('Limit erreicht: {0} gespeicherte Einträge, einschließlich abgebrochener und widerrufener Einladungen.',{0:data.recordLimit})}</span></div>}
@@ -184,10 +187,10 @@ function EnrollmentPlatformSection({onChanged,onDevice,deviceIds,platform,sessio
 function CreateInvitation({platform,enrollmentPath,collectionProfile,configurationSignal,now,currentTime,onUncertain,insecureTest,onClose,onCreated,onRefresh,currentItems,onReview}:{platform:EnrollmentPlatform;enrollmentPath:string;collectionProfile:EnrollmentCollectionProfile;configurationSignal:AbortSignal;now:number|null;currentTime:()=>number|null;onUncertain:()=>void;insecureTest:boolean;onClose:()=>void;onCreated:(item:EnrollmentSnapshot,serverNow:string,startedAt:EnrollmentClockAnchor)=>void;onRefresh:()=>Promise<void>;currentItems:EnrollmentSnapshot[];onReview:(id:string)=>void}) {
  const [created,setCreated]=useState<{snapshot:EnrollmentSnapshot;bootstrap:EnrollmentBootstrap;bootstrapSHA256?:string}|null>(null),[secret,setSecret]=useState(''),[revealed,setRevealed]=useState(false),[pending,setPending]=useState(false),[error,setError]=useState(''),[uncertain,setUncertain]=useState(false),[copied,setCopied]=useState(false),[commandCopied,setCommandCopied]=useState(false);
  const [locale]=useLocale();
- const windows=platform==='windows',macOS=platform==='darwin',windowsCopy=windowsConsent[locale],macCopy=macOSCopy[locale];
+ const windows=platform==='windows',macOS=platform==='darwin',windowsCopy=windowsConsent[locale],macInventory=collectionProfile==='macos-read-inventory-v1',macCopy=macOSCopy[locale];
  const latestInsecureTest=useRef(insecureTest);latestInsecureTest.current=insecureTest;
  const transportAvailable=()=>!macOS||macOSTransportAvailable(latestInsecureTest.current);
- const completeSource=collectionProfile==='managed-operations-v3',packageSource=collectionProfile==='managed-operations-v2'||completeSource,managed=windows||collectionProfile==='managed-operations-v1'||packageSource;
+ const completeSource=collectionProfile==='managed-operations-v3',packageSource=collectionProfile==='managed-operations-v2'||completeSource,managed=windows||macInventory||collectionProfile==='managed-operations-v1'||packageSource;
  const consentCopy=completeSource?completePackageConsent[locale]:packageConsent[locale];
  const downloadAvailable=platform==='linux'&&verifiedLinuxDownloadAvailable(collectionProfile);
  const readAdminUnavailable=locale==='de'?'Der vollständige Read-Admin-Befehl ist erst nach Aktivierung eines geprüften kompatiblen Releases verfügbar.':'The complete read-admin command is unavailable until a verified compatible release is activated.';
@@ -222,7 +225,7 @@ function CreateInvitation({platform,enrollmentPath,collectionProfile,configurati
  useEffect(()=>{if(transportAvailable())return;clearSecret();setCollectionAcknowledged(false);setInsecureHTTPAcknowledged(false);if(operation.current){operation.current.abort();operation.current=null;setPending(false);setUncertain(true);onUncertain();}},[macOS,insecureTest,clearSecret]);
  useEffect(()=>{if(!record||!secret)return;if(record.state!=='created'||deadlinePassed(record,currentTime())){clearSecret();return;}const remaining=enrollmentDeadline(record)*1000-(currentTime()??Infinity);const timer=window.setTimeout(clearSecret,Math.max(0,Math.min(remaining,2147483647)));return()=>window.clearTimeout(timer);},[record?.state,record?.deadlineAt,now,secret,currentTime,clearSecret]);
  const create=async()=>{
-  if(configurationSignal.aborted||operation.current||created||uncertain||(!transportAvailable()||macOS&&collectionProfile!=='basic-readonly-v1')||currentTime()===null||(managed&&!collectionAcknowledged)||(windows&&insecureTest&&!insecureHTTPAcknowledged))return;const controller=new AbortController();operation.current=controller;const startedAt=captureClock();setPending(true);setError('');
+  if(configurationSignal.aborted||operation.current||created||uncertain||(!transportAvailable()||macOS&&!['basic-readonly-v1','macos-read-inventory-v1'].includes(collectionProfile))||currentTime()===null||(managed&&!collectionAcknowledged)||(windows&&insecureTest&&!insecureHTTPAcknowledged))return;const controller=new AbortController();operation.current=controller;const startedAt=captureClock();setPending(true);setError('');
   try{const next=await mutate<InvitationCreation>(`${enrollmentPath}/invitations`,{requestId:requestID(),platform,...(managed?{collectionAcknowledged:true}:{}),...(windows?{insecureHTTPAcknowledged:insecureTest&&insecureHTTPAcknowledged}:{})},controller.signal);if(!alive.current||controller.signal.aborted||configurationSignal.aborted)return;
    if(!transportAvailable()||next?.schemaVersion!=='tracebolt.enrollment-invitation.v2'||!validServerTime(next.serverNow)||!validSnapshot(next.snapshot)||next.snapshot.state!=='created'||next.snapshot.platform!==platform||next.snapshot.binding.collectionProfile!==collectionProfile||(windows&&next.snapshot.binding.profile!==(insecureTest?'http-test':'tls'))||(macOS&&next.snapshot.binding.profile!=='tls')||!validBootstrapSHA256(next.bootstrapSHA256)||typeof next.invitationSecret!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(next.invitationSecret))throw new Error('invalid invitation response');
    const bootstrap=publicBootstrap(next.bootstrap,next.snapshot,next.invitationSecret);if(!bootstrap)throw new Error('invalid public bootstrap');
@@ -241,13 +244,13 @@ function CreateInvitation({platform,enrollmentPath,collectionProfile,configurati
   {!created?<>
    <p className="enrollment-intro">{t('Freigabe nach Schlüsselvergleich am Gerät.')}</p>
    <p className="enrollment-intro">{macOS?macCopy.selected:windows?windowsCopy.availability:locale==='de'?'Linux ausgewählt. Schließe diesen Dialog, um das Betriebssystem zu wechseln.':'Linux selected. Close this dialog to switch operating systems.'}</p>
-   {macOS&&<MacOSScope/>}
+   {macOS&&!macInventory&&<MacOSScope/>}
    {managed&&<div className="enrollment-consent">
-    {windows?<><h3>{windowsCopy.title}</h3><p>{windowsCopy.scope}</p><p>{windowsCopy.bounds}</p><p>{windowsCopy.exclusions}</p></>:packageSource?<>
+    {macInventory?<MacOSScope inventory/>:windows?<><h3>{windowsCopy.title}</h3><p>{windowsCopy.scope}</p><p>{windowsCopy.bounds}</p><p>{windowsCopy.exclusions}</p></>:packageSource?<>
      <p>{shortConsent.scope}</p><p>{shortConsent.retention}</p><p>{consentCopy.fresh}</p>
      <details className="enrollment-context enrollment-advanced"><summary>{shortConsent.details}<ChevronDown size={14}/></summary><p>{consentCopy.scope}</p><p>{consentCopy.bounds}</p><p>{consentCopy.retention}</p><p>{consentCopy.exclusions}</p></details>
     </>:<><h3>{t('Betriebsinventar · Linux')}</h3><p>{t('Datenträger, Netzwerk, Dienste, Prozesse, Software und Ereignis-Metadaten. Namen und Mount-Pfade können persönliche oder sensible Angaben enthalten.')}</p><p>{t('Keine Befehlszeilen, Umgebungsvariablen oder Rohprotokolle. Kein KI-Export. Sichtbarkeit hängt vom Namensraum und den Berechtigungen des Agents ab.')}</p></>}
-    <label className="check-field"><input type="checkbox" checked={collectionAcknowledged} disabled={pending||uncertain} onChange={event=>setCollectionAcknowledged(event.target.checked)}/><span>{windows?windowsCopy.acknowledge:packageSource?consentCopy.acknowledge:t('Ich bestätige diese zusätzliche Erfassung für das neue Gerät.')}</span></label>
+    <label className="check-field"><input type="checkbox" checked={collectionAcknowledged} disabled={pending||uncertain} onChange={event=>setCollectionAcknowledged(event.target.checked)}/><span>{macInventory?macInventoryCopy[locale].acknowledge:windows?windowsCopy.acknowledge:packageSource?consentCopy.acknowledge:t('Ich bestätige diese zusätzliche Erfassung für das neue Gerät.')}</span></label>
    </div>}
    {windows&&insecureTest&&<div className="enrollment-consent enrollment-windows-http"><p>{windowsCopy.http}</p><label className="check-field"><input type="checkbox" checked={insecureHTTPAcknowledged} disabled={pending||uncertain} onChange={event=>setInsecureHTTPAcknowledged(event.target.checked)}/><span>{windowsCopy.acknowledgeHTTP}</span></label></div>}
    <div className="enrollment-message"><Info size={16}/><span>{macOS?macCopy.release:windows?windowsCopy.release:completeSource&&!downloadAvailable?readAdminUnavailable:downloadAvailable?(locale==='de'?'Nach Erstellung: öffentlicher, quellseitig festgelegter Download-Befehl. Vor Ausführung Voraussetzungen und Dienstberechtigungen prüfen.':'After creation: a public source-pinned download command. Review prerequisites and service permissions before running it.') : completeSource?(locale==='de'?'Öffentliche Bootstrap-Konfiguration; die geprüften nativen Programme müssen separat vorbereitet werden.':'Public bootstrap configuration; reviewed native binaries must be prepared separately.'):t('Öffentliche Bootstrap-Datei. In diesem Build ist kein Installer enthalten.')}</span></div>
@@ -257,7 +260,7 @@ function CreateInvitation({platform,enrollmentPath,collectionProfile,configurati
    <div className="enrollment-created-meta"><EnrollmentStatus item={record!} now={now}/><span>{t('Gültig bis {0}',{0:fullDate(enrollmentDate(enrollmentDeadline(record!)))})}</span></div>
    {record?.state==='created'?<div className="enrollment-install">
     {!macOS&&created.bootstrap.renewalPolicy&&<p role="status">{locale==='de'?'Automatische Zertifikatserneuerung: passender aktueller Quellbuild erforderlich. Die dauerhafte Freigabe wird am Gerät separat bestätigt.':'Automatic certificate renewal requires a matching current source build. Approve ongoing renewal separately on the device.'}</p>}
-    {macOS&&<MacOSSourceInstructions renewable={created.bootstrap.renewalPolicy==='same-key-v1'}/>}
+    {macOS&&<MacOSSourceInstructions inventory={macInventory} renewable={created.bootstrap.renewalPolicy==='same-key-v1'}/>}
     {windows&&created.bootstrap.collectionProfile==='windows-inventory-v1'&&<div className="enrollment-windows-install"><h3>{windowsCopy.installTitle}</h3><p>{windowsCopy.install}</p><p>{windowsCopy.release}</p></div>}
     {publicCommand?<div className="enrollment-public-command">
      <h3>{downloadCommand?downloadCopy.title:commandCopy.title}</h3>

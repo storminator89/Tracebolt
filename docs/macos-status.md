@@ -100,31 +100,42 @@ before activating the successor. Expired/revoked current credentials and final
 revocation checks remain authoritative. See
 [automatic certificate renewal](automatic-certificate-renewal.md).
 
-## Next scopes and remaining native gates
+## Fresh read-only inventory source
 
-The inactive [sender-state foundation](macos-read-inventory-state.md) and
-[protected sender integration](macos-read-inventory-sender.md) add bounded durable
-checkpoints, immutable used/ready markers, an exclusive Darwin storage adapter,
-and the fixed-source coordinator. No production protected authority reader,
-fresh inventory enrollment/consent, endpoint CLI or renewal scheduler selects
-this path yet. Existing basic scope is unchanged.
+The separately enabled `macosInventoryEnabled` domain now connects fresh explicit
+local consent, protected sender state, fixed native collectors, dedicated TLS
+transport, latest-only manager storage and private views in the same manager UI.
+See [fresh runtime](macos-read-inventory-runtime.md) and
+[manager integration](macos-read-inventory-manager.md) for exact commands and
+boundaries. This is source integration, not native execution or a Mac release.
 
-Expanded hardware, software receipts, process accounting labels and numeric
-interface metadata have separate inactive [collector](macos-read-inventory-source.md)
-and [wire contract](macos-read-inventory-wire.md) source. A separate default-off
-[manager foundation](macos-read-inventory-manager.md) now admits only the fresh
-Darwin/TLS inventory profile, with independent initialization fences, original
-receipts, terminal disable, bounded private reads and latest-generation expiry.
-Its operator configuration flag does not create an endpoint scope or make the
-inventory client runnable. Existing endpoint enrollment still rejects this fresh
-profile until explicit local consent and runtime integration are completed.
-There is no expanded inventory UI integration in this slice. The basic profile does
-not collect them, and Linux/Windows consent is not macOS consent. Installer
-receipts must not be labeled a complete installed-application inventory. Public
-package sources may be reused; no private application catalogue is introduced.
+The new profile collects the hardware model identifier, physical/logical CPU
+counts and RAM capacity; Installer receipt identifiers; caller-visible process
+IDs/parent IDs and short accounting labels; and separate passive numeric IPv4/IPv6
+interface metadata. Receipts are not a complete installed-application inventory.
+One-minute collection and latest-generation retention up to the original 24-hour
+expiry are bounded defaults pending native performance acceptance. Full, partial,
+denied and unknown sources remain separate from fresh/stale/expired data age.
+The compact English/German UI labels each source and its limitations explicitly.
+
+Only the distinct fresh `--macos-read-inventory` enrollment path can create this
+scope. It requires typed local acknowledgement before keys, state or network, a
+new identity and the independent protected inventory used/checkpoint/ready state.
+The original basic Mac, Linux and Windows grants are never adopted or expanded.
+Same-key renewal retains exact pending bytes, floors and original capture ages.
+Foreground reporting stops when its process stops; launchd installation remains
+unavailable. Public package sources may be reused; no private catalogue is added.
+
+The [collector](macos-read-inventory-source.md),
+[wire](macos-read-inventory-wire.md), [sender state](macos-read-inventory-state.md)
+and [protected sender](macos-read-inventory-sender.md) remain separate reviewed
+contracts. Their earlier inactive-slice notes are superseded only by this explicit
+runtime composition, not by broader collection or authority.
+
+## Remaining scopes and native gates
 
 Log content, service actions, package changes, unattended installation and software
-updates remain outside this basic slice. They need their own reviewed sources,
+updates remain outside these source scopes. They need their own reviewed sources,
 explicit authority, durable replay/uncertainty contracts and native acceptance.
 No TCC, Full Disk Access, administrative privileges or system extensions are
 requested by the basic reporting source.

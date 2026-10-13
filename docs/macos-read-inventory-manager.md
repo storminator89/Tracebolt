@@ -3,11 +3,12 @@
 This unreleased source slice connects the reviewed macOS inventory wire contract
 to an explicitly enabled, TLS-only manager domain. It is not native macOS
 acceptance, installation or release evidence. The collector, wire and separate
-sender-state foundations remain independently reviewable. This slice does not
-add an endpoint installer, local scope-consent command or runnable inventory
-sender. The generic enrollment client deliberately rejects this expanded profile
-until that distinct fresh local consent and protected handoff are connected.
-Do not publish a usable Mac setup command from this manager-only work.
+sender-state foundations remain independently reviewable. The subsequent
+[fresh endpoint runtime](macos-read-inventory-runtime.md) now connects explicit
+local consent, protected handoff and foreground reporting for matching reviewed
+source builds. The generic enrollment client still rejects this expanded profile;
+only the distinct fresh inventory entry point selects it. There is no installer
+or published Mac download command.
 
 ## Fresh authority and coexistence
 
@@ -131,8 +132,12 @@ paging and logical expiry cleanup. Manager/API tests use response recorders,
 in-memory fixture keys and protected temporary databases, without listeners or
 native macOS reads.
 
-Still required: dedicated fresh local consent/enrollment/configuration and sender
-integration; protected native persistence and cancellation/join; separately
+The matching shared UI now exposes explicit inventory enrollment and bounded
+private inventory views in English and German. It preserves source quality,
+original age and receipt-only software semantics. Source-only runtime and UI
+integration do not establish native acceptance.
+
+Still required: protected native persistence and cancellation/join; separately
 approved Apple Silicon/Intel source/permission behavior; one-minute performance
 and resource checks; exact-artifact end-to-end TLS/renewal/disable/restart and
 retention acceptance. No installation, launchd, TCC, Full Disk Access, account,
