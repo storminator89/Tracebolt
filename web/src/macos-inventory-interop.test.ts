@@ -11,3 +11,12 @@ describe('Go store to private TypeScript inventory contract', () => {
   expect(pages.summary.hardware).toBeNull(); expect(pages.summary.receiptIds).toEqual([]); expect(pages.summary.processes).toEqual([]); expect(pages.summary.interfaces).toEqual([]);
  });
 });
+
+// Exact manager-produced request/response pairs, including legacy bytes.
+import lookupVectors from './macos-inventory-lookup-go-fixture.json';
+import type { MacInventoryQuery } from './macos-inventory-types';
+describe('Go store lookup-v2 interoperability', () => {
+ it.each(lookupVectors)('accepts $name', ({ query, page }) => {
+  expect(validMacInventoryPage(page, page.deviceId, query as MacInventoryQuery)).toBe(true);
+ });
+});

@@ -15,14 +15,27 @@ export interface MacInventorySource { source: string; quality: 'observed' | 'den
 export interface MacHardware extends MacInventorySource { modelIdentifier: string; physicalCPUs: number; logicalCPUs: number; memoryCapacityBytes: number }
 export interface MacProcess { pid: number; parentPid: number; accountingName: string; nameQuality: 'observed' | 'unavailable' }
 export interface MacInterface { name: string; mtu: number; up: boolean; running: boolean; addresses: { ip: string; prefixBits: number }[] }
-export interface MacInventoryQuery { section: 'summary' | MacInventorySection; generationId: string; offset: number; limit: number }
-export interface MacInventoryPage {
- schemaVersion: 'tracebolt.macos-read-inventory-page.v1'; deviceId: string; section: MacInventoryQuery['section'];
+export interface MacInventoryQueryV1 { section: 'summary' | MacInventorySection; generationId: string; offset: number; limit: number }
+export interface MacInventoryLookupQuery { schemaVersion: 'tracebolt.macos-read-inventory-query.v2'; section: 'receipts' | 'processes'; generationId: string; offset: number; limit: number; search: string }
+export type MacInventoryQuery = MacInventoryQueryV1 | MacInventoryLookupQuery;
+interface MacInventoryPageFields {
+ deviceId: string; section: MacInventoryQuery['section'];
  status: 'not-enabled' | 'unavailable' | 'disabled' | 'expired' | 'fresh' | 'stale'; serverNow: string; authorityUntil: string;
  generationId: string; sourceQuality: 'full' | 'partial' | 'unknown'; collectedAt: string | null; expiresAt: string | null;
  sources: Record<MacInventorySection, MacInventorySource> | null; hardware: MacHardware | null;
  receiptIds: string[]; processes: MacProcess[]; interfaces: MacInterface[]; offset: number; total: number; nextOffset: number | null;
 }
+export type MacInventoryPage = MacInventoryPageFields & ({ schemaVersion: 'tracebolt.macos-read-inventory-page.v1' } | { schemaVersion: 'tracebolt.macos-read-inventory-page.v2'; search: string; matchingCount: number });
+export const isMacLookupSection = (section: MacInventoryQuery['section']): section is MacInventoryLookupQuery['section'] => section === 'receipts' || section === 'processes';
+export const validMacInventorySearch = (value: unknown): value is string => typeof value === 'string' && value.length <= 256 && !/[^\x20-\x7e]/.test(value) && value === value.toLowerCase() && !value.startsWith(' ') && !value.endsWith(' ');
+/** Normalize only an explicit Apply/Enter, never a keystroke or revalidation. */
+export function normalizeMacInventorySearch(value: string): string | null {
+ if (/[^\x20-\x7e]/.test(value)) return null;
+ const normalized = value.replace(/^ +| +$/g, '').toLowerCase();
+ return validMacInventorySearch(normalized) ? normalized : null;
+}
+export const macInventoryMatchingCount = (page: MacInventoryPage): number => page.schemaVersion === 'tracebolt.macos-read-inventory-page.v2' ? page.matchingCount : page.total;
+export const macProcessMatches = (row: MacProcess, search: string): boolean => (row.nameQuality === 'observed' && row.accountingName.toLowerCase().includes(search)) || String(row.pid).includes(search) || String(row.parentPid).includes(search);
 const exact = (v: unknown, keys: string[]): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === keys.length && keys.every(key => Object.hasOwn(v, key));
 const integer = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number => typeof v === 'number' && Number.isSafeInteger(v) && !Object.is(v, -0) && v >= 0 && v <= max;
 const text = (v: unknown, pattern: RegExp): v is string => typeof v === 'string' && pattern.test(v);
@@ -54,8 +67,12 @@ export function validMacInterface(v: unknown, family: 'ipv4' | 'ipv6'): v is Mac
  });
 }
 export function validMacInventoryPage(v: unknown, deviceId: string, query: MacInventoryQuery): v is MacInventoryPage {
+ const lookup = 'schemaVersion' in query;
+ if (!exact(query, lookup ? ['schemaVersion', 'section', 'generationId', 'offset', 'limit', 'search'] : ['section', 'generationId', 'offset', 'limit']) || lookup && (query.schemaVersion !== 'tracebolt.macos-read-inventory-query.v2' || !isMacLookupSection(query.section) || !validMacInventorySearch(query.search))) return false;
  if (!integer(query.limit, 100) || query.limit < 1 || !integer(query.offset, 4096) || !['summary', ...macInventorySections].includes(query.section) || (query.section === 'summary' ? query.generationId !== '' || query.offset !== 0 : !validMacGenerationId(query.generationId) || query.section === 'hardware' && query.offset !== 0)) return false;
- if (!exact(v, ['schemaVersion', 'deviceId', 'section', 'status', 'serverNow', 'authorityUntil', 'generationId', 'sourceQuality', 'collectedAt', 'expiresAt', 'sources', 'hardware', 'receiptIds', 'processes', 'interfaces', 'offset', 'total', 'nextOffset']) || v.schemaVersion !== 'tracebolt.macos-read-inventory-page.v1' || !validMacDeviceId(deviceId) || v.deviceId !== deviceId || v.section !== query.section || !timestamp(v.serverNow) || !timestamp(v.authorityUntil) || Date.parse(v.authorityUntil) <= Date.parse(v.serverNow) || !['not-enabled', 'unavailable', 'disabled', 'expired', 'fresh', 'stale'].includes(String(v.status)) || !['full', 'partial', 'unknown'].includes(String(v.sourceQuality)) || !integer(v.offset, 4096) || v.offset !== query.offset || !integer(v.total, 4096) || !Array.isArray(v.receiptIds) || !Array.isArray(v.processes) || !Array.isArray(v.interfaces)) return false;
+ const fields = ['schemaVersion', 'deviceId', 'section', 'status', 'serverNow', 'authorityUntil', 'generationId', 'sourceQuality', 'collectedAt', 'expiresAt', 'sources', 'hardware', 'receiptIds', 'processes', 'interfaces', 'offset', 'total', 'nextOffset'];
+ if (!exact(v, lookup ? [...fields, 'search', 'matchingCount'] : fields) || v.schemaVersion !== (lookup ? 'tracebolt.macos-read-inventory-page.v2' : 'tracebolt.macos-read-inventory-page.v1') || lookup && (!validMacInventorySearch(v.search) || v.search !== query.search || !integer(v.matchingCount, 4096) || !integer(v.total, 4096) || v.matchingCount > v.total || query.search === '' && v.matchingCount !== v.total) || !validMacDeviceId(deviceId) || v.deviceId !== deviceId || v.section !== query.section || !timestamp(v.serverNow) || !timestamp(v.authorityUntil) || Date.parse(v.authorityUntil) <= Date.parse(v.serverNow) || !['not-enabled', 'unavailable', 'disabled', 'expired', 'fresh', 'stale'].includes(String(v.status)) || !['full', 'partial', 'unknown'].includes(String(v.sourceQuality)) || !integer(v.offset, 4096) || v.offset !== query.offset || !integer(v.total, 4096) || !Array.isArray(v.receiptIds) || !Array.isArray(v.processes) || !Array.isArray(v.interfaces)) return false;
+ const search = lookup ? query.search as string : '';
  const page = v as unknown as MacInventoryPage;
  const ready = page.status === 'fresh' || page.status === 'stale';
  if (page.sources === null) {
@@ -72,12 +89,13 @@ export function validMacInventoryPage(v: unknown, deviceId: string, query: MacIn
  const section = query.section, selected = page.sources[section], rows = section === 'receipts' ? page.receiptIds : section === 'processes' ? page.processes : section === 'ipv4' || section === 'ipv6' ? page.interfaces : [];
  if (section !== 'hardware' && page.hardware !== null || section !== 'receipts' && page.receiptIds.length || section !== 'processes' && page.processes.length || section !== 'ipv4' && section !== 'ipv6' && page.interfaces.length) return false;
  if (section === 'hardware') return validMacHardware(page.hardware) && statusKeys.every(key => page.hardware![key as keyof MacInventorySource] === selected[key as keyof MacInventorySource]) && page.total === 0 && page.offset === 0 && page.nextOffset === null;
- if (page.total > (section === 'receipts' ? 2048 : section === 'processes' ? 4096 : 128) || page.offset > page.total || rows.length > query.limit || page.offset + rows.length > page.total || rows.length === 0 && page.offset < page.total || (page.nextOffset === null ? page.offset + rows.length !== page.total : page.nextOffset !== page.offset + rows.length || page.nextOffset <= page.offset || page.nextOffset >= page.total)) return false;
+ const count = macInventoryMatchingCount(page);
+ if (page.total > (section === 'receipts' ? 2048 : section === 'processes' ? 4096 : 128) || page.offset > count || rows.length > query.limit || page.offset + rows.length > count || rows.length === 0 && page.offset < count || (page.nextOffset === null ? page.offset + rows.length !== count : page.nextOffset !== page.offset + rows.length || page.nextOffset <= page.offset || page.nextOffset >= count)) return false;
  if (selected.quality !== 'observed' && (page.total !== 0 || rows.length !== 0)) return false;
- if (section === 'receipts') return page.receiptIds.every((row, i) => text(row, /^[A-Za-z0-9._+-]{1,256}$/) && (i === 0 || row > page.receiptIds[i - 1]));
+ if (section === 'receipts') return page.receiptIds.every((row, i) => text(row, /^[A-Za-z0-9._+-]{1,256}$/) && (!lookup || row.toLowerCase().includes(search)) && (i === 0 || row > page.receiptIds[i - 1]));
  if (selected.quality === 'observed' && page.total === 0) return false;
  if (section === 'processes' && page.sourceQuality === 'full' && page.processes.some(row => row.nameQuality !== 'observed')) return false;
- if (section === 'processes') return page.processes.every((row, i) => validMacProcess(row) && (i === 0 || row.pid > page.processes[i - 1].pid));
+ if (section === 'processes') return page.processes.every((row, i) => validMacProcess(row) && (!lookup || macProcessMatches(row, search)) && (i === 0 || row.pid > page.processes[i - 1].pid));
  return page.interfaces.every((row, i) => validMacInterface(row, section) && (i === 0 || row.name > page.interfaces[i - 1].name));
 }
 export function sameMacInventoryGeneration(a: MacInventoryPage, b: MacInventoryPage): boolean {
