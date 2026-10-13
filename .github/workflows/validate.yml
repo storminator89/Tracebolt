@@ -654,6 +654,10 @@ jobs:
       - name: Complete-service component source and evidence contracts
         working-directory: .
         run: |
+          node web/scripts/capture-windows-complete-notifications.mjs --check
+          node --test web/scripts/windows-complete-notifications-contract.node.mjs
+          node web/scripts/capture-windows-complete-incident-inbox.mjs --check
+          node --test web/scripts/windows-complete-incident-inbox-contract.node.mjs
           node web/scripts/capture-windows-complete-service-health.mjs --check
           node --test web/scripts/windows-complete-service-health-contract.node.mjs
       - name: Production build
@@ -722,6 +726,8 @@ jobs:
           node tests/e2e-review/windows-update-retirement-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
           node tests/e2e-review/windows-update-download-browser.mjs --check-evidence "$TRACEBOLT_SOURCE_SHA"
           node web/scripts/check-windows-complete-service-health-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
+          node web/scripts/check-windows-complete-incident-inbox-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
+          node web/scripts/check-windows-complete-notifications-evidence.mjs "$TRACEBOLT_SOURCE_SHA"
       - name: Synthetic central MSI separate-stage browser gate (16 captures)
         if: ${{ !cancelled() }}
         env:
@@ -1057,6 +1063,32 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-complete-notifications-manifest.json
+            artifacts/review/complete-notifications-review-en-1440.png
+            artifacts/review/complete-notifications-unknown-en-1440.png
+            artifacts/review/complete-notifications-named-en-1440.png
+            artifacts/review/complete-notifications-uncertain-en-1440.png
+            artifacts/review/complete-notifications-review-en-390.png
+            artifacts/review/complete-notifications-unknown-en-390.png
+            artifacts/review/complete-notifications-named-en-390.png
+            artifacts/review/complete-notifications-uncertain-en-390.png
+            artifacts/review/complete-notifications-review-de-1440.png
+            artifacts/review/complete-notifications-unknown-de-1440.png
+            artifacts/review/complete-notifications-named-de-1440.png
+            artifacts/review/complete-notifications-uncertain-de-1440.png
+            artifacts/review/complete-notifications-review-de-390.png
+            artifacts/review/complete-notifications-unknown-de-390.png
+            artifacts/review/complete-notifications-named-de-390.png
+            artifacts/review/complete-notifications-uncertain-de-390.png
+            artifacts/review/windows-complete-incident-inbox-manifest.json
+            artifacts/review/complete-incident-inbox-active-en-1440.png
+            artifacts/review/complete-incident-inbox-unknown-en-1440.png
+            artifacts/review/complete-incident-inbox-active-en-390.png
+            artifacts/review/complete-incident-inbox-unknown-en-390.png
+            artifacts/review/complete-incident-inbox-active-de-1440.png
+            artifacts/review/complete-incident-inbox-unknown-de-1440.png
+            artifacts/review/complete-incident-inbox-active-de-390.png
+            artifacts/review/complete-incident-inbox-unknown-de-390.png
             artifacts/review/windows-complete-service-health-manifest.json
             artifacts/review/complete-service-single-beyond-preview-en-1440.png
             artifacts/review/complete-service-group-exact-review-en-1440.png

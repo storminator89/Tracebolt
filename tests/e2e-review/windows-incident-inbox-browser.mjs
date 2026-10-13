@@ -4,8 +4,8 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
-const built=await require('esbuild').build({stdin:{contents:"export {windowsCapacityDevice} from './windows-capacity-fixture'; export {validWindowsIncidentInboxView,validWindowsIncidentAcknowledgement} from './windows-incident-inbox-types'; export {default as wire} from '../../tests/fixtures/windows-incident-inbox-view.json'; export {default as reviewWire} from '../../tests/fixtures/windows-service-incident-review.json'; export {validWindowsServiceIncidentReview} from './windows-service-incident-review-types'; export {validWindowsActionView} from './windows-service-action-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
-const {windowsCapacityDevice,validWindowsIncidentInboxView,validWindowsIncidentAcknowledgement,wire,reviewWire,validWindowsServiceIncidentReview,validWindowsActionView}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+const built=await require('esbuild').build({stdin:{contents:"export {windowsCapacityDevice} from './windows-capacity-fixture'; export {validWindowsIncidentInboxView} from './windows-incident-inbox-types'; export {validWindowsCompleteIncidentInboxView,validWindowsCompleteIncidentAcknowledgement} from './windows-complete-incident-inbox-types'; export {default as wire} from '../../tests/fixtures/windows-incident-inbox-view.json'; export {default as reviewWire} from '../../tests/fixtures/windows-service-incident-review.json'; export {validWindowsServiceIncidentReview} from './windows-service-incident-review-types'; export {validWindowsActionView} from './windows-service-action-types';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {windowsCapacityDevice,validWindowsIncidentInboxView,validWindowsCompleteIncidentInboxView,validWindowsCompleteIncidentAcknowledgement,wire,reviewWire,validWindowsServiceIncidentReview,validWindowsActionView}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 export const windowsIncidentInboxCaseName='Windows incident inbox and explicit acknowledgement readback';
 export const windowsIncidentInboxDisclosure='Production UI and real disposable loopback login with intercepted invented Windows incidents and one explicitly clicked acknowledgement per locale/viewport. GET readback records seen while the incident remains active. Hosted browser fixture evidence only; no live acknowledgement, native endpoint read/action, new grant, AI, notification or deployment.';
 export const windowsServiceIncidentReviewDisclosure='Entirely intercepted invented named session, exact service incident and binding-pinned control responses in the compiled production App. Opening reviews performs GET only; one deliberately selected restart preview per locale/viewport remains unchecked and unapproved. No approval, acknowledgement, collection, live manager/broker write, grant, SCM action or native acceptance.';
@@ -32,6 +32,13 @@ export function windowsIncidentInboxBrowserFixture(serverNow,expiresAt,origin=se
  const source=windowsCapacityDevice(),metadata={...source,id:view.items[0].deviceId,name:'Synthetic Windows Desk',status:'unknown',agentCertificate:{source:'guided-enrollment',expiresAt,checkedAt:serverNow}};
  return {view,metadata};
 }
+/** The production App explicitly selects v2. Keep original v1 fixture/keys untouched
+ * and project only the additive envelope; no full-service/control authority. */
+export function completeAssessmentInbox(view){
+ assert.ok(validWindowsIncidentInboxView(view,'active','all',0));
+ const complete={...view,schemaVersion:'tracebolt.windows-incident-inbox.v2',items:view.items.map(item=>({...item,sourceKind:'assessment_v1',openingSource:null,lastBadSource:null,recoverySource:null,currentSource:null}))};
+ assert.ok(validWindowsCompleteIncidentInboxView(complete,'active','all',0));return complete;
+}
 export async function windowsIncidentInboxBrowserCase({page,expect,base,login,shot}){
  stage='login';failures=0;pending=0;await login(page);
  let origin=null,acknowledgedAt=null,postCount=0,readCount=0,readbackCount=0,postKey=null,readback=null,serviceFixture=null;
@@ -45,17 +52,17 @@ export async function windowsIncidentInboxBrowserCase({page,expect,base,login,sh
    assert.equal(req.method(),'GET');assert.equal(url.search,'');const response=await route.fetch({maxRedirects:0,timeout:5000});let value;try{assert.equal(response.status(),200);value=await response.json();}finally{await response.dispose();}
    const session=await getSession(),fixture=windowsIncidentInboxBrowserFixture(session.serverNow,session.expiresAt);return fulfill(route,{...value,devices:[fixture.metadata],stats:{...value.stats,totalDevices:1,healthyDevices:0,attentionDevices:0},generatedAt:session.serverNow});
   }
-  if(url.pathname==='/api/fleet/windows-incidents'){
+  if(url.pathname==='/api/fleet/windows-incidents/complete'){
    assert.equal(req.method(),'GET');assert.equal(url.search,windowsIncidentInboxQuery);const session=await getSession();origin??=session.serverNow;readCount++;
    const {view}=windowsIncidentInboxBrowserFixture(session.serverNow,session.expiresAt,origin,acknowledgedAt);
    if(postKey!==null){const item=view.items.find(row=>row.key===postKey);assert.ok(item);assert.equal(item.acknowledgedAt,acknowledgedAt);assert.equal(item.resolvedAt,null);assert.equal(view.scope,'active');readbackCount++;readback={key:item.key,acknowledgedAt:item.acknowledgedAt,resolvedAt:item.resolvedAt,scope:view.scope};}
-   return fulfill(route,view);
+   return fulfill(route,completeAssessmentInbox(view));
   }
-  if(url.pathname==='/api/fleet/windows-incidents/acknowledge'){
+  if(url.pathname==='/api/fleet/windows-incidents/complete/acknowledge'){
    assert.equal(req.method(),'POST');assert.equal(url.search,'');const session=await getSession();assert.equal(req.headers()['x-csrf-token'],session.csrfToken);assert.match(req.headers()['content-type']??'',/^application\/json(?:;|$)/);
    const body=JSON.parse(req.postData());assert.deepEqual(body,{key:windowsIncidentInboxTargetKey});assert.equal(postCount,0);assert.equal(acknowledgedAt,null);assert.equal(readCount,1);
    postCount++;postKey=body.key;acknowledgedAt=session.serverNow;
-   const value={schemaVersion:'tracebolt.windows-incident-ack.v1',serverNow:session.serverNow,key:postKey,acknowledgedAt};assert.ok(validWindowsIncidentAcknowledgement(value,postKey));return fulfill(route,value);
+   const value={schemaVersion:'tracebolt.windows-incident-ack.v2',serverNow:session.serverNow,key:postKey,acknowledgedAt};assert.ok(validWindowsCompleteIncidentAcknowledgement(value,postKey));return fulfill(route,value);
   }
   const allowedRead=['/api/auth/session','/api/session','/api/enrollment','/api/windows/enrollment','/api/fleet/identities'];
   if(req.method()==='GET'&&!url.pathname.startsWith('/api/'))return route.continue();
@@ -132,7 +139,7 @@ export function windowsServiceIncidentReviewRoute({base,fixture,external,unexpec
    assert.equal(raw,JSON.stringify({target:item.serviceName,operation:'restart'}));assert.equal(fixture.counts.review,1);assert.equal(fixture.counts.status,1);assert.equal(fixture.counts.preview,0);fixture.counts.preview++;return reply(fixture.preview);
   }
   if(method!=='GET'||raw!==null){if(url.pathname===actionPath+'/approve')fixture.counts.approve++;else if(url.pathname.endsWith('/acknowledge'))fixture.counts.acknowledge++;else fixture.counts.collection++;return block();}
-  if(url.pathname==='/api/fleet/windows-incidents'){assert.equal(url.search,windowsIncidentInboxQuery);assert.equal(fixture.counts.inbox,0);fixture.counts.inbox++;return reply(fixture.view);}
+  if(url.pathname==='/api/fleet/windows-incidents/complete'){assert.equal(url.search,windowsIncidentInboxQuery);assert.equal(fixture.counts.inbox,0);fixture.counts.inbox++;return reply(completeAssessmentInbox(fixture.view));}
   if(url.search)return block();
   if(url.pathname==='/api/auth/session')return reply(fixture.session);
   if(url.pathname==='/api/session')return reply({csrfToken:fixture.session.csrfToken});

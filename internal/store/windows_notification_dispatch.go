@@ -17,8 +17,10 @@ import (
 )
 
 type WindowsNotificationCandidate struct {
-	ID     string
-	Target WindowsIncidentTarget
+	ID             string
+	Target         WindowsIncidentTarget
+	CompleteTarget *WindowsCompleteIncidentTarget
+	Subject        string
 }
 
 func (s *Store) NextWindowsNotification(ctx context.Context, b alarmdelivery.Binding, now time.Time) (*WindowsNotificationCandidate, error) {
@@ -26,15 +28,30 @@ func (s *Store) NextWindowsNotification(ctx context.Context, b alarmdelivery.Bin
 		return nil, ErrWindowsNotification
 	}
 	var v WindowsNotificationCandidate
-	var raw []byte
-	e := s.db.QueryRowContext(ctx, `SELECT id,target FROM windows_notification_outbox WHERE binding=? AND state='queued' AND due<=? ORDER BY due,created,id LIMIT 1`, b.Key(), now.UnixMilli()).Scan(&v.ID, &raw)
+	var raw, body []byte
+	var domain string
+	e := s.db.QueryRowContext(ctx, `SELECT id,target,domain,body FROM windows_notification_outbox WHERE binding=? AND state='queued' AND due<=? ORDER BY due,created,id LIMIT 1`, b.Key(), now.UnixMilli()).Scan(&v.ID, &raw, &domain, &body)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if e != nil {
 		return nil, e
 	}
-	if json.Unmarshal(raw, &v.Target) != nil || !v.Target.valid() {
+	if domain == "service-complete" {
+		envelope, err := decodeWindowsCompleteNotificationEnvelope(raw)
+		if err != nil {
+			return nil, err
+		}
+		payload, err := decodeWindowsCompleteNotificationPayload(body, b.Key(), v.ID, envelope)
+		if err != nil {
+			return nil, err
+		}
+		v.CompleteTarget = &envelope.Target
+		v.Target = envelope.Target.WindowsIncidentTarget
+		v.Subject = payload.Target
+		return &v, nil
+	}
+	if json.Unmarshal(raw, &v.Target) != nil || !v.Target.valid() || v.Target.Domain != domain {
 		return nil, ErrWindowsNotification
 	}
 	canonical, _ := json.Marshal(v.Target)
@@ -146,7 +163,7 @@ func notificationCurrent(ctx context.Context, tx *sql.Tx, t WindowsIncidentTarge
 // Enrollment authority is locked by the caller before this operator transaction.
 // The final claim is the dispatch boundary: no storage lock spans HTTP I/O.
 func (s *Store) ClaimWindowsNotification(ctx context.Context, b alarmdelivery.Binding, c WindowsNotificationCandidate, in windowscapacity.Input, since time.Time, clock func() time.Time, guard func(time.Time) error) (*alarmdelivery.Attempt, error) {
-	if !b.Valid() || !c.Target.valid() || clock == nil || guard == nil || !in.Authorized || c.Target.DeviceID != in.DeviceID || c.Target.InvitationID != in.InvitationID || c.Target.CertificateHash != in.CertificateHash {
+	if !b.Valid() || c.CompleteTarget != nil || !c.Target.valid() || clock == nil || guard == nil || !in.Authorized || c.Target.DeviceID != in.DeviceID || c.Target.InvitationID != in.InvitationID || c.Target.CertificateHash != in.CertificateHash {
 		return nil, ErrWindowsNotification
 	}
 	tx, e := s.db.BeginTx(ctx, nil)
@@ -341,7 +358,7 @@ func (s *Store) ClaimWindowsNotification(ctx context.Context, b alarmdelivery.Bi
 	return &alarmdelivery.Attempt{Payload: payload, Number: attempts + 1}, nil
 }
 func (s *Store) CompleteWindowsNotification(ctx context.Context, b alarmdelivery.Binding, a alarmdelivery.Attempt, result alarmdelivery.Result, now time.Time) error {
-	if !b.Valid() || !validMaintenanceTime(now) || a.Payload.SchemaVersion != WindowsNotificationSchema || a.Number < 1 || a.Number > alarmdelivery.MaxAttempts {
+	if !b.Valid() || !validMaintenanceTime(now) || (a.Payload.SchemaVersion != WindowsNotificationSchema && a.Payload.SchemaVersion != WindowsCompleteNotificationSchema) || a.Number < 1 || a.Number > alarmdelivery.MaxAttempts {
 		return ErrWindowsNotification
 	}
 	state, code := string(result.Outcome), sanitizeAlarmCode(result.Code)
@@ -362,6 +379,20 @@ func (s *Store) CompleteWindowsNotification(ctx context.Context, b alarmdelivery
 	}
 	// A maintenance/policy change during HTTP preserves accepted/uncertain truth,
 	// but permanently consumes a definite retry, even if its window already ended.
-	_, e := s.db.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN stop_retry=1 AND ?='queued' THEN 'suppressed' ELSE ? END,code=CASE WHEN stop_retry=1 AND ?='queued' THEN code ELSE ? END,due=?,finished=CASE WHEN stop_retry=1 AND ?='queued' THEN ? ELSE ? END WHERE id=? AND binding=? AND state='in_flight' AND attempts=?`, state, state, state, code, due, state, now.UnixMilli(), finished, a.Payload.EventID, b.Key(), a.Number)
+	body, e := json.Marshal(a.Payload)
+	if e != nil || len(body) > alarmdelivery.MaxPayloadBytes {
+		return ErrWindowsNotification
+	}
+	_, e = s.db.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN stop_retry=1 AND ?='queued' THEN 'suppressed' ELSE ? END,code=CASE WHEN stop_retry=1 AND ?='queued' THEN code ELSE ? END,due=?,finished=CASE WHEN stop_retry=1 AND ?='queued' THEN ? ELSE ? END WHERE id=? AND binding=? AND state='in_flight' AND attempts=? AND body=?`, state, state, state, code, due, state, now.UnixMilli(), finished, a.Payload.EventID, b.Key(), a.Number, body)
+	return e
+}
+
+// Unavailable complete evidence is not authority loss or recovery. Delay only
+// this queued candidate, preserving its original queue deadline and attempt count.
+func (s *Store) DeferWindowsNotification(ctx context.Context, id string, now time.Time) error {
+	if !validMaintenanceTime(now) || len(id) != 64 {
+		return ErrWindowsNotification
+	}
+	_, e := s.db.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN created<=? THEN 'suppressed' ELSE state END,code=CASE WHEN created<=? THEN 'queue_expired' ELSE code END,finished=CASE WHEN created<=? THEN ? ELSE finished END,due=? WHERE id=? AND state='queued' AND created<=?`, now.Add(-alarmdelivery.MaxQueueAge).UnixMilli(), now.Add(-alarmdelivery.MaxQueueAge).UnixMilli(), now.Add(-alarmdelivery.MaxQueueAge).UnixMilli(), now.UnixMilli(), now.Add(30*time.Second).UnixMilli(), id, now.UnixMilli())
 	return e
 }
