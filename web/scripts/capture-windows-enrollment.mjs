@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { boundedRegular, captureMatrix, diagnostic, disclosure, origin, publicSafeFailures, requireHosted, scenes, validateDialogPNG, viewports } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, listing, now, record, secret } from './windows-enrollment-fixtures.mjs';
 import { createCaptureGuard } from './windows-enrollment-capture-guard.mjs';
-import { runVisibilityControls } from './windows-enrollment-visibility-controls.mjs';
+import { runVisibilityControls } from './windows-enrollment-visibility-diagnostics.mjs';
 export { captureMatrix, disclosure, origin, scenes, viewports };
 const root = fileURLToPath(new URL('../../', import.meta.url)), require = createRequire(new URL('../package.json', import.meta.url));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -53,7 +53,7 @@ export async function compile() {
  const assets = new Map(result.outputFiles.map(file => [`/${path.basename(file.path)}`, { body: Buffer.from(file.contents), contentType: file.path.endsWith('.css') ? 'text/css' : 'text/javascript' }]));
  assert(assets.has('/app.js') && assets.has('/app.css'));
  assets.set('/', { contentType: 'text/html', body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/app.css"><title>Synthetic Windows enrollment</title></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>' });
- for (const file of ['web/scripts/capture-windows-enrollment.mjs', 'web/scripts/windows-enrollment-contract.mjs', 'web/scripts/windows-enrollment-fixtures.mjs', 'web/scripts/windows-enrollment-capture.node.mjs', 'web/scripts/run-windows-enrollment-ci.mjs', 'web/scripts/check-windows-enrollment-evidence.mjs', 'web/scripts/windows-enrollment-visibility-controls.mjs', 'web/scripts/windows-enrollment-capture-guard.mjs', 'web/scripts/windows-enrollment-capture-guard.node.mjs', '.github/workflows/pr-checks.yml']) await readSource(file);
+ for (const file of ['web/scripts/capture-windows-enrollment.mjs', 'web/scripts/windows-enrollment-contract.mjs', 'web/scripts/windows-enrollment-fixtures.mjs', 'web/scripts/windows-enrollment-capture.node.mjs', 'web/scripts/run-windows-enrollment-ci.mjs', 'web/scripts/check-windows-enrollment-evidence.mjs', 'web/scripts/windows-enrollment-visibility-controls.mjs', 'web/scripts/windows-enrollment-visibility-diagnostics.mjs', 'web/scripts/windows-enrollment-capture-guard.mjs', 'web/scripts/windows-enrollment-capture-guard.node.mjs', '.github/workflows/pr-checks.yml']) await readSource(file);
  const rows = map => [...map].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([file, sha256]) => ({ file, sha256 }));
  const sourceInputs = rows(loaded), dependencyInputs = rows(dependencies);
  assert.deepEqual(dependencyInputs.map(row => row.file).sort(), ['web/node_modules/@fontsource/inter/package.json', ...fontWeights.flatMap(weight => [`web/node_modules/@fontsource/inter/latin-${weight}.css`, `web/node_modules/@fontsource/inter/files/inter-latin-${weight}-normal.woff`, `web/node_modules/@fontsource/inter/files/inter-latin-${weight}-normal.woff2`])].sort());

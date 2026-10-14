@@ -121,6 +121,49 @@ runtime-error count and route-boundary assertions also have separate stages.
 These diagnostics retain the original control measurement order and assertions.
 They do not weaken a failed control or establish production privacy or pixels.
 
+## Failure-only geometry observations
+
+A Range prerequisite assertion may now trigger a separate diagnostic pass, only
+when the original control context has successfully closed, the browser remains
+connected and the runner has not cancelled or timed out. Setup, measurement,
+native, privacy and cleanup failures do not activate this pass. The original
+fifteen controls, their exact geometry expectations and assertion order are
+unchanged. The failed assertion is rethrown with its original fixed stage.
+Diagnostics cannot create capture evidence or make the job pass.
+
+Each of the fifteen source-named probes gets its own new context and page, with
+one fresh copy of the same static synthetic control document and its unchanged
+single-document interceptor. No probe shares a document or context with another
+probe, the failed control, or the production capture. It takes no screenshot and
+never changes DOM, CSS or native browser APIs.
+
+Within each probe, the read order is initial element-contents Range, finite own
+box, its single direct text-node Range, repeated element-contents Range, and native
+visibility. Geometry is exported only as `positive`, `empty` or `error`; native
+visibility only as `true`, `false` or `error`. Rectangle data, text, attributes,
+identifiers and raw errors are never exported. The unchanged privacy checker then
+runs and yields only `accepted`, `rejected` or `error` plus its fixed last stage.
+Those sequential reads may themselves force layout. A later privacy acceptance
+does not prove its identifier exception ran, and the output explicitly records
+`exceptionPath: not-observed` rather than inferring branch coverage.
+
+Complete diagnostic output requires exactly all fifteen known names in order,
+closed contexts, one document per context and no runtime/route violation. The
+closed schema rejects extra keys, unknown enums, incomplete/duplicate rows and
+claims of screenshots or exception proof. Setup, budget, runtime, route,
+measurement or cleanup uncertainty discards all partial rows and reports only a
+fixed unavailable reason; cancellation or disconnection emits no diagnostic.
+
+The pass has a 15-second hard timer, bounded page waits, checks after every async
+operation and the unchanged outer 120-second runner deadline. A timer or abort
+stops all further probes and requests closure of the current context. A context
+that resolves after stopping is closed before any routing or page creation. A
+stuck cleanup never permits another probe or a complete report; the runner still
+closes the browser. The extra validated metadata is printed separately after the
+unchanged FAIL message. Success manifests, five-context/eight-image counts,
+production capture, privacy/persistence gates and success-only artifact upload
+are unchanged. These observations diagnose this synthetic harness only.
+
 ## Checks and artifacts
 
 Local checks are inert only:

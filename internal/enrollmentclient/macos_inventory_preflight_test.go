@@ -329,6 +329,43 @@ func TestMacOSInventoryServicePreflightStorageAndCloseFailures(t *testing.T) {
 	}
 }
 
+func TestMacOSInventoryServicePreflightRejectsFutureSenderClock(t *testing.T) {
+	f := newMacOSPreflightFixture(t, false)
+	memory := &macOSInventoryMemory{}
+	future := f.now.Add(2 * time.Minute)
+	checkpoint, e := state.InitializeFresh(memory, f.enable, future)
+	if e != nil {
+		t.Fatal(e)
+	}
+	checkpoint.Close()
+	f.checkpoint = bytes.Clone(memory.raw)
+	if e := state.ValidateCheckpoint(f.checkpoint, f.enable); e != nil {
+		t.Fatal("future checkpoint was not structurally valid", e)
+	}
+	if _, e := state.Restore(memory, f.enable, f.checkpoint, f.now); !errors.Is(e, state.ErrClock) {
+		t.Fatal("fixture did not reproduce the sender's rollback rejection", e)
+	}
+	before := f.snapshot()
+	if e := f.run(t, context.Background()); !errors.Is(e, ErrState) {
+		t.Fatal("service preflight admitted a sender that cannot restore", e)
+	}
+	if !reflect.DeepEqual(before, f.store.files) || !reflect.DeepEqual(f.events, []string{"enrollment-open", "storage-open", "storage-close"}) {
+		t.Fatal("rollback preflight modified state or skipped storage cleanup")
+	}
+}
+
+func TestMacOSInventoryServicePreflightRechecksSenderClock(t *testing.T) {
+	f := newMacOSPreflightFixture(t, false)
+	f.onStorageClose = func() { f.now = f.now.Add(-time.Second) }
+	before := f.snapshot()
+	if e := f.run(t, context.Background()); !errors.Is(e, ErrState) {
+		t.Fatal("sender clock rollback after initial inspection passed preflight", e)
+	}
+	if !reflect.DeepEqual(before, f.store.files) || !reflect.DeepEqual(f.events, []string{"enrollment-open", "storage-open", "storage-close"}) {
+		t.Fatal("clock rollback changed state or bypassed final authority")
+	}
+}
+
 func TestMacOSInventoryServicePreflightRechecksContextAndAuthority(t *testing.T) {
 	for _, mode := range []string{"canceled-before-open", "canceled-during-read", "canceled-during-storage", "canceled-on-close", "ledger-changed", "config-changed", "manifest-lost", "revoked-during-storage", "expired-during-storage", "leaf-changed"} {
 		t.Run(mode, func(t *testing.T) {

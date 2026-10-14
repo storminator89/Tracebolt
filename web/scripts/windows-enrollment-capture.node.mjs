@@ -12,6 +12,7 @@ import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, 
 import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
 import { controlHTML, controlRoute, controlURL, runVisibilityControls, controlRangeExpectations, hiddenControlCases, acceptedControlCases, controlFailure } from './windows-enrollment-visibility-controls.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
+import { collectVisibilityDiagnostic, geometryDiagnosticBudgetMs, measureControlGeometry, registerVisibilityDiagnosticSignal, runVisibilityControls as diagnosticControls, validateVisibilityDiagnostic, visibilityDiagnosticFor } from './windows-enrollment-visibility-diagnostics.mjs';
 import './windows-enrollment-capture-guard.node.mjs';
 const compiled = await compile(), sourceSha = 'a'.repeat(40);
 const requestId = `request_${'5'.repeat(32)}`, rawBody = approvedBody(requestId);
@@ -565,4 +566,170 @@ test('the unchanged real aggregate still rejects prior failure, cancellation, sk
   assert.equal(rejected.error, undefined); assert.equal(rejected.status, 1); assert.match(rejected.stderr, /focused prerequisite failed, skipped, cancelled or missing/);
  }
  for (const results of [{ ...success(), extra: { result: 'success' } }, { backend: { result: 'success' }, frontend: { result: 'success' }, browser: { result: 'success' } }]) assert.equal(run(results).status, 1);
+});
+
+// Failure-only synthetic diagnostics. These adapters never launch a browser.
+function geometryDiagnosticHarness(fault = {}) {
+ const calls = [], contexts = []; let connected = true;
+ const observation = { initialElementRange: 'empty', ownBox: 'positive', textNodeRange: 'positive', repeatElementRange: 'positive', native: 'false' };
+ const browser = { isConnected: () => connected, async newContext(configuration) {
+  const index = contexts.length, name = visibilityControlCases[index]; calls.push(['context', index]);
+  if (fault.setup === 'context') throw new Error('PRIVATE RAW ERROR');
+  if (fault.lateContext) await fault.lateContext;
+  let handler, pageError, url = fault.setup === 'blank' ? 'PRIVATE URL' : 'about:blank';
+  const page = { url: () => url, on: (event, callback) => { assert.equal(event, 'pageerror'); pageError = callback; },
+   async goto(target, options) {
+    calls.push(['goto', index]); assert.equal(target, controlURL); assert(options.timeout > 0 && options.timeout <= 1000);
+    if (fault.setup === 'document') throw new Error('PRIVATE RAW ERROR');
+    await handler({ request: () => ({ url: () => target, method: () => 'GET', postData: () => null, headers: () => ({}) }), fulfill: response => assert.equal(response.body, controlHTML), abort: () => assert.fail('Unexpected denial') }); url = target;
+    if (fault.setup === 'runtime') pageError();
+    if (fault.setup === 'route-boundary') await handler({ request: () => ({ url: () => origin + '/', method: () => 'GET', postData: () => null, headers: () => ({}) }), abort: () => {}, fulfill: () => assert.fail('Unexpected response') });
+   },
+   locator(selector) { assert.equal(selector, `#${name}`); return { name, diagnostic: true, locator(inner) { assert.equal(inner, '[data-probe]'); return { async evaluate(callback) { calls.push(['measure', index]); assert.equal(callback, measureControlGeometry); if (fault.setup === 'measure') throw new Error('PRIVATE RAW ERROR'); return fault.observation ?? { ...observation }; } }; } }; },
+  };
+  const context = { setDefaultTimeout(value) { assert(value > 0 && value <= 1000); calls.push(['timeout', index]); },
+   async route(pattern, callback) { calls.push(['route', index]); assert.equal(pattern, '**/*'); if (fault.setup === 'route') throw new Error('PRIVATE RAW ERROR'); handler = callback; },
+   async newPage() { calls.push(['page', index]); if (fault.setup === 'page') throw new Error('PRIVATE RAW ERROR'); return page; },
+   async close() { calls.push(['close', index]); if (fault.setup === 'runtime-close') pageError(); if (fault.setup === 'route-close') await handler({ request: () => ({ url: () => origin + '/', method: () => 'GET', postData: () => null, headers: () => ({}) }), abort: () => {}, fulfill: () => assert.fail('Unexpected response') }); if (fault.closePending) await fault.closePending; if (fault.setup === 'cleanup') throw new Error('PRIVATE RAW ERROR'); },
+  };
+  contexts.push(context); return context;
+ } };
+ const inspect = async (_page, region, _expect, mark) => {
+  assert(region.diagnostic); calls.push(['privacy', region.name]);
+  if (fault.privacyStages) { for (const stage of fault.privacyStages) mark(stage); if (fault.privacyThrow) throw new Error('PRIVATE RAW ERROR'); return; }
+  mark('public-safe-elements'); mark('public-safe-inspection');
+  if (region.name === 'visible' || region.name === 'closed-secret') { mark('public-safe-text'); throw new Error('Expected rejection'); }
+ };
+ return { browser, expect: () => {}, assertPublicSafe: inspect, calls, contexts, disconnect: () => { connected = false; } };
+}
+const diagnosticRun = (h, extra = {}) => withHostedFixture(() => collectVisibilityDiagnostic({ ...h, signal: new AbortController().signal, ...extra }));
+
+test('geometry diagnostics require exactly fifteen fresh contexts and source-enumerated rows', async () => {
+ const h = geometryDiagnosticHarness(), value = await diagnosticRun(h);
+ assert.equal(value.status, 'complete'); assert.equal(value.exceptionPath, 'not-observed');
+ assert.deepEqual(value.probes.map(row => row.name), visibilityControlCases); assert.equal(h.contexts.length, 15);
+ for (let index = 0; index < 15; index++) {
+  assert.deepEqual(h.calls.filter(row => row[1] === index).map(row => row[0]), ['context', 'timeout', 'route', 'page', 'goto', 'measure', 'close']);
+  if (index) assert(h.calls.findIndex(row => row[0] === 'close' && row[1] === index - 1) < h.calls.findIndex(row => row[0] === 'context' && row[1] === index));
+ }
+ assert.equal(h.calls.filter(row => row[0] === 'privacy').length, 15);
+ for (const altered of [
+  { ...value, raw: secret }, { ...value, probes: value.probes.slice(1) }, { ...value, contexts: 14 }, { ...value, screenshots: 1 },
+  { ...value, exceptionPath: 'proven' }, { ...value, probes: [...value.probes, value.probes[0]] },
+  { ...value, probes: value.probes.map((row, index) => index ? row : { ...row, name: 'unknown' }) },
+  ...['initialElementRange', 'ownBox', 'textNodeRange', 'repeatElementRange', 'native', 'privacy', 'privacyLast'].map(field => ({ ...value, probes: value.probes.map((row, index) => index ? row : { ...row, [field]: secret }) })),
+  { ...value, probes: value.probes.map((row, index) => index ? row : { ...row, raw: secret }) },
+ ]) assert.throws(() => validateVisibilityDiagnostic(altered));
+ for (const altered of [{ schema: value.schema, status: 'unavailable', reason: 'unknown' }, { schema: value.schema, status: 'unavailable', reason: 'setup', probes: [] }]) assert.throws(() => validateVisibilityDiagnostic(altered));
+});
+
+test('geometry diagnostics stop on setup runtime route and cleanup uncertainty without partial rows', async () => {
+ for (const [setup, reason] of [['context', 'setup'], ['route', 'setup'], ['page', 'setup'], ['blank', 'setup'], ['document', 'setup'], ['measure', 'measurement'], ['runtime', 'runtime'], ['route-boundary', 'route'], ['runtime-close', 'runtime'], ['route-close', 'route'], ['cleanup', 'cleanup']]) {
+  const h = geometryDiagnosticHarness({ setup }), value = await diagnosticRun(h);
+  assert.deepEqual(value, { schema: 'synthetic-visibility-geometry.v1', status: 'unavailable', reason });
+  assert.equal(h.calls.filter(row => row[0] === 'context').length, 1); assert.equal(h.calls.filter(row => row[0] === 'close').length, setup === 'context' ? 0 : 1);
+  assert(!JSON.stringify(value).includes('PRIVATE'));
+ }
+ const h = geometryDiagnosticHarness({ observation: { raw: secret } });
+ assert.equal((await diagnosticRun(h)).reason, 'measurement'); assert.equal(h.contexts.length, 1);
+});
+
+test('privacy diagnostics contain only normalized stages and never claim an exercised exception', async () => {
+ for (const privacyStages of [['UNKNOWN PRIVATE'], ['public-safe-elements'], ['public-safe-elements', 'public-safe-inspection', 'public-safe-text', secret]]) {
+  const h = geometryDiagnosticHarness({ privacyStages, privacyThrow: true }), value = await diagnosticRun(h);
+  assert.equal(value.status, 'complete'); assert(value.probes.every(row => row.privacy === 'error')); assert.equal(value.exceptionPath, 'not-observed');
+  assert(!JSON.stringify(value).includes(secret)); assert(!JSON.stringify(value).includes('PRIVATE'));
+ }
+});
+
+test('geometry measurement uses the fixed native read order and bounded finite-only categories', () => {
+ const rect = { x: 0, y: 0, width: 1, height: 1 };
+ for (const result of [[rect], [], [{ ...rect, x: NaN }], [{ ...rect, width: Infinity }], Array(65).fill(rect), 'throw']) {
+  const calls = [], text = { nodeType: 3 }, element = { childNodes: [text], firstChild: text };
+  const document = { createRange: () => { let target; return { selectNodeContents(value) { target = value; }, getClientRects() { calls.push(target === text ? 'text' : 'element'); if (result === 'throw') throw new Error(secret); return result; } }; } };
+  const Element = function() {};
+  Element.prototype.getClientRects = function() { assert.equal(this, element); calls.push('box'); return [rect]; };
+  Element.prototype.checkVisibility = function() { assert.equal(this, element); calls.push('native'); return false; };
+  const measure = new Function('document', 'Element', `return (${measureControlGeometry.toString()});`)(document, Element);
+  const value = measure(element); assert.deepEqual(calls, ['element', 'box', 'text', 'element', 'native']);
+  const expected = result === 'throw' || result.length > 64 || result.some(row => !Object.values(row).every(Number.isFinite)) ? 'error' : result.length ? 'positive' : 'empty';
+  assert.equal(value.initialElementRange, expected); assert.equal(value.textNodeRange, expected); assert.equal(value.repeatElementRange, expected); assert.equal(value.ownBox, 'positive'); assert.equal(value.native, 'false');
+  element.childNodes.push(text); assert.equal(measure(element).textNodeRange, 'error');
+ }
+});
+
+test('diagnostic cancellation closes a late context and cannot route spawn or publish afterward', async () => {
+ let resolveContext; const lateContext = new Promise(resolve => { resolveContext = resolve; });
+ const h = geometryDiagnosticHarness({ lateContext }), controller = new AbortController();
+ const pending = diagnosticRun(h, { signal: controller.signal });
+ await new Promise(resolve => setImmediate(resolve)); controller.abort(); assert.equal(await pending, null);
+ resolveContext(); await new Promise(resolve => setImmediate(resolve));
+ assert.deepEqual(h.calls, [['context', 0], ['close', 0]]);
+ const already = geometryDiagnosticHarness(); assert.equal(await diagnosticRun(already, { signal: controller.signal }), null); assert.equal(already.calls.length, 0);
+});
+
+test('diagnostic budget expiry after in-flight context creation closes it before further work', async () => {
+ let time = 0, resolveContext; const lateContext = new Promise(resolve => { resolveContext = resolve; });
+ const h = geometryDiagnosticHarness({ lateContext });
+ const pending = diagnosticRun(h, { now: () => time });
+ await new Promise(resolve => setImmediate(resolve)); time = geometryDiagnosticBudgetMs; resolveContext();
+ assert.deepEqual(await pending, { schema: 'synthetic-visibility-geometry.v1', status: 'unavailable', reason: 'budget' });
+ assert.deepEqual(h.calls, [['context', 0], ['close', 0]]);
+});
+
+test('cancellation interrupts uncertain diagnostic cleanup without starting another context', async () => {
+ let finishClose; const closePending = new Promise(resolve => { finishClose = resolve; });
+ const h = geometryDiagnosticHarness({ closePending }), controller = new AbortController();
+ const pending = diagnosticRun(h, { signal: controller.signal });
+ await new Promise(resolve => setImmediate(resolve)); controller.abort(); assert.equal(await pending, null);
+ finishClose(); await new Promise(resolve => setImmediate(resolve));
+ assert.equal(h.calls.filter(row => row[0] === 'context').length, 1); assert.equal(h.calls.filter(row => row[0] === 'close').length, 1);
+});
+
+test('wrapper preserves the original failure stage and starts diagnostics only after confirmed original close', async () => {
+ for (const mode of ['empty', 'expected', 'wrong-native', 'cleanup', 'cancelled', 'unregistered', 'disconnected']) {
+  const h = visibilityControlHarness(mode === 'cleanup' || mode === 'cancelled' || mode === 'unregistered' || mode === 'disconnected' ? 'empty' : mode, mode === 'cleanup' ? { setup: 'close' } : {});
+  const d = geometryDiagnosticHarness(), createOriginal = h.browser.newContext; let creates = 0;
+  h.browser.newContext = async options => { if (creates++ === 0) return createOriginal(options); assert(h.closed()); return d.browser.newContext(options); };
+  h.browser.isConnected = () => mode !== 'disconnected';
+  const originalPrivacy = h.assertPublicSafe; h.assertPublicSafe = (...args) => args[1].diagnostic ? d.assertPublicSafe(...args) : originalPrivacy(...args);
+  const controller = new AbortController(); if (mode === 'cancelled') controller.abort();
+  if (mode !== 'unregistered') registerVisibilityDiagnosticSignal(h.browser, controller.signal);
+  if (mode === 'expected') assert.equal((await withHostedFixture(() => diagnosticControls(h))).passed, true);
+  else await assert.rejects(() => withHostedFixture(() => diagnosticControls(h)));
+  if (mode === 'empty') {
+   assert.equal(visibilityDiagnosticFor(h.browser).status, 'complete'); assert.equal(creates, 16);
+   assert.equal(h.marks.at(-1).stage, 'visibility-control-closed-body-range-empty');
+  } else { assert.equal(visibilityDiagnosticFor(h.browser), null); assert.equal(creates, 1); }
+ }
+});
+
+test('diagnostic wrapper is source-bound while the original control and production capture bodies remain untouched', async () => {
+ assert(compiled.sourceInputs.some(row => row.file === 'web/scripts/windows-enrollment-visibility-diagnostics.mjs'));
+ const runner = await readFile(new URL('./run-windows-enrollment-ci.mjs', import.meta.url), 'utf8');
+ assert.match(runner, /lifecycle\.abort\(\); reject\(new Error\('capture deadline'\)\); }, 120000/);
+ assert(runner.indexOf('lifecycle.abort(); clearTimeout(timer)') < runner.indexOf('await browser?.close()'));
+ assert(runner.indexOf('raw diagnostics withheld.') < runner.indexOf('Synthetic visibility geometry diagnostic'));
+ const source = await readFile(new URL('./windows-enrollment-visibility-diagnostics.mjs', import.meta.url), 'utf8');
+ assert.doesNotMatch(source, /\.screenshot\(|\.setContent\(|\.addStyleTag\(|\.continue\(|innerHTML\s*=|outerHTML\s*=|\.open\s*=|\.textContent\s*=/);
+});
+
+test('hard diagnostic timer bounds an unresolved context and closes its late result', async t => {
+ t.mock.timers.enable({ apis: ['setTimeout'] });
+ let resolveContext; const lateContext = new Promise(resolve => { resolveContext = resolve; });
+ const h = geometryDiagnosticHarness({ lateContext }), pending = diagnosticRun(h);
+ await new Promise(resolve => setImmediate(resolve)); t.mock.timers.tick(geometryDiagnosticBudgetMs);
+ assert.deepEqual(await pending, { schema: 'synthetic-visibility-geometry.v1', status: 'unavailable', reason: 'budget' });
+ resolveContext(); await new Promise(resolve => setImmediate(resolve));
+ assert.deepEqual(h.calls, [['context', 0], ['close', 0]]);
+});
+
+test('hard diagnostic timer bounds unresolved cleanup and cannot advance another probe', async t => {
+ t.mock.timers.enable({ apis: ['setTimeout'] });
+ let finishClose; const closePending = new Promise(resolve => { finishClose = resolve; });
+ const h = geometryDiagnosticHarness({ closePending }), pending = diagnosticRun(h);
+ await new Promise(resolve => setImmediate(resolve)); t.mock.timers.tick(geometryDiagnosticBudgetMs);
+ assert.deepEqual(await pending, { schema: 'synthetic-visibility-geometry.v1', status: 'unavailable', reason: 'budget' });
+ finishClose(); await new Promise(resolve => setImmediate(resolve));
+ assert.equal(h.calls.filter(row => row[0] === 'context').length, 1); assert.equal(h.calls.filter(row => row[0] === 'close').length, 1);
 });
