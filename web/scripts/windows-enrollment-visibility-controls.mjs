@@ -1,6 +1,6 @@
 /** Known synthetic DOM in one isolated hosted context. Never a production page. */
 import assert from 'node:assert/strict';
-import { origin, requireHosted } from './windows-enrollment-contract.mjs';
+import { origin, requireHosted, visibilityControlCases, visibilityControlPrivacyStages, visibilityControlStage } from './windows-enrollment-contract.mjs';
 import { invitation, secret } from './windows-enrollment-fixtures.mjs';
 export const controlURL = origin + '/visibility-control';
 export const controlHTML = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><link rel="icon" href="data:,"><title>Synthetic visibility controls only</title></head><body>
@@ -25,30 +25,42 @@ export async function runVisibilityControls({ browser, expect, assertPublicSafe,
  const context = await browser.newContext({ viewport: { width: 800, height: 600 }, locale: 'en-US', reducedMotion: 'reduce', serviceWorkers: 'block' });
  let completed = false, closedBodyRange = null, runtimeErrors = 0; const state = { documents: 0, blocked: 0 };
  try {
-  await context.route('**/*', controlRoute(state));
-  const page = await context.newPage(); assert.equal(page.url(), 'about:blank'); page.on('pageerror', () => { runtimeErrors++; });
+  mark('visibility-control-route'); await context.route('**/*', controlRoute(state));
+  mark('visibility-control-page'); const page = await context.newPage();
+  mark('visibility-control-blank'); assert.equal(page.url(), 'about:blank'); page.on('pageerror', () => { runtimeErrors++; });
   mark('visibility-control-document'); await page.goto(controlURL);
-  for (const name of ['clear', 'visible', 'closed-body', 'closed-summary', 'open-body', 'contents']) {
+  for (const name of visibilityControlCases) {
+   const checkpoint = phase => mark(visibilityControlStage(name, phase));
    mark(`visibility-control-${name}`);
    const region = page.locator(`#${name}`), probe = region.locator('[data-probe]');
    // Geometry and default native box visibility are deliberately separate.
+   checkpoint('measure');
    const observed = await probe.evaluate(element => {
     const range = document.createRange(); range.selectNodeContents(element);
     const positiveRange = [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
     const native = Element.prototype.checkVisibility.call(element);
     return { positiveRange, native };
    });
-   assert.deepEqual(Object.keys(observed).sort(), ['native', 'positiveRange']); assert.equal(typeof observed.positiveRange, 'boolean');
-   assert.equal(observed.native, name !== 'closed-body' && name !== 'contents');
-   if (name === 'closed-body') { await expect(probe).toBeHidden(); closedBodyRange = observed.positiveRange ? 'positive' : 'empty'; }
-   else { assert.equal(observed.positiveRange, true); await expect(probe).toBeVisible(); }
+   checkpoint('observation-shape'); assert.deepEqual(Object.keys(observed).sort(), ['native', 'positiveRange']);
+   checkpoint('range-type'); assert.equal(typeof observed.positiveRange, 'boolean');
+   const rangeKind = observed.positiveRange ? 'positive' : 'empty';
+   const nativeKind = observed.native === true ? 'true' : observed.native === false ? 'false' : 'invalid';
+   checkpoint(`native-${nativeKind}-range-${rangeKind}`); assert.equal(observed.native, name !== 'closed-body' && name !== 'contents');
+   if (name === 'closed-body') { checkpoint(`playwright-hidden-range-${rangeKind}`); await expect(probe).toBeHidden(); closedBodyRange = observed.positiveRange ? 'positive' : 'empty'; }
+   else { checkpoint(`range-${rangeKind}`); assert.equal(observed.positiveRange, true); checkpoint('playwright-visible'); await expect(probe).toBeVisible(); }
    const expected = name === 'clear' || name === 'closed-body' && !observed.positiveRange ? null : name === 'closed-body' ? 'public-safe-text-closed-details-native-false' : 'public-safe-text';
    const stages = []; let rejected = false;
-   try { await assertPublicSafe(page, region, expect, stage => { stages.push(stage); }); } catch { rejected = true; }
+   // Never interpolate an inspected value or exception into a public checkpoint.
+   const lastStage = () => stages.length === 0 ? 'none' : visibilityControlPrivacyStages.includes(stages.at(-1)) ? stages.at(-1) : 'invalid';
+   checkpoint(`privacy-check-range-${rangeKind}`);
+   try { await assertPublicSafe(page, region, expect, stage => { stages.push(stage); checkpoint(`privacy-check-${lastStage()}-range-${rangeKind}`); }); } catch { rejected = true; }
+   checkpoint(`privacy-${rejected ? 'rejected' : 'accepted'}-last-${lastStage()}-range-${rangeKind}`);
    assert.equal(rejected, expected !== null, 'Synthetic privacy control mismatch');
+   checkpoint(`privacy-sequence-last-${lastStage()}-range-${rangeKind}`);
    assert.deepEqual(stages, ['public-safe-elements', 'public-safe-inspection', ...(expected === null ? [] : [expected])]);
   }
-  assert.equal(runtimeErrors, 0); assert.deepEqual(state, { documents: 1, blocked: 0 }); completed = true;
+  mark('visibility-control-runtime-errors'); assert.equal(runtimeErrors, 0);
+  mark('visibility-control-route-boundary'); assert.deepEqual(state, { documents: 1, blocked: 0 }); completed = true;
   return { contexts: 1, cases: 6, passed: true, closedBodyRange, screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 };
  } finally { if (completed) mark('visibility-control-close'); await context.close(); }
 }

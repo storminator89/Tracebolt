@@ -72,18 +72,53 @@ export function focusVisibility({ bounds, outlineWidth, outlineOffset, viewport,
  return { outlineBounds: outline, clipBounds: clip, clipped, topBandVisible, tallBottomCrop, headerOverlap,
   accepted: !clipped.left && !clipped.right && !clipped.top && (!clipped.bottom || tallBottomCrop) && topBandVisible && !headerOverlap };
 }
+/** Fixed diagnostic only; never changes the clipping decision or its tolerance.
+ * A fractional-client discrepancy is not evidence that painted pixels are clear.
+ */
+export function rightFocusClipReason(geometry, visibility) {
+ if (!visibility.clipped.right) return 'none';
+ const right = visibility.outlineBounds.right;
+ const viewport = right > geometry.viewport.right + 0.5;
+ const layers = (geometry.clips ?? []).filter(layer => layer.x && right > layer.bounds.right + 0.5);
+ if (layers.some(layer => !['table', 'ancestor'].includes(layer.kind))) return 'unclassified';
+ const table = layers.filter(layer => layer.kind === 'table');
+ const ancestor = layers.some(layer => layer.kind !== 'table');
+ if (Number(viewport) + Number(table.length > 0) + Number(ancestor) > 1) return 'mixed';
+ if (viewport) return 'viewport';
+ if (ancestor) return 'ancestor';
+ if (!table.length) return 'unclassified';
+ // This independent edge is diagnostic-only and requires every offending table
+ // to pass the unscaled/no-gutter/no-vertical-overflow guard. Unknown is explicit.
+ const fractional = table.every(layer => layer.fractionalGuard === true && Number.isFinite(layer.fractionalRight)
+  && Number.isFinite(layer.fractionalWidth) && layer.fractionalWidth > 0);
+ const small = right - visibility.clipBounds.right <= 1;
+ if (!fractional) return small ? 'table unverified subpixel' : 'table unverified overflow';
+ if (table.some(layer => geometry.bounds.right - geometry.bounds.left > layer.fractionalWidth)) return 'table wider';
+ if (table.every(layer => right <= layer.fractionalRight)) return 'table fractional';
+ return small ? 'table subpixel' : 'table overflow';
+}
 export async function measureFocusVisibility(control, stage = () => {}) {
  stage('outline geometry read');
  const geometry = await control.evaluate(element => {
   const rect = node => { const r = node.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
   const style = getComputedStyle(element), clips = [];
+  const unscaled = s => s.transform === 'none' && s.perspective === 'none'
+   && s.translate === 'none' && s.rotate === 'none' && s.scale === 'none' && (s.zoom === '1' || s.zoom === 'normal');
+  let allUnscaled = unscaled(style);
   for (let node = element.parentElement; node; node = node.parentElement) {
    const s = getComputedStyle(node), x = /^(auto|scroll|hidden|clip)$/.test(s.overflowX), y = /^(auto|scroll|hidden|clip)$/.test(s.overflowY);
+   allUnscaled = allUnscaled && unscaled(s);
    if (x || y) {
     const r = node.getBoundingClientRect(), left = r.left + node.clientLeft, top = r.top + node.clientTop;
-    clips.push({ x, y, bounds: { left, top, right: left + node.clientWidth, bottom: top + node.clientHeight } });
+    clips.push({ x, y, bounds: { left, top, right: left + node.clientWidth, bottom: top + node.clientHeight },
+     kind: node.matches('.package-table-scroll') ? 'table' : 'ancestor',
+     fractionalRight: r.right - parseFloat(s.borderRightWidth),
+     fractionalWidth: r.right - r.left - parseFloat(s.borderLeftWidth) - parseFloat(s.borderRightWidth),
+     fractionalGuard: s.direction === 'ltr' && s.writingMode === 'horizontal-tb' && s.scrollbarGutter === 'auto'
+      && /^(auto|hidden|clip)$/.test(s.overflowY) && node.scrollHeight <= node.clientHeight });
    }
   }
+  for (const layer of clips) layer.fractionalGuard = layer.fractionalGuard && allUnscaled;
   const headers = [...document.querySelectorAll('.main-shell > .topbar, .main-shell > .transport-warning')].map(rect).filter(r => r.right > r.left && r.bottom > r.top);
   return { bounds: rect(element), outlineWidth: parseFloat(style.outlineWidth), outlineOffset: parseFloat(style.outlineOffset),
    viewport: { left: 0, top: 0, right: innerWidth, bottom: innerHeight }, clips, headers,
@@ -105,7 +140,7 @@ export async function measureFocusVisibility(control, stage = () => {}) {
    return [edge, !!hit && (hit === element || element.contains(hit))];
   }));
  }, visibility);
- return { ...visibility, hitTests, accepted: visibility.accepted && Object.values(hitTests).every(Boolean) };
+ return { ...visibility, rightClipReason: rightFocusClipReason(geometry, visibility), hitTests, accepted: visibility.accepted && Object.values(hitTests).every(Boolean) };
 }
 /** Preposition only a real predecessor. The target and intermediate region are
  * reached exclusively by forward Tab, with no target focus/scroll correction. */
@@ -141,7 +176,19 @@ export async function assertKeyboardContrast({ page, expect, selector, keyboardE
   stage('outline exposure');
   const visibility = await measureFocusVisibility(control, stage);
   stage('outline left edge'); expect(visibility.clipped.left).toBe(false);
-  stage('outline right edge'); expect(visibility.clipped.right).toBe(false);
+  stage('outline right edge');
+  if (visibility.clipped.right) {
+   if (visibility.rightClipReason === 'viewport') stage('outline right viewport');
+   else if (visibility.rightClipReason === 'ancestor') stage('outline right ancestor');
+   else if (visibility.rightClipReason === 'mixed') stage('outline right mixed');
+   else if (visibility.rightClipReason === 'table wider') stage('outline right table wider');
+   else if (visibility.rightClipReason === 'table fractional') stage('outline right table fractional');
+   else if (visibility.rightClipReason === 'table subpixel') stage('outline right table subpixel');
+   else if (visibility.rightClipReason === 'table overflow') stage('outline right table overflow');
+   else if (visibility.rightClipReason === 'table unverified subpixel') stage('outline right table unverified subpixel');
+   else if (visibility.rightClipReason === 'table unverified overflow') stage('outline right table unverified overflow');
+  }
+  expect(visibility.clipped.right).toBe(false);
   stage('outline top edge'); expect(visibility.clipped.top).toBe(false);
   stage('outline top band'); expect(visibility.topBandVisible).toBe(true);
   stage('outline header'); expect(visibility.headerOverlap).toBe(false);
@@ -168,7 +215,7 @@ export async function setContrastTheme(page, expect, theme) {
 export function focusContrastStage(name, size, locale, theme, phase) {
  if (!['legacy-package-table', 'legacy-package-details', 'advisory-toggle', 'inventory-source-tab', 'complete-package-search', 'complete-package-table', 'complete-package-details'].includes(name)
   || !['desktop', 'mobile'].includes(size) || !['en', 'de'].includes(locale) || !['light', 'dark'].includes(theme)
-  || !['outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture'].includes(phase)) return 'focus contrast unknown';
+  || !['outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline right viewport', 'outline right ancestor', 'outline right mixed', 'outline right table wider', 'outline right table fractional', 'outline right table subpixel', 'outline right table overflow', 'outline right table unverified subpixel', 'outline right table unverified overflow', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture'].includes(phase)) return 'focus contrast unknown';
  return `focus contrast ${name} ${size} ${locale} ${theme}: ${phase}`;
 }
 export async function captureFocusMatrix({ page, expect, targets, capture, mark = () => {} }) {

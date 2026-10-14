@@ -96,6 +96,17 @@ and [pinned Playwright visibility](https://github.com/microsoft/playwright/blob/
 These controls must actually pass in the authorized hosted browser before their
 behavior can be claimed. Inert adapter tests do not establish browser behavior.
 
+A control failure now names its specific fixed subphase: measurement, observation
+shape, boolean Range type, native expectation, positive Range expectation,
+Playwright hidden/visible assertion, privacy pass/rejection, or exact privacy-stage
+sequence. After valid measurement, native outcomes are only `true`, `false`, or
+`invalid` and Range outcomes only `positive` or `empty`. Privacy checkpoints add
+only the accepted/rejected result and the last source-enumerated checkpoint
+(or `none`/`invalid`), never text, errors, geometry or inspected values. Setup,
+runtime-error count and route-boundary assertions also have separate stages.
+These diagnostics retain the original control measurement order and assertions.
+They do not weaken a failed control or establish production privacy or pixels.
+
 ## Checks and artifacts
 
 Local checks are inert only:

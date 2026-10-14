@@ -11,7 +11,28 @@ export const viewports = Object.freeze(['en', 'de'].flatMap(locale => [1440, 390
 export const scenes = Object.freeze(['instructions', 'release']);
 export const captureMatrix = Object.freeze(viewports.flatMap(view => scenes.map(scene => Object.freeze({ ...view, scene, file: `windows-enrollment-${scene}-${view.locale}-${view.width}.png` }))));
 export const publicSafeFailures = Object.freeze(['public-safe-text', 'public-safe-text-closed-details-native-true', 'public-safe-text-closed-details-native-false', 'public-safe-text-closed-details-native-unavailable', 'public-safe-text-closed-details-native-error', 'public-safe-inputs', 'public-safe-location', 'public-safe-storage']);
-export const stages = Object.freeze(['launch', 'compile', 'visibility-control-context', 'visibility-control-document', 'visibility-control-clear', 'visibility-control-visible', 'visibility-control-closed-body', 'visibility-control-closed-summary', 'visibility-control-open-body', 'visibility-control-contents', 'visibility-control-close', 'prepare-output', 'new-context', 'route', 'new-page', 'navigate', 'initial-status', 'select-windows', 'open-create', 'consent', 'submit-create', 'secret-masked', 'interrupt-clear', 'refresh-restored', 'instructions', 'fonts', 'scroll', 'no-overflow', 'public-safe', 'public-safe-elements', 'public-safe-inspection', ...publicSafeFailures, 'screenshot', 'runtime-errors', 'route-boundary', 'image-hash', 'close-context', 'manifest', 'close-browser', 'evidence']);
+// Fixed, source-owned diagnostics for the isolated synthetic controls only.
+export const visibilityControlCases = Object.freeze(['clear', 'visible', 'closed-body', 'closed-summary', 'open-body', 'contents']);
+export const visibilityControlPrivacyStages = Object.freeze(['public-safe-elements', 'public-safe-inspection', ...publicSafeFailures]);
+const controlPrivacyLast = ['none', 'invalid', ...visibilityControlPrivacyStages];
+export const visibilityControlPhases = Object.freeze([
+ 'measure', 'observation-shape', 'range-type', 'playwright-visible',
+ ...['positive', 'empty'].flatMap(range => [
+  `range-${range}`, `playwright-hidden-range-${range}`, `privacy-check-range-${range}`,
+  ...['true', 'false', 'invalid'].map(native => `native-${native}-range-${range}`),
+  ...controlPrivacyLast.flatMap(last => [
+   `privacy-check-${last}-range-${range}`,
+   `privacy-accepted-last-${last}-range-${range}`,
+   `privacy-rejected-last-${last}-range-${range}`,
+   `privacy-sequence-last-${last}-range-${range}`,
+  ]),
+ ]),
+]);
+export function visibilityControlStage(name, phase) {
+ assert(visibilityControlCases.includes(name) && visibilityControlPhases.includes(phase), 'Unknown synthetic visibility control diagnostic');
+ return `visibility-control-${name}-${phase}`;
+}
+export const stages = Object.freeze(['launch', 'compile', 'visibility-control-context', 'visibility-control-route', 'visibility-control-page', 'visibility-control-blank', 'visibility-control-document', 'visibility-control-runtime-errors', 'visibility-control-route-boundary', ...visibilityControlCases.flatMap(name => visibilityControlPhases.map(phase => visibilityControlStage(name, phase))), 'visibility-control-clear', 'visibility-control-visible', 'visibility-control-closed-body', 'visibility-control-closed-summary', 'visibility-control-open-body', 'visibility-control-contents', 'visibility-control-close', 'prepare-output', 'new-context', 'route', 'new-page', 'navigate', 'initial-status', 'select-windows', 'open-create', 'consent', 'submit-create', 'secret-masked', 'interrupt-clear', 'refresh-restored', 'instructions', 'fonts', 'scroll', 'no-overflow', 'public-safe', 'public-safe-elements', 'public-safe-inspection', ...publicSafeFailures, 'screenshot', 'runtime-errors', 'route-boundary', 'image-hash', 'close-context', 'manifest', 'close-browser', 'evidence']);
 export function diagnostic(stage, index = null) {
  assert(stages.includes(stage), 'Unknown Windows enrollment capture stage');
  assert(index === null || Number.isSafeInteger(index) && index >= 0 && index < captureMatrix.length, 'Invalid capture index');

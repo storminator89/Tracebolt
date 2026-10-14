@@ -8,7 +8,7 @@ import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { test } from 'node:test';
 import { assertPublicSafe, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
-import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG } from './windows-enrollment-contract.mjs';
+import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG, visibilityControlCases, visibilityControlPhases, visibilityControlStage } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
 import { controlHTML, controlRoute, controlURL, runVisibilityControls } from './windows-enrollment-visibility-controls.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
@@ -324,18 +324,20 @@ test('isolated control route serves only its one known document and never produc
  await route({ request: () => request(), abort: () => { aborted = true; }, fulfill: () => assert.fail('Duplicate document') }); assert(aborted); assert.deepEqual(state, { documents: 1, blocked: 1 });
  assert.doesNotMatch(controlHTML, /<script|<iframe|<img|<form|https?:|src=/i); assert.match(controlHTML, /<p data-probe style="display:contents">SYNTHETIC_ONLY_NOT_AN_INVITATION_1234567890<\/p>/);
 });
-function visibilityControlHarness(mode = 'positive') {
- const calls = [], marks = []; let handler, closed = false, url = 'about:blank';
+function visibilityControlHarness(mode = 'positive', fault = {}) {
+ const calls = [], marks = []; let handler, pageError, closed = false, url = fault.setup === 'blank' ? 'unexpected synthetic URL' : 'about:blank';
  const page = {
-  url: () => url, on: event => assert.equal(event, 'pageerror'),
-  async goto(target) { calls.push(['control-goto', target]); assert.equal(target, controlURL); await handler({ request: () => ({ url: () => target, method: () => 'GET', postData: () => null, headers: () => ({}) }), fulfill: response => assert.equal(response.body, controlHTML), abort: () => assert.fail('Control navigation blocked') }); url = target; },
-  locator(selector) { const name = selector.slice(1); assert(['clear', 'visible', 'closed-body', 'closed-summary', 'open-body', 'contents'].includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async callback => { assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); return { positiveRange: name !== 'closed-body' || mode !== 'empty', native: mode === 'wrong-native' ? false : name !== 'closed-body' && name !== 'contents' }; } }; } }; },
+  url: () => url, on: (event, callback) => { assert.equal(event, 'pageerror'); pageError = callback; },
+  async goto(target) { if (fault.setup === 'document') throw new Error('unexported synthetic error'); calls.push(['control-goto', target]); assert.equal(target, controlURL); await handler({ request: () => ({ url: () => target, method: () => 'GET', postData: () => null, headers: () => ({}) }), fulfill: response => assert.equal(response.body, controlHTML), abort: () => assert.fail('Control navigation blocked') }); url = target; if (fault.setup === 'runtime-errors') pageError(); if (fault.setup === 'route-boundary') await handler({ request: () => ({ url: () => origin + '/api/session', method: () => 'GET', postData: () => null, headers: () => ({}) }), abort: () => {}, fulfill: () => assert.fail('Unexpected fulfillment') }); },
+  locator(selector) { const name = selector.slice(1); assert(['clear', 'visible', 'closed-body', 'closed-summary', 'open-body', 'contents'].includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async callback => { assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); if (name === fault.caseName && fault.measureError) throw new Error('unexported synthetic error'); if (name === fault.caseName && 'observation' in fault) return fault.observation; return { positiveRange: name !== 'closed-body' || mode !== 'empty', native: mode === 'wrong-native' ? false : name !== 'closed-body' && name !== 'contents' }; } }; } }; },
  };
- const context = { route: async (pattern, fn) => { assert.equal(pattern, '**/*'); handler = fn; calls.push(['control-route']); }, newPage: async () => { calls.push(['new-control-page']); return page; }, close: async () => { closed = true; calls.push(['close-control-context']); } };
+ const context = { route: async (pattern, fn) => { if (fault.setup === 'route') throw new Error('unexported synthetic error'); assert.equal(pattern, '**/*'); handler = fn; calls.push(['control-route']); }, newPage: async () => { if (fault.setup === 'page') throw new Error('unexported synthetic error'); calls.push(['new-control-page']); return page; }, close: async () => { closed = true; calls.push(['close-control-context']); if (fault.setup === 'close') throw new Error('unexported synthetic error'); } };
  const browser = { newContext: async options => { calls.push(['new-control-context', options]); return context; } };
- const expect = probe => ({ toBeHidden: async () => assert.equal(probe.name, 'closed-body'), toBeVisible: async () => assert.notEqual(probe.name, 'closed-body') });
+ const expect = probe => ({ toBeHidden: async () => { if (probe.name === fault.caseName && fault.playwrightError) throw new Error('unexported synthetic error'); assert.equal(probe.name, 'closed-body'); }, toBeVisible: async () => { if (probe.name === fault.caseName && fault.playwrightError) throw new Error('unexported synthetic error'); assert.notEqual(probe.name, 'closed-body'); } });
  const inspect = async (givenPage, region, givenExpect, mark) => {
-  assert.equal(givenPage, page); assert.equal(region.owner, page); assert.equal(givenExpect, expect); calls.push(['privacy', region.name]); mark('public-safe-elements'); mark('public-safe-inspection');
+  assert.equal(givenPage, page); assert.equal(region.owner, page); assert.equal(givenExpect, expect); calls.push(['privacy', region.name]);
+  if (region.name === fault.caseName && fault.privacyStages) { for (const stage of fault.privacyStages) mark(stage); if (fault.privacyRejected) throw new Error('unexported synthetic error'); return; }
+  mark('public-safe-elements'); mark('public-safe-inspection');
   if (mode === 'accept-all' || region.name === 'clear' || region.name === 'closed-body' && mode === 'empty') return;
   mark(region.name === 'closed-body' ? 'public-safe-text-closed-details-native-false' : 'public-safe-text'); throw new Error('Expected synthetic rejection');
  };
@@ -356,6 +358,51 @@ test('native control driver owns one separate context/page and always closes it;
  }
  const source = await readFile(new URL('./windows-enrollment-visibility-controls.mjs', import.meta.url), 'utf8'); assert.doesNotMatch(source, /\.screenshot\(|\.setContent\(|innerHTML\s*=|outerHTML\s*=|\.addStyleTag\(|\.continue\(|routeFixture/);
  const recipe = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8'); assert(recipe.indexOf('await runVisibilityControls({ browser, expect, assertPublicSafe, mark })') < recipe.indexOf('for (const [viewIndex,')); assert(compiled.sourceInputs.some(row => row.file === 'web/scripts/windows-enrollment-visibility-controls.mjs'));
+});
+test('every isolated control assertion has a fixed failure phase without exporting observed values', async () => {
+ const raw = 'UNTRUSTED_SYNTHETIC_DIAGNOSTIC_MUST_NOT_ESCAPE';
+ const check = async (caseName, fault, phase, mode = 'positive') => {
+  const h = visibilityControlHarness(mode, { caseName, ...fault });
+  await assert.rejects(() => withHostedFixture(() => runVisibilityControls(h)));
+  assert(h.closed()); assert.equal(h.marks.at(-1).stage, visibilityControlStage(caseName, phase));
+  assert(!JSON.stringify(h.marks).includes(raw));
+  for (const row of h.marks) assert.deepEqual(Object.keys(row), ['stage', 'scene', 'locale', 'width']);
+ };
+ for (const caseName of visibilityControlCases) {
+  const native = caseName !== 'closed-body' && caseName !== 'contents';
+  await check(caseName, { measureError: true }, 'measure');
+  for (const observation of [null, {}, { native, positiveRange: true, extra: raw }]) await check(caseName, { observation }, 'observation-shape');
+  await check(caseName, { observation: { native, positiveRange: raw } }, 'range-type');
+  await check(caseName, { observation: { native: !native, positiveRange: true } }, `native-${!native}-range-positive`);
+  await check(caseName, { observation: { native: raw, positiveRange: true } }, 'native-invalid-range-positive');
+  if (caseName !== 'closed-body') await check(caseName, { observation: { native, positiveRange: false } }, 'range-empty');
+  await check(caseName, { playwrightError: true }, caseName === 'closed-body' ? 'playwright-hidden-range-positive' : 'playwright-visible');
+  const privacyStages = ['public-safe-elements', 'public-safe-inspection'];
+  await check(caseName, { privacyStages, privacyRejected: caseName === 'clear' }, `privacy-${caseName === 'clear' ? 'rejected' : 'accepted'}-last-public-safe-inspection-range-positive`);
+  for (const last of ['none', 'public-safe-elements', 'public-safe-inputs', 'invalid']) {
+   const faultyStages = last === 'none' ? [] : last === 'public-safe-elements' ? ['public-safe-elements'] : [...privacyStages, last === 'invalid' ? raw : last];
+   await check(caseName, { privacyStages: faultyStages, privacyRejected: caseName !== 'clear' }, `privacy-sequence-last-${last}-range-positive`);
+  }
+ }
+ await check('closed-body', { observation: { native: true, positiveRange: false } }, 'native-true-range-empty', 'empty');
+ await check('closed-body', { playwrightError: true }, 'playwright-hidden-range-empty', 'empty');
+ await check('closed-body', { privacyStages: ['public-safe-elements', 'public-safe-inspection'], privacyRejected: true }, 'privacy-rejected-last-public-safe-inspection-range-empty', 'empty');
+});
+test('isolated control setup, cleanup and final boundaries retain separate fail-closed checkpoints', async () => {
+ for (const setup of ['route', 'page', 'blank', 'document', 'runtime-errors', 'route-boundary', 'close']) {
+  const h = visibilityControlHarness('positive', { setup }); await assert.rejects(() => withHostedFixture(() => runVisibilityControls(h)));
+  assert(h.closed()); assert.equal(h.marks.at(-1).stage, `visibility-control-${setup}`);
+ }
+});
+test('synthetic visibility control diagnostic vocabulary is closed and has no raw-value extension', () => {
+ assert.equal(new Set(stages).size, stages.length);
+ for (const name of visibilityControlCases) for (const phase of visibilityControlPhases) {
+  const stage = visibilityControlStage(name, phase); assert.deepEqual(diagnostic(stage), { stage, scene: null, locale: null, width: null });
+ }
+ for (const value of ['raw DOM', secret, invitation, {}, null, undefined]) {
+  assert.throws(() => visibilityControlStage(value, 'measure'));
+  assert.throws(() => visibilityControlStage('closed-body', value));
+ }
 });
 test('success counts explicitly separate one control context from four unchanged capture contexts', () => {
  const report = successfulReport(sourceSha); assert.equal(report.contexts, 5); assert.equal(report.captureContexts, 4); assert.equal(report.controlContexts, 1); assert.equal(report.controlCases, 6); assert.equal(report.syntheticCreates, 4); assert.equal(report.screenshots, 8);

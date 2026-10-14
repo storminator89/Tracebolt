@@ -1180,7 +1180,7 @@ CONDITIONAL_LITERAL_STAGES = {
     'mobile package viewport': 'mobile-package-viewport',
 }
 CONDITIONAL_FOCUS_TARGETS = ('legacy-package-table', 'legacy-package-details', 'advisory-toggle')
-FOCUS_PHASES = ('outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture')
+FOCUS_PHASES = ('outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline right viewport', 'outline right ancestor', 'outline right mixed', 'outline right table wider', 'outline right table fractional', 'outline right table subpixel', 'outline right table overflow', 'outline right table unverified subpixel', 'outline right table unverified overflow', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture')
 CONDITIONAL_FOCUS_STAGES = {
     f'focus contrast {target} {size} {locale} {theme}: {phase}':
     f'focus-{target}-{size}-{locale}-{theme}-{phase.replace(" ", "-")}'
