@@ -142,6 +142,11 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Authenticated smoke and affected existing browser flows
         run: python3 -I -B tests/security/pr_checks.py browser
+      - name: Verify synthetic Windows created-stage instructions
+        run: |
+          node web/scripts/capture-windows-enrollment.mjs --check
+          node --test web/scripts/windows-enrollment-capture.node.mjs
+          node web/scripts/run-windows-enrollment-ci.mjs
       - name: Keep successful focused public-safe screenshots only
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -153,6 +158,16 @@ jobs:
             artifacts/review/first-report-manifest.json
             artifacts/review/pr-browser-smoke-results.json
             artifacts/review/pr-browser-smoke-manifest.json
+            artifacts/review/windows-enrollment-results.json
+            artifacts/review/windows-enrollment-manifest.json
+            artifacts/review/windows-enrollment-instructions-en-1440.png
+            artifacts/review/windows-enrollment-release-en-1440.png
+            artifacts/review/windows-enrollment-instructions-en-390.png
+            artifacts/review/windows-enrollment-release-en-390.png
+            artifacts/review/windows-enrollment-instructions-de-1440.png
+            artifacts/review/windows-enrollment-release-de-1440.png
+            artifacts/review/windows-enrollment-instructions-de-390.png
+            artifacts/review/windows-enrollment-release-de-390.png
             artifacts/review/results.json
             artifacts/review/screenshot-manifest.json
             artifacts/review/managed-preview-result.json
