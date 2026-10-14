@@ -44,6 +44,7 @@ UI_SHARED = ('web/src/App.tsx', 'web/src/api.ts', 'web/src/types.ts', 'web/src/a
 # Use existing bounded browser entry points, never dynamically supplied commands.
 # Longest prefixes first avoid software/history, MSI and service/action ambiguity.
 FLOWS = {
+    'first-report': 'web/scripts/run-first-report-ci.mjs',
     'lan': 'tests/e2e-review/lan-browser.mjs',
     'linux-cve-update-review': 'web/scripts/run-linux-cve-update-review-ci.mjs',
     'windows-fleet-software': 'web/scripts/run-windows-fleet-software-ci.mjs',
@@ -83,6 +84,11 @@ DOMAIN_SCRIPTS = {
     'tests/e2e-review/paused-windows-routes.test.mjs': {
         'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions',
     },
+    'web/scripts/capture-first-report-fixtures.mjs': {'first-report'},
+    'web/scripts/run-first-report-ci.mjs': {'first-report'},
+    'web/scripts/check-first-report-evidence.mjs': {'first-report'},
+    'web/scripts/first-report-contract.mjs': {'first-report'},
+    'web/scripts/first-report-contract.node.mjs': {'first-report'},
     'tests/e2e-review/fleet-groups-browser.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-evidence.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-fixtures.test.mjs': {'fleet-groups'},
@@ -108,7 +114,7 @@ DOMAIN_SCRIPTS = {
     'tests/e2e-review/windows-update-download-fixtures.test.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-browser.mjs': {'windows-service-actions'},
     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs': {'windows-service-actions'},
-    'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi'},
+    'web/scripts/capture-windows-fleet-msi-fixtures.mjs': {'windows-fleet-msi', 'first-report'},
     'web/scripts/capture-windows-msi-catalogue-fixtures.mjs': {'windows-fleet-msi'},
     'web/scripts/capture-windows-reusable-msi-fixtures.mjs': {'windows-fleet-msi'},
     'web/scripts/capture-windows-scheduled-msi-fixtures.mjs': {'windows-fleet-msi'},
@@ -120,6 +126,9 @@ DOMAIN_SCRIPTS = {
 # These existing UI names do not match the older domain aliases. Keep them in
 # the normal changed/related Vitest path while selecting their verified owner.
 DOMAIN_UI = {
+    'web/src/enrollment.tsx': {'enrollment', 'first-report'},
+    'web/src/enrollment-types.ts': {'enrollment', 'first-report'},
+    'web/src/enrollment-report.tsx': {'enrollment', 'first-report'},
     'web/src/windows-fleet-managed-msi.css': {'windows-fleet-msi'},
     'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
     'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
@@ -447,6 +456,9 @@ def web_checks(plan):
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
     if {'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions'} & set(plan.get('flows', [])):
         run(['node', '--test', 'tests/e2e-review/paused-windows-routes.test.mjs'], stage='ui-paused-windows-routes-contract')
+    if 'first-report' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-first-report-fixtures.mjs', '--check'], stage='ui-first-report-contract')
+        run(['node', '--test', '--test-concurrency=1', 'web/scripts/first-report-contract.node.mjs'], stage='ui-first-report-evidence-contract')
     if 'shell' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/route-loading-fixtures.test.mjs'], stage='ui-route-loading-contract')
         run(['node', '--test', 'tests/e2e-review/shell-browser-diagnostics.test.mjs'], stage='ui-shell-diagnostic-contract')
@@ -487,7 +499,7 @@ def web_checks(plan):
 # Existing full gate validators are reused where available. Other executable
 # runners enforce exact captures internally; require their positive report too.
 BROWSER_REPORTS = {name: name + '-results.json' for name in FLOWS if name.startswith('windows-') or name == 'fleet-groups'}
-BROWSER_REPORTS.update({'linux-cve-update-review': 'linux-cve-update-review-results.json', 'lan': 'lan-browser-results.json', 'shell': 'results.json',
+BROWSER_REPORTS.update({'first-report': 'first-report-results.json', 'linux-cve-update-review': 'linux-cve-update-review-results.json', 'lan': 'lan-browser-results.json', 'shell': 'results.json',
     'managed': 'managed-preview-result.json', 'enrollment': 'enrollment-browser-results.json',
     'conditional': 'conditional-browser-results.json', 'v3': 'v3-mvp-browser-results.json',
     'fleet-identity': 'fleet-identity-browser-results.json', 'endpoint-identity': 'endpoint-browser-results.json',
@@ -570,6 +582,8 @@ def browser_report(flow, sha):
         raise ValueError('invalid browser report')
     value = reporter.decode(path.read_bytes())
     validate_browser_report(flow, value, sha)
+    if flow == 'first-report':
+        run(['node', 'web/scripts/check-first-report-evidence.mjs', sha], stage='browser-first-report-evidence')
     if flow == 'windows-fleet-software':
         run(['node', 'web/scripts/check-windows-fleet-software-evidence.mjs', sha], stage='browser-fleet-software-evidence')
     if flow == 'linux-cve-update-review':

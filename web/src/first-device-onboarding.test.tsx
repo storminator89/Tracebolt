@@ -18,17 +18,18 @@ const labels = {
 } as const;
 function server({ access = 'shared', enabled = true, devices = [] }: { access?: 'shared' | 'named' | 'legacy' | 'development'; enabled?: boolean; devices?: Device[] } = {}) {
     let readOverview = async () => json(overview(devices));
+    let readEnrollment = async () => json(enrollment(enabled));
     const session = access === 'development' ? { ...journalSession, mode: 'development', authenticationRequired: false, authenticated: false, loginMode: 'shared', actorId: null, capabilities: [] } : { ...journalSession, ...(access === 'legacy' ? {} : { loginMode: access, actorId: access === 'named' ? `operator_${'b'.repeat(32)}` : null, capabilities: ['read'] }) };
     const fetch = vi.fn(async (url: string, init?: RequestInit) => {
         if (init?.method && init.method !== 'GET') throw new Error('This navigation must never mutate');
         if (url === '/api/auth/session') return json(session);
         if (url === '/api/overview') return readOverview();
-        if (url === '/api/enrollment') return json(enrollment(enabled));
+        if (url === '/api/enrollment') return readEnrollment();
         if (url === '/api/windows/enrollment') return json(enrollment(false));
         return json({}, 503);
     });
     vi.stubGlobal('fetch', fetch);
-    return { fetch, setOverview: (next: typeof readOverview) => { readOverview = next; } };
+    return { fetch, setOverview: (next: typeof readOverview) => { readOverview = next; }, setEnrollment: (next: typeof readEnrollment) => { readEnrollment = next; } };
 }
 function route(view: string) { act(() => { window.history.replaceState({}, '', `/#/${view}`); window.dispatchEvent(new Event('hashchange')); }); }
 async function travel(direction: 'back' | 'forward') {
@@ -144,4 +145,43 @@ describe('first device guidance', () => {
         expect(await screen.findByRole('heading', { name: 'No data available' })).toBeVisible();
         expect(screen.queryByRole('button', { name: labels.en.setup })).not.toBeInTheDocument(); expectReadOnly(s.fetch);
     });
+});
+
+it.each(['en', 'de'] as const)('manual enrollment status reloads newly accepted report evidence with unchanged invitation revision (%s)', async locale => {
+    setLocale(locale, false); const seconds = Date.parse(journalNow) / 1000, invitation = `invite_${'1'.repeat(32)}`;
+    const pendingDevice: Device = { ...device, lastSeen: '0001-01-01T00:00:00Z', capabilities: [{ id: 'agent_identity', name: 'Enrolled agent identity', status: 'supported', detail: 'Synthetic activated identity' }], agentCertificate: { source: 'guided-enrollment', checkedAt: journalNow, expiresAt: new Date((seconds + 86400) * 1000).toISOString() } };
+    const item = { version: 'tracebolt.enrollment-state.v2', binding: { instanceID: `manager_${'2'.repeat(32)}`, origin: window.location.origin, profile: 'tls', collectionProfile: 'managed-operations-v3', issuerFingerprint: 'a'.repeat(64) }, invitationID: invitation, createRequestID: `request_${'3'.repeat(32)}`, platform: 'linux', revision: 6, state: 'activated', createdAt: seconds - 300, deadlineAt: seconds + 600, updatedAt: seconds, claim: { claimID: `claim_${'4'.repeat(32)}`, keyFingerprint: 'ab'.repeat(32), comparisonCode: '12ab'.repeat(8) }, approval: { deviceID: device.id }, intent: { deviceID: device.id, notAfter: seconds + 86400 }, issuance: {}, activation: {}, termination: {} };
+    const s = server({ devices: [pendingDevice] }), timers = vi.spyOn(window, 'setInterval');
+    s.setEnrollment(async () => json({ ...enrollment(), items: [item] })); route('devices'); render(<App/>);
+    const panel = await screen.findByRole('region', { name: labels[locale].panel });
+    fireEvent.click(await within(panel).findByRole('button', { name: locale === 'de' ? /^Einladungen/ : /^Invitations/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: locale === 'de' ? `Einladung ${invitation} prüfen` : `Review invitation ${invitation}` }));
+    const waiting = locale === 'de' ? 'Warte auf erste Meldung' : 'Waiting for first report', check = locale === 'de' ? 'Status prüfen' : 'Check status';
+    expect(await screen.findByText(waiting)).toBeVisible();
+    const count = (path: string) => s.fetch.mock.calls.filter(([url]) => url === path).length;
+    expect(count('/api/overview')).toBe(1); expect(count('/api/enrollment')).toBe(1);
+    const poll = timers.mock.calls.find(([, delay]) => delay === 10000)?.[0]; expect(typeof poll).toBe('function');
+    await act(async () => { (poll as () => void)(); });
+    expect(count('/api/enrollment')).toBe(2); expect(count('/api/overview')).toBe(1);
+    const unrelatedReads = () => s.fetch.mock.calls.filter(([path]) => path !== '/api/enrollment' && path !== '/api/overview').length;
+    const beforeManual = unrelatedReads();
+    let release!: (value: Response) => void;
+    s.setOverview(() => new Promise(resolve => { release = resolve; }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: check }));
+    await waitFor(() => expect(count('/api/overview')).toBe(2));
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: check })).toBeDisabled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: check }));
+    await act(async () => { (poll as () => void)(); });
+    expect(count('/api/enrollment')).toBe(3); expect(count('/api/overview')).toBe(2);
+    const reported = { ...pendingDevice, lastSeen: new Date((seconds - 30) * 1000).toISOString() };
+    await act(async () => { release(json(overview([reported]))); });
+    const report = within(screen.getByRole('dialog')).getByRole('status', { name: locale === 'de' ? 'Meldung' : 'Report' });
+    expect(report.querySelector('time')).toHaveAttribute('datetime', reported.lastSeen); expect(screen.queryByText(waiting)).not.toBeInTheDocument(); expect(item.revision).toBe(6);
+    expect(count('/api/enrollment')).toBe(3); expect(count('/api/overview')).toBe(2); expect(unrelatedReads()).toBe(beforeManual);
+    s.setOverview(async () => json({ error: { message: 'Synthetic overview unavailable' } }, 503));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: check }));
+    await within(report).findByText(locale === 'de' ? 'Meldungsstatus nicht verfügbar' : 'Report status unavailable');
+    expect(report.querySelector('time')).toHaveAttribute('datetime', reported.lastSeen);
+    expect(screen.queryByText(waiting)).not.toBeInTheDocument();
+    expect(count('/api/enrollment')).toBe(4); expect(count('/api/overview')).toBe(3); expectReadOnly(s.fetch);
 });

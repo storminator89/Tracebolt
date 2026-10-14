@@ -184,7 +184,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_exact_owned_scripts_select_the_existing_complete_fleet_flow(self):
         expected = {
-            'capture-windows-fleet-msi-fixtures.mjs', 'capture-windows-msi-catalogue-fixtures.mjs',
+            'capture-windows-msi-catalogue-fixtures.mjs',
             'capture-windows-reusable-msi-fixtures.mjs', 'capture-windows-scheduled-msi-fixtures.mjs',
             'capture-windows-software-catalogue-fixtures.mjs', 'run-windows-fleet-msi-ci.mjs',
             'run-windows-msi-catalogue-ci.mjs',
@@ -210,6 +210,74 @@ class SelectionTests(unittest.TestCase):
                         ['node', 'web/scripts/run-windows-msi-catalogue-ci.mjs'],
                     ])
                     report.assert_called_once_with('windows-fleet-msi', SHA)
+
+    def test_first_report_selects_bounded_hosted_flow_and_source_dependencies(self):
+        owned = {'web/scripts/' + name for name in ['capture-first-report-fixtures.mjs',
+                 'run-first-report-ci.mjs', 'check-first-report-evidence.mjs',
+                 'first-report-contract.mjs', 'first-report-contract.node.mjs']}
+        self.assertEqual({path for path, flows in p.DOMAIN_SCRIPTS.items() if flows == {'first-report'}}, owned)
+        for path in owned:
+            self.assertTrue((ROOT / path).is_file())
+            for status in ['A', 'M']:
+                plan = self.select((status, path))
+                self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+                self.assertEqual(plan['flows'], ['first-report'])
+        shared = self.select(('M', 'web/scripts/capture-windows-fleet-msi-fixtures.mjs'))
+        self.assertEqual(shared['flows'], ['first-report', 'windows-fleet-msi'])
+        self.assertFalse(shared['broadWeb'])
+        for path in ['web/src/enrollment.tsx', 'web/src/enrollment-types.ts', 'web/src/enrollment-report.tsx',
+                     'web/src/report-time.tsx', 'web/src/first-report-status.test.tsx']:
+            plan = self.select(('M', path))
+            self.assertIn('first-report', plan['flows'])
+            self.assertIn(path.removeprefix('web/'), plan['web'])
+        for path in ['web/src/enrollment.tsx', 'web/src/enrollment-types.ts', 'web/src/enrollment-report.tsx']:
+            self.assertIn('enrollment', self.select(('M', path))['flows'])
+        for change in [('D', next(iter(owned))), ('M', 'web/scripts/first-report-unknown.mjs'),
+                       ('M', 'web/src/App.tsx'), ('M', 'web/package-lock.json')]:
+            self.assertEqual(self.select(change)['flows'], sorted(p.FLOWS))
+
+    def test_first_report_runs_inert_contract_and_rechecks_success_before_upload(self):
+        plan = {'flows': ['first-report'], 'sha': SHA, 'broadWeb': False, 'web': []}
+        with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+            p.browser_checks(plan)
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'],
+            ['node', 'web/scripts/run-first-report-ci.mjs']])
+        report.assert_called_once_with('first-report', SHA)
+        with patch.object(p, 'run') as run:
+            p.web_checks(plan)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertIn(['node', 'web/scripts/capture-first-report-fixtures.mjs', '--check'], commands)
+        self.assertIn(['node', '--test', '--test-concurrency=1', 'web/scripts/first-report-contract.node.mjs'], commands)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); output = root / 'artifacts/review'; output.mkdir(parents=True)
+            (output / 'first-report-results.json').write_text(json.dumps({'sourceSha': SHA, 'status': 'PASS', 'browserAcceptance': True}))
+            with patch.object(p, 'ROOT', root), patch.object(p, 'run') as run:
+                p.browser_report('first-report', SHA)
+            run.assert_called_once_with(['node', 'web/scripts/check-first-report-evidence.mjs', SHA], stage='browser-first-report-evidence')
+            with patch.object(p, 'ROOT', root), patch.object(p, 'run', side_effect=ValueError('invalid evidence')):
+                with self.assertRaises(ValueError):
+                    p.browser_report('first-report', SHA)
+        workflow = (ROOT / '.github/workflows/pr-checks.yml').read_text()
+        for name in ['first-report-results.json', 'first-report-manifest.json']:
+            self.assertEqual(workflow.count('            artifacts/review/' + name + '\n'), 1)
+        self.assertIn('            artifacts/review/synthetic-*.png\n', workflow)
+        self.assertIn('      - name: Keep successful focused public-safe screenshots only\n        if: success()', workflow)
+        self.assertNotIn('workflow_dispatch:', workflow)
+        self.assertIn("      TRACEBOLT_SOURCE_SHA: ${{ github.sha }}", workflow)
+        self.assertIn('npx playwright install --with-deps chromium', workflow)
+
+    def test_first_report_failed_process_never_prints_raw_output_or_validates_success(self):
+        marker = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD'
+        def process(args, **kwargs):
+            kwargs['stdout'].write(marker.encode())
+            return SimpleNamespace(returncode=1 if args == ['node', p.FLOWS['first-report']] else 0)
+        output = io.StringIO()
+        with patch.object(p.subprocess, 'run', side_effect=process), patch.object(p, 'browser_report') as report, redirect_stdout(output):
+            with self.assertRaises(ValueError):
+                p.browser_checks({'flows': ['first-report'], 'sha': SHA})
+        self.assertIn('FAIL stage: browser-first-report', output.getvalue())
+        self.assertNotIn(marker, output.getvalue()); report.assert_not_called()
 
     def test_exact_retirement_fixture_selects_its_existing_update_owner(self):
         expected = {'tests/e2e-review/windows-update-retirement-browser.mjs',
@@ -397,19 +465,21 @@ class SelectionTests(unittest.TestCase):
         plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
         self.assertEqual(plan['packages'], expected['packages'])
         self.assertEqual(plan['web'], expected['web'])
-        self.assertEqual(plan['flows'], ['fleet-groups', 'linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance',
+        self.assertEqual(plan['flows'], ['first-report', 'fleet-groups', 'linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance',
                                         'windows-managed-msi', 'windows-mutation-coexistence', 'windows-service-actions', 'windows-storage-io'])
         self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
         self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
                                       generated_allowlist_verified=True))
 
     def test_exact_msi_ui_owners_keep_changed_and_related_interaction_checks(self):
-        self.assertEqual(set(p.DOMAIN_UI), {
+        self.assertEqual({path for path, flows in p.DOMAIN_UI.items() if flows == {'windows-fleet-msi'}}, {
             'web/src/windows-fleet-managed-msi.css',
             'web/src/windows-fleet-managed-msi.test.tsx',
             'web/src/windows-reusable-managed-msi.test.tsx',
         })
         for path, flows in p.DOMAIN_UI.items():
+            if flows != {'windows-fleet-msi'}:
+                continue
             with self.subTest(path=path):
                 self.assertEqual(flows, {'windows-fleet-msi'})
                 self.assertTrue((ROOT / path).is_file())

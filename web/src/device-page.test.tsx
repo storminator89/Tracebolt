@@ -34,7 +34,14 @@ function answer(path: string) {
 async function navigate(path: string) {
  await act(async () => { window.history.replaceState({}, '', `/#/${path}`); window.dispatchEvent(new HashChangeEvent('hashchange')); });
 }
-async function open() { await navigate(`devices/${id}`); render(<App/>); return screen.findByRole('region', { name: 'Device Synthetic Linux fixture' }); }
+async function open() {
+ await navigate(`devices/${id}`);
+ await act(async () => { render(<App/>); });
+ // Authentication must settle before the render starts its lazy route import.
+ // Await that real import; cold Vite transforms are not a DOM-readiness timeout.
+ await act(async () => { await vi.dynamicImportSettled(); });
+ return screen.findByRole('region', { name: 'Device Synthetic Linux fixture' });
+}
 beforeEach(() => {
  setLocale('en', false); localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, '', '/');
  vi.mocked(request).mockReset().mockImplementation(async path => answer(path));
@@ -55,7 +62,7 @@ describe('dedicated device page', () => {
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(document.body.style.overflow).not.toBe('hidden');
   expect(within(page).getByRole('heading', { name: 'Synthetic Linux fixture', level: 1 })).toBeVisible();
   expect(within(page).getByText('Not assessed', { selector: '.status' })).toBeVisible();
-  expect(within(page).getByText('Time unknown', { selector: '.detail-time' })).toBeVisible(); expect(page).not.toHaveTextContent('0001');
+  expect(within(within(page).getByRole('region', { name: 'Last report' })).getByText('No report recorded yet')).toBeVisible(); expect(page).not.toHaveTextContent('0001');
   expect(screen.queryByLabelText('Search devices')).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Add device' })).not.toBeInTheDocument();
   fireEvent.click(within(page).getByRole('tab', { name: 'Details' }));
   const technical = within(page).getByText('Device profile & technical details').closest('details')!;

@@ -1,3 +1,4 @@
+import { ReportTime } from './report-time';
 import { WindowsContextPanel } from './windows-retained-context';
 import { WindowsServiceActionsPanel } from './windows-service-actions';
 import { WindowsFullServicesPanel } from './windows-full-services';
@@ -14,7 +15,7 @@ import { ArrowRight, Clock3, HardDrive, Info, MemoryStick, RefreshCw, Terminal }
 import { useLocale } from './i18n';
 import { MetricValue } from './components';
 import { ResourceHistoryCharts } from './resource-history';
-import { fullDate, relativeTime } from './utils';
+import { fullDate } from './utils';
 import type { Device } from './types';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventorySection, WindowsInventorySnapshot } from './windows-inventory-types';
@@ -91,11 +92,11 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
         {!fullSoftware && !fullProcesses && selected !== 'security' && selected !== 'sessions' && selected !== 'device' && selected !== 'updates' && <><p className="windows-inventory-privacy"><Info size={15}/>{c.privacy}</p><p className="windows-inventory-exclusions">{c.scope}</p></>}
     </section>;
 }
-export function WindowsDeviceOverview({ device, resource, sessionKey, onInventory, onDetails }: { device: Device; resource: WindowsInventoryResource; sessionKey: string | null; onInventory?: () => void; onDetails: () => void }) {
+export function WindowsDeviceOverview({ device, resource, sessionKey, onInventory, onDetails, reportsAvailable = true }: { reportsAvailable?: boolean; device: Device; resource: WindowsInventoryResource; sessionKey: string | null; onInventory?: () => void; onDetails: () => void }) {
     const [locale] = useLocale(), c = copy[locale];
     return <div className="windows-device-overview">
         <section className="windows-overview-inventory" aria-label={c.title}><div className="windows-inventory-section-header"><h2>{c.title}</h2>{onInventory && <button type="button" className="text-button" onClick={onInventory}>{c.open}<ArrowRight size={14}/></button>}</div><InventoryState resource={resource}/>{resource.snapshot && <dl className="windows-overview-summary">{sections.map(key => <div key={key}><dt>{c[key]}</dt><dd>{key === 'hostname' && resource.snapshot!.hostname.rows[0] ? resource.snapshot!.hostname.rows[0].value : sectionCount(resource.snapshot![key], locale)}{resource.snapshot![key].quality === 'partial' && <small className="windows-overview-partial">{c.partial}</small>}</dd></div>)}</dl>}</section>
-        <section className="windows-overview-resources" aria-label={c.resources}><p className="windows-last-report">{c.lastReport}: <time dateTime={device.lastSeen}>{relativeTime(device.lastSeen)}</time></p><div className="device-metrics">{[{ label: 'CPU', metric: device.cpu, icon: Terminal }, { label: c.memory, metric: device.memory, icon: MemoryStick }, { label: c.disk, metric: device.disk, icon: HardDrive }].map(({ label, metric, icon: Icon }) => <div className="device-metric-card" key={label}><span className="device-metric-label"><Icon size={16}/>{label}</span><MetricValue metric={metric} precision={1}/><time className="device-metric-time" dateTime={metric.collectedAt}>{c.measured} · {fullDate(metric.collectedAt)}</time></div>)}</div><ResourceHistoryCharts deviceId={device.id} sessionKey={sessionKey} ready={resource.error !== 'session'} platform="windows"/><button type="button" className="text-button" onClick={onDetails}>{c.details}<ArrowRight size={14}/></button></section>
+        <section className="windows-overview-resources" aria-label={c.resources}><p className="windows-last-report">{c.lastReport}: <ReportTime device={device} available={reportsAvailable}/></p><div className="device-metrics">{[{ label: 'CPU', metric: device.cpu, icon: Terminal }, { label: c.memory, metric: device.memory, icon: MemoryStick }, { label: c.disk, metric: device.disk, icon: HardDrive }].map(({ label, metric, icon: Icon }) => <div className="device-metric-card" key={label}><span className="device-metric-label"><Icon size={16}/>{label}</span><MetricValue metric={metric} precision={1}/><time className="device-metric-time" dateTime={metric.collectedAt}>{c.measured} · {fullDate(metric.collectedAt)}</time></div>)}</div><ResourceHistoryCharts deviceId={device.id} sessionKey={sessionKey} ready={resource.error !== 'session'} platform="windows"/><button type="button" className="text-button" onClick={onDetails}>{c.details}<ArrowRight size={14}/></button></section>
         <details className="windows-inventory-scope"><summary>{c.about}</summary><p>{c.measurementNote}</p></details><p className="windows-inventory-exclusions">{c.planned}</p>
     </div>;
 }

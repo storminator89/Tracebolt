@@ -149,6 +149,8 @@ jobs:
           name: focused-ui-review-${{ github.sha }}
           path: |
             artifacts/review/synthetic-*.png
+            artifacts/review/first-report-results.json
+            artifacts/review/first-report-manifest.json
             artifacts/review/pr-browser-smoke-results.json
             artifacts/review/pr-browser-smoke-manifest.json
             artifacts/review/results.json
