@@ -1,5 +1,6 @@
 /** Page-by-page rendered copy review. Overview rows are restricted to the
  * disposable manager's built-in synthetic fixtures before any public capture. */
+import { reviewOverviewWorkStart } from './overview-work-start-browser.mjs';
 import { assertDesktopNavigation, assertMobileDrawerClosed, shellDrawerKeyboardReview } from './shell-scenarios.mjs';
 
 async function inventoryKeyboardReview({ page, expect, capture, locale, size }) {
@@ -74,6 +75,7 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
    await expect(page.locator('.fleet-panel .device-table .source.real')).toHaveCount(0);
    if (size === 'desktop') await assertDesktopNavigation({ page, expect });
    await capture('overview');
+   await reviewOverviewWorkStart({ page, expect, capture, locale, size, viewport, fixture });
    for (const route of ['devices', 'cases', 'settings']) {
     await page.goto(new URL(`#/${route}`, page.url()).href); await loaded(page);
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
