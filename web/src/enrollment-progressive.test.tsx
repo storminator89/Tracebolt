@@ -125,7 +125,7 @@ describe('install, approve and connection verification', () => {
   expect(details(dialog, 'Destination & profile')).not.toHaveAttribute('open');
   const approve = within(dialog).getByRole('button', { name: 'Approve device' }); expect(approve).toBeDisabled();
   vi.mocked(mutate).mockResolvedValue(record('approved', 3)); fireEvent.click(within(dialog).getByRole('checkbox')); fireEvent.click(approve);
-  await within(dialog).findByText('Key approved'); expect(currentStep(dialog)).toHaveTextContent('Connected');
+  await within(dialog).findByText('Key approved'); expect(currentStep(dialog)).toHaveTextContent('Check data');
   expect(within(dialog).getByText(/connection is not yet confirmed/)).toBeVisible();
   expect(mutate).toHaveBeenLastCalledWith(`/enrollment/${invitation}/approve`, { requestId: expect.any(String), expectedRevision: 2, expectedKeyFingerprint: record().claim.keyFingerprint }, expect.any(AbortSignal));
   current.items = [record('activated', 6)]; await refresh(dialog);
@@ -134,6 +134,36 @@ describe('install, approve and connection verification', () => {
   expect(within(dialog).getByRole('list', { name: 'Setup steps' }).querySelector('.complete')).toBeNull();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Open device' }));
   expect(onDevice).toHaveBeenCalledExactlyOnceWith(device); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+ });
+ it.each(['approved', 'issuance_intent', 'issued', 'activated'] as const)('labels %s as a data check without claiming a connection in English or German', async state => {
+  current.items = [record(state, 3)]; render(section());
+  fireEvent.click(await screen.findByRole('button', { name: /Invitations/ }));
+  fireEvent.click(screen.getByRole('button', { name: `Review invitation ${invitation}` }));
+  const dialog = screen.getByRole('dialog', { name: 'Review invitation' });
+  expect(currentStep(dialog)).toHaveTextContent('Check data');
+  expect(within(dialog).getByRole('list', { name: 'Setup steps' })).not.toHaveTextContent('Connected');
+  expect(within(dialog).getByText(state === 'activated' ? /check its latest report to verify the connection/ : /connection is not yet confirmed/)).toBeVisible();
+  act(() => setLocale('de', false));
+  const steps = within(dialog).getByRole('list', { name: 'Einrichtungsschritte' });
+  expect(steps.querySelector('[aria-current="step"]')).toHaveTextContent('Daten prüfen');
+  expect(steps).not.toHaveTextContent('Verbunden');
+  expect(steps.querySelector('.complete')).toBeNull(); expect(mutate).not.toHaveBeenCalled();
+ });
+ it('also keeps Windows approved setup neutral without borrowing Linux or macOS status', async () => {
+  const windowsRecord = { ...record('approved', 3), platform: 'windows', binding: { ...record().binding, collectionProfile: 'windows-inventory-v1' } } as EnrollmentSnapshot;
+  const linux = current;
+  const windows = { ...current, platforms: ['windows'], items: [windowsRecord], collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive' };
+  vi.mocked(request).mockImplementation(async path => structuredClone(path === '/windows/enrollment' ? windows : linux));
+  render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
+  fireEvent.change(screen.getByRole('combobox', { name: 'Operating system' }), { target: { value: 'windows' } });
+  fireEvent.click(await screen.findByRole('button', { name: /Invitations/ }));
+  fireEvent.click(screen.getByRole('button', { name: `Review invitation ${invitation}` }));
+  const dialog = screen.getByRole('dialog', { name: 'Review invitation' });
+  expect(currentStep(dialog)).toHaveTextContent('Check data');
+  expect(within(dialog).getByText(/connection is not yet confirmed/)).toBeVisible();
+  act(() => setLocale('de', false));
+  expect(within(dialog).getByRole('list', { name: 'Einrichtungsschritte' }).querySelector('[aria-current="step"]')).toHaveTextContent('Daten prüfen');
+  expect(mutate).not.toHaveBeenCalled();
  });
  it('does not show an active setup step for ended invitations', async () => {
   let dialog = await create(); current.items = [record('canceled', 2)]; await refresh(dialog);
