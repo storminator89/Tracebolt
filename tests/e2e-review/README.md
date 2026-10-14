@@ -619,3 +619,33 @@ the independently computed edge contains the outline while the integer-client
 edge fails; it does not prove rendered ring clearance or identify client rounding
 as the sole cause. The original failing assertion still fails. No raw coordinate,
 CSS value, element name or diagnostic object is added to public output.
+
+### V3 private failure coordinates
+
+The PR wrapper projects a failed V3 run through a fresh private per-invocation
+file, outside artifacts. The exact-source registry is
+`v3-browser-coordinates.json`; its ten ordered cases are numbered from one.
+Checkpoints start at zero: the 131 literal/helper stages come first, followed by
+the source-owned focus target/size/locale/theme/phase Cartesian order (995 total).
+Focus checkpoints are admitted only for case 4, the existing compact inventory
+case. No new browser action, assertion, retry, timeout or capture is introduced.
+
+The closed sidecar schema is `tracebolt.v3-browser-failure.v1`, with the exact
+`sourceSha`, ordered unique `failures: [{case, checkpoint}]`, boolean
+`setupFailure` and `runtimeFailure`, and integer `finalCheckpoint`. The public
+line is `FAIL V3 location: case=N checkpoint=N`, optionally containing further
+ordered failure coordinates, `setup-checkpoint=N` or `runtime-errors`, separated
+by `; `. Only validated source-owned numeric ranges and fixed tokens are printed;
+no report names, errors, DOM values, URLs, IDs, source SHA or paths are printed.
+Unknown or malformed records remain withheld. Registry or sidecar read failures
+never establish browser acceptance, and the original process failure is rethrown.
+
+The producer uses exclusive creation with mode 0600 and best-effort writing. The
+wrapper removes its private directory on every exit and ignores inherited
+sidecar destinations. Raw process output, existing reports, screenshot guards,
+all 15 focus assertions and their 0.5 px tolerance, genuine forward Tab, final
+exit condition and successful-only artifact upload remain unchanged. Coordinates
+identify a failed checkpoint, not its cause; fresh hosted results and the original
+80-image inspection are still required. Run the inert producer/writer contracts
+with `node --test tests/e2e-review/v3-browser-coordinates.test.mjs`; the Python PR
+contract suite also runs them and tests the decoder and error propagation.

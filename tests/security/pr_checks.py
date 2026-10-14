@@ -1521,6 +1521,85 @@ def run_journal_browser(env, sha):
             raise  # Original failure and withheld raw process output stay intact.
 
 
+V3_COORDINATES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/v3-browser-coordinates.json'
+
+
+def v3_failure_location(path, sha):
+    """Project only this invocation's source-bound, finite numeric coordinates."""
+    try:
+        with os.fdopen(reporter.open_log(V3_COORDINATES_SOURCE), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 16384:
+                return None
+            raw = stream.read(16385)
+        if len(raw) > 16384:
+            return None
+        contract = reporter.decode(raw)
+        if (type(contract) is not dict or set(contract) != {'schemaVersion', 'cases', 'stages', 'focus'}
+                or contract['schemaVersion'] != 'tracebolt.v3-browser-coordinates.v1'
+                or type(contract['cases']) is not list or len(contract['cases']) != 10
+                or type(contract['stages']) is not list or not 0 < len(contract['stages']) <= 256):
+            return None
+        for values in (contract['cases'], contract['stages']):
+            if any(type(item) is not str or not 0 < len(item) <= 160 for item in values) or len(set(values)) != len(values):
+                return None
+        focus = contract['focus']
+        if (type(focus) is not dict or set(focus) != {'case', 'targets', 'sizes', 'locales', 'themes', 'phases'}
+                or type(focus['case']) is not int or focus['case'] != 4
+                or focus['targets'] != ['inventory-source-tab', 'complete-package-search', 'complete-package-table', 'complete-package-details']
+                or focus['sizes'] != ['desktop', 'mobile'] or focus['locales'] != ['en', 'de']
+                or focus['themes'] != ['light', 'dark'] or focus['phases'] != list(FOCUS_PHASES)):
+            return None
+        checkpoint_count = len(contract['stages']) + 4 * 2 * 2 * 2 * len(FOCUS_PHASES)
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schemaVersion', 'sourceSha', 'failures', 'setupFailure', 'runtimeFailure', 'finalCheckpoint'}
+                or value['schemaVersion'] != 'tracebolt.v3-browser-failure.v1'
+                or type(value['sourceSha']) is not str or value['sourceSha'] != sha
+                or any(type(value[key]) is not bool for key in ('setupFailure', 'runtimeFailure'))
+                or type(value['finalCheckpoint']) is not int or not 0 <= value['finalCheckpoint'] < checkpoint_count
+                or type(value['failures']) is not list or len(value['failures']) > len(contract['cases'])):
+            return None
+        previous, locations = 0, []
+        for row in value['failures']:
+            if (type(row) is not dict or set(row) != {'case', 'checkpoint'}
+                    or type(row['case']) is not int or not previous < row['case'] <= len(contract['cases'])
+                    or type(row['checkpoint']) is not int or not 0 <= row['checkpoint'] < checkpoint_count
+                    or (row['checkpoint'] >= len(contract['stages']) and row['case'] != focus['case'])):
+                return None
+            previous = row['case']
+            locations.append('case=%d checkpoint=%d' % (row['case'], row['checkpoint']))
+        if value['setupFailure']:
+            locations.append('setup-checkpoint=%d' % value['finalCheckpoint'])
+        if value['runtimeFailure']:
+            locations.append('runtime-errors')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_v3_browser(env, sha):
+    # Fresh private per-invocation path, never artifacts; always removed. Ignore
+    # any inherited destination and explicitly bind the child to this source.
+    with tempfile.TemporaryDirectory(prefix='tracebolt-private-v3-') as private:
+        path = Path(private) / 'coordinates.json'
+        try:
+            run(['node', FLOWS['v3']], stage='browser-v3',
+                env={**env, 'TRACEBOLT_SOURCE_SHA': sha, 'TRACEBOLT_V3_DIAGNOSTICS_PATH': str(path)})
+        except ValueError:
+            location = v3_failure_location(path, sha)
+            if location is not None:
+                print('FAIL V3 location: ' + location, flush=True)
+            raise  # Original failure, redaction and exit semantics are unchanged.
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -1551,6 +1630,8 @@ def browser_checks(plan):
                 run_journal_browser(env, plan['sha'])
             elif flow == 'conditional':
                 run_conditional_browser(env, plan['sha'])
+            elif flow == 'v3':
+                run_v3_browser(env, plan['sha'])
             else:
                 run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
         except ValueError:

@@ -2552,6 +2552,140 @@ process.stdout.write(JSON.stringify(report));
                 p.browser_checks({'flows': ['v3'], 'sha': SHA})
             conditional.assert_not_called()
 
+class V3FailureProjectionTests(unittest.TestCase):
+    marker = 'PRIVATE_V3_VALUE_MUST_NOT_ESCAPE'
+
+    def report(self, case=1, checkpoint=5):
+        return {'schemaVersion': 'tracebolt.v3-browser-failure.v1', 'sourceSha': SHA,
+                'failures': [{'case': case, 'checkpoint': checkpoint}], 'setupFailure': False,
+                'runtimeFailure': False, 'finalCheckpoint': 8}
+
+    def test_source_registry_and_node_producer_contracts(self):
+        contract = json.loads(p.V3_COORDINATES_SOURCE.read_text())
+        source = (ROOT / p.FLOWS['v3']).read_text()
+        self.assertEqual(contract['cases'], re.findall(r"await check\('([^']+)'", source))
+        self.assertEqual(contract['focus']['phases'], list(p.FOCUS_PHASES))
+        self.assertEqual(len(contract['stages']), 131)
+        result = p.subprocess.run(['node', '--test', 'tests/e2e-review/v3-browser-coordinates.test.mjs'], cwd=ROOT, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout.decode(errors='replace'))
+
+    def test_actual_producer_all_checkpoints_decode_without_result_prose(self):
+        script = """
+import {v3FailureCoordinates,v3Checkpoints} from './tests/e2e-review/v3-browser-coordinates.mjs';
+import coordinates from './tests/e2e-review/v3-browser-coordinates.json' with {type:'json'};
+const reports=v3Checkpoints.map((stage,checkpoint)=>{
+ const results=coordinates.cases.map(name=>({name,status:'PASS',durationMs:1}));
+ results[3]={...results[3],status:'FAIL',stage,error:'PRIVATE_V3_VALUE_MUST_NOT_ESCAPE'};
+ return v3FailureCoordinates({sourceSha:'a'.repeat(40),results,setupFailure:false,runtimeErrorCount:0,stage});
+});console.log(JSON.stringify(reports));
+"""
+        produced = p.subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT, capture_output=True, check=True)
+        self.assertNotIn(self.marker.encode(), produced.stdout)
+        reports = json.loads(produced.stdout); self.assertEqual(len(reports), 995)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'record.json'
+            for checkpoint, report in enumerate(reports):
+                path.write_text(json.dumps(report))
+                self.assertEqual(p.v3_failure_location(path, SHA), f'case=4 checkpoint={checkpoint}')
+                report['sourceSha'] = 'b' * 40; path.write_text(json.dumps(report))
+                self.assertIsNone(p.v3_failure_location(path, SHA))
+
+    def test_setup_runtime_and_multiple_failure_projection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'record.json'
+            for change, expected in [({}, 'case=1 checkpoint=5'),
+                                    ({'setupFailure': True}, 'case=1 checkpoint=5; setup-checkpoint=8'),
+                                    ({'failures': [], 'runtimeFailure': True}, 'runtime-errors'),
+                                    ({'failures': [{'case': 2, 'checkpoint': 6}, {'case': 4, 'checkpoint': 994}]}, 'case=2 checkpoint=6; case=4 checkpoint=994')]:
+                path.write_text(json.dumps({**self.report(), **change})); self.assertEqual(p.v3_failure_location(path, SHA), expected)
+
+    def test_malformed_unknown_inconsistent_schema_and_nonfinite_inputs_are_withheld(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'record.json'
+            invalid = [{'sourceSha': 'b' * 40}, {'sourceSha': SHA+'\n'}, {'schemaVersion': self.marker}, {'private': self.marker},
+                       {'failures': []}, {'setupFailure': 1}, {'runtimeFailure': 0}, {'finalCheckpoint': True},
+                       {'finalCheckpoint': -1}, {'finalCheckpoint': 995}, {'finalCheckpoint': 1.5},
+                       {'failures': [{'case': 1, 'checkpoint': 131}]}, {'failures': [{'case': 4, 'checkpoint': 995}]},
+                       {'failures': [{'case': 0, 'checkpoint': 5}]}, {'failures': [{'case': 11, 'checkpoint': 5}]},
+                       {'failures': [{'case': True, 'checkpoint': 5}]}, {'failures': [{'case': 1, 'checkpoint': False}]},
+                       {'failures': [{'case': 1, 'checkpoint': 5, 'error': self.marker}]},
+                       {'failures': [{'case': 2, 'checkpoint': 5}, {'case': 1, 'checkpoint': 5}]},
+                       {'failures': [{'case': 1, 'checkpoint': 5}] * 2}, {'failures': [{'case': 1, 'checkpoint': 5}] * 11}]
+            for change in invalid:
+                path.write_text(json.dumps({**self.report(), **change})); self.assertIsNone(p.v3_failure_location(path, SHA), change)
+            for raw in [b'{', b'\xff', b'x'*8193, b'',
+                        json.dumps(self.report()).replace('"failures":', '"failures": [], "failures":').encode(),
+                        json.dumps(self.report()).replace('"finalCheckpoint": 8', '"finalCheckpoint": NaN').encode()]:
+                path.write_bytes(raw); self.assertIsNone(p.v3_failure_location(path, SHA))
+            path.write_text(json.dumps(self.report()))
+            for sha in [None, 1, '', 'A'*40, SHA+'\n']: self.assertIsNone(p.v3_failure_location(path, sha))
+            path.unlink(); self.assertIsNone(p.v3_failure_location(path, SHA))
+
+    def test_nonregular_symlinked_and_untrusted_registry_files_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); path = root / 'record.json'; path.write_text(json.dumps(self.report()))
+            link = root / 'link'; link.symlink_to(path); fifo = root / 'fifo'; os.mkfifo(fifo)
+            alias = root / 'alias'; alias.symlink_to(root, target_is_directory=True)
+            for target in [root, link, fifo, alias/'record.json']: self.assertIsNone(p.v3_failure_location(target, SHA))
+            contract = root / 'contract.json'; original = json.loads(p.V3_COORDINATES_SOURCE.read_text())
+            mutations = [{}, {**original, 'schemaVersion': self.marker}, {**original, 'cases': []},
+                         {**original, 'stages': [1]}, {**original, 'stages': ['duplicate']*2},
+                         {**original, 'focus': {**original['focus'], 'case': True}},
+                         {**original, 'focus': {**original['focus'], 'phases': ['unknown']}}]
+            for value in mutations:
+                contract.write_text(json.dumps(value))
+                with patch.object(p, 'V3_COORDINATES_SOURCE', contract): self.assertIsNone(p.v3_failure_location(path, SHA))
+            contract.write_bytes(b'x'*16385)
+            with patch.object(p, 'V3_COORDINATES_SOURCE', contract): self.assertIsNone(p.v3_failure_location(path, SHA))
+
+    def test_private_invocations_ignore_stale_paths_preserve_redaction_and_cleanup(self):
+        paths, output = [], io.StringIO()
+        def process(args, **kwargs):
+            self.assertEqual(args, ['node', p.FLOWS['v3']]); kwargs['stdout'].write(self.marker.encode())
+            self.assertIs(kwargs['stdout'], kwargs['stderr']); self.assertFalse(kwargs['check'])
+            self.assertEqual(kwargs['env']['TRACEBOLT_SOURCE_SHA'], SHA)
+            path = Path(kwargs['env']['TRACEBOLT_V3_DIAGNOSTICS_PATH'])
+            self.assertFalse(path.exists()); self.assertNotIn('artifacts', path.parts); paths.append(path)
+            if len(paths)==1: path.write_text(json.dumps(self.report()))
+            return SimpleNamespace(returncode=1)
+        with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                    p.run_v3_browser({'TRACEBOLT_V3_DIAGNOSTICS_PATH': '/stale', 'TRACEBOLT_SOURCE_SHA': 'b'*40}, SHA)
+        self.assertNotEqual(paths[0], paths[1]); self.assertTrue(all(not path.parent.exists() for path in paths))
+        self.assertEqual(output.getvalue().count('FAIL V3 location: case=1 checkpoint=5'), 1)
+        for value in [self.marker, SHA, 'PASS:', *map(str, paths)]: self.assertNotIn(value, output.getvalue())
+
+    def test_original_exception_identity_success_skip_and_unexpected_failure_cleanup(self):
+        original = ValueError(self.marker)
+        with patch.object(p, 'run', side_effect=original), patch.object(p, 'v3_failure_location', return_value=None):
+            with self.assertRaises(ValueError) as caught: p.run_v3_browser({}, SHA)
+        self.assertIs(caught.exception, original)
+        with patch.object(p, 'run'), patch.object(p, 'v3_failure_location') as projection: p.run_v3_browser({}, SHA)
+        projection.assert_not_called()
+        paths=[]
+        def unexpected(*args, **kwargs):
+            paths.append(Path(kwargs['env']['TRACEBOLT_V3_DIAGNOSTICS_PATH'])); raise OSError(self.marker)
+        with patch.object(p, 'run', side_effect=unexpected), self.assertRaises(OSError): p.run_v3_browser({}, SHA)
+        self.assertFalse(paths[0].parent.exists())
+
+    def test_only_v3_uses_wrapper_and_failure_never_reaches_acceptance(self):
+        original=ValueError(self.marker)
+        with patch.object(p, 'run'), patch.object(p, 'run_v3_browser', side_effect=original) as wrapper, patch.object(p, 'browser_report') as acceptance:
+            with self.assertRaises(ValueError) as caught: p.browser_checks({'flows': ['v3'], 'sha': SHA})
+        self.assertIs(caught.exception, original); wrapper.assert_called_once(); acceptance.assert_not_called()
+        with patch.object(p, 'run'), patch.object(p, 'run_v3_browser') as wrapper, patch.object(p, 'browser_report') as acceptance:
+            p.browser_checks({'flows': ['managed'], 'sha': SHA})
+        wrapper.assert_not_called(); acceptance.assert_called_once_with('managed', SHA)
+
+    def test_writer_hook_cannot_change_existing_final_exit_or_success_artifact_gate(self):
+        source=(ROOT/p.FLOWS['v3']).read_text(); hook=source[source.index('if(!apiSmoke&&process.env.TRACEBOLT_V3_DIAGNOSTICS_PATH)'):source.index("\nawait fs.writeFile(path.join(out,apiSmoke?'v3-mvp-api-smoke.json'")]
+        self.assertIn("{flag:'wx',mode:0o600}",hook); self.assertIn('catch{}',hook)
+        self.assertNotIn('process.exitCode',hook); self.assertNotIn('page.',hook); self.assertNotIn('console.',hook)
+        self.assertIn('process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status===\'FAIL\')?1:0;',source)
+        workflow=(ROOT/'.github/workflows/pr-checks.yml').read_text()
+        self.assertIn('Keep successful focused public-safe screenshots only',workflow)
+
 
 if __name__ == '__main__':
     unittest.main()
