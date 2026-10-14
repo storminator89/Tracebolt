@@ -52,7 +52,12 @@ export async function numericTypographyReview({ page, expect, capture, name, sel
    for (const text of samples) { number.data = text; proportionalControl.push(measure().number.width); }
   } finally {
    number.data = original;
-   if (originalStyle === null) element.removeAttribute('style'); else element.setAttribute('style', originalStyle);
+   if (originalStyle === null) {
+    // Materialize a lazy CSSOM style attribute before removing it. Otherwise
+    // Chromium can leave an empty attribute after clearing the declarations.
+    element.getAttribute('style');
+    element.removeAttribute('style');
+   } else element.setAttribute('style', originalStyle);
   }
   return { kind: 'restored-synthetic-DOM-shaping-probe', role, font, loadedInter, spans, frames, proportionalControl, restoredText: number.data, originalText: original, sameTextNode: number.parentNode === element, restoredMarkup: element.innerHTML === originalHTML, restoredStyle: element.getAttribute('style') === originalStyle,
    claims: { liveReactUpdate: false, cls: false, loadingImprovement: false, nativeZoom: false } };

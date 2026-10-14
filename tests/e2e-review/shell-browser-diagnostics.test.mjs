@@ -232,3 +232,121 @@ test('restoration subphase names only the first failed invariant and preserves t
  const source = fs.readFileSync(new URL('concise-shell-gallery.mjs', import.meta.url), 'utf8');
  assert.ok(source.includes('expect(evidence.sameTextNode && evidence.restoredMarkup && evidence.restoredStyle).toBe(true)'));
 });
+
+// Source-grounded model of Blink's lazy style-attribute storage, not a browser
+// implementation or rendered proof. Chromium 145.0.7632.6 element.cc:
+// RemoveAttributeHinted, RemoveAllInlineStyleProperties, InlineStyleChanged,
+// InvalidateStyleAttribute, SynchronizeStyleAttributeInternal, GetAttributeHinted.
+// https://raw.githubusercontent.com/chromium/chromium/145.0.7632.6/third_party/blink/renderer/core/dom/element.cc
+function modelLazyStyleAttribute(element) {
+ const get = element.getAttribute.bind(element), set = element.setAttribute.bind(element), remove = element.removeAttribute.bind(element);
+ const declaration = element.ownerDocument.createElement('div').style;
+ declaration.cssText = get('style') ?? '';
+ let dirty = false;
+ Object.defineProperty(element, 'style', { value: new Proxy(declaration, {
+  set(target, key, value) { Reflect.set(target, key, value, target); dirty = true; return true; },
+ }) });
+ element.getAttribute = name => {
+  if (name === 'style' && dirty) { set(name, declaration.cssText); dirty = false; }
+  return get(name);
+ };
+ element.setAttribute = (name, value) => {
+  set(name, value);
+  if (name === 'style') { declaration.cssText = value; dirty = false; }
+ };
+ element.removeAttribute = name => {
+  if (name !== 'style') return remove(name);
+  if (get(name) === null) {
+   if (dirty) declaration.cssText = ''; // Clearing declarations leaves it dirty.
+   return;
+  }
+  remove(name); declaration.cssText = ''; dirty = false;
+ };
+}
+
+test('lazy-style model distinguishes absent from empty and requires synchronization before removal', () => {
+ const { JSDOM } = require('jsdom'), dom = new JSDOM('<strong>6</strong>');
+ try {
+  const element = dom.window.document.querySelector('strong'); modelLazyStyleAttribute(element);
+  assert.equal(element.getAttribute('style'), null);
+  element.style.fontVariantNumeric = 'normal'; element.removeAttribute('style');
+  assert.equal(element.getAttribute('style'), ''); // The old finally path fails exact null equality.
+  element.removeAttribute('style'); assert.equal(element.getAttribute('style'), null);
+  element.style.fontVariantNumeric = 'normal'; element.getAttribute('style'); element.removeAttribute('style');
+  assert.equal(element.getAttribute('style'), null);
+ } finally { dom.window.close(); }
+});
+
+function assertSameChildNodes(element, originalNodes) {
+ const restoredNodes = [...element.childNodes];
+ assert.equal(restoredNodes.length, originalNodes.length);
+ restoredNodes.forEach((node, index) => assert.equal(node, originalNodes[index]));
+}
+
+test('restoration fixture rejects cloned numeric, unit and quality nodes', () => {
+ const { JSDOM } = require('jsdom'), dom = new JSDOM('<div>6<span>MiB</span><span>Stale</span></div>');
+ try {
+  const element = dom.window.document.querySelector('div'), nodes = [...element.childNodes];
+  for (const node of nodes) {
+   const clone = node.cloneNode(true); element.replaceChild(clone, node);
+   assert.throws(() => assertSameChildNodes(element, nodes));
+   element.replaceChild(node, clone); assertSameChildNodes(element, nodes);
+  }
+ } finally { dom.window.close(); }
+});
+
+test('actual numeric probe restores exact DOM bytes and failure identity with eager and lazy inline styles', async () => {
+ const { JSDOM } = require('jsdom');
+ const globals = ['document', 'Node', 'getComputedStyle'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+ let count = 0;
+ try {
+  for (const lazy of [false, true]) for (const role of ['summary', 'compact', 'expanded']) for (const locale of ['en', 'de'])
+   for (const originalStyle of [null, '', ' color : red; --original:  3 !important; ']) for (const failure of [null, 2, 3, 'capture']) {
+    const dom = new JSDOM('<!doctype html><body></body>');
+    try {
+     const d = dom.window.document, holder = d.createElement('div');
+     holder.className = role === 'summary' ? 'summary-strip' : `metric ${role === 'compact' ? 'compact' : ''}`;
+     const element = d.createElement(role === 'summary' ? 'strong' : 'div'); element.className = 'metric-value'; holder.append(element); d.body.append(holder);
+     const number = d.createTextNode(locale === 'de' ? ' 1.234,5 ' : ' 1,234.5 '); element.append(number);
+     if (role !== 'summary') { const unit = d.createElement('span'); unit.textContent = 'MiB / s'; element.append(unit); }
+     if (role === 'expanded') { const quality = d.createElement('span'); quality.textContent = locale === 'de' ? 'Veraltet' : 'Stale'; element.append(quality); }
+     const sibling = d.createElement('span'); sibling.textContent = 'Synthetic subtitle'; holder.append(sibling);
+     if (originalStyle !== null) element.setAttribute('style', originalStyle);
+     if (lazy) modelLazyStyleAttribute(element);
+     const originalText = number.data, html = element.innerHTML, outer = holder.innerHTML, nodes = [...element.childNodes];
+     const restored = () => {
+      assert.equal(number.data, originalText); assert.equal(number.parentNode, element);
+      assert.equal(element.getAttribute('style'), originalStyle); assert.equal(element.innerHTML, html);
+      assertSameChildNodes(element, nodes); assert.equal(holder.innerHTML, outer);
+     };
+     const weight = { summary: '600', compact: '400', expanded: '500' }[role];
+     // All font/geometry values below are fabricated control-flow fixtures.
+     const computed = node => ({ fontFamily: 'Inter, sans-serif', fontWeight: weight, fontStyle: 'normal', fontSize: '24px', letterSpacing: '0px',
+      fontVariantNumeric: node === element ? element.style.fontVariantNumeric || 'tabular-nums' : 'normal', fontFeatureSettings: 'normal' });
+     const width = () => [...number.data].reduce((sum, character) => sum + (/[0-9]/.test(character) ? (computed(element).fontVariantNumeric === 'tabular-nums' ? 8 : character === '1' ? 5 : 9) : 3), 0);
+     element.getBoundingClientRect = () => ({ x: 20, width: width() + 50 });
+     for (const span of element.children) span.getBoundingClientRect = () => ({ x: 20 + width(), width: 20 });
+     sibling.getBoundingClientRect = () => ({ x: 20 + width() + 50, width: 30 });
+     const originalFailure = new Error('Injected synthetic probe failure'); let measurements = 0, captured = false;
+     d.createRange = () => ({ selectNodeContents: node => assert.equal(node, number), getBoundingClientRect() {
+      if (++measurements === failure) throw originalFailure; return { x: 20, width: width() };
+     } });
+     const fonts = [{ family: 'Inter', weight, status: 'loaded' }]; fonts.load = async () => {}; fonts.ready = Promise.resolve();
+     Object.defineProperty(d, 'fonts', { value: fonts }); globalThis.document = d; globalThis.Node = dom.window.Node; globalThis.getComputedStyle = computed;
+     const target = { first() { return this; }, evaluate: (callback, argument) => callback(element, argument) };
+     const expect = value => value === target ? { async toBeVisible() {} } : browserExpect(value);
+     const capture = async (_name, _section, evidence) => {
+      captured = true; restored(); assert.equal(evidence.restoredStyle, true); assert.equal(evidence.role, role);
+      assert.deepEqual(evidence.claims, { liveReactUpdate: false, cls: false, loadingImprovement: false, nativeZoom: false });
+      if (failure === 'capture') throw originalFailure;
+     };
+     const task = numericTypographyReview({ page: { locator: () => target }, expect, capture, name: role, selector: '.metric-value', section: '.metric', locale, decimal: role === 'expanded' });
+     if (failure === null) await task; else await assert.rejects(task, error => error === originalFailure);
+     restored(); assert.equal(captured, failure === null || failure === 'capture'); count++;
+    } finally { dom.window.close(); }
+   }
+ } finally {
+  for (const [key, descriptor] of globals) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
+ }
+ assert.equal(count, 144);
+});
