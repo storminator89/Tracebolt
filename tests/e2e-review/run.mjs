@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { runAIReview } from './ai-scenarios.mjs';
 import { runShellReview } from './shell-scenarios.mjs';
 import { conciseShellGallery } from './concise-shell-gallery.mjs';
+import { focusContrastShellGallery } from './focus-contrast-shell.mjs';
 import { createBrowserTransportDiagnostics, reportTransportFailure } from './browser-transport-diagnostics.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(root, 'web/package.json'));
@@ -84,7 +85,7 @@ async function shot(page,name,section=null) {
   reportTransportFailure(transportDiagnostics.get(page),'screenshot',error,{elapsedMs:performance.now()-captureStarted,layout});
   throw error;
  }
- screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('concise-shell')?'Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.':name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
+ screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:(name.includes('concise-shell')||name.includes('focus-contrast'))?'Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.':name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
 }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
@@ -237,6 +238,7 @@ try {
   const page=await pageAt('/settings'); await loaded(page); await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible(); await expect(page.locator('.setting-row').filter({has:page.getByText('Manager',{exact:true})})).toContainText(`127.0.0.1:${port}`); await expect(page.locator('.main-content')).toContainText('Synthetische Beispiele, keine echten Geräte.'); await shot(page,'desktop-settings');
  });
  await conciseShellGallery({test,pageAt,loaded,shot,expect,data});
+ await focusContrastShellGallery({test,pageAt,loaded,shot,expect,data,record:contrast=>{screenshots.at(-1).contrast=contrast;}});
  await runShellReview({test,pageAt,loaded,shot,expect,caseItem,cleanCase:data.cases.find(c=>c.deviceId==='demo-linux-01')});
  if(process.env.TRACEBOLT_REVIEW_AI==='1') await runAIReview({test,pageAt,loaded,shot,base,data,expect,restartManager:async()=>{await stop();start();await ready();}});
 } finally {

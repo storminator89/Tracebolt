@@ -2,7 +2,9 @@
  * No VM, installer execution, native collection, real credentials or TLS bypass.
  */
 import {checkFreshV3Consent,checkMobileSocketViewport,checkV3Viewport,createV3FailureDiagnostics} from './v3-failure-diagnostics.mjs';
+import {v3FailureCoordinates} from './v3-browser-coordinates.mjs';
 import {createRequire} from 'node:module';
+import {captureFocusMatrix} from './focus-contrast-browser.mjs';
 import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
 import {checkInventoryReadFirst} from './inventory-read-first.mjs';
 import {hasInventoryReadiness,inventoryProjectionReady} from './inventory-readiness.mjs';
@@ -205,6 +207,12 @@ try{
    const page=await pageAt();await device(page);await expect(rows(page,'.complete-packages')).toHaveCount(100);
    const originalPackage=(await get(`/api/devices/${devices.alpha}/inventory/packages`)).complete;
    await checkInventoryReadFirst(page,{expect,selector:'.complete-packages',stem:'synthetic-complete-packages-read-first',shot,facts:[originalPackage.binding.generationId,originalPackage.binding.sequence,originalPackage.manifest.collectedAt,originalPackage.completedAt,originalPackage.retainedUntil]});
+   await captureFocusMatrix({page,expect,mark,capture:async(name,contrast)=>{await shot(page,name);screenshots.at(-1).contrast=contrast;},targets:[
+    {name:'inventory-source-tab',selector:'.inventory-source-tabs button[aria-selected="true"]'},
+    {name:'complete-package-search',selector:'.complete-package-search input'},
+    {name:'complete-package-table',selector:'.complete-packages .package-table-scroll',keyboardEntry:{from:'.complete-packages .inventory-capture-details > summary',path:['.complete-packages .package-table-scroll']}},
+    {name:'complete-package-details',selector:'.complete-packages .package-row-details summary',keyboardEntry:{from:'.complete-packages .inventory-capture-details > summary',path:['.complete-packages .package-table-scroll','.complete-packages .package-row-details summary']}},
+   ]});
    await compactPanelShots(page,'.complete-packages .package-heading','synthetic-complete-packages-summary',{mobileSelector:'.complete-packages tbody tr:first-child'});
    for(const locale of ['en','de']){await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);await packageMappingDisclosure(page,'.complete-packages','qa-package-000000','qa-source-000000',locale);}
    await compactPanelShots(page,'.complete-packages .package-table-scroll','synthetic-complete-packages-table',{mobileSelector:'.complete-packages tbody tr:first-child'});
@@ -273,4 +281,11 @@ try{
   });
  }
 }catch{fatal=true;console.log(`V3 setup failed (${stage}); raw diagnostics withheld.`);}
-finally{failureDiagnostics?.dispose();failureDiagnostics=null;if(context)await context.close();await stop();if(browser)await browser.close();const report={sourceSha,createdAt:new Date().toISOString(),scope:apiSmoke?'Real-handler v3 API smoke only; no browser executed':'Built React plus real authenticated loopback HTTP-test handlers and v3 package/system store; wholly invented data',fixture:'Generated disposable identities and direct synthetic store admission. No native collector, sender, VM, installer, service lifecycle or actual host source was invoked.',publicCommandScope:apiSmoke?'Public bootstrap checksum and secret exclusion checked through HTTP only; no command rendered or executed':'Rendered complete command availability follows the source pin: verified rc.3 read-admin and exact ingress, otherwise unavailable. Public bootstrap checksum checked; command never executed and invitation material never exported.',existingAcceptance:'Inherited84 required cases, three enrollment quarantines and five review cycles unchanged; coverage429/manual refresh remains backlog.',runtimeErrorCount,secretsExported:false,realTelemetryExported:false,installerExecuted:false,nativeCollectorExecuted:false,userVmAccessed:false,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};await fs.writeFile(path.join(out,apiSmoke?'v3-mvp-api-smoke.json':'v3-mvp-browser-results.json'),JSON.stringify(report,null,2));if(!apiSmoke)await fs.writeFile(path.join(out,'v3-mvp-browser-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status==='FAIL')?1:0;}
+finally{failureDiagnostics?.dispose();failureDiagnostics=null;if(context)await context.close();await stop();if(browser)await browser.close();const report={sourceSha,createdAt:new Date().toISOString(),scope:apiSmoke?'Real-handler v3 API smoke only; no browser executed':'Built React plus real authenticated loopback HTTP-test handlers and v3 package/system store; wholly invented data',fixture:'Generated disposable identities and direct synthetic store admission. No native collector, sender, VM, installer, service lifecycle or actual host source was invoked.',publicCommandScope:apiSmoke?'Public bootstrap checksum and secret exclusion checked through HTTP only; no command rendered or executed':'Rendered complete command availability follows the source pin: verified rc.3 read-admin and exact ingress, otherwise unavailable. Public bootstrap checksum checked; command never executed and invitation material never exported.',existingAcceptance:'Inherited84 required cases, three enrollment quarantines and five review cycles unchanged; coverage429/manual refresh remains backlog.',runtimeErrorCount,secretsExported:false,realTelemetryExported:false,installerExecuted:false,nativeCollectorExecuted:false,userVmAccessed:false,results,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,setupFailure:fatal}};
+// Fresh private destination supplied only by the invoking PR wrapper. Failure
+// to write diagnostics must never replace or clear the original test result.
+if(!apiSmoke&&process.env.TRACEBOLT_V3_DIAGNOSTICS_PATH){try{
+ const diagnostic=v3FailureCoordinates({sourceSha,results,setupFailure:fatal,runtimeErrorCount,stage});
+ if(diagnostic)await fs.writeFile(process.env.TRACEBOLT_V3_DIAGNOSTICS_PATH,JSON.stringify(diagnostic),{flag:'wx',mode:0o600});
+}catch{}}
+await fs.writeFile(path.join(out,apiSmoke?'v3-mvp-api-smoke.json':'v3-mvp-browser-results.json'),JSON.stringify(report,null,2));if(!apiSmoke)await fs.writeFile(path.join(out,'v3-mvp-browser-manifest.json'),JSON.stringify({sourceSha,screenshots},null,2));await fs.rm(temporary,{recursive:true,force:true});process.exitCode=fatal||runtimeErrorCount||results.some(r=>r.status==='FAIL')?1:0;}
