@@ -147,3 +147,30 @@ it('shows all-excluded v2 status and reasons with no selectable action', async (
     expect(screen.getByText('Unavailable services (1)')).toBeVisible(); expect(screen.getByRole('button', { name: 'Select fixture' })).toBeDisabled();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(previewServiceAction).not.toHaveBeenCalled();
 });
+
+
+describe('read-first service availability', () => {
+    it.each(['en', 'de'] as const)('compacts only confirmed idle unavailability and preserves live controls in %s', async locale => {
+        setLocale(locale, false);
+        const idle: ServiceActionView = { ...actionView(), available: false, reason: 'helper_stale', services: [] };
+        const workflow: ReturnType<typeof useServiceActions> = { view: idle, preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), refresh: vi.fn() };
+        const mounted = render(<ServiceActionPanel workflow={workflow} authorized/>), panel = mounted.container.querySelector('.service-action-panel')!;
+        const renderState = (change: Partial<typeof workflow>) => mounted.rerender(<ServiceActionPanel workflow={{ ...workflow, ...change }} authorized/>);
+        expect(panel).toHaveClass('service-action-panel-idle'); expect(panel).toHaveTextContent(locale === 'en' ? 'The local helper report is stale.' : 'Der lokale Helper-Bericht ist veraltet.');
+        for (const change of [{ loading: 'read' }, { loading: 'preview', selected: 'fixture.service' }, { loading: 'approve' }, { error: 'read' }, { error: 'uncertain' }, { unresolved: true }, { selected: 'fixture.service' }, { view: actionView() }, { view: actionJobView('approved') }, { view: actionJobView('claimed') }, { view: actionJobView('needs_intervention') }, { view: actionJobView('operation_completed') }] as Partial<typeof workflow>[]) {
+            renderState(change); expect(mounted.container.querySelector('.service-action-panel')).toBe(panel); expect(panel).not.toHaveClass('service-action-panel-idle');
+            expect(screen.getByRole('button', { name: locale === 'en' ? 'Check action status' : 'Aktionsstatus prüfen' })).toBeVisible();
+            if (change.loading === 'preview') expect(screen.getByRole('button', { name: locale === 'en' ? 'Close preview' : 'Vorschau schließen' })).toBeVisible();
+            if (change.view?.job) expect(screen.getByRole('region', { name: locale === 'en' ? 'Saved action' : 'Gespeicherte Aktion' })).toHaveTextContent(change.view.job.id);
+            renderState({}); expect(panel).toHaveClass('service-action-panel-idle');
+        }
+        const live = { selected: 'fixture.service', preview: actionPreview() };
+        renderState(live); const review = screen.getByRole('region', { name: locale === 'en' ? 'Review service action' : 'Dienstaktion prüfen' });
+        const consent = screen.getByRole('checkbox'); fireEvent.click(consent); expect(consent).toBeChecked();
+        renderState({ ...live, view: actionView() }); expect(screen.getByRole('checkbox')).toBe(consent); expect(consent).toBeChecked(); expect(review).toBeVisible();
+        renderState({ ...live, view: idle }); expect(screen.getByRole('checkbox')).toBe(consent); expect(consent).toBeChecked(); expect(panel).not.toHaveClass('service-action-panel-idle');
+        expect(screen.getByRole('button', { name: locale === 'en' ? 'Close preview' : 'Vorschau schließen' })).toBeVisible();
+        expect(review).toHaveTextContent(actionPreview().expiresAt); expect(review).toHaveTextContent(actionActor); expect(review).toHaveTextContent('fixture.service');
+        renderState({}); expect(panel).toHaveClass('service-action-panel-idle'); expect(workflow.approve).not.toHaveBeenCalled();
+    });
+});

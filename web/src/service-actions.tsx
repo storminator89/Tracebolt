@@ -29,7 +29,9 @@ export function serviceActionLabel(locale: 'en' | 'de') { return copy[locale].se
 type Workflow = ReturnType<typeof useServiceActions>;
 export function ServiceActionPanel({ workflow, authorized }: { workflow: Workflow; authorized: boolean }) {
     const [locale] = useLocale(), labels = copy[locale], id = useId(), job = workflow.view?.job;
-    return <section className="service-action-panel" aria-labelledby={id}>
+    // Unknown, active and saved outcomes always retain the full foreground panel.
+    const idleUnavailable = !workflow.loading && !workflow.error && !workflow.unresolved && !workflow.selected && !workflow.preview && !job && (!authorized || workflow.view?.available === false && !['action_in_progress', 'needs_intervention'].includes(workflow.view.reason));
+    return <section className={`service-action-panel${idleUnavailable ? ' service-action-panel-idle' : ''}`} aria-labelledby={id}>
         <header><h4 id={id}>{labels.heading}</h4>{authorized && <button type="button" className="button small" disabled={!!workflow.loading || workflow.error === 'session'} onClick={workflow.refresh}><RefreshCw size={14}/>{labels.refresh}</button>}</header>
         {!authorized ? <p className="package-note">{labels.unavailable} {labels.access}</p> : <>
             {workflow.loading && <p role="status"><LoaderCircle size={14} className="spin"/>{workflow.loading === 'preview' ? labels.preparing : workflow.loading === 'approve' ? labels.approving : labels.loading}</p>}

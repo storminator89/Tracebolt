@@ -69,3 +69,29 @@ it('integrates v2 review with the real service table and fails closed on substit
     expect(screen.getByRole('alert')).toHaveTextContent('unsupported or inconsistent'); expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(vi.mocked(mutateRaw).mock.calls.some(([path]) => path.endsWith('/approve'))).toBe(false);
 });
+
+
+it.each(['en', 'de'] as const)('preserves the service reader while idle availability changes in %s', async locale => {
+    setLocale(locale, false);
+    let status = { ...actionView(), available: false, reason: 'helper_stale' as const, services: [] } as ReturnType<typeof actionView>;
+    vi.mocked(request).mockImplementation(async path => {
+        if (path === '/auth/session') return actionSession;
+        if (path.endsWith('/inventory/system')) return system;
+        if (path.endsWith('/service-actions')) return status;
+        throw new Error(`Unexpected path ${path}`);
+    });
+    const mounted = render(<SystemInventoryPanel deviceId={actionDevice} section="services"/>); await flush();
+    const panel = mounted.container.querySelector('.service-action-panel')!, table = screen.getByRole('table'), search = screen.getByRole('searchbox');
+    const refresh = () => fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Check action status' : 'Aktionsstatus prüfen' }));
+    expect(panel).toHaveClass('service-action-panel-idle');
+    status = actionView(); refresh(); await flush(); expect(panel).not.toHaveClass('service-action-panel-idle');
+    fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Preview try-restart: fixture.service' : 'Try-Restart prüfen: fixture.service' })); await flush();
+    const review = screen.getByRole('region', { name: locale === 'en' ? 'Review service action' : 'Dienstaktion prüfen' });
+    expect(review).toBeVisible(); expect(review.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Close preview' : 'Vorschau schließen' }));
+    status = { ...actionView(), available: false, reason: 'helper_stale', services: [] }; refresh(); await flush();
+    expect(panel).toHaveClass('service-action-panel-idle'); expect(screen.getByRole('table')).toBe(table); expect(screen.getByRole('searchbox')).toBe(search);
+    expect(screen.getByText(system.lastComplete.services!.meta.observedAt)).toBeVisible();
+    expect(vi.mocked(mutateRaw).mock.calls.filter(([path]) => path.endsWith('/inventory/system/query'))).toHaveLength(1);
+    expect(vi.mocked(mutateRaw).mock.calls.some(([path]) => path.endsWith('/approve'))).toBe(false);
+});
