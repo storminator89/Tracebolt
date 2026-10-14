@@ -18,6 +18,11 @@ const kinds: Kind[] = ['endpoint', 'overview', 'software'];
 const busy = () => new APIError('private storage diagnostics', 429, 'storage_busy');
 const flush = () => act(async () => {});
 const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+function restoreNotifications() {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    const show = new Event('pageshow'); Object.defineProperty(show, 'persisted', { value: true }); window.dispatchEvent(show);
+}
 function deferred<T>() { let resolve!: (value: T) => void, reject!: (error: unknown) => void; const promise = new Promise<T>((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; }
 function Endpoint({ deviceId, sessionKey }: { deviceId: string; sessionKey: string }) { return <EndpointIdentityPanel resource={useEndpointIdentity(deviceId, true, sessionKey)}/>; }
 const device = (kind: Kind) => kind === 'endpoint' ? endpointDevice : kind === 'overview' ? overviewDevice : completeDevice;
@@ -42,6 +47,7 @@ describe.each(kinds)('%s exact storage-contention GET recovery', kind => {
     });
     it('stops after the second busy response and allows an explicit fresh attempt', async () => {
         vi.mocked(request).mockRejectedValue(busy()); await start(kind); await advance(2000); expect(screen.getByRole('alert')).toBeVisible(); expect(refresh(kind)).toBeEnabled(); await advance(30000); expect(request).toHaveBeenCalledTimes(2);
+        act(restoreNotifications); await advance(3000); expect(request).toHaveBeenCalledTimes(2); expect(screen.getByRole('alert')).toBeVisible();
         vi.mocked(request).mockResolvedValue(payload(kind)); fireEvent.click(refresh(kind)); await flush(); expect(request).toHaveBeenCalledTimes(3); expect(screen.getByText(marker(kind))).toBeVisible();
     });
     it.each([new APIError('storage_busy', 429), new APIError('private', 401, 'storage_busy'), new APIError('private', 403, 'storage_busy'), new APIError('private', 409, 'storage_busy'), new APIError('private', 503, 'storage_busy'), new Error('storage_busy'), { status: 429, code: 'storage_busy' }])('does not retry an unqualified error (%j)', async failure => {
@@ -59,22 +65,59 @@ describe.each(kinds)('%s exact storage-contention GET recovery', kind => {
         else act(() => window.dispatchEvent(new Event(transition === 'auth' ? AUTH_REQUIRED_EVENT : transition)));
         await advance(3000); expect(signal.aborted).toBe(true); expect(vi.mocked(request).mock.calls.filter(([, options]) => options?.signal === signal)).toHaveLength(1); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
     });
-    it('new focus supersedes the delayed attempt rather than allowing two retries', async () => {
-        vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(payload(kind)); await start(kind); const old = vi.mocked(request).mock.calls[0][1]!.signal as AbortSignal;
-        act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(old.aborted).toBe(true); expect(screen.getByText(marker(kind))).toBeVisible(); await advance(3000); expect(request).toHaveBeenCalledTimes(2);
+    it('preserves the original busy delay and controller through redundant return notifications', async () => {
+        vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValueOnce(payload(kind)); await start(kind);
+        const first = vi.mocked(request).mock.calls[0], signal = first[1]!.signal as AbortSignal;
+        await advance(1000); act(restoreNotifications); await flush();
+        expect(request).toHaveBeenCalledTimes(1); expect(signal.aborted).toBe(false); expect(screen.getByRole('status')).toHaveTextContent('Storage is busy'); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+        await advance(999); act(restoreNotifications); await flush(); expect(request).toHaveBeenCalledTimes(1); expect(signal.aborted).toBe(false);
+        await advance(1); expect(request).toHaveBeenCalledTimes(2); expect(vi.mocked(request).mock.calls[1]).toEqual(first); expect(vi.mocked(request).mock.calls[1][1]!.signal).toBe(signal); expect(screen.getByText(marker(kind))).toBeVisible();
+        act(restoreNotifications); await advance(3000); expect(request).toHaveBeenCalledTimes(2); expect(screen.getByText(marker(kind))).toBeVisible();
     });
-    it.each(['pagehide', 'auth', 'unmount'] as const)('ignores late retry success after %s', async transition => {
+    it.each(['blur', 'hidden', 'pagehide'] as const)('return after %s supersedes the delayed attempt without replaying its retry', async transition => {
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.mocked(request).mockRejectedValueOnce(busy()).mockRejectedValueOnce(busy()).mockResolvedValueOnce(payload(kind)); await start(kind);
+        const old = vi.mocked(request).mock.calls[0][1]!.signal as AbortSignal;
+        await advance(500);
+        act(() => { if (transition === 'hidden') { visibility.mockReturnValue('hidden'); document.dispatchEvent(new Event('visibilitychange')); } else window.dispatchEvent(new Event(transition)); });
+        expect(old.aborted).toBe(true); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+        if (transition === 'hidden') { act(restoreNotifications); await flush(); expect(request).toHaveBeenCalledTimes(1); }
+        await advance(3000); expect(request).toHaveBeenCalledTimes(1);
+        act(() => { visibility.mockReturnValue('visible'); restoreNotifications(); }); await flush();
+        expect(request).toHaveBeenCalledTimes(2); const fresh = vi.mocked(request).mock.calls[1], signal = fresh[1]!.signal as AbortSignal;
+        expect(signal).not.toBe(old); expect(signal.aborted).toBe(false); expect(screen.getByRole('status')).toHaveTextContent('Storage is busy'); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+        act(restoreNotifications); await advance(1999); expect(request).toHaveBeenCalledTimes(2); expect(signal.aborted).toBe(false);
+        await advance(1); expect(request).toHaveBeenCalledTimes(3); expect(vi.mocked(request).mock.calls[2]).toEqual(fresh); expect(vi.mocked(request).mock.calls[2][1]!.signal).toBe(signal); expect(screen.getByText(marker(kind))).toBeVisible();
+        await advance(3000); expect(request).toHaveBeenCalledTimes(3); expect(vi.mocked(request).mock.calls.filter(([, options]) => options?.signal === old)).toHaveLength(1);
+    });
+    it.each(['blur', 'hidden', 'pagehide', 'auth', 'unmount'] as const)('ignores late retry success after %s', async transition => {
         const second = deferred<unknown>(); vi.mocked(request).mockRejectedValueOnce(busy()).mockReturnValueOnce(second.promise); const mounted = await start(kind); await advance(2000); const signal = vi.mocked(request).mock.calls[1][1]!.signal as AbortSignal;
-        if (transition === 'unmount') mounted.unmount(); else act(() => window.dispatchEvent(new Event(transition === 'auth' ? AUTH_REQUIRED_EVENT : transition)));
+        if (transition === 'unmount') mounted.unmount(); else if (transition === 'hidden') { vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); act(() => document.dispatchEvent(new Event('visibilitychange'))); }
+        else act(() => window.dispatchEvent(new Event(transition === 'auth' ? AUTH_REQUIRED_EVENT : transition)));
         expect(signal.aborted).toBe(true); await act(async () => second.resolve(payload(kind))); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(2);
     });
-    it('does not retry when the original ten-second budget ends during the delay', async () => {
-        const first = deferred<unknown>(); vi.mocked(request).mockReturnValueOnce(first.promise).mockResolvedValue(payload(kind)); await start(kind); await advance(9000); await act(async () => first.reject(busy())); expect(screen.getByRole('status')).toHaveTextContent('Storage is busy');
-        await advance(1000); expect(screen.getByRole('alert')).toHaveTextContent(/time|respond/i); await advance(3000); expect(request).toHaveBeenCalledTimes(1); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+    it.each(['initial', 'restored'] as const)('keeps the %s read ten-second budget when redundant return notifications arrive during the delay', async phase => {
+        const first = deferred<unknown>();
+        if (phase === 'restored') vi.mocked(request).mockRejectedValueOnce(busy());
+        vi.mocked(request).mockReturnValueOnce(first.promise).mockResolvedValue(payload(kind)); await start(kind);
+        if (phase === 'restored') { await advance(500); act(() => window.dispatchEvent(new Event('blur'))); expect(vi.mocked(request).mock.calls[0][1]!.signal!.aborted).toBe(true); act(restoreNotifications); await flush(); }
+        const reads = phase === 'restored' ? 2 : 1, signal = vi.mocked(request).mock.calls[reads - 1][1]!.signal as AbortSignal;
+        await advance(9000); await act(async () => first.reject(busy())); expect(screen.getByRole('status')).toHaveTextContent('Storage is busy');
+        act(restoreNotifications); await advance(999); expect(signal.aborted).toBe(false); expect(request).toHaveBeenCalledTimes(reads); act(restoreNotifications);
+        await advance(1); expect(signal.aborted).toBe(true); expect(screen.getByRole('alert')).toHaveTextContent(/time|respond/i); await advance(3000); expect(request).toHaveBeenCalledTimes(reads); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
     });
-    it('aborts a held retry at the original deadline and suppresses later data', async () => {
+    it('aborts a held retry at the original deadline despite redundant return notifications and suppresses later data', async () => {
         const second = deferred<unknown>(); vi.mocked(request).mockRejectedValueOnce(busy()).mockReturnValueOnce(second.promise); await start(kind); await advance(2000); const signal = vi.mocked(request).mock.calls[1][1]!.signal as AbortSignal;
-        await advance(7999); expect(signal.aborted).toBe(false); await advance(1); expect(signal.aborted).toBe(true); expect(screen.getByRole('alert')).toBeVisible(); await act(async () => second.resolve(payload(kind))); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+        act(restoreNotifications); await advance(7999); expect(signal.aborted).toBe(false); act(restoreNotifications);
+        await advance(1); expect(signal.aborted).toBe(true); expect(request).toHaveBeenCalledTimes(2); expect(screen.getByRole('alert')).toBeVisible(); await act(async () => second.resolve(payload(kind))); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+    });
+    it('does not resume a restored busy read after auth invalidation and later return notifications', async () => {
+        vi.mocked(request).mockRejectedValue(busy()); await start(kind);
+        act(() => window.dispatchEvent(new Event('blur'))); act(restoreNotifications); await flush(); expect(request).toHaveBeenCalledTimes(2);
+        const signal = vi.mocked(request).mock.calls[1][1]!.signal as AbortSignal;
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); expect(signal.aborted).toBe(true); expect(screen.getByRole('alert')).toHaveTextContent('session has ended');
+        act(() => { window.dispatchEvent(new Event('blur')); restoreNotifications(); }); await advance(3000);
+        expect(request).toHaveBeenCalledTimes(2); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
     });
     it('renders German progress text without raw server diagnostics', async () => {
         setLocale('de', false); vi.mocked(request).mockRejectedValue(busy()); await start(kind); expect(screen.getByRole('status')).toHaveTextContent('Ein automatischer Leseversuch folgt in 2 Sekunden.'); expect(document.body.textContent).not.toContain('private storage diagnostics');
@@ -82,11 +125,18 @@ describe.each(kinds)('%s exact storage-contention GET recovery', kind => {
 });
 
 describe('original freshness and POST boundaries', () => {
+    it.each(kinds)('%s never renders values that expire during a busy delay with redundant return notifications', async kind => {
+        if (kind === 'endpoint') { const v = endpointView(); v.status = 'stale'; v.serverNow = '2026-10-05T11:59:59Z'; vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(v); }
+        else if (kind === 'software') { const v = completeView(); v.serverNow = '2026-10-04T23:59:59Z'; vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(v); }
+        else { const v = overviewView(); v.serverNow = '2026-10-05T18:29:59Z'; v.volumes.status = v.volumes.complete!.state = 'expired'; vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(v); }
+        await start(kind); await advance(1000); act(restoreNotifications); await advance(1000);
+        expect(request).toHaveBeenCalledTimes(2); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
     it.each(kinds)('%s subtracts retry delay from original retention age', async kind => {
         if (kind === 'endpoint') { const v = endpointView(); v.status = 'stale'; v.serverNow = '2026-10-05T11:59:57Z'; vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(v); }
         else if (kind === 'software') { const v = completeView(); v.serverNow = '2026-10-04T23:59:57Z'; vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(v); }
         else { const v = overviewView(); v.serverNow = '2026-10-05T18:29:57Z'; v.volumes.status = v.volumes.complete!.state = 'expired'; vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(v); vi.mocked(mutateRaw).mockImplementation(async (_path, raw) => overviewPage(v, processRows(), volumeRows(), raw)); }
-        await start(kind); await advance(2000); expect(screen.getByText(marker(kind))).toBeVisible(); await advance(999); expect(screen.getByText(marker(kind))).toBeVisible(); await advance(1); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument();
+        await start(kind); await advance(2000); expect(screen.getByText(marker(kind))).toBeVisible(); act(restoreNotifications); await advance(999); expect(screen.getByText(marker(kind))).toBeVisible(); act(restoreNotifications); await advance(1); expect(screen.queryByText(marker(kind))).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(2);
     });
     it('does not replay an overview query POST even when exact storage_busy follows a recovered GET', async () => {
         vi.mocked(request).mockRejectedValueOnce(busy()).mockResolvedValue(overviewView()); vi.mocked(mutateRaw).mockRejectedValue(busy()); await start('overview'); await advance(2000); expect(screen.getByRole('alert')).toBeVisible(); await advance(3000); expect(request).toHaveBeenCalledTimes(2); expect(mutateRaw).toHaveBeenCalledTimes(1); expect(screen.queryByRole('table')).not.toBeInTheDocument();
