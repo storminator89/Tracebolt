@@ -360,8 +360,30 @@ def run(args, cwd=ROOT, stage='selected-check', env=None):
 
 
 
+ROUTE_FIRST_COMMIT_PHASES = frozenset({
+    'bootstrap', 'suspend-import', 'blocked-mount', 'blocked-dom', 'resume-dom', 'resumed-mount',
+})
+ROUTE_FIRST_COMMIT_TITLE = 'blocks first commit for same-task pagehide and import completion (event-first)'
+ROUTE_FIRST_COMMIT_SUITE = 'route-local deferred detail lifecycle'
+
+
+def route_first_commit_failure_phase(source, index, assertion):
+    """Accept one fixed test's closed phase only, never arbitrary reporter metadata."""
+    if (source != 'web/src/route-details.test.tsx' or index != 11
+            or assertion.get('status') != 'failed'
+            or assertion.get('title') != ROUTE_FIRST_COMMIT_TITLE
+            or assertion.get('ancestorTitles') != [ROUTE_FIRST_COMMIT_SUITE]
+            or assertion.get('fullName') != ROUTE_FIRST_COMMIT_SUITE + ' ' + ROUTE_FIRST_COMMIT_TITLE):
+        return None
+    meta = assertion.get('meta')
+    if type(meta) is not dict or set(meta) != {'routeFirstCommitPhase'}:
+        return None
+    phase = meta['routeFirstCommitPhase']
+    return phase if type(phase) is str and phase in ROUTE_FIRST_COMMIT_PHASES else None
+
+
 def vitest_failure_location(path):
-    """Only source-known file coordinates and numeric assertion positions leave CI."""
+    """Release source coordinates and one allowlisted route test's fixed phase."""
     try:
         allowed = {str(file.resolve()): file.relative_to(ROOT).as_posix()
                    for directory in ['web/src', 'web/scripts', 'tests/e2e-review']
@@ -386,15 +408,21 @@ def vitest_failure_location(path):
                     or len(row['assertionResults']) > 50000):
                 return None
             seen.add(row['name'])
-            indices = []
+            indices, route_phase = [], None
             for i, assertion in enumerate(row['assertionResults'], 1):
                 if type(assertion) is not dict or assertion.get('status') not in ['passed', 'failed', 'pending', 'todo', 'skipped', 'disabled']:
                     return None
                 if assertion['status'] == 'failed':
                     indices.append(i)
+                    phase = route_first_commit_failure_phase(allowed[row['name']], i, assertion)
+                    if phase is not None:
+                        route_phase = phase
             if row['status'] == 'failed':
                 coordinates = ','.join(map(str, indices[:10])) or 'runner-or-hook'
-                failed.append(allowed[row['name']] + ' assertions=' + coordinates)
+                location = allowed[row['name']] + ' assertions=' + coordinates
+                if route_phase is not None:
+                    location += ' route-first-commit=11:' + route_phase
+                failed.append(location)
             elif indices:
                 return None
         return '; '.join(sorted(failed)[:20]) or None
@@ -1087,6 +1115,233 @@ def windows_action_failure_location(sha, invocation):
         return None
 
 
+# The Conditional runner already writes a bounded, redacted results report.
+# This bridge releases only coordinates reconstructed from fixed source literals.
+# It never opens screenshots or emits report prose, diagnostics or numeric values.
+CONDITIONAL_FAILURE_CASES = {
+    'Managed package-source enrollment requires explicit scope acknowledgement and never exports invitation material': 'managed-consent',
+    'Device tabs and package/review disclosures issue only their lazy device-bound reads': 'lazy-reads',
+    'Every legacy inventory panel and diagnostic source has bilingual desktop and mobile pixels': 'legacy-gallery',
+    'Operational observations preserve section scope, sample filtering, unavailable data and unknown assessment': 'operational-scope',
+    'Failed latest collection retains labelled older operational rows while package facts become unknown': 'retained-observations',
+    'Partial package-source inventory preserves exact binary/source versions without claiming a complete total': 'partial-packages',
+    'Unconfigured and declared-synthetic catalogs never produce live review candidates or zero-CVE claims': 'catalog-unavailable',
+    'Conditional candidates use reported source version, immutable lineage and unknown authority counts': 'source-bound-review',
+    'Missing source coverage and unsupported Ubuntu release remain partial or unavailable without binary-name fallback': 'source-mismatch',
+    'Unsupported comparison stays a visible conditional row with unavailable comparison rather than an equal or fixed verdict': 'comparison-unavailable',
+    'Real current-state stale, revoked and retention expiry suppress candidates without refreshing old observation times': 'stale-revoked-retention',
+    'Catalog file selection is local, import is revision-bound, and explicit clear returns to empty memory-only state': 'catalog-selection',
+    'Stale catalog CAS rejects replacement and requires a fresh status and file selection': 'catalog-conflict',
+    'Invalid catalog content and a lost committed import preserve honest status without replay or stored file content': 'catalog-lost-import',
+    'Review identity mismatch, invented authoritative counts and changed-input errors discard prior candidates': 'review-identity',
+    'Late review response cannot survive device navigation or a closed disclosure': 'late-review',
+    'Protected 401 clears the private review UI without persisting source data in script storage': 'protected-access-loss',
+    'Persisted-page suspension clears review data until fresh automatic revalidation completes': 'persisted-resume',
+    'Mobile package tables remain keyboard-scrollable within the viewport, and German review preserves unknown-count warnings': 'mobile-localized',
+}
+CONDITIONAL_LITERAL_STAGES = {
+    'setup': 'setup',
+    'open device panel': 'open-device-panel',
+    'safe synthetic viewport capture': 'safe-synthetic-viewport-capture',
+    'six package columns and keyboard-accessible mapping details': 'six-package-columns-and-keyboard-accessible-mapping-details',
+    'fixture setup': 'fixture-setup',
+    'compile fixture': 'compile-fixture',
+    'real API smoke': 'real-api-smoke',
+    'hosted Chromium launch': 'hosted-chromium-launch',
+    'managed consent': 'managed-consent',
+    'lazy reads': 'lazy-reads',
+    'manual coverage refresh injects one storage_busy read': 'manual-coverage-refresh-injects-one-storage-busy-read',
+    'coverage retry reaches the real authenticated handler': 'coverage-retry-reaches-the-real-authenticated-handler',
+    'held real coverage response keeps prior facts cleared': 'held-real-coverage-response-keeps-prior-facts-cleared',
+    'real coverage retry restores observations with unknown authority counts': 'real-coverage-retry-restores-observations-with-unknown-authority-counts',
+    'operational scope': 'operational-scope',
+    'retained observation': 'retained-observation',
+    'partial package facts': 'partial-package-facts',
+    'unavailable and synthetic catalog': 'unavailable-and-synthetic-catalog',
+    'source-bound conditional candidate': 'source-bound-conditional-candidate',
+    'source mismatch': 'source-mismatch',
+    'comparison unavailable': 'comparison-unavailable',
+    'stale identity-bound evidence': 'stale-identity-bound-evidence',
+    'catalog file selection': 'catalog-file-selection',
+    'real catalog revision conflict': 'real-catalog-revision-conflict',
+    'catalog conflict is explained': 'catalog-conflict-is-explained',
+    'refreshed catalog requires a new file selection': 'refreshed-catalog-requires-a-new-file-selection',
+    'invalid catalog rejection': 'invalid-catalog-rejection',
+    'lost committed catalog import': 'lost-committed-catalog-import',
+    'lost import remains explicitly unconfirmed': 'lost-import-remains-explicitly-unconfirmed',
+    'wrong device response': 'wrong-device-response',
+    'device switch during review': 'device-switch-during-review',
+    'protected authorization loss': 'protected-authorization-loss',
+    'persisted pagehide removes review rows': 'persisted-pagehide-removes-review-rows',
+    'persisted pageshow starts automatic review read': 'persisted-pageshow-starts-automatic-review-read',
+    'held resumed review keeps rows absent': 'held-resumed-review-keeps-rows-absent',
+    'persisted auth resume restores visible shell': 'persisted-auth-resume-restores-visible-shell',
+    'fresh resumed review restores exactly one row': 'fresh-resumed-review-restores-exactly-one-row',
+    'mobile package viewport': 'mobile-package-viewport',
+}
+CONDITIONAL_FOCUS_TARGETS = ('legacy-package-table', 'legacy-package-details', 'advisory-toggle')
+FOCUS_PHASES = ('outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture')
+CONDITIONAL_FOCUS_STAGES = {
+    f'focus contrast {target} {size} {locale} {theme}: {phase}':
+    f'focus-{target}-{size}-{locale}-{theme}-{phase.replace(" ", "-")}'
+    for target in CONDITIONAL_FOCUS_TARGETS for size in ('desktop', 'mobile')
+    for locale in ('en', 'de') for theme in ('light', 'dark') for phase in FOCUS_PHASES
+}
+CONDITIONAL_REPORT_PROSE = {'fixture': 'Three generated disposable identities; every observation and catalog is invented. Direct synthetic admission to the real enrolled store is not transport, collector, native installer or production-fleet validation.', 'catalogDisclosure': 'Invented normalized files may declare synthetic:false solely to exercise unverified interchange semantics; never real vendor data.', 'faultInjection': 'Explicit malformed/identity/count/401/409 responses, lost import, held response, persisted-page events and service-only fixture-clock advances (auth clock stays real); no actual OS/BFCache or real waiting-age claim', 'existingEnrollmentQuarantine': 'Unaffected: 10 enabled, three explicitly skipped; no full enrollment acceptance', 'scope': 'Built React and real authenticated loopback HTTP-test operator, operational/package store, catalog CAS and conditional review handlers'}
+CONDITIONAL_ERROR = 'Bounded assertion failure; request bodies, credentials and private state withheld.'
+COVERAGE_DIAGNOSTIC_STEPS = ('not started', 'busy and disabled', 'prior private facts cleared', 'source heading retained', 'uncertainty warning retained', 'cleared view verified', 'manual refresh', 'storage busy notice', 'upstream retry', 'restored unknown counts')
+
+def conditional_diagnostic_shape(value, case):
+    """Validate existing optional diagnostics without releasing any of their fields."""
+    integer = lambda n, maximum: type(n) is int and 0 <= n <= maximum
+    if type(value) is not dict:
+        return False
+    if value == {'unavailable': True} and type(value['unavailable']) is bool:
+        return True
+    if case == 'lazy-reads':
+        if set(value) != {'coverageRefresh'} or type(value['coverageRefresh']) is not dict:
+            return False
+        v = value['coverageRefresh']
+        return (set(v) == {'step', 'reads', 'statuses', 'mutations', 'routeFailed', 'holdExpired'}
+                and type(v['step']) is str and v['step'] in COVERAGE_DIAGNOSTIC_STEPS
+                and integer(v['reads'], 3) and integer(v['mutations'], 10)
+                and type(v['routeFailed']) is bool and type(v['holdExpired']) is bool
+                and type(v['statuses']) is list and len(v['statuses']) <= 3
+                and all(integer(n, 599) and n >= 100 for n in v['statuses']))
+    if case != 'persisted-resume' or set(value) != {'repeatCount', 'attempts', 'network', 'finalState'}:
+        return False
+    boolean_keys = {'documentVisible', 'privateViewPresent', 'privateInert', 'privateAriaHidden',
+                    'privateVisible', 'appShellPresent', 'reviewPresent', 'reviewBusy', 'reviewAlertPresent'}
+    event_keys = {'pagehide', 'pageshow', 'focus', 'blur', 'visibilitychange'}
+    def snapshot(v):
+        return (type(v) is dict and set(v) == boolean_keys | {'articleCount', 'events'}
+                and all(type(v[key]) is bool for key in boolean_keys) and integer(v['articleCount'], 128)
+                and type(v['events']) is dict and set(v['events']) == event_keys
+                and all(integer(n, 100) for n in v['events'].values()))
+    if (not integer(value['repeatCount'], 10) or value['repeatCount'] < 1 or not snapshot(value['finalState'])
+            or type(value['attempts']) is not list or len(value['attempts']) > value['repeatCount']
+            or type(value['network']) is not list or len(value['network']) > 80):
+        return False
+    for index, attempt in enumerate(value['attempts'], 1):
+        if (type(attempt) is not dict or set(attempt) - {'fulfillFailed'} not in ({'attempt', 'upstream'}, {'attempt', 'upstream', 'state'})
+                or type(attempt['attempt']) is not int or attempt['attempt'] != index
+                or type(attempt['upstream']) is not list or len(attempt['upstream']) > 8
+                or ('state' in attempt and not snapshot(attempt['state']))
+                or ('fulfillFailed' in attempt and (attempt['fulfillFailed'] is not True or not attempt['upstream']))):
+            return False
+        for response in attempt['upstream']:
+            if (type(response) is not dict or set(response) != {'status', 'errorCode'}
+                    or not integer(response['status'], 599) or response['status'] < 100
+                    or type(response['errorCode']) is not str
+                    or response['errorCode'] not in ('none', 'storage_busy', 'review_busy', 'review_changed', 'authentication_required', 'other', 'non_json')):
+                return False
+    # The producer increments after the final completed iteration. Its still-live
+    # listeners can record that one sentinel during finalState collection; this
+    # is not an extra attempt and requires every iteration's completed snapshot.
+    final_sentinel = len(value['attempts']) == value['repeatCount'] and all('state' in row for row in value['attempts'])
+    network_attempt_limit = value['repeatCount'] + int(final_sentinel)
+    for event in value['network']:
+        if (type(event) is not dict or set(event) not in ({'attempt', 'route', 'phase'}, {'attempt', 'route', 'phase', 'status'})
+                or not integer(event['attempt'], network_attempt_limit)
+                or type(event['route']) is not str or event['route'] not in ('auth', 'coverage', 'review')
+                or type(event['phase']) is not str or event['phase'] not in ('request', 'response', 'failed')
+                or ('status' in event) != (event['phase'] == 'response')
+                or ('status' in event and (not integer(event['status'], 599) or event['status'] < 100))):
+            return False
+    return True
+
+
+def conditional_failure_location(sha):
+    """Read this invocation's report through the existing no-follow bounded decoder."""
+    try:
+        path = ROOT / 'artifacts/review/conditional-browser-results.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 131072:
+                return None
+            raw = stream.read(131073)
+        if len(raw) > 131072:
+            return None
+        value = reporter.decode(raw)
+        keys = set(CONDITIONAL_REPORT_PROSE) | {'sourceSha', 'applicationBaselineArchiveSha256', 'createdAt',
+                'runtimeErrorCount', 'secretsExported', 'realTelemetryExported', 'results', 'summary'}
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict or set(value) != keys
+                or value['sourceSha'] != sha
+                or any(value[key] != expected for key, expected in CONDITIONAL_REPORT_PROSE.items())
+                or value['applicationBaselineArchiveSha256'] != 'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b'
+                or type(value['createdAt']) is not str or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z', value['createdAt'])
+                or value['secretsExported'] is not False or value['realTelemetryExported'] is not False
+                or type(value['runtimeErrorCount']) is not int or not 0 <= value['runtimeErrorCount'] <= 1000000
+                or type(value['results']) is not list or len(value['results']) > len(CONDITIONAL_FAILURE_CASES)):
+            return None
+        rows, summary = value['results'], value['summary']
+        if (type(summary) is not dict or set(summary) != {'passed', 'failed', 'setupFailure'}
+                or type(summary['setupFailure']) is not bool
+                or any(type(summary[key]) is not int or not 0 <= summary[key] <= len(CONDITIONAL_FAILURE_CASES) for key in ('passed', 'failed'))
+                or (not summary['setupFailure'] and len(rows) != len(CONDITIONAL_FAILURE_CASES))):
+            return None
+        failed, locations = 0, []
+        for row, (name, case) in zip(rows, CONDITIONAL_FAILURE_CASES.items()):
+            if (type(row) is not dict or row.get('name') != name or row.get('status') not in ('PASS', 'FAIL')
+                    or type(row.get('durationMs')) is not int or not 0 <= row['durationMs'] <= 9007199254740991):
+                return None
+            keys = {'name', 'status', 'durationMs'}
+            if row['status'] == 'PASS' and case in ('lazy-reads', 'persisted-resume') and 'diagnostics' not in row:
+                return None
+            if 'diagnostics' in row:
+                keys.add('diagnostics')
+                if case not in ('lazy-reads', 'persisted-resume') or not conditional_diagnostic_shape(row['diagnostics'], case):
+                    return None
+            if row['status'] == 'FAIL':
+                failed += 1
+                keys |= {'stage', 'error'}
+                if row.get('error') != CONDITIONAL_ERROR or type(row.get('stage')) is not str:
+                    return None
+                stage = CONDITIONAL_LITERAL_STAGES.get(row['stage'])
+                if stage is None and case == 'legacy-gallery':
+                    stage = CONDITIONAL_FOCUS_STAGES.get(row['stage'])
+                if stage is None:
+                    return None
+                locations.append('case=' + case + ' stage=' + stage)
+            if set(row) != keys:
+                return None
+        if summary['failed'] != failed or summary['passed'] != len(rows) - failed:
+            return None
+        if summary['setupFailure']:
+            locations.append('setup-failure')
+        if value['runtimeErrorCount']:
+            locations.append('runtime-errors')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_conditional_browser(env, sha):
+    # Remove only this report before entering the failure handler. A failed cleanup
+    # or failed launch without a fresh report cannot project a prior same-head run.
+    path = ROOT / 'artifacts/review/conditional-browser-results.json'
+    directory = None
+    try:
+        directory = reporter.open_log(path.parent)
+        if not stat.S_ISDIR(os.fstat(directory).st_mode):
+            raise ValueError('invalid Conditional diagnostic directory')
+        os.unlink(path.name, dir_fd=directory)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        raise ValueError('could not prepare fresh Conditional diagnostics') from None
+    finally:
+        if directory is not None:
+            os.close(directory)
+    try:
+        run(['node', FLOWS['conditional']], stage='browser-conditional', env={**env, 'TRACEBOLT_SOURCE_SHA': sha})
+    except ValueError:
+        location = conditional_failure_location(sha)
+        if location is not None:
+            print('FAIL Conditional location: ' + location, flush=True)
+        raise  # Preserve the original exception and withheld raw process output.
+
+
 JOURNAL_COORDINATES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/journal-browser-coordinates.json'
 
 
@@ -1294,6 +1549,8 @@ def browser_checks(plan):
                 run_shell_browser(env, plan['sha'])
             elif flow == 'journal':
                 run_journal_browser(env, plan['sha'])
+            elif flow == 'conditional':
+                run_conditional_browser(env, plan['sha'])
             else:
                 run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
         except ValueError:

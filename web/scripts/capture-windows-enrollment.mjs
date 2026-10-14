@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { boundedRegular, captureMatrix, diagnostic, disclosure, origin, publicSafeFailures, requireHosted, scenes, validateDialogPNG, viewports } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, listing, now, record, secret } from './windows-enrollment-fixtures.mjs';
+import { runVisibilityControls } from './windows-enrollment-visibility-controls.mjs';
 export { captureMatrix, disclosure, origin, scenes, viewports };
 const root = fileURLToPath(new URL('../../', import.meta.url)), require = createRequire(new URL('../package.json', import.meta.url));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -51,7 +52,7 @@ export async function compile() {
  const assets = new Map(result.outputFiles.map(file => [`/${path.basename(file.path)}`, { body: Buffer.from(file.contents), contentType: file.path.endsWith('.css') ? 'text/css' : 'text/javascript' }]));
  assert(assets.has('/app.js') && assets.has('/app.css'));
  assets.set('/', { contentType: 'text/html', body: '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/app.css"><title>Synthetic Windows enrollment</title></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>' });
- for (const file of ['web/scripts/capture-windows-enrollment.mjs', 'web/scripts/windows-enrollment-contract.mjs', 'web/scripts/windows-enrollment-fixtures.mjs', 'web/scripts/windows-enrollment-capture.node.mjs', 'web/scripts/run-windows-enrollment-ci.mjs', 'web/scripts/check-windows-enrollment-evidence.mjs', '.github/workflows/pr-checks.yml']) await readSource(file);
+ for (const file of ['web/scripts/capture-windows-enrollment.mjs', 'web/scripts/windows-enrollment-contract.mjs', 'web/scripts/windows-enrollment-fixtures.mjs', 'web/scripts/windows-enrollment-capture.node.mjs', 'web/scripts/run-windows-enrollment-ci.mjs', 'web/scripts/check-windows-enrollment-evidence.mjs', 'web/scripts/windows-enrollment-visibility-controls.mjs', '.github/workflows/pr-checks.yml']) await readSource(file);
  const rows = map => [...map].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([file, sha256]) => ({ file, sha256 }));
  const sourceInputs = rows(loaded), dependencyInputs = rows(dependencies);
  assert.deepEqual(dependencyInputs.map(row => row.file).sort(), ['web/node_modules/@fontsource/inter/package.json', ...fontWeights.flatMap(weight => [`web/node_modules/@fontsource/inter/latin-${weight}.css`, `web/node_modules/@fontsource/inter/files/inter-latin-${weight}-normal.woff`, `web/node_modules/@fontsource/inter/files/inter-latin-${weight}-normal.woff2`])].sort());
@@ -105,7 +106,18 @@ export async function assertPublicSafe(page, dialog, expect, mark = () => {}) {
    const range = document.createRange(); range.selectNodeContents(node);
    if ([...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0) && (node.textContent.includes(secret) || identifier.test(node.textContent))) {
     for (let ancestor = parent; ancestor; ancestor = ancestor.parentElement) {
-     if (ancestor.matches('details:not([open])') && !ancestor.querySelector(':scope > summary')?.contains(parent)) return 'public-safe-text-closed-details';
+     if (ancestor.matches('details:not([open])') && !ancestor.querySelector(':scope > summary')?.contains(parent)) {
+      // Diagnostic only: default native box visibility is not painted visibility.
+      // In particular, display:contents can return false with visible text.
+      try {
+       const check = Element.prototype.checkVisibility;
+       if (typeof check !== 'function') return 'public-safe-text-closed-details-native-unavailable';
+       const native = check.call(parent);
+       if (native === true) return 'public-safe-text-closed-details-native-true';
+       if (native === false) return 'public-safe-text-closed-details-native-false';
+      } catch {}
+      return 'public-safe-text-closed-details-native-error';
+     }
     }
     return 'public-safe-text';
    }
@@ -121,7 +133,9 @@ export async function assertPublicSafe(page, dialog, expect, mark = () => {}) {
 }
 export async function capture({ browser, expect, output, onStage = () => {} }) {
  requireHosted(); const mark = (stage, index = null) => onStage(diagnostic(stage, index));
- mark('compile'); const compiled = await compile(), captures = []; mark('prepare-output'); await mkdir(output, { recursive: true });
+ mark('compile'); const compiled = await compile(), captures = [];
+ const visibilityControls = await runVisibilityControls({ browser, expect, assertPublicSafe, mark });
+ mark('prepare-output'); await mkdir(output, { recursive: true });
  for (const [viewIndex, { locale, width, height }] of viewports.entries()) {
   const index = viewIndex * scenes.length, de = locale === 'de', state = routeState(); let runtimeErrors = 0, completed = false;
   mark('new-context', index); const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', locale: de ? 'de-DE' : 'en-US', serviceWorkers: 'block' });
@@ -172,7 +186,7 @@ export async function capture({ browser, expect, output, onStage = () => {} }) {
    completed = true;
   } finally { if (completed) mark('close-context', index); await context.close(); }
  }
- return { sourceInputs: compiled.sourceInputs, dependencyInputs: compiled.dependencyInputs, sourceDigest: compiled.sourceDigest, captures, disclosure, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, requestsToRealAPI: 0 };
+ return { sourceInputs: compiled.sourceInputs, dependencyInputs: compiled.dependencyInputs, sourceDigest: compiled.sourceDigest, captures, visibilityControls, disclosure, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, requestsToRealAPI: 0 };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
  assert(process.argv.includes('--check'), 'Use --check locally; captures require the hosted CI runner.');

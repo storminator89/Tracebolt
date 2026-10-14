@@ -141,12 +141,12 @@ try{
    await packageDetails.locator('summary').focus();await page.keyboard.press('Space');await expect(packageDetails).not.toHaveAttribute('open');
 
    const capture=async(name,contrast)=>{await shot(page,name);screenshots.at(-1).contrast=contrast;};
-   await captureFocusMatrix({page,expect,capture,targets:[
-    {name:'legacy-package-table',selector:'.package-observations .package-table-scroll'},
-    {name:'legacy-package-details',selector:'.package-observations .package-row-details summary'},
+   await captureFocusMatrix({page,expect,mark,capture,targets:[
+    {name:'legacy-package-table',selector:'.package-observations .package-table-scroll',keyboardEntry:{from:'.package-observations > .package-heading button',path:['.package-observations .package-table-scroll']}},
+    {name:'legacy-package-details',selector:'.package-observations .package-row-details summary',keyboardEntry:{from:'.package-observations > .package-heading button',path:['.package-observations .package-table-scroll','.package-observations .package-row-details summary']}},
    ]});
    await review(page);
-   await captureFocusMatrix({page,expect,capture,targets:[{name:'advisory-toggle',selector:'.advisory-review-toggle'}]});
+   await captureFocusMatrix({page,expect,mark,capture,targets:[{name:'advisory-toggle',selector:'.advisory-review-toggle'}]});
 
    await importCatalog();await page.goto(base+'/#/settings');await expect(page.locator('.security-catalog')).toHaveAttribute('aria-busy','false');await expect(page.locator('.security-catalog')).toContainText('Unverified origin');
    await capturePanelMatrix(page,'.security-catalog > .security-heading','synthetic-legacy-catalog-summary',{device:false});

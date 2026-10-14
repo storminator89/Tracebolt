@@ -50,9 +50,9 @@ describe('S03/S04 exact solid-color contrast regression', () => {
  });
  for (const [file, selectors, offsets] of [
   ['advisory-review.css', ['.advisory-review-toggle:focus-visible'], ['-3px']],
-  ['package-observations.css', ['.package-table-scroll:focus-visible', '.package-row-details summary:focus-visible'], ['3px', '3px']],
+  ['package-observations.css', ['.package-table-scroll:focus-visible', '.package-row-details summary:focus-visible'], ['-3px', '-3px']],
   ['complete-packages.css', ['.complete-package-search input:focus-visible', '.inventory-source-tabs button:focus-visible'], ['2px', '2px']],
- ] as const) it(`${file}: removes each demonstrated alpha override, preserving ring geometry`, () => {
+ ] as const) it(`${file}: uses opaque focus with the source-owned inset/outset geometry`, () => {
   const source = readFileSync(`src/${file}`, 'utf8'); expect(source).not.toContain('#3aab9877');
   selectors.forEach((selector, index) => {
    const block = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(m => m[1].trim() === selector);

@@ -1,6 +1,7 @@
 /** Inert contracts only: no browser, host action, listener or external request. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { test } from 'node:test';
 import { assertPublicSafe, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
 import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
+import { controlHTML, controlRoute, controlURL, runVisibilityControls } from './windows-enrollment-visibility-controls.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
 const compiled = await compile(), sourceSha = 'a'.repeat(40);
 const requestId = `request_${'5'.repeat(32)}`, rawBody = approvedBody(requestId);
@@ -29,7 +31,7 @@ function fixturePNG(row, channels = 3) {
  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.alloc((width * channels + 1) * height))), chunk('IEND', Buffer.alloc(0))]);
 }
 const captureRow = (index, bytes = fixturePNG(captureMatrix[index])) => ({ ...captureMatrix[index], synthetic: true, publicSafe: true, fullPage: false, captureScope: 'production-dialog', imageWidth: bytes.readUInt32BE(16), imageHeight: bytes.readUInt32BE(20), sha256: createHash('sha256').update(bytes).digest('hex'), sourceDigest: compiled.sourceDigest, syntheticCreates: 1, csrfReads: 1, productionFontsLoaded: true });
-const manifest = () => ({ sourceSha, sourceInputs: compiled.sourceInputs, dependencyInputs: compiled.dependencyInputs, sourceDigest: compiled.sourceDigest, captures: captureMatrix.map((_, index) => captureRow(index)), disclosure, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, requestsToRealAPI: 0 });
+const manifest = () => ({ sourceSha, sourceInputs: compiled.sourceInputs, dependencyInputs: compiled.dependencyInputs, sourceDigest: compiled.sourceDigest, captures: captureMatrix.map((_, index) => captureRow(index)), visibilityControls: { contexts: 1, cases: 6, passed: true, closedBodyRange: 'positive', screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 }, disclosure, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, requestsToRealAPI: 0 });
 
 test('eight unique instruction/release images in exactly four EN/DE desktop/mobile contexts', () => {
  assert.deepEqual(viewports, ['en', 'de'].flatMap(locale => [1440, 390].map(width => ({ locale, width, height: width === 390 ? 844 : 1100 }))));
@@ -83,7 +85,7 @@ test('only bundled in-memory assets are served and no request is forwarded', asy
 });
 test('browser entry refuses execution outside hosted CI before touching a browser', async () => {
  const oldActions = process.env.GITHUB_ACTIONS, oldRunner = process.env.RUNNER_ENVIRONMENT;
- try { delete process.env.GITHUB_ACTIONS; delete process.env.RUNNER_ENVIRONMENT; assert.throws(() => requireHosted(), /Hosted CI only/); await assert.rejects(() => capture({ browser: null, expect: null, output: '/unused' }), /Hosted CI only/); }
+ try { delete process.env.GITHUB_ACTIONS; delete process.env.RUNNER_ENVIRONMENT; assert.throws(() => requireHosted(), /Hosted CI only/); await assert.rejects(() => capture({ browser: null, expect: null, output: '/unused' }), /Hosted CI only/); await assert.rejects(() => runVisibilityControls({ browser: null, expect: null, assertPublicSafe: null }), /Hosted CI only/); }
  finally { if (oldActions === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = oldActions; if (oldRunner === undefined) delete process.env.RUNNER_ENVIRONMENT; else process.env.RUNNER_ENVIRONMENT = oldRunner; }
 });
 test('diagnostics admit only closed stage and matrix metadata, never raw values', () => {
@@ -94,7 +96,7 @@ test('diagnostics admit only closed stage and matrix metadata, never raw values'
 test('success metadata requires the complete exact-source public-safe matrix', () => {
  validateMetadata(successfulReport(sourceSha), manifest(), sourceSha, compiled);
  for (const change of [{ screenshots: 4 }, { syntheticCreates: 8 }, { contexts: 8 }, { requestsToRealAPI: 1 }, { actualMutationRequests: 1 }, { nativeAcceptance: true }, { status: 'FAIL' }, { secret }]) assert.throws(() => validateMetadata({ ...successfulReport(sourceSha), ...change }, manifest(), sourceSha, compiled));
- for (const change of [{ captures: [] }, { sourceDigest: 'b'.repeat(64) }, { sourceInputs: [] }, { dependencyInputs: [] }, { appMounted: true }, { browserExecuted: false }, { rawInvitation: invitation }]) assert.throws(() => validateMetadata(successfulReport(sourceSha), { ...manifest(), ...change }, sourceSha, compiled));
+ for (const change of [{ captures: [] }, { sourceDigest: 'b'.repeat(64) }, { sourceInputs: [] }, { dependencyInputs: [] }, { appMounted: true }, { browserExecuted: false }, { rawInvitation: invitation }, { visibilityControls: null }, { visibilityControls: { ...manifest().visibilityControls, closedBodyRange: 'unknown' } }, { visibilityControls: { ...manifest().visibilityControls, passed: false } }, { visibilityControls: { ...manifest().visibilityControls, screenshots: 1 } }, { visibilityControls: { ...manifest().visibilityControls, raw: secret } }]) assert.throws(() => validateMetadata(successfulReport(sourceSha), { ...manifest(), ...change }, sourceSha, compiled));
 });
 test('every image row binds scene, viewport, cropped dimensions, hash and one synthetic POST', () => {
  for (const [index, row] of captureMatrix.entries()) {
@@ -115,7 +117,7 @@ test('existing hosted browser job runs the strict capture gate and uploads its e
  assert.match(workflow, /if: success\(\)/); assert.match(workflow, /node web\/scripts\/run-windows-enrollment-ci\.mjs/);
  assert.doesNotMatch(workflow, /workflow_dispatch|pull_request_target|secrets\.|ignoreHTTPSErrors|windows-inventory-browser|macos-enrollment/);
  const browserJob = workflow.split('\n  browser:\n')[1]?.split('\n  focused:\n')[0]; assert(browserJob);
- const expectedStep = '      - name: Verify synthetic Windows created-stage instructions\n        run: |\n          node web/scripts/capture-windows-enrollment.mjs --check\n          node --test web/scripts/windows-enrollment-capture.node.mjs\n          node web/scripts/run-windows-enrollment-ci.mjs\n';
+ const expectedStep = '      - name: Verify synthetic Windows created-stage instructions\n' + `        if: ${independentGateCondition}\n` + '        run: |\n          node web/scripts/capture-windows-enrollment.mjs --check\n          node --test web/scripts/windows-enrollment-capture.node.mjs\n          node web/scripts/run-windows-enrollment-ci.mjs\n';
  assert(browserJob.includes(expectedStep)); assert(browserJob.indexOf('python3 -I -B tests/security/pr_checks.py browser') < browserJob.indexOf(expectedStep));
  assert(browserJob.indexOf(expectedStep) < browserJob.indexOf('if: success()')); assert.doesNotMatch(browserJob, /continue-on-error/);
  assert.match(workflow, /needs: \[select, backend, frontend, browser\]/); assert.match(workflow, /item\.get\('result'\) != 'success'/);
@@ -205,7 +207,7 @@ test('bounded reader fails closed on descriptor swaps, changed metadata, extra b
 });
 
 // Read-only DOM/geometry model, not a browser or a claim about Chromium layout.
-function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles = [{ width: 1, height: 1 }], ancestry = 'ordinary', inputs = [], href = origin + '/', local = {}, session = {}, protectedCount = 0, inspectionError = false, returnedFailure } = {}) {
+function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles = [{ width: 1, height: 1 }], ancestry = 'ordinary', inputs = [], href = origin + '/', local = {}, session = {}, protectedCount = 0, inspectionError = false, returnedFailure, nativeOutcome = false } = {}) {
  const element = (kind, parentElement = null) => ({
   kind, parentElement,
   matches(selector) { assert.equal(selector, 'details:not([open])'); return this.kind === 'closed-details'; },
@@ -227,7 +229,9 @@ function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles 
   createRange() { return { selectNodeContents: node => assert.equal(node, textNode), getClientRects: () => rectangles }; },
   querySelectorAll(selector) { assert.equal(selector, 'input'); return inputs.map(value => ({ value })); },
  };
- const evaluate = callback => new Function('document', 'NodeFilter', 'location', 'localStorage', 'sessionStorage', `return (${callback.toString()});`)(document, { SHOW_TEXT: 4 }, { href }, local, session)(root, { secret, invitation });
+ const Element = function() {};
+ if (nativeOutcome !== 'unavailable') Element.prototype.checkVisibility = function() { assert.equal(this, parent); if (nativeOutcome === 'throw') throw new Error('unexported native error'); return nativeOutcome; };
+ const evaluate = callback => new Function('document', 'NodeFilter', 'location', 'localStorage', 'sessionStorage', 'Element', `return (${callback.toString()});`)(document, { SHOW_TEXT: 4 }, { href }, local, session, Element)(root, { secret, invitation });
  const page = { locator(selector) { assert.equal(selector, '.enrollment-secret, .enrollment-fingerprint, .enrollment-comparison'); return { protectedCount }; } };
  const dialog = { async evaluate(callback, values) { inspected = true; assert.deepEqual(values, { secret, invitation }); if (inspectionError) throw new Error('unexported synthetic diagnostic'); if (returnedFailure !== undefined) return returnedFailure; return evaluate(callback); } };
  const expect = locator => ({ async toHaveCount(count) { assert.equal(count, 0); assert.equal(locator.protectedCount, count); } });
@@ -250,8 +254,8 @@ test('public-safety branches retain exact original acceptance across read-only D
  for (const text of ['Reviewed instructions', secret, invitation, `manager_${'2'.repeat(32)}`, 'ab'.repeat(32), '12ab'.repeat(8)]) {
   for (const rectangles of [[], [{ width: 0, height: 1 }], [{ width: 1, height: 0 }], [{ width: 1, height: 1 }]]) {
    for (const ancestry of ['ordinary', 'closed-body', 'closed-summary', 'open-body', 'nested-closed-body', 'script', 'style', 'detached']) {
-    for (const extra of [{}, { inputs: [secret] }, { inputs: [invitation] }, { href: origin + '/#' + secret }, { href: origin + '/#' + invitation }, { local: { value: secret } }, { session: { value: secret } }]) {
-     const h = publicSafetyHarness({ text, rectangles, ancestry, ...extra }), expected = h.evaluate(originalPublicSafetyPredicate);
+    for (const extra of [{}, { inputs: [secret] }, { inputs: [invitation] }, { href: origin + '/#' + secret }, { href: origin + '/#' + invitation }, { local: { value: secret } }, { session: { value: secret } }]) for (const nativeOutcome of [false, true, 'unavailable', 'throw']) {
+     const h = publicSafetyHarness({ text, rectangles, ancestry, nativeOutcome, ...extra }), expected = h.evaluate(originalPublicSafetyPredicate);
      if (expected) await h.run(); else await assert.rejects(() => h.run(), /Unsafe public capture surface/);
      assert(h.events.every(row => Object.keys(row).join(',') === 'stage,scene,locale,width'));
      assert(h.events.every(row => row.scene === 'instructions' && row.locale === 'en' && row.width === 1440));
@@ -260,13 +264,13 @@ test('public-safety branches retain exact original acceptance across read-only D
    }
   }
  }
- assert.equal(cases, 1344);
+ assert.equal(cases, 5376);
 });
 test('public-safety diagnostics identify fixed branches without exempting closed disclosure text', async () => {
  const cases = [
   [{ text: invitation }, 'public-safe-text'],
-  [{ text: invitation, ancestry: 'closed-body' }, 'public-safe-text-closed-details'],
-  [{ text: secret, ancestry: 'nested-closed-body' }, 'public-safe-text-closed-details'],
+  [{ text: invitation, ancestry: 'closed-body' }, 'public-safe-text-closed-details-native-false'],
+  [{ text: secret, ancestry: 'nested-closed-body' }, 'public-safe-text-closed-details-native-false'],
   [{ text: invitation, ancestry: 'closed-summary' }, 'public-safe-text'],
   [{ text: invitation, ancestry: 'open-body' }, 'public-safe-text'],
   [{ inputs: [secret] }, 'public-safe-inputs'],
@@ -274,7 +278,7 @@ test('public-safety diagnostics identify fixed branches without exempting closed
   [{ local: { value: secret } }, 'public-safe-storage'],
   [{ session: { value: secret } }, 'public-safe-storage'],
  ];
- assert.deepEqual(publicSafeFailures, ['public-safe-text', 'public-safe-text-closed-details', 'public-safe-inputs', 'public-safe-location', 'public-safe-storage']);
+ assert.deepEqual(publicSafeFailures, ['public-safe-text', 'public-safe-text-closed-details-native-true', 'public-safe-text-closed-details-native-false', 'public-safe-text-closed-details-native-unavailable', 'public-safe-text-closed-details-native-error', 'public-safe-inputs', 'public-safe-location', 'public-safe-storage']);
  for (const [options, failure] of cases) {
   const h = publicSafetyHarness(options); await assert.rejects(() => h.run(), /Unsafe public capture surface/);
   assert.deepEqual(h.events.map(row => row.stage), ['public-safe-elements', 'public-safe-inspection', failure]);
@@ -300,4 +304,117 @@ test('production prerequisites and privacy assertions still precede every screen
  const runner = await readFile(new URL('./run-windows-enrollment-ci.mjs', import.meta.url), 'utf8');
  assert(runner.includes('} catch { failure = tag; }')); assert(runner.includes('JSON.stringify(report.failure)')); assert(runner.includes('raw diagnostics withheld.'));
  assert.doesNotMatch(runner, /console\.(?:error|debug|trace)|error\.message|error\.stack|\.innerText\(|\.textContent\(/);
+});
+
+test('native parent-box subcategories never exempt matching closed-disclosure text', async () => {
+ for (const [nativeOutcome, suffix] of [[true, 'true'], [false, 'false'], ['unavailable', 'unavailable'], ['throw', 'error'], ['not-a-boolean', 'error']]) {
+  const h = publicSafetyHarness({ text: invitation, ancestry: 'closed-body', nativeOutcome }); await assert.rejects(() => h.run(), /Unsafe public capture surface/);
+  assert.equal(h.events.at(-1).stage, `public-safe-text-closed-details-native-${suffix}`);
+ }
+ const h = publicSafetyHarness({ text: secret, nativeOutcome: false }); await assert.rejects(() => h.run(), /Unsafe public capture surface/); assert.equal(h.events.at(-1).stage, 'public-safe-text');
+});
+test('isolated control route serves only its one known document and never production or external routes', async () => {
+ const request = (url = controlURL, method = 'GET', body = null, headers = {}) => ({ url: () => url, method: () => method, postData: () => body, headers: () => headers });
+ for (const args of [[origin + '/'], [origin + '/api/session'], [origin + '/api/windows/enrollment/invitations', 'POST', '{}'], ['https://external.invalid/'], [controlURL + '?extra'], [controlURL, 'POST'], [controlURL, 'GET', '{}'], [controlURL, 'GET', null, { cookie: 'invented' }], [controlURL, 'GET', null, { authorization: 'invented' }]]) {
+  const state = { documents: 0, blocked: 0 }; let aborted = false;
+  await controlRoute(state)({ request: () => request(...args), abort: () => { aborted = true; }, fulfill: () => assert.fail('Unexpected fulfillment') }); assert(aborted); assert.deepEqual(state, { documents: 0, blocked: 1 });
+ }
+ const state = { documents: 0, blocked: 0 }, route = controlRoute(state); let received, aborted = false;
+ await route({ request: () => request(), fulfill: value => { received = value; }, abort: () => assert.fail('Expected fixture') }); assert.equal(received.body, controlHTML); assert.equal(received.contentType, 'text/html');
+ await route({ request: () => request(), abort: () => { aborted = true; }, fulfill: () => assert.fail('Duplicate document') }); assert(aborted); assert.deepEqual(state, { documents: 1, blocked: 1 });
+ assert.doesNotMatch(controlHTML, /<script|<iframe|<img|<form|https?:|src=/i); assert.match(controlHTML, /<p data-probe style="display:contents">SYNTHETIC_ONLY_NOT_AN_INVITATION_1234567890<\/p>/);
+});
+function visibilityControlHarness(mode = 'positive') {
+ const calls = [], marks = []; let handler, closed = false, url = 'about:blank';
+ const page = {
+  url: () => url, on: event => assert.equal(event, 'pageerror'),
+  async goto(target) { calls.push(['control-goto', target]); assert.equal(target, controlURL); await handler({ request: () => ({ url: () => target, method: () => 'GET', postData: () => null, headers: () => ({}) }), fulfill: response => assert.equal(response.body, controlHTML), abort: () => assert.fail('Control navigation blocked') }); url = target; },
+  locator(selector) { const name = selector.slice(1); assert(['clear', 'visible', 'closed-body', 'closed-summary', 'open-body', 'contents'].includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async callback => { assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); return { positiveRange: name !== 'closed-body' || mode !== 'empty', native: mode === 'wrong-native' ? false : name !== 'closed-body' && name !== 'contents' }; } }; } }; },
+ };
+ const context = { route: async (pattern, fn) => { assert.equal(pattern, '**/*'); handler = fn; calls.push(['control-route']); }, newPage: async () => { calls.push(['new-control-page']); return page; }, close: async () => { closed = true; calls.push(['close-control-context']); } };
+ const browser = { newContext: async options => { calls.push(['new-control-context', options]); return context; } };
+ const expect = probe => ({ toBeHidden: async () => assert.equal(probe.name, 'closed-body'), toBeVisible: async () => assert.notEqual(probe.name, 'closed-body') });
+ const inspect = async (givenPage, region, givenExpect, mark) => {
+  assert.equal(givenPage, page); assert.equal(region.owner, page); assert.equal(givenExpect, expect); calls.push(['privacy', region.name]); mark('public-safe-elements'); mark('public-safe-inspection');
+  if (mode === 'accept-all' || region.name === 'clear' || region.name === 'closed-body' && mode === 'empty') return;
+  mark(region.name === 'closed-body' ? 'public-safe-text-closed-details-native-false' : 'public-safe-text'); throw new Error('Expected synthetic rejection');
+ };
+ return { browser, expect, assertPublicSafe: inspect, mark: stage => marks.push(diagnostic(stage)), calls, marks, closed: () => closed };
+}
+async function withHostedFixture(run) {
+ const before = { actions: process.env.GITHUB_ACTIONS, runner: process.env.RUNNER_ENVIRONMENT };
+ try { process.env.GITHUB_ACTIONS = 'true'; process.env.RUNNER_ENVIRONMENT = 'github-hosted'; return await run(); }
+ finally { if (before.actions === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = before.actions; if (before.runner === undefined) delete process.env.RUNNER_ENVIRONMENT; else process.env.RUNNER_ENVIRONMENT = before.runner; }
+}
+test('native control driver owns one separate context/page and always closes it; only inert adapters execute here', async () => {
+ for (const mode of ['positive', 'empty', 'wrong-native', 'accept-all']) {
+  const h = visibilityControlHarness(mode);
+  if (mode === 'positive' || mode === 'empty') {
+   const result = await withHostedFixture(() => runVisibilityControls(h)); assert.deepEqual(result, { contexts: 1, cases: 6, passed: true, closedBodyRange: mode, screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 }); assert.equal(h.calls.filter(row => row[0] === 'privacy').length, 6);
+  } else await assert.rejects(() => withHostedFixture(() => runVisibilityControls(h)));
+  assert(h.closed()); assert.equal(h.calls.filter(row => row[0] === 'new-control-context').length, 1); assert.deepEqual(h.calls[0][1], { viewport: { width: 800, height: 600 }, locale: 'en-US', reducedMotion: 'reduce', serviceWorkers: 'block' }); assert.equal(h.calls.filter(row => row[0] === 'new-control-page').length, 1); assert.deepEqual(h.calls.filter(row => row[0] === 'control-goto'), [['control-goto', controlURL]]); assert(h.calls.findIndex(row => row[0] === 'control-route') < h.calls.findIndex(row => row[0] === 'new-control-page'));
+ }
+ const source = await readFile(new URL('./windows-enrollment-visibility-controls.mjs', import.meta.url), 'utf8'); assert.doesNotMatch(source, /\.screenshot\(|\.setContent\(|innerHTML\s*=|outerHTML\s*=|\.addStyleTag\(|\.continue\(|routeFixture/);
+ const recipe = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8'); assert(recipe.indexOf('await runVisibilityControls({ browser, expect, assertPublicSafe, mark })') < recipe.indexOf('for (const [viewIndex,')); assert(compiled.sourceInputs.some(row => row.file === 'web/scripts/windows-enrollment-visibility-controls.mjs'));
+});
+test('success counts explicitly separate one control context from four unchanged capture contexts', () => {
+ const report = successfulReport(sourceSha); assert.equal(report.contexts, 5); assert.equal(report.captureContexts, 4); assert.equal(report.controlContexts, 1); assert.equal(report.controlCases, 6); assert.equal(report.syntheticCreates, 4); assert.equal(report.screenshots, 8);
+ for (const closedBodyRange of ['positive', 'empty']) { const current = manifest(); current.visibilityControls.closedBodyRange = closedBodyRange; validateMetadata(report, current, sourceSha, compiled); }
+ for (const field of ['contexts', 'cases', 'passed', 'screenshots', 'syntheticDocumentRequests', 'requestsToRealAPI', 'actualMutationRequests']) { const current = manifest(); current.visibilityControls[field] = field === 'passed' ? false : 99; assert.throws(() => validateMetadata(report, current, sourceSha, compiled)); }
+});
+
+
+const independentGateCondition = "${{ !cancelled() && steps.browser_runtime.outcome == 'success' }}";
+async function independentGateWorkflow() {
+ const workflow = await readFile(new URL('../../.github/workflows/pr-checks.yml', import.meta.url), 'utf8');
+ const browser = workflow.split('  browser:\n')[1]?.split('  focused:\n')[0];
+ assert(browser, 'Existing browser job must be present');
+ const setup = browser.split('      - name: Build whole UI and prepare existing browser runtime\n')[1]?.split('      - name:')[0];
+ const gate = browser.split('      - name: Verify synthetic Windows created-stage instructions\n')[1]?.split('      - name:')[0];
+ assert(setup && gate, 'Existing setup and Windows gate must be present');
+ assert.match(setup, /^        id: browser_runtime\n/);
+ assert.equal(browser.match(/^        id: browser_runtime$/gm)?.length, 1);
+ assert.equal(gate.match(/^        if: (.+)$/m)?.[1], independentGateCondition);
+ assert.equal(gate.split('        run: |\n')[1], '          node web/scripts/capture-windows-enrollment.mjs --check\n          node --test web/scripts/windows-enrollment-capture.node.mjs\n          node web/scripts/run-windows-enrollment-ci.mjs\n');
+ assert.doesNotMatch(browser, /continue-on-error|secrets:|environment:|permissions:/);
+ assert.match(browser, /TRACEBOLT_SOURCE_SHA: \$\{\{ github\.sha \}\}/);
+ assert.match(browser, /      - name: Keep successful focused public-safe screenshots only\n        if: success\(\)\n/);
+ assert.match(workflow, /^permissions:\n  contents: read$/m);
+ return { workflow, browser, setup, gate };
+}
+
+test('independent Windows UI gate retains exact setup, source, commands and success-only artifact boundaries', async () => {
+ const { setup, browser } = await independentGateWorkflow();
+ assert.match(setup, /npm ci\n          npm run build\n          npx playwright install --with-deps chromium/);
+ assert.match(browser, /      - name: Authenticated smoke and affected existing browser flows\n        run: python3 -I -B tests\/security\/pr_checks\.py browser/);
+ assert(browser.indexOf('id: browser_runtime') < browser.indexOf('Verify synthetic Windows created-stage instructions'));
+});
+
+test('the exact documented gate condition refuses cancellation and every non-success setup outcome', async () => {
+ await independentGateWorkflow();
+ // This is a finite model of the exact source-bound GitHub expression, not an Actions runtime.
+ // cancelled() overrides implicit success(); outcome is the value before continue-on-error.
+ for (const cancelled of [false, true]) for (const setup of ['success', 'failure', 'cancelled', 'skipped', '', null, undefined]) for (const previous of ['success', 'failure']) {
+  const scheduled = !cancelled && setup === 'success';
+  assert.equal(scheduled, cancelled ? false : setup === 'success');
+  if (cancelled || setup !== 'success') assert.equal(scheduled, false);
+  if (!cancelled && setup === 'success' && previous === 'failure') assert.equal(scheduled, true);
+ }
+});
+
+test('the unchanged real aggregate still rejects prior failure, cancellation, skip or missing prerequisites', async () => {
+ const { workflow } = await independentGateWorkflow();
+ const aggregate = workflow.split('  focused:\n')[1];
+ assert.match(aggregate, /    if: \$\{\{ always\(\) \}\}\n    needs: \[select, backend, frontend, browser\]/);
+ assert.doesNotMatch(aggregate, /continue-on-error/);
+ const script = aggregate.split("          python3 - <<'PY'\n")[1]?.split('          PY')[0].split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+ assert(script && script.startsWith('import json, os\n'));
+ const success = () => Object.fromEntries(['select', 'backend', 'frontend', 'browser'].map(name => [name, { result: 'success' }]));
+ const run = results => spawnSync('python3', ['-I', '-B', '-c', script], { encoding: 'utf8', timeout: 10000, env: { PATH: process.env.PATH, RESULTS: JSON.stringify(results) } });
+ const accepted = run(success()); assert.equal(accepted.error, undefined); assert.equal(accepted.status, 0); assert.match(accepted.stdout, /^PASS: focused source tier only;/);
+ for (const name of ['select', 'backend', 'frontend', 'browser']) for (const result of ['failure', 'cancelled', 'skipped', null]) {
+  const results = success(); results[name].result = result; const rejected = run(results);
+  assert.equal(rejected.error, undefined); assert.equal(rejected.status, 1); assert.match(rejected.stderr, /focused prerequisite failed, skipped, cancelled or missing/);
+ }
+ for (const results of [{ ...success(), extra: { result: 'success' } }, { backend: { result: 'success' }, frontend: { result: 'success' }, browser: { result: 'success' } }]) assert.equal(run(results).status, 1);
 });

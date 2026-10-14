@@ -545,3 +545,56 @@ manifest entries include computed `contrast` measurements alongside revision
 and fixture provenance. The helper never launches a browser on import or grants
 any endpoint authority. Source arithmetic is not pixel/browser acceptance; review
 the exact hosted images before closing the visual gate.
+
+Package table/mapping captures additionally enter through real preceding
+controls with forward Tab, reject bounded top/side clipping and LAN-header
+occlusion, and record geometry/hit-test evidence. Only tall table bottoms may
+remain cropped. See the linked correction notes for the exact exposure contract
+and remaining marker/pixel review; no local browser result is implied.
+
+### Conditional failure checkpoint in PR CI
+
+The PR wrapper still withholds all browser stdout/stderr. On a failed Conditional
+run it now reads only that invocation's freshly written
+`conditional-browser-results.json` through the existing no-follow, bounded JSON
+decoder. An exact source SHA, fixed report metadata, case order/counts, summary,
+redacted error sentence, stage vocabulary and optional diagnostic shapes must
+match. Unknown fields, private/raw strings, duplicate JSON keys, symlinks and
+source mismatches yield no checkpoint. Existing optional coverage/lifecycle
+diagnostics are validated but never printed.
+
+Public output is limited to fixed source-owned labels such as
+`FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-outline-exposure`.
+The three Conditional focus targets retain the four original check phases and
+add fourteen fixed exposure subphases. Across the unchanged EN/DE ×
+desktop/mobile × light/dark matrix, this gives 432 allowed coordinates. A
+previous same-head report is removed through a no-follow directory descriptor
+before launching this runner; cleanup failure cannot expose old evidence. The
+original failing process/exception remains a failure, and success never enters
+the projector. No screenshot gates, assertions, retries, time budgets, CSS or
+keyboard paths change.
+
+`ConditionalFailureTests` in `tests/security/test_pr_checks.py` exercises the
+actual source-owned `check()` producer and report-object construction in an inert
+Node VM, then Python `run()` and the public checkpoint. It does not import or
+launch the browser runner. These synthetic failure tests establish the diagnostic
+path only; a fresh exact-head hosted run is still needed to identify the actual
+Conditional failure. The V3 runner and public failure projection are unchanged;
+the shared helper also gives its focus checks the finer private phase labels,
+without changing behavior or establishing V3 pixel acceptance.
+
+Exposure subphases identify geometry reading/classification, hit-test reading,
+the existing left/right/top/top-band/header checks, and the existing final
+acceptance check. For that unchanged aggregate assertion, a fixed bottom-edge
+or hit-edge label is selected from its existing boolean inputs; no assertion or
+measurement is relaxed, replaced or added. The historical broad `outline exposure`
+phase remains valid. Every original assertion, the geometry classifier, browser
+measurement callbacks and forward-Tab function retain their source behavior.
+
+Thirteen synthetic failing paths execute the actual focus helper, Conditional
+`check()` catch/report producer, Python wrapper and strict decoder in inert tests.
+The public checkpoint contains only a closed phase label, never geometry values,
+hit-test data, DOM text or raw errors. These diagnostics do not establish which
+subphase failed in the earlier hosted run and do not justify a speculative CSS
+change. A fresh exact-head hosted run and the existing 80-image pixel gate remain
+required.

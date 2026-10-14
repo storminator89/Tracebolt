@@ -24,10 +24,10 @@ try {
 } catch { failure = tag; }
 finally {
  clearTimeout(timer); try { await browser?.close(); } catch { passed = false; failure ??= diagnostic('close-browser'); }
- const report = passed ? successfulReport(sourceSha) : { sourceSha, status: 'FAIL', browserAcceptance: false, scenes: 0, screenshots: 0, contexts: 0, syntheticCreates: 0, requestsToRealAPI: 0, actualMutationRequests: 0, nativeAcceptance: false, disclosure, failure: failure ?? tag };
+ const report = passed ? successfulReport(sourceSha) : { sourceSha, status: 'FAIL', browserAcceptance: false, scenes: 0, screenshots: 0, contexts: 0, captureContexts: 0, controlContexts: 0, controlCases: 0, syntheticCreates: 0, requestsToRealAPI: 0, actualMutationRequests: 0, nativeAcceptance: false, disclosure, failure: failure ?? tag };
  const reportFile = path.join(output, 'windows-enrollment-results.json'); await writeFile(reportFile, JSON.stringify(report, null, 2) + '\n');
  if (passed) try { await validateEvidence(output, sourceSha); } catch {
-  passed = false; Object.assign(report, { status: 'FAIL', browserAcceptance: false, scenes: 0, screenshots: 0, contexts: 0, syntheticCreates: 0, failure: diagnostic('evidence') });
+  passed = false; Object.assign(report, { status: 'FAIL', browserAcceptance: false, scenes: 0, screenshots: 0, contexts: 0, captureContexts: 0, controlContexts: 0, controlCases: 0, syntheticCreates: 0, failure: diagnostic('evidence') });
   await writeFile(reportFile, JSON.stringify(report, null, 2) + '\n');
  }
  process.exitCode = passed ? 0 : 1;

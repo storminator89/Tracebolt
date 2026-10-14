@@ -1690,6 +1690,85 @@ class VitestFailureTests(unittest.TestCase):
         return {'testResults': [{'name': str(source), 'status': 'failed', 'message': marker,
                 'assertionResults': [{'status': 'passed'}, {'status': 'failed', 'fullName': marker, 'failureMessages': [marker]}]}]}
 
+    def route_fixture(self, root, phase='blocked-mount'):
+        source = root / 'web/src/route-details.test.tsx'; source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('source fixture')
+        assertions = [{'status': 'passed'} for _ in range(19)]
+        assertions[10] = {'status': 'failed', 'title': p.ROUTE_FIRST_COMMIT_TITLE,
+                          'ancestorTitles': [p.ROUTE_FIRST_COMMIT_SUITE],
+                          'fullName': p.ROUTE_FIRST_COMMIT_SUITE + ' ' + p.ROUTE_FIRST_COMMIT_TITLE,
+                          'failureMessages': ['PRIVATE_RAW_VALUE'],
+                          'meta': {'routeFirstCommitPhase': phase}}
+        return {'testResults': [{'name': str(source), 'status': 'failed', 'message': 'PRIVATE_RAW_VALUE',
+                                'assertionResults': assertions}]}
+
+    def test_route_phase_is_a_closed_enum_for_the_exact_source_known_case(self):
+        phases = {'bootstrap', 'suspend-import', 'blocked-mount', 'blocked-dom', 'resume-dom', 'resumed-mount'}
+        self.assertEqual(p.ROUTE_FIRST_COMMIT_PHASES, phases)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'
+            with patch.object(p, 'ROOT', root):
+                for phase in sorted(phases):
+                    report.write_text(json.dumps(self.route_fixture(root, phase)))
+                    self.assertEqual(p.vitest_failure_location(report),
+                                     'web/src/route-details.test.tsx assertions=11 route-first-commit=11:' + phase)
+
+    def test_route_phase_rejects_unknown_extra_and_malformed_metadata(self):
+        bad = [None, {}, [], 'PRIVATE_RAW_VALUE', {'other': 'blocked-mount'},
+               {'routeFirstCommitPhase': 'blocked-mount', 'extra': 'PRIVATE_RAW_VALUE'}]
+        bad += [{'routeFirstCommitPhase': value} for value in [
+            None, True, 11, [], {}, 'PRIVATE_RAW_VALUE', 'blocked-mount\nPRIVATE_RAW_VALUE',
+            'blocked-mount ', 'prefix-blocked-mount', 'x' * 10000,
+        ]]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'; value = self.route_fixture(root)
+            with patch.object(p, 'ROOT', root):
+                for meta in bad:
+                    value['testResults'][0]['assertionResults'][10]['meta'] = meta
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report), 'web/src/route-details.test.tsx assertions=11')
+                value['testResults'][0]['assertionResults'][10]['meta'] = {'routeFirstCommitPhase': 'blocked-mount'}
+                raw = json.dumps(value).replace('"routeFirstCommitPhase": "blocked-mount"',
+                    '"routeFirstCommitPhase": "blocked-mount", "routeFirstCommitPhase": "PRIVATE_RAW_VALUE"')
+                report.write_text(raw); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_route_phase_is_withheld_for_other_files_positions_cases_and_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'
+            with patch.object(p, 'ROOT', root):
+                for field, invalid in [('title', 'PRIVATE_RAW_VALUE'), ('fullName', 'PRIVATE_RAW_VALUE'),
+                                       ('ancestorTitles', ['PRIVATE_RAW_VALUE'])]:
+                    value = self.route_fixture(root); value['testResults'][0]['assertionResults'][10][field] = invalid
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report), 'web/src/route-details.test.tsx assertions=11')
+                value = self.route_fixture(root); row = value['testResults'][0]
+                other = root / 'web/src/other.test.tsx'; other.write_text('source fixture'); row['name'] = str(other)
+                report.write_text(json.dumps(value))
+                self.assertEqual(p.vitest_failure_location(report), 'web/src/other.test.tsx assertions=11')
+                for position in [0, 9, 11, 18]:
+                    value = self.route_fixture(root); assertions = value['testResults'][0]['assertionResults']
+                    assertions[position], assertions[10] = assertions[10], assertions[position]
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report),
+                                     'web/src/route-details.test.tsx assertions=' + str(position + 1))
+                value = self.route_fixture(root); row = value['testResults'][0]
+                row['status'] = 'passed'; row['assertionResults'][10]['status'] = 'passed'
+                report.write_text(json.dumps(value)); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_route_phase_preserves_failed_process_and_private_report_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); value = self.route_fixture(root, 'resumed-mount'); reports = []; output = io.StringIO()
+            def failure(args, cwd, stage):
+                report = Path(next(a.split('=', 1)[1] for a in args if a.startswith('--outputFile=')))
+                self.assertNotIn('artifacts', report.parts); reports.append(report)
+                report.write_text(json.dumps(value)); raise ValueError('original failure')
+            with patch.object(p, 'ROOT', root), patch.object(p, 'run', side_effect=failure), redirect_stdout(output):
+                with self.assertRaisesRegex(ValueError, 'original failure'):
+                    p.run_vitest(['vitest', 'run', '--maxWorkers=1'], root / 'web', stage='ui-test')
+            self.assertEqual(output.getvalue(),
+                             'FAIL UI location: web/src/route-details.test.tsx assertions=11 route-first-commit=11:resumed-mount\n')
+            self.assertFalse(reports[0].exists())
+
     def test_only_source_file_and_numeric_coordinates_are_released(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); report = root / 'private.json'; value = self.fixture(root)
@@ -2091,6 +2170,358 @@ class ShellFailureDiagnosticTests(unittest.TestCase):
         with patch.object(p, 'run'), patch.object(p, 'shell_failure_location') as projection:
             p.run_shell_browser({}, SHA)
         projection.assert_not_called()
+
+
+class ConditionalFailureTests(unittest.TestCase):
+    marker = 'PRIVATE_ERROR_DOM_URL_VALUE_MUST_NOT_ESCAPE'
+
+    def coverage(self):
+        return {'coverageRefresh': {'step': 'restored unknown counts', 'reads': 2, 'statuses': [429, 200],
+                'mutations': 0, 'routeFailed': False, 'holdExpired': False}}
+
+    def lifecycle(self):
+        state = dict.fromkeys(['documentVisible', 'privateViewPresent', 'privateInert', 'privateAriaHidden',
+                              'privateVisible', 'appShellPresent', 'reviewPresent', 'reviewBusy', 'reviewAlertPresent'], False)
+        state.update(articleCount=1, events=dict.fromkeys(['pagehide', 'pageshow', 'focus', 'blur', 'visibilitychange'], 0))
+        return {'repeatCount': 5, 'attempts': [{'attempt': 1, 'upstream': [{'status': 200, 'errorCode': 'none'}], 'state': state}],
+                'network': [{'attempt': 0, 'route': 'auth', 'phase': 'request'}, {'attempt': 1, 'route': 'review', 'phase': 'response', 'status': 200}],
+                'finalState': state}
+
+    def report(self, failures=None):
+        failures = failures or {}
+        rows = []
+        for name, case in p.CONDITIONAL_FAILURE_CASES.items():
+            row = {'name': name, 'status': 'PASS', 'durationMs': 1}
+            if case == 'lazy-reads': row['diagnostics'] = self.coverage()
+            if case == 'persisted-resume': row['diagnostics'] = self.lifecycle()
+            if case in failures: row.update(status='FAIL', stage=failures[case], error=p.CONDITIONAL_ERROR)
+            rows.append(row)
+        return {**p.CONDITIONAL_REPORT_PROSE, 'sourceSha': SHA,
+                'applicationBaselineArchiveSha256': 'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b',
+                'createdAt': '2026-10-14T00:00:00.000Z', 'runtimeErrorCount': 0,
+                'secretsExported': False, 'realTelemetryExported': False, 'results': rows,
+                'summary': {'passed': len(rows) - len(failures), 'failed': len(failures), 'setupFailure': False}}
+
+    def write(self, root, value):
+        path = root / 'artifacts/review/conditional-browser-results.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value)); return path
+
+    def test_producer_case_literal_stage_metadata_and_coverage_vocabularies_match_exactly(self):
+        source = (ROOT / p.FLOWS['conditional']).read_text()
+        self.assertEqual(list(p.CONDITIONAL_FAILURE_CASES), re.findall(r"await check\('([^']+)'", source))
+        self.assertEqual(list(p.CONDITIONAL_LITERAL_STAGES), list(dict.fromkeys(['setup', *re.findall(r"mark\('([^']+)'\)", source)])))
+        self.assertEqual(p.COVERAGE_DIAGNOSTIC_STEPS, tuple(dict.fromkeys(re.findall(r"coverageStep='([^']+)'", source))))
+        for key, value in p.CONDITIONAL_REPORT_PROSE.items():
+            self.assertIn("'" + value + "'", source, key)
+        self.assertIn("error:'" + p.CONDITIONAL_ERROR + "'", source)
+        targets = tuple(re.findall(r"name:'([^']+)',selector:", source))
+        self.assertEqual(targets, p.CONDITIONAL_FOCUS_TARGETS)
+        helper = (ROOT / 'tests/e2e-review/focus-contrast-browser.mjs').read_text()
+        self.assertEqual(tuple(re.findall(r"stage\('([^']+)'\)", helper)), p.FOCUS_PHASES)
+        # Execute only the inert stage producer, never import a browser runner.
+        script = "import {focusContrastStage} from './tests/e2e-review/focus-contrast-browser.mjs'; const result=[]; for(const target of " + json.dumps(targets) + ") for(const size of ['desktop','mobile']) for(const locale of ['en','de']) for(const theme of ['light','dark']) for(const phase of " + json.dumps(p.FOCUS_PHASES) + ") result.push(focusContrastStage(target,size,locale,theme,phase)); process.stdout.write(JSON.stringify(result));"
+        values = json.loads(p.subprocess.check_output(['node', '--input-type=module', '-e', script], cwd=ROOT))
+        self.assertEqual(values, list(p.CONDITIONAL_FOCUS_STAGES)); self.assertEqual(len(values), 432)
+
+    def test_all_focus_coordinates_and_earlier_unrelated_failure_project_only_fixed_labels(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            for stage, code in p.CONDITIONAL_FOCUS_STAGES.items():
+                self.write(Path(tmp), self.report({'legacy-gallery': stage}))
+                self.assertEqual(p.conditional_failure_location(SHA), 'case=legacy-gallery stage=' + code)
+            self.write(Path(tmp), self.report({'managed-consent': 'managed consent'}))
+            self.assertEqual(p.conditional_failure_location(SHA), 'case=managed-consent stage=managed-consent')
+            self.write(Path(tmp), self.report())
+            self.assertIsNone(p.conditional_failure_location(SHA))
+
+    def test_strict_source_schema_counts_raw_fields_and_unknown_coordinates_are_rejected(self):
+        good = self.report({'legacy-gallery': next(iter(p.CONDITIONAL_FOCUS_STAGES))})
+        invalid = []
+        for key, value in [('sourceSha', 'b' * 40), ('createdAt', self.marker), ('scope', self.marker), ('raw', self.marker),
+                           ('secretsExported', True), ('realTelemetryExported', True), ('runtimeErrorCount', True),
+                           ('runtimeErrorCount', -1), ('runtimeErrorCount', 1000001), ('results', {}), ('summary', {})]:
+            invalid.append({**good, key: value})
+        for key, value in [('stage', self.marker), ('stage', 'focus contrast complete-package-table mobile en light: outline exposure'),
+                           ('stage', 'focus contrast legacy-package-table mobile en light: unknown'), ('stage', []),
+                           ('name', self.marker), ('error', self.marker), ('raw', self.marker), ('status', 'SKIP'), ('durationMs', True)]:
+            row = deepcopy(good); row['results'][2][key] = value; invalid.append(row)
+        for row in [[], good['results'][:-1], [good['results'][0]] * 19, list(reversed(good['results']))]:
+            invalid.append({**good, 'results': row})
+        for summary in [{'passed': 19, 'failed': 1, 'setupFailure': False}, {'passed': 18, 'failed': True, 'setupFailure': False},
+                        {'passed': 18, 'failed': 1, 'setupFailure': False, 'raw': self.marker}]:
+            invalid.append({**good, 'summary': summary})
+        misplaced = self.report({'managed-consent': next(iter(p.CONDITIONAL_FOCUS_STAGES))}); invalid.append(misplaced)
+        for index in [1, 17]:
+            missing = deepcopy(good); del missing['results'][index]['diagnostics']; invalid.append(missing)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            for value in invalid:
+                self.write(Path(tmp), value); self.assertIsNone(p.conditional_failure_location(SHA), value)
+            path = self.write(Path(tmp), good)
+            for raw in [b'{', b'\xff', b'x' * 131073,
+                        json.dumps(good).replace('"runtimeErrorCount": 0', '"runtimeErrorCount": 0, "runtimeErrorCount": 0').encode(),
+                        json.dumps(good).replace('"runtimeErrorCount": 0', '"runtimeErrorCount": NaN').encode()]:
+                path.write_bytes(raw); self.assertIsNone(p.conditional_failure_location(SHA))
+            self.write(Path(tmp), good)
+            for sha in [None, True, self.marker, SHA + '\n']:
+                self.assertIsNone(p.conditional_failure_location(sha))
+
+    def test_optional_diagnostics_are_strictly_validated_but_never_released(self):
+        self.assertTrue(p.conditional_diagnostic_shape(self.coverage(), 'lazy-reads'))
+        self.assertTrue(p.conditional_diagnostic_shape(self.lifecycle(), 'persisted-resume'))
+        for case in ['lazy-reads', 'persisted-resume']:
+            self.assertTrue(p.conditional_diagnostic_shape({'unavailable': True}, case))
+            for value in [{'unavailable': 1}, {'unavailable': True, 'raw': self.marker}, {'raw': self.marker}, None]:
+                self.assertFalse(p.conditional_diagnostic_shape(value, case))
+        invalid = []
+        for key, value in [('step', self.marker), ('statuses', [self.marker]), ('statuses', [True]), ('reads', 4), ('mutations', -1), ('raw', self.marker)]:
+            item = self.coverage(); item['coverageRefresh'][key] = value; invalid.append(('lazy-reads', item))
+        for field in ['finalState', 'network', 'attempts']:
+            item = self.lifecycle()
+            if field == 'finalState': item[field]['raw'] = self.marker
+            else: item[field][0]['raw'] = self.marker
+            invalid.append(('persisted-resume', item))
+        item = self.lifecycle(); item['attempts'][0]['upstream'][0]['errorCode'] = self.marker; invalid.append(('persisted-resume', item))
+        item = self.lifecycle(); item['finalState']['events']['focus'] = True; invalid.append(('persisted-resume', item))
+        for case, value in invalid: self.assertFalse(p.conditional_diagnostic_shape(value, case), value)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            for case, value in invalid:
+                report = self.report({'legacy-gallery': next(iter(p.CONDITIONAL_FOCUS_STAGES))})
+                index = list(p.CONDITIONAL_FAILURE_CASES.values()).index(case); report['results'][index]['diagnostics'] = value
+                self.write(Path(tmp), report); self.assertIsNone(p.conditional_failure_location(SHA))
+
+    def test_partial_setup_and_runtime_failures_are_fixed_flags_with_consistent_counts(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            value = self.report(); value['results'] = value['results'][:2]
+            value['summary'] = {'passed': 2, 'failed': 0, 'setupFailure': True}; value['runtimeErrorCount'] = 5
+            self.write(Path(tmp), value)
+            self.assertEqual(p.conditional_failure_location(SHA), 'setup-failure; runtime-errors')
+            value['summary']['setupFailure'] = False; self.write(Path(tmp), value)
+            self.assertIsNone(p.conditional_failure_location(SHA))
+
+    def test_real_producer_to_python_run_to_public_checkpoint_without_browser_import(self):
+        # Run only the existing check() producer and final report object in a Node
+        # VM with inert start/stop/assertion stubs. Never evaluate the runner body.
+        original_run = p.subprocess.run
+        for case, stage in [('legacy-gallery', 'focus contrast legacy-package-details mobile en light: outline exposure'),
+                            ('managed-consent', 'managed consent')]:
+            with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+                root = Path(tmp); path = root / 'artifacts/review/conditional-browser-results.json'; path.parent.mkdir(parents=True)
+                script = r"""
+import fs from 'node:fs'; import vm from 'node:vm';
+const [runner, output, sha, failedCase, failureStage, coverage, lifecycle, marker] = JSON.parse(process.env.CONDITIONAL_TEST_INPUT);
+const text=fs.readFileSync(runner,'utf8'), names=[...text.matchAll(/await check\('([^']+)'/g)].map(m=>m[1]);
+const check=text.slice(text.indexOf('async function check('),text.indexOf('\ntry{\n if(!Number.isInteger(lifecycleRepeats)'));
+const sourceReport=text.match(/const report=(\{sourceSha,applicationBaselineArchiveSha256,createdAt:.*?);await fs.writeFile/)[1];
+const box={results:[],sourceSha:sha,applicationBaselineArchiveSha256:'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b',apiSmoke:false,runtimeErrorCount:0,fatal:false,context:null,collectDiagnostics:null,stage:'setup',currentTest:'',console:{log(){}},start:async()=>{},stop:async()=>{}};
+box.mark=value=>{box.stage=value;};box.diagnosticDetails=async()=>box.currentTest===names[1]?{diagnostics:coverage}:box.currentTest===names[17]?{diagnostics:lifecycle}:{};
+vm.createContext(box);vm.runInContext(check,box);
+for(const [index,name] of names.entries())await box.check(name,async()=>{if(index===failedCase){box.mark(failureStage);throw new Error(marker);}});
+const report=vm.runInContext('('+sourceReport+')',box);fs.writeFileSync(output,JSON.stringify(report));
+process.stdout.write(marker);process.stderr.write(marker);process.exitCode=1;
+"""
+                def process(args, **kwargs):
+                    if args[-1] == '--pr-smoke': return SimpleNamespace(returncode=0)
+                    self.assertEqual(args, ['node', p.FLOWS['conditional']]); self.assertFalse(path.exists())
+                    self.assertEqual(kwargs['env']['TRACEBOLT_SOURCE_SHA'], SHA)
+                    index = list(p.CONDITIONAL_FAILURE_CASES.values()).index(case)
+                    data = [str(ROOT / p.FLOWS['conditional']), str(path), SHA, index, stage, self.coverage(), self.lifecycle(), self.marker]
+                    return original_run(['node', '--input-type=module', '-e', script], **{**kwargs, 'env': {**kwargs['env'], 'CONDITIONAL_TEST_INPUT': json.dumps(data)}})
+                output = io.StringIO()
+                with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output), self.assertRaises(ValueError):
+                    p.browser_checks({'flows': ['conditional'], 'sha': SHA})
+                text = output.getvalue(); self.assertIn('FAIL stage: browser-conditional', text)
+                expected = 'focus-legacy-package-details-mobile-en-light-outline-exposure' if case == 'legacy-gallery' else 'managed-consent'
+                self.assertIn('FAIL Conditional location: case=' + case + ' stage=' + expected, text)
+                self.assertNotIn(self.marker, text); self.assertNotIn('PASS: authenticated', text)
+                self.assertNotIn('durationMs', text); self.assertNotIn('coverageRefresh', text)
+
+    def test_actual_exposure_helper_failures_reach_only_their_fixed_public_subphase(self):
+        # Real helper, geometry classifier, assertions, check() catch and report
+        # construction. Locator evaluations return synthetic fixtures; no DOM or
+        # browser runner is imported, and no target scroll/focus rescue is added.
+        phases = ['outline geometry read', 'outline geometry classify', 'outline hit-test read',
+                  'outline left edge', 'outline right edge', 'outline top edge', 'outline top band',
+                  'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left',
+                  'outline hit right', 'outline hit bottom']
+        original_run = p.subprocess.run
+        script = r"""
+import fs from 'node:fs'; import vm from 'node:vm'; import path from 'node:path';
+import assert from 'node:assert/strict'; import {pathToFileURL} from 'node:url';
+const [runner, output, sha, phase, coverage, lifecycle, marker] = JSON.parse(process.env.CONDITIONAL_SUBPHASE_TEST);
+const {assertKeyboardContrast,focusContrastStage}=await import(pathToFileURL(path.join(path.dirname(runner),'focus-contrast-browser.mjs')));
+const text=fs.readFileSync(runner,'utf8'), names=[...text.matchAll(/await check\('([^']+)'/g)].map(m=>m[1]);
+const check=text.slice(text.indexOf('async function check('),text.indexOf('\ntry{\n if(!Number.isInteger(lifecycleRepeats)'));
+const sourceReport=text.match(/const report=(\{sourceSha,applicationBaselineArchiveSha256,createdAt:.*?);await fs.writeFile/)[1];
+const box={results:[],sourceSha:sha,applicationBaselineArchiveSha256:'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b',apiSmoke:false,runtimeErrorCount:0,fatal:false,context:null,collectDiagnostics:null,stage:'setup',currentTest:'',console:{log(){}},start:async()=>{},stop:async()=>{}};
+box.mark=value=>{box.stage=value;};box.diagnosticDetails=async()=>box.currentTest===names[1]?{diagnostics:coverage}:box.currentTest===names[17]?{diagnostics:lifecycle}:{};
+vm.createContext(box);vm.runInContext(check,box);
+const geometry={bounds:{left:277,top:211,right:355,bottom:276},outlineWidth:3,outlineOffset:-3,viewport:{left:0,top:0,right:390,bottom:844},clips:[{x:true,y:true,bounds:{left:35,top:150,right:355,bottom:844}}],headers:[{left:0,top:55,right:390,bottom:150}],allowTallBottom:false};
+const hits={top:true,left:true,right:true,bottom:true};
+if(phase==='outline geometry classify')geometry.outlineWidth=NaN;
+if(phase==='outline left edge')geometry.bounds.left=34;
+if(phase==='outline right edge')geometry.bounds.right=356;
+if(phase==='outline top edge')geometry.bounds.top=149;
+if(phase==='outline top band'){geometry.bounds.top=843;geometry.bounds.bottom=900;}
+if(phase==='outline header'){geometry.clips=[];geometry.bounds.top=120;geometry.bounds.bottom=180;}
+if(phase==='outline bottom edge'){geometry.bounds.top=820;geometry.bounds.bottom=875;}
+for(const edge of Object.keys(hits))if(phase==='outline hit '+edge)hits[edge]=false;
+let focused='',tabs=0,evaluations=0;const actions=[];
+const locator=selector=>({selector,first(){return this;},async scrollIntoViewIfNeeded(){actions.push('scroll:'+selector);},async focus(){actions.push('focus:'+selector);focused=selector;},async evaluate(){
+ evaluations++;
+ if(evaluations===1)return {theme:'light',backgrounds:['rgb(246, 248, 249)'],foreground:'#05756a',focusVisible:true,outlineStyle:'solid',outlineWidth:'3px',outlineOffset:'-3px'};
+ if(evaluations===2){if(phase==='outline geometry read')throw new Error(marker);return geometry;}
+ if(evaluations===3){if(phase==='outline hit-test read')throw new Error(marker);return hits;}
+ throw new Error('unexpected fixture evaluation');
+}});
+const expect=value=>value?.selector?{async toBeFocused(){assert.equal(focused,value.selector);},async toBeInViewport(){}}:{toBe(want){assert.equal(value,want);},toBeGreaterThanOrEqual(want){assert.ok(value>=want);}};
+const page={locator,keyboard:{async press(key){assert.equal(key,'Tab');actions.push(key);focused=['region','target'][tabs++];}}};
+for(const [index,name] of names.entries())await box.check(name,async()=>{
+ if(index===2)await assertKeyboardContrast({page,expect,selector:'target',keyboardEntry:{from:'anchor',path:['region','target']},stage:step=>box.mark(focusContrastStage('legacy-package-details','mobile','en','light',step))});
+});
+assert.equal(box.results[2].status,'FAIL');assert.equal(box.stage,'fixture setup');
+assert.equal(box.results[2].stage,focusContrastStage('legacy-package-details','mobile','en','light',phase));
+assert.deepEqual(actions,['scroll:anchor','focus:anchor','Tab','Tab']);
+const report=vm.runInContext('('+sourceReport+')',box);fs.writeFileSync(output,JSON.stringify(report));
+process.stdout.write(marker);process.stderr.write(marker);process.exitCode=1;
+"""
+        for phase in phases:
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+                path = Path(tmp) / 'artifacts/review/conditional-browser-results.json'; path.parent.mkdir(parents=True)
+                def process(args, **kwargs):
+                    if args[-1] == '--pr-smoke': return SimpleNamespace(returncode=0)
+                    self.assertEqual(args, ['node', p.FLOWS['conditional']]); self.assertFalse(path.exists())
+                    data = [str(ROOT / p.FLOWS['conditional']), str(path), SHA, phase, self.coverage(), self.lifecycle(), self.marker]
+                    return original_run(['node', '--input-type=module', '-e', script], **{**kwargs, 'env': {**kwargs['env'], 'CONDITIONAL_SUBPHASE_TEST': json.dumps(data)}})
+                output = io.StringIO()
+                with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output), self.assertRaises(ValueError):
+                    p.browser_checks({'flows': ['conditional'], 'sha': SHA})
+                text = output.getvalue()
+                self.assertIn('FAIL stage: browser-conditional', text)
+                self.assertIn('FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-' + phase.replace(' ', '-'), text)
+                for private in [self.marker, 'bounds', 'hitTests', 'outlineWidth', '277', '355', 'PASS: authenticated']:
+                    self.assertNotIn(private, text)
+
+    def real_lifecycle_report(self, repeats, fulfill_failure):
+        # Evaluate the actual lifecycle callback, check() and report object only.
+        # The page is an inert event/route harness, not a browser or copied schema.
+        script = r"""
+import fs from 'node:fs'; import vm from 'node:vm'; import assert from 'node:assert/strict';
+const [runner, sha, repeats, fulfillFailure, coverage, state, marker] = JSON.parse(process.env.CONDITIONAL_LIFECYCLE_TEST);
+const text=fs.readFileSync(runner,'utf8'), names=[...text.matchAll(/await check\('([^']+)'/g)].map(m=>m[1]);
+const check=text.slice(text.indexOf('async function check('),text.indexOf('\ntry{\n if(!Number.isInteger(lifecycleRepeats)'));
+const details=text.match(/async function diagnosticDetails\(\).*\n/)[0];
+const start=text.indexOf("  await check('Persisted-page suspension");
+const lifecycle=text.slice(start,text.indexOf("\n  await check('Mobile package tables",start));
+const sourceReport=text.match(/const report=(\{sourceSha,applicationBaselineArchiveSha256,createdAt:.*?);await fs.writeFile/)[1];
+const listeners=new Map(), pending=[];let handler,snapshots=0,fulfills=0,closes=0;
+const base='http://127.0.0.1:19892';
+const page={on(event,fn){listeners.set(event,fn);},locator(){return {};},
+ async route(pattern,fn){assert.equal(pattern,'**/security/review');handler=fn;},
+ async unroute(pattern,fn){assert.equal(fn,handler);await Promise.all(pending);handler=null;},
+ async evaluate(fn){const source=fn.toString();
+  if(source.includes("PageTransitionEvent('pageshow'")){
+   assert.ok(handler);pending.push(handler({async fetch(){return {status:()=>200};},async fulfill(){fulfills++;if(fulfillFailure)throw new Error(marker);}}));
+  }else if(source.includes('const privateView=')){
+   snapshots++;
+   if(snapshots===repeats+1){
+    const request={url:()=>base+'/api/auth/session'};
+    listeners.get('request')(request);listeners.get('response')({url:request.url,status:()=>200});listeners.get('requestfailed')(request);
+   }
+   return structuredClone(state);
+  }
+ },
+};
+const expect=()=>({async toHaveCount(){},async toBeVisible(){}});
+expect.poll=fn=>({async toBeGreaterThan(n){assert.ok(await fn()>n);}});
+const box={results:[],sourceSha:sha,applicationBaselineArchiveSha256:'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b',apiSmoke:false,runtimeErrorCount:0,fatal:false,context:null,collectDiagnostics:null,stage:'setup',currentTest:'',console:{log(){}},start:async()=>{},stop:async()=>{},pageAt:async()=>{box.context={async close(){closes++;listeners.get('requestfailed')({url:()=>base+'/api/auth/session'});}};return page;},importCatalog:async()=>{},openDevice:async()=>{},review:async()=>{},expect,devices:{alpha:'fixture'},base,lifecycleRepeats:repeats,URL};
+box.mark=value=>{box.stage=value;};vm.createContext(box);vm.runInContext(details+check,box);
+for(const [index,name] of names.entries()){
+ if(index===17){await vm.runInContext('(async()=>{'+lifecycle+'})()',box);continue;}
+ await box.check(name,async()=>{
+  if(index===1)box.collectDiagnostics=async()=>coverage;
+  if(index===2){box.mark('focus contrast legacy-package-details mobile en light: outline exposure');throw new Error(marker);}
+ });
+}
+assert.equal(snapshots,repeats+1);assert.equal(fulfills,repeats);assert.equal(closes,1);
+const report=vm.runInContext('('+sourceReport+')',box);
+assert.equal(report.results[17].status,'PASS');assert.equal(report.results[2].status,'FAIL');
+process.stdout.write(JSON.stringify(report));
+"""
+        data = [str(ROOT / p.FLOWS['conditional']), SHA, repeats, fulfill_failure, self.coverage(), self.lifecycle()['finalState'], self.marker]
+        raw = p.subprocess.check_output(['node', '--input-type=module', '-e', script], cwd=ROOT,
+                                       env={**os.environ, 'CONDITIONAL_LIFECYCLE_TEST': json.dumps(data)})
+        return json.loads(raw)
+
+    def test_real_lifecycle_fulfill_failure_and_post_loop_events_retain_prior_focus_checkpoint(self):
+        for repeats in [1, 5, 10]:
+            for fulfill_failure in [False, True]:
+                report = self.real_lifecycle_report(repeats, fulfill_failure)
+                diagnostic = report['results'][17]['diagnostics']
+                self.assertEqual(len(diagnostic['attempts']), repeats)
+                self.assertEqual([row['attempt'] for row in diagnostic['network']], [repeats + 1] * 4)
+                self.assertEqual([row.get('fulfillFailed') for row in diagnostic['attempts']], [True if fulfill_failure else None] * repeats)
+                self.assertTrue(p.conditional_diagnostic_shape(diagnostic, 'persisted-resume'))
+                with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+                    root = Path(tmp); output = io.StringIO()
+                    original = ValueError('original mandatory failure')
+                    def run(*args, **kwargs):
+                        self.write(root, report); raise original
+                    with patch.object(p, 'run', side_effect=run), redirect_stdout(output), self.assertRaises(ValueError) as caught:
+                        p.run_conditional_browser({}, SHA)
+                    self.assertIs(caught.exception, original)
+                    self.assertEqual(output.getvalue(), 'FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-outline-exposure\n')
+                    for private in [self.marker, 'fulfillFailed', 'attempt=', 'finalState', 'durationMs']:
+                        self.assertNotIn(private, output.getvalue())
+
+    def test_lifecycle_corrections_reject_misplaced_flags_and_impossible_loop_sentinels(self):
+        report = self.real_lifecycle_report(5, True)
+        diagnostic = report['results'][17]['diagnostics']; invalid = []
+        for value in [False, 0, 1, 'true', self.marker, None, {}, []]:
+            item = deepcopy(diagnostic); item['attempts'][0]['fulfillFailed'] = value; invalid.append(item)
+        for scope in ['root', 'response', 'network', 'state']:
+            item = deepcopy(diagnostic)
+            target = item if scope == 'root' else item['attempts'][0]['upstream'][0] if scope == 'response' else item['network'][0] if scope == 'network' else item['attempts'][0]['state']
+            target['fulfillFailed'] = True; invalid.append(item)
+        item = deepcopy(diagnostic); item['attempts'][0]['upstream'] = []; invalid.append(item)
+        for value in [7, 100, -1, True, 6.0, 6.5, '6', self.marker, None]:
+            item = deepcopy(diagnostic); item['network'][0]['attempt'] = value; invalid.append(item)
+        item = deepcopy(diagnostic); item['attempts'].pop(); invalid.append(item)
+        item = deepcopy(diagnostic); del item['attempts'][-1]['state']; invalid.append(item)
+        item = deepcopy(diagnostic); item['attempts'][-1]['attempt'] = 6; invalid.append(item)
+        item = deepcopy(diagnostic); item['network'][0]['raw'] = self.marker; invalid.append(item)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            for item in invalid:
+                self.assertFalse(p.conditional_diagnostic_shape(item, 'persisted-resume'), item)
+                candidate = deepcopy(report); candidate['results'][17]['diagnostics'] = item
+                self.write(Path(tmp), candidate); self.assertIsNone(p.conditional_failure_location(SHA))
+
+    def test_stale_missing_or_unsafe_reports_cannot_describe_a_new_failed_launch(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            root = Path(tmp); path = self.write(root, self.report({'managed-consent': 'managed consent'}))
+            output = io.StringIO(); original = ValueError('original failure')
+            with patch.object(p, 'run', side_effect=original), redirect_stdout(output), self.assertRaises(ValueError) as caught:
+                p.run_conditional_browser({}, SHA)
+            self.assertIs(caught.exception, original); self.assertFalse(path.exists()); self.assertNotIn('location:', output.getvalue())
+            other = root / 'other'; other.write_text(json.dumps(self.report({'managed-consent': 'managed consent'})))
+            path.symlink_to(other); self.assertIsNone(p.conditional_failure_location(SHA)); path.unlink()
+            os.mkfifo(path); self.assertIsNone(p.conditional_failure_location(SHA)); path.unlink()
+            path.mkdir(); self.assertIsNone(p.conditional_failure_location(SHA)); path.rmdir()
+            path.parent.rename(root / 'real-review'); path.parent.symlink_to(root / 'real-review', target_is_directory=True)
+            with patch.object(p, 'run') as run, self.assertRaises(ValueError): p.run_conditional_browser({}, SHA)
+            run.assert_not_called()
+
+    def test_projection_only_runs_after_failure_and_never_changes_original_exit_or_other_flows(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            with patch.object(p, 'run'), patch.object(p, 'conditional_failure_location') as projection:
+                p.run_conditional_browser({}, SHA)
+            projection.assert_not_called()
+            original = ValueError('original failure')
+            with patch.object(p, 'run', side_effect=original), patch.object(p, 'conditional_failure_location', return_value='case=managed-consent stage=managed-consent'), redirect_stdout(io.StringIO()), self.assertRaises(ValueError) as caught:
+                p.run_conditional_browser({}, SHA)
+            self.assertIs(caught.exception, original)
+            with patch.object(p, 'run'), patch.object(p, 'browser_report'), patch.object(p, 'run_conditional_browser') as conditional:
+                p.browser_checks({'flows': ['v3'], 'sha': SHA})
+            conditional.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -10,12 +10,17 @@ acceptance. Published Windows scope and limits remain in [Windows status](window
 
 The existing `Focused source checks` workflow runs this recipe in its
 `Focused browser flows` job after the selected browser flows. The explicit step
-runs the inert checks and then the hosted capture runner. Its nonzero result
-fails that job and the existing `PR build and affected-flow checks` aggregate.
+runs the inert checks and then the hosted capture runner after successful UI/browser
+setup, including when a separate browser flow has failed. Cancellation or a failed,
+skipped or missing setup prevents this step. Its nonzero result fails that job and
+the existing `PR build and affected-flow checks` aggregate. An earlier failure
+remains a failure; no `continue-on-error` is added. Screenshot upload still requires
+whole-job success, so this independence supplies bounded diagnostics, not partial
+public screenshot artifacts.
 No workflow, trigger or permission is added. Existing hosted Ubuntu, Node,
 Playwright, action pins and read-only repository permissions are reused.
 
-Each of four browser contexts uses English or German at 1440×1100 or 390×844.
+Each of four capture contexts uses English or German at 1440×1100 or 390×844.
 Each context produces two images:
 
 - `windows-enrollment-instructions-{en,de}-{1440,390}.png`: the actual Setup heading
@@ -52,8 +57,44 @@ The returned invitation is a fixed inert string. The input must initially be
 masked. Existing `pagehide`/`pageshow` behavior clears that value and refreshes
 status before any screenshot. The capture then asserts that the secret input is
 absent and no secret or rendered raw fixture identity is inside the dialog.
-The target/profile disclosure stays in its ordinary closed state. No bootstrap
+The target/profile disclosure stays in its ordinary closed state. A matching
+positive Range beneath it still fails, whatever native box visibility returns. No bootstrap
 file is downloaded or published, and no approval or termination is performed.
+
+## Isolated native-browser visibility controls
+
+Before creating the four capture contexts, the hosted recipe creates and closes
+one separate control context: **five total contexts = four capture + one control**.
+The success report names both counts and six control cases explicitly. The
+manifest requires the bounded control result; the eight production crops, four
+synthetic creations and existing browser-suite contracts are unchanged.
+
+Only that context's new empty page navigates to the same reserved origin's fixed
+`/visibility-control` path. Its own interceptor serves one source-bound static
+HTML document and blocks every other request, including all production/API paths.
+It never forwards traffic, shares a page/context with the application, modifies
+production markup/styles, downloads data or takes a screenshot. The fixed contents
+are known inert fixture strings, not user values. Its CSP allows no scripts or
+external resources. The synthetic control document is not uploaded.
+
+The six controls cover safe text, visible synthetic secret text, wrapped body text
+inside closed details, a closed summary, an open details body, and matched text
+**directly under `display:contents`**. The latter must remain rejected even though
+its parent has no box. Positive controls require positive Range geometry and
+privacy rejection; the safe control must pass. Closed-body geometry is recorded
+only as `positive` or `empty`, since a newly constructed fixture need not reproduce
+the application's layout. Native closed-body visibility must be false. A positive
+closed-body Range must still fail the unchanged privacy predicate.
+
+`Element.prototype.checkVisibility.call(parent)` is read only after an existing
+closed-body Range/text failure. All four native outcomes still reject. The default
+API checks the box/flat-tree state, not painted pixels, occlusion, clipping or
+opacity. It is deliberately diagnostic, not a new visibility policy. See
+[CSSOM View](https://drafts.csswg.org/cssom-view/#dom-element-checkvisibility),
+[HTML details rendering](https://html.spec.whatwg.org/multipage/rendering.html#the-details-and-summary-elements),
+and [pinned Playwright visibility](https://github.com/microsoft/playwright/blob/v1.58.2/packages/injected/src/domUtils.ts#L78-L131).
+These controls must actually pass in the authorized hosted browser before their
+behavior can be claimed. Inert adapter tests do not establish browser behavior.
 
 ## Checks and artifacts
 
@@ -98,7 +139,8 @@ producer encoding, so duplicate or hidden extra fields are rejected.
 Diagnostics use a closed stage vocabulary and never export request bodies,
 bootstrap data, invitation values, cookies, page text, raw errors or traces.
 The public-safety checkpoint distinguishes protected-element presence, inspection
-errors, matching Range text (including ancestry below a closed disclosure), input
+errors, matching Range text (including ancestry below a closed disclosure and a
+fixed native parent-box true/false/unavailable/error subcategory), input
 values, URL and storage. These are fixed category names only. Closed-disclosure
 ancestry does not prove either visibility or invisibility; the same matching text
 still fails the unchanged privacy predicate. The category must be investigated
@@ -109,3 +151,21 @@ visually accepted.
 
 This gate is separate from existing Windows capability, Linux enrollment and
 macOS capture suites. Their paths, scenarios and count contracts are unchanged.
+
+
+## Independent diagnostic scheduling
+
+The existing setup step has the stable `browser_runtime` ID. The Windows step uses
+`!cancelled() && steps.browser_runtime.outcome == 'success'`. The status function
+avoids GitHub's implicit prior-step-success guard while preserving cancellation;
+`outcome` is the unmasked setup result. No workflow event, runner, action pin,
+permission, credential, host target or capture scope changes. The existing final
+aggregate still requires every prerequisite to succeed.
+
+The accompanying inert contracts bind the exact condition and source SHA, model
+all cancellation/setup combinations, and execute the unchanged aggregate script
+against successful, failed, cancelled, skipped and missing prerequisite fixtures.
+These contracts do not replace hosted workflow execution.
+
+References: [GitHub status-check functions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions)
+and [step outcome semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#steps-context).
