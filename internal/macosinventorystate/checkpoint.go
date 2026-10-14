@@ -154,6 +154,24 @@ func ValidateCheckpoint(raw, originalEnable []byte) error {
 	return nil
 }
 
+// ValidateCheckpointAt is the read-only admission counterpart of Restore's
+// clock check. A structurally valid checkpoint with a future durable watermark
+// cannot start a sender at an earlier local time. This neither advances the
+// checkpoint nor turns preflight into an initialization or recovery path.
+func ValidateCheckpointAt(raw, originalEnable []byte, now time.Time) error {
+	c, e := decode(raw)
+	if e != nil {
+		return e
+	}
+	if !bytes.Equal(c.Enable, originalEnable) {
+		return ErrConflict
+	}
+	if !validTime(now) || now.Before(c.ClockAt) {
+		return ErrClock
+	}
+	return nil
+}
+
 func receipt(raw, request []byte, now time.Time) error {
 	if len(raw) == 0 {
 		return ErrInvalid
