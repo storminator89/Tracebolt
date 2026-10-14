@@ -444,6 +444,7 @@ def web_checks(plan):
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
     if 'shell' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/route-loading-fixtures.test.mjs'], stage='ui-route-loading-contract')
+        run(['node', '--test', 'tests/e2e-review/shell-browser-diagnostics.test.mjs'], stage='ui-shell-diagnostic-contract')
     if 'fleet-groups' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/fleet-groups-fixtures.test.mjs'], stage='ui-fleet-groups-contract')
     if 'windows-fleet-software' in plan.get('flows', []):
@@ -971,18 +972,75 @@ def shell_route_loading_location(path, sha):
         return None
 
 
+SHELL_CASES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/shell-browser-cases.json'
+SHELL_FAILURE_CATEGORIES = ('assertion', 'timeout', 'other')
+
+
+def shell_failure_location(path, sha):
+    """Project source-bound numeric IDs and closed categories, never report names."""
+    try:
+        def read_bounded(path, limit):
+            with os.fdopen(reporter.open_log(path), 'rb') as stream:
+                metadata = os.fstat(stream.fileno())
+                if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= limit:
+                    raise ValueError('invalid')
+                raw = stream.read(limit + 1)
+            if len(raw) > limit:
+                raise ValueError('invalid')
+            return reporter.decode(raw)
+        contract = read_bounded(SHELL_CASES_SOURCE, 16384)
+        if (type(contract) is not dict or set(contract) != {'schema', 'cases'}
+                or type(contract['schema']) is not int or contract['schema'] != 1
+                or type(contract['cases']) is not list or len(contract['cases']) != 45
+                or any(type(name) is not str or not 0 < len(name) <= 200 for name in contract['cases'])
+                or len(set(contract['cases'])) != 45):
+            return None
+        value = read_bounded(path, 8192)
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schema', 'sourceSha', 'failures', 'runtimeCases', 'unknownCase'}
+                or type(value['schema']) is not int or value['schema'] != 1 or value['sourceSha'] != sha
+                or type(value['unknownCase']) is not bool
+                or type(value['failures']) is not list or len(value['failures']) > 45
+                or type(value['runtimeCases']) is not list or len(value['runtimeCases']) > 45):
+            return None
+        previous, locations = 0, []
+        for row in value['failures']:
+            if (type(row) is not dict or set(row) != {'case', 'category'}
+                    or type(row['case']) is not int or not previous < row['case'] <= 45
+                    or type(row['category']) is not str or row['category'] not in SHELL_FAILURE_CATEGORIES):
+                return None
+            previous = row['case']
+            category = next(name for name in SHELL_FAILURE_CATEGORIES if name == row['category'])
+            locations.append('case=%d category=%s' % (row['case'], category))
+        previous = 0
+        for case in value['runtimeCases']:
+            if type(case) is not int or not previous < case <= 45:
+                return None
+            previous = case
+            locations.append('case=%d category=runtime' % case)
+        if value['unknownCase']:
+            locations.append('unknown-case')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
 def run_shell_browser(env, sha):
     # A fresh private path prevents stale same-head results and is removed on
     # every exit. No raw errors, fixture values or browser logs are released.
     with tempfile.TemporaryDirectory(prefix='tracebolt-private-route-loading-') as private:
         path = Path(private) / 'coordinates.json'
+        shell_path = Path(private) / 'shell-coordinates.json'
         try:
             run(['node', FLOWS['shell']], stage='browser-shell',
-                env={**env, 'TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC': str(path)})
+                env={**env, 'TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC': str(path), 'TRACEBOLT_SHELL_DIAGNOSTIC': str(shell_path)})
         except ValueError:
             location = shell_route_loading_location(path, sha)
             if location is not None:
                 print('FAIL shell route-load location: ' + location, flush=True)
+            location = shell_failure_location(shell_path, sha)
+            if location is not None:
+                print('FAIL shell location: ' + location, flush=True)
             raise
 
 

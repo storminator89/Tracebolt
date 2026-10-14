@@ -1574,5 +1574,101 @@ class ShellRouteLoadingDiagnosticTests(unittest.TestCase):
         self.assertIs(caught.exception, original); shell.assert_called_once(); acceptance.assert_not_called()
 
 
+class ShellFailureDiagnosticTests(unittest.TestCase):
+    def report(self, **extra):
+        return {'schema': 1, 'sourceSha': SHA, 'failures': [{'case': 2, 'category': 'assertion'}], 'runtimeCases': [], 'unknownCase': False, **extra}
+
+    def test_exact_closed_categories_ids_runtime_and_unknown_flag(self):
+        source = (ROOT / 'tests/e2e-review/shell-browser-diagnostics.mjs').read_text()
+        categories = re.search(r'shellFailureCategories = Object.freeze\(\[(.*?)\]\)', source, re.S)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", categories[1])), p.SHELL_FAILURE_CATEGORIES)
+        contract = json.loads(p.SHELL_CASES_SOURCE.read_text())
+        self.assertEqual(len(contract['cases']), 45); self.assertEqual(len(set(contract['cases'])), 45)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for category in p.SHELL_FAILURE_CATEGORIES:
+                path.write_text(json.dumps(self.report(failures=[{'case': 45, 'category': category}], runtimeCases=[1, 45], unknownCase=True)))
+                self.assertEqual(p.shell_failure_location(path, SHA), 'case=45 category=' + category + '; case=1 category=runtime; case=45 category=runtime; unknown-case')
+            path.write_text(json.dumps(self.report(failures=[])))
+            self.assertIsNone(p.shell_failure_location(path, SHA))
+
+    def test_unknown_names_categories_raw_fields_bad_types_stale_and_out_of_range_rejected(self):
+        invalid = [{'sourceSha': 'b' * 40}, {'schema': True}, {'schema': 2}, {'unknownCase': 1}, {'error': 'private-marker'},
+                   {'failures': [{'case': 2, 'category': 'private-marker'}]},
+                   {'failures': [{'case': 'private-name', 'category': 'assertion'}]},
+                   {'failures': [{'case': 2, 'category': 'assertion', 'name': 'private-name'}]},
+                   {'failures': [{'case': True, 'category': 'assertion'}]},
+                   {'failures': [{'case': 0, 'category': 'assertion'}]},
+                   {'failures': [{'case': 46, 'category': 'assertion'}]},
+                   {'failures': [{'case': 2, 'category': 'assertion'}] * 2},
+                   {'failures': [{'case': 3, 'category': 'assertion'}, {'case': 2, 'category': 'timeout'}]},
+                   {'failures': [{'case': 2, 'category': 'assertion'}] * 46},
+                   {'runtimeCases': [True]}, {'runtimeCases': [0]}, {'runtimeCases': [46]},
+                   {'runtimeCases': [2, 1]}, {'runtimeCases': [1, 1]}, {'runtimeCases': ['private-name']},
+                   {'runtimeCases': list(range(1, 47))}, {'runtimeCases': {}}, {'failures': {}}]
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for extra in invalid:
+                path.write_text(json.dumps(self.report(**extra)))
+                self.assertIsNone(p.shell_failure_location(path, SHA), extra)
+            for raw in [b'{', b'\xff', b'x' * 8193,
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": 1, "schema": 1').encode(),
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": NaN').encode()]:
+                path.write_bytes(raw); self.assertIsNone(p.shell_failure_location(path, SHA))
+            path.write_text(json.dumps(self.report()))
+            self.assertIsNone(p.shell_failure_location(path, 'invalid-source'))
+
+    def test_symlink_nonregular_and_invalid_source_manifest_withheld(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); path = root / 'record.json'; path.write_text(json.dumps(self.report()))
+            link = root / 'link'; link.symlink_to(path)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            alias = root / 'alias'; alias.symlink_to(root, target_is_directory=True)
+            for unsafe in [link, fifo, root, alias / 'record.json', root / 'missing']:
+                self.assertIsNone(p.shell_failure_location(unsafe, SHA))
+            contract = root / 'contract.json'
+            valid = json.loads(p.SHELL_CASES_SOURCE.read_text())
+            for raw in [b'{}', b'x' * 16385, json.dumps({**valid, 'schema': True}).encode(),
+                        json.dumps({**valid, 'cases': valid['cases'][:44]}).encode(),
+                        json.dumps({**valid, 'cases': ['same'] * 45}).encode()]:
+                contract.write_bytes(raw)
+                with patch.object(p, 'SHELL_CASES_SOURCE', contract):
+                    self.assertIsNone(p.shell_failure_location(path, SHA))
+
+    def test_fresh_private_invocation_preserves_direct_case_diagnostic_and_original_failure(self):
+        paths, output = [], io.StringIO()
+        def process(args, **kwargs):
+            self.assertEqual(args, ['node', p.FLOWS['shell']])
+            kwargs['stdout'].write(b'private-marker')
+            path = Path(kwargs['env']['TRACEBOLT_SHELL_DIAGNOSTIC'])
+            direct = Path(kwargs['env']['TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC'])
+            self.assertEqual(path.parent, direct.parent); self.assertNotEqual(path, direct)
+            self.assertFalse(path.exists()); self.assertFalse(direct.exists()); self.assertNotIn('artifacts', path.parts)
+            paths.append(path)
+            if len(paths) == 1:
+                path.write_text(json.dumps(self.report()))
+                direct.write_text(json.dumps({'schema': 1, 'sourceSha': SHA, 'status': 'PASS', 'stage': 'complete', 'runtimeError': False}))
+            return SimpleNamespace(returncode=1)
+        with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                    p.run_shell_browser({'TRACEBOLT_SHELL_DIAGNOSTIC': '/not-used'}, SHA)
+        self.assertNotEqual(paths[0], paths[1]); self.assertTrue(all(not path.parent.exists() for path in paths))
+        self.assertEqual(output.getvalue().count('FAIL shell location: case=2 category=assertion'), 1)
+        self.assertEqual(output.getvalue().count('FAIL shell route-load location: case=direct-case status=pass stage=complete'), 1)
+        for forbidden in ['private-marker', SHA, *map(str, paths)]:
+            self.assertNotIn(forbidden, output.getvalue())
+
+    def test_success_never_projects_and_failure_identity_remains(self):
+        original = ValueError('inert failure')
+        with patch.object(p, 'run', side_effect=original), patch.object(p, 'shell_failure_location', return_value=None):
+            with self.assertRaises(ValueError) as caught:
+                p.run_shell_browser({}, SHA)
+        self.assertIs(caught.exception, original)
+        with patch.object(p, 'run'), patch.object(p, 'shell_failure_location') as projection:
+            p.run_shell_browser({}, SHA)
+        projection.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
