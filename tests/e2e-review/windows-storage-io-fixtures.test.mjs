@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {windowsStorageIOBrowserFixture,windowsStorageIODisclosure,windowsStorageIOCaseName,requireWindowsStorageIOEvidence} from './windows-storage-io-browser.mjs';
+import {windowsStorageIORetainedAge,windowsStorageIOBrowserFixture,windowsStorageIODisclosure,windowsStorageIOCaseName,requireWindowsStorageIOEvidence} from './windows-storage-io-browser.mjs';
 const serverNow='2026-10-11T12:00:10Z',capturedAt='2026-10-11T12:00:00Z';
 test('disk IO source fixture is the exact Go canonical encoder artifact',()=>{assert.deepEqual(fs.readFileSync(new URL('../../web/src/windows-storage-io-go-fixture.json',import.meta.url)),fs.readFileSync(new URL('../../internal/windowsstorageio/testdata/snapshot.json',import.meta.url)));});
 test('disk IO invented fixtures keep times, unavailable reasons and idle truth',()=>{
@@ -40,4 +40,20 @@ test('hosted browser job executes the bounded disk IO gate and retains its exact
  const artifacts=browserJob.split('      - name: Keep browser review evidence briefly\n')[1];assert.ok(artifacts);assert.match(artifacts,/if: always\(\)/);
  for(const file of ['windows-storage-io-results.json','windows-storage-io-manifest.json','synthetic-windows-storage-io-*.png'])assert.ok(artifacts.split('\n').some(line=>line.trim()==='artifacts/review/windows-storage-io/'+file));
  const runner=fs.readFileSync(new URL('./windows-storage-io-runner.mjs',import.meta.url),'utf8');assert.match(runner,/path\.join\(root,'artifacts\/review\/windows-storage-io'\)/);assert.match(runner,/process\.env\.TRACEBOLT_SOURCE_SHA!==sourceSha/);assert.match(runner,/process\.exitCode=passed\?0:1/);
+});
+
+ test('retained display age derives from original sample end under only zero or one cold-route tick',()=>{
+ const initial=Date.parse(serverNow),sampleEndedAt='2026-10-11T11:00:01.250Z';
+ for(const locale of ['en','de'])for(const progress of [0,300])assert.equal(windowsStorageIORetainedAge({initial,now:initial+progress,sampleEndedAt,locale}),locale==='de'?progress?'3.609 s':'3.608 s':progress?'3,609 s':'3,608 s');
+ for(const progress of [-300,-1,1,299,301,600,1000,86400000,0.5,NaN,Infinity])assert.throws(()=>windowsStorageIORetainedAge({initial,now:initial+progress,sampleEndedAt,locale:'en'}),/Unexpected synthetic/);
+ for(const change of [{initial:NaN},{initial:Infinity},{sampleEndedAt:'invalid'},{sampleEndedAt:'2026-10-11T12:00:11Z'},{locale:'fr'}])assert.throws(()=>windowsStorageIORetainedAge({initial,now:initial,sampleEndedAt,locale:'en',...change}),/Unexpected synthetic/);
+});
+ test('retained age checkpoint pins initial readiness and warm mounts without changing original expiry',()=>{
+ const source=fs.readFileSync(new URL('./windows-storage-io-browser.mjs',import.meta.url),'utf8');
+ assert.ok(source.includes("const readyAt=await page.evaluate(()=>Date.now());expect(readyAt===initial||readyAt===initial+pausedDetailCommitMs).toBe(true);"));
+ assert.ok(source.includes("expect(await page.evaluate(()=>Date.now())).toBe(readyAt);stage='mount';"));
+ assert.ok(source.includes("stage='retained-age';const retainedNow=await page.evaluate(()=>Date.now());expect(retainedNow).toBe(readyAt);"));
+ assert.ok(source.includes("sampleEndedAt:stamp(retainedCapturedAt,1250),locale"));
+ assert.ok(source.includes("retainedCapturedAt=new Date(initial-86400000+500).toISOString();await refresh('en');await expect(panel).toHaveCount(2);await page.clock.runFor(1000);await expect(panel).toHaveCount(1);"));
+ assert.doesNotMatch(source,/3[,.]608 s|setSystemTime|setFixedTime|fastForward|clock\.resume/);
 });

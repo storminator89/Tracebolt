@@ -917,7 +917,7 @@ WINDOWS_DETAIL_FAILURE_STAGES = {
     'windows-storage-io': (
         'setup', 'mount', 'detail-route-readiness', 'mount-detail-route-readiness',
         'summary', 'details', 'navigation', 'idle', 'partial', 'denied', 'unsupported',
-        'retained', 'legacy', 'expiry', 'focus', 'revoked', 'session', 'complete',
+        'retained', 'retained-age', 'legacy', 'expiry', 'focus', 'revoked', 'session', 'complete',
     ),
 }
 

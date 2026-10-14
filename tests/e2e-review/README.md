@@ -525,3 +525,12 @@ interactions, produce screenshots or establish hosted browser acceptance.
 The selected Windows failure diagnostics expose only finite source-defined
 case/stage coordinates; service-action diagnostics retain their exact
 source/invocation/locale/viewport binding and shared stage contract.
+
+Storage IO's retained age assertion derives the exact displayed seconds from the
+original retained sample end and the paused clock. Initial readiness accepts only
+zero or 300 ms; each warm mount and retained-age checkpoint must remain at that
+same time. This keeps the exact EN/DE assertion valid across the second boundary
+(3,608 to 3,609 seconds) without permitting extra advancement. The original
+sample timestamp, 24-hour retention deadline, initial+500 ms near-expiry sample
+and subsequent 1,000 ms expiry check remain unchanged. A finite `retained-age`
+diagnostic isolates this assertion without exposing sample or runtime values.

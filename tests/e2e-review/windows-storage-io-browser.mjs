@@ -1,4 +1,5 @@
 import {settlePausedDetailRoute} from './paused-detail-route.mjs';
+import {pausedDetailCommitMs} from './paused-detail-route.mjs';
 /** Inert invented transport and production-UI assertions. No browser or server
  * starts on import; the separate opt-in runner provides those. */
 import {createRequire} from 'node:module';
@@ -34,6 +35,13 @@ export function windowsStorageIOBrowserFixture({serverNow,capturedAt,phase='obse
  if(!validWindowsInventoryView(view,view.deviceId))throw new Error('Invalid synthetic Windows IO fixture');
  return view;
 }
+/** Derive the display from the original sample end, accepting only the single
+ * optional cold-route tick. Arbitrary elapsed time must never normalize a leak. */
+export function windowsStorageIORetainedAge({initial,now,sampleEndedAt,locale}){
+ const end=Date.parse(sampleEndedAt);
+ if(!Number.isSafeInteger(initial)||!Number.isSafeInteger(now)||![0,pausedDetailCommitMs].includes(now-initial)||!Number.isFinite(end)||end>now||!['en','de'].includes(locale))throw new Error('Unexpected synthetic storage IO clock or sample');
+ return Math.floor((now-end)/1000).toLocaleString(locale)+' s';
+}
 export async function windowsStorageIOBrowserCase({page,expect,base,shot}){
  const capturedAt='2026-10-11T12:00:00Z',initial=Date.parse(capturedAt)+10000;
  let phase='observed',retainedCapturedAt='2026-10-11T11:00:00Z',authenticated=true;
@@ -55,9 +63,9 @@ export async function windowsStorageIOBrowserCase({page,expect,base,shot}){
   return route.continue();
  });
  const panel=page.locator('.windows-storage-io'),current=panel.first(),details=()=>current.locator('.windows-storage-io-details');
- const mount=async locale=>{await page.goto(base+'/#/devices');await page.goto(base+'/#/devices/'+windowsDeviceId);stage='mount-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='mount';await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();};
+ const mount=async locale=>{await page.goto(base+'/#/devices');await page.goto(base+'/#/devices/'+windowsDeviceId);stage='mount-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));expect(await page.evaluate(()=>Date.now())).toBe(readyAt);stage='mount';await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();};
  const refresh=async locale=>{await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();};
- stage='mount';await page.goto(base+'/#/devices/'+windowsDeviceId);await expect(page.locator('.app-shell')).toBeVisible();stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:/^(Inventory|Inventar)$/,exact:true}));stage='mount';
+ stage='mount';await page.goto(base+'/#/devices/'+windowsDeviceId);await expect(page.locator('.app-shell')).toBeVisible();stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:/^(Inventory|Inventar)$/,exact:true}));stage='mount';const readyAt=await page.evaluate(()=>Date.now());expect(readyAt===initial||readyAt===initial+pausedDetailCommitMs).toBe(true);
  for(const locale of ['en','de'])for(const width of [1440,390]){
   const de=locale==='de';await page.setViewportSize({width,height:width===390?844:1000});await page.getByLabel(/Language|Sprache/).selectOption(locale);phase='observed';await mount(locale);
   stage='summary';await expect(current).toBeVisible();await expect(current).toContainText(de?'12.582.912 B/s':'12,582,912 B/s');await expect(current).toContainText(de?'1,25 ms':'1.25 ms');await expect(current).toContainText(de?'120,5 Vorgänge/s':'120.5 ops/s');await expect(current).toContainText(de?'Am Messende ausstehend':'Outstanding at sample end');await expect(current).toContainText(de?'Einschließlich Anfragen in Bearbeitung':'Includes requests in service');await expect(current.locator('time').first()).toHaveAttribute('datetime',stamp(capturedAt,250));await expect(current.locator('time').last()).toHaveAttribute('datetime',stamp(capturedAt,1250));await expect(details()).not.toHaveAttribute('open');
@@ -68,7 +76,7 @@ export async function windowsStorageIOBrowserCase({page,expect,base,shot}){
   stage='partial';phase='partial';await refresh(locale);await expect(current).toContainText(de?'Zähler zurückgesetzt':'Counter reset');await expect(current).toContainText(de?'Ungültige Messzeitbasis':'Invalid sample timebase');
   for(const [mode,en,deText] of [['denied','Access denied','Zugriff verweigert'],['unsupported','Source unsupported','Quelle nicht unterstützt']]){stage=mode;phase=mode;await refresh(locale);await expect(current).toContainText(de?deText:en);await expect(current).not.toContainText('0 B/s');}
   stage='retained';phase='retained';await refresh(locale);await expect(panel).toHaveCount(2);const previous=page.locator('details.windows-inventory-bounds').filter({has:page.locator('.windows-storage-io')});await expect(previous).not.toHaveAttribute('open');await expect(current).toContainText(de?'Messzeitlimit erreicht':'Sample time limit reached');await expect(current).not.toContainText('120.5 ops/s');await current.evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await shot(page,`synthetic-windows-storage-io-failure-${width}-${locale}`,windowsStorageIODisclosure);
-  await previous.locator('>summary').click();await expect(panel.last()).toBeVisible();await expect(panel.last().locator('time').last()).toHaveAttribute('datetime',stamp(retainedCapturedAt,1250));await expect(panel.last()).toContainText(de?'Veraltete Messung':'Stale sample');await expect(panel.last()).toContainText(de?'3.608 s':'3,608 s');await panel.last().evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await shot(page,`synthetic-windows-storage-io-retained-${width}-${locale}`,windowsStorageIODisclosure);
+  await previous.locator('>summary').click();await expect(panel.last()).toBeVisible();await expect(panel.last().locator('time').last()).toHaveAttribute('datetime',stamp(retainedCapturedAt,1250));await expect(panel.last()).toContainText(de?'Veraltete Messung':'Stale sample');stage='retained-age';const retainedNow=await page.evaluate(()=>Date.now());expect(retainedNow).toBe(readyAt);await expect(panel.last()).toContainText(windowsStorageIORetainedAge({initial,now:retainedNow,sampleEndedAt:stamp(retainedCapturedAt,1250),locale}));stage='retained';await panel.last().evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await shot(page,`synthetic-windows-storage-io-retained-${width}-${locale}`,windowsStorageIODisclosure);
  }
  await page.getByLabel(/Language|Sprache/).selectOption('en');
  stage='legacy';phase='legacy';await refresh('en');await expect(page.locator('.windows-storage-io-absent')).toHaveText('No disk I/O sample reported for this capture.');
