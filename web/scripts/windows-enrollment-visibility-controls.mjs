@@ -3,14 +3,35 @@ import assert from 'node:assert/strict';
 import { origin, requireHosted, visibilityControlCases, visibilityControlPrivacyStages, visibilityControlStage } from './windows-enrollment-contract.mjs';
 import { invitation, secret } from './windows-enrollment-fixtures.mjs';
 export const controlURL = origin + '/visibility-control';
-export const controlHTML = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><link rel="icon" href="data:,"><title>Synthetic visibility controls only</title></head><body>
+export const controlHTML = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><link rel="icon" href="data:,"><title>Synthetic visibility controls only</title><style>
+#override-body details::details-content { content-visibility:visible; }
+#override-contents details::details-content { display:contents; }
+#override-inline details::details-content { display:inline; }
+</style></head><body>
 <section id="clear"><p data-probe>Known safe control text</p></section>
 <section id="visible"><p data-probe>${secret}</p></section>
 <section id="closed-body"><details><summary>Closed control</summary><dl><div><dt>Invented ID</dt><dd data-probe>${invitation}</dd></div></dl></details></section>
 <section id="closed-summary"><details><summary data-probe>${invitation}</summary><p>Closed safe body</p></details></section>
 <section id="open-body"><details open><summary>Open control</summary><p data-probe>${invitation}</p></details></section>
 <section id="contents"><p data-probe style="display:contents">${secret}</p></section>
+<section id="closed-secret"><details><summary>Closed secret control</summary><p data-probe>${secret}</p></details></section>
+<section id="second-summary"><details><summary>First safe summary</summary><summary data-probe>${invitation}</summary></details></section>
+<section id="outer-body"><details><summary>Outer safe summary</summary><details open><summary data-probe>${invitation}</summary></details></details></section>
+<section id="inner-body"><details><summary>Outer safe summary<details><summary>Inner safe summary</summary><p data-probe>${invitation}</p></details></summary></details></section>
+<section id="body-contents"><details><summary>Closed contents control</summary><p data-probe style="display:contents">${invitation}</p></details></section>
+<section id="closed-then-visible"><details><summary>Closed safe summary</summary><p data-probe>${invitation}</p></details><p>${invitation}</p></section>
+<section id="override-body"><details><summary>Overridden content visibility</summary><p data-probe>${invitation}</p></details></section>
+<section id="override-contents"><details><summary>Overridden contents display</summary><p data-probe>${invitation}</p></details></section>
+<section id="override-inline"><details><summary>Overridden inline display</summary><p data-probe>${invitation}</p></details></section>
 </body></html>`;
+export const hiddenControlCases = Object.freeze(['closed-body', 'closed-secret', 'second-summary', 'outer-body', 'inner-body', 'body-contents', 'closed-then-visible']);
+export const acceptedControlCases = Object.freeze(['clear', 'closed-body', 'second-summary', 'outer-body', 'inner-body']);
+export function controlFailure(name) {
+ if (acceptedControlCases.includes(name)) return null;
+ if (name === 'body-contents') return 'public-safe-text-closed-details-native-false';
+ if (name.startsWith('override-')) return 'public-safe-text-closed-details-native-true';
+ return 'public-safe-text';
+}
 export function controlRoute(state) {
  return async route => {
   const request = route.request(), headers = request.headers();
@@ -23,7 +44,7 @@ export function controlRoute(state) {
 export async function runVisibilityControls({ browser, expect, assertPublicSafe, mark = () => {} }) {
  requireHosted(); mark('visibility-control-context');
  const context = await browser.newContext({ viewport: { width: 800, height: 600 }, locale: 'en-US', reducedMotion: 'reduce', serviceWorkers: 'block' });
- let completed = false, closedBodyRange = null, runtimeErrors = 0; const state = { documents: 0, blocked: 0 };
+ let completed = false, runtimeErrors = 0; const state = { documents: 0, blocked: 0 };
  try {
   mark('visibility-control-route'); await context.route('**/*', controlRoute(state));
   mark('visibility-control-page'); const page = await context.newPage();
@@ -38,17 +59,25 @@ export async function runVisibilityControls({ browser, expect, assertPublicSafe,
    const observed = await probe.evaluate(element => {
     const range = document.createRange(); range.selectNodeContents(element);
     const positiveRange = [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+    const positiveBox = [...Element.prototype.getClientRects.call(element)].some(rect => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) && rect.width > 0 && rect.height > 0);
     const native = Element.prototype.checkVisibility.call(element);
-    return { positiveRange, native };
+    return { positiveRange, positiveBox, native };
    });
-   checkpoint('observation-shape'); assert.deepEqual(Object.keys(observed).sort(), ['native', 'positiveRange']);
+   checkpoint('observation-shape'); assert.deepEqual(Object.keys(observed).sort(), ['native', 'positiveBox', 'positiveRange']);
    checkpoint('range-type'); assert.equal(typeof observed.positiveRange, 'boolean');
+   checkpoint('box-type'); assert.equal(typeof observed.positiveBox, 'boolean');
+   checkpoint(observed.positiveBox ? 'box-positive' : 'box-empty'); assert.equal(observed.positiveBox, name !== 'contents' && name !== 'body-contents');
    const rangeKind = observed.positiveRange ? 'positive' : 'empty';
    const nativeKind = observed.native === true ? 'true' : observed.native === false ? 'false' : 'invalid';
-   checkpoint(`native-${nativeKind}-range-${rangeKind}`); assert.equal(observed.native, name !== 'closed-body' && name !== 'contents');
-   if (name === 'closed-body') { checkpoint(`playwright-hidden-range-${rangeKind}`); await expect(probe).toBeHidden(); closedBodyRange = observed.positiveRange ? 'positive' : 'empty'; }
-   else { checkpoint(`range-${rangeKind}`); assert.equal(observed.positiveRange, true); checkpoint('playwright-visible'); await expect(probe).toBeVisible(); }
-   const expected = name === 'clear' || name === 'closed-body' && !observed.positiveRange ? null : name === 'closed-body' ? 'public-safe-text-closed-details-native-false' : 'public-safe-text';
+   checkpoint(`native-${nativeKind}-range-${rangeKind}`); assert.equal(observed.native, !hiddenControlCases.includes(name) && name !== 'contents');
+   // Hard prerequisites: a browser with empty closed-body geometry cannot prove
+   // the reviewed repair. Do not silently treat that unexercised path as a pass.
+   checkpoint(`range-${rangeKind}`); assert.equal(observed.positiveRange, true);
+   if (hiddenControlCases.includes(name) && name !== 'body-contents') { checkpoint(`playwright-hidden-range-${rangeKind}`); await expect(probe).toBeHidden(); }
+   else { checkpoint('playwright-visible'); await expect(probe).toBeVisible(); }
+   // Playwright's display:contents visibility also uses Range geometry. Its
+   // visible result there is not independent proof of painted visibility.
+   const expected = controlFailure(name);
    const stages = []; let rejected = false;
    // Never interpolate an inspected value or exception into a public checkpoint.
    const lastStage = () => stages.length === 0 ? 'none' : visibilityControlPrivacyStages.includes(stages.at(-1)) ? stages.at(-1) : 'invalid';
@@ -61,6 +90,6 @@ export async function runVisibilityControls({ browser, expect, assertPublicSafe,
   }
   mark('visibility-control-runtime-errors'); assert.equal(runtimeErrors, 0);
   mark('visibility-control-route-boundary'); assert.deepEqual(state, { documents: 1, blocked: 0 }); completed = true;
-  return { contexts: 1, cases: 6, passed: true, closedBodyRange, screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 };
+  return { contexts: 1, cases: visibilityControlCases.length, passed: true, closedBodyRange: 'positive', closedBodyBox: 'positive', screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 };
  } finally { if (completed) mark('visibility-control-close'); await context.close(); }
 }

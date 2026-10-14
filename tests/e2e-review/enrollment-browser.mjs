@@ -2,6 +2,7 @@
  * client library and built React. No real endpoint, telemetry, external sharing,
  * TLS warning bypass, secret screenshots, traces, request logs or storage dumps.
  */
+import {assertOverviewWorkStart} from './overview-work-start-browser.mjs';
 import {createRequire} from 'node:module';
 import {validSnapshot} from '../../web/src/enrollment-types.ts';
 import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
@@ -160,7 +161,16 @@ try{
     await expect(page.getByRole('heading',{name:locale==='de'?'Noch keine Geräte':'No devices yet',exact:true})).toBeVisible();
     await expect(entry).toBeEnabled();await expect(page.locator('.summary-strip')).toHaveCount(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+    await assertOverviewWorkStart({page,expect,empty:true});
     await shot(page,`synthetic-first-device-empty-${locale}-${mobile?'390':'1440'}`);
+    await page.getByRole('button',{name:locale==='de'?'Dunkles Design aktivieren':'Switch to dark theme',exact:true}).click();
+    await assertOverviewWorkStart({page,expect,empty:true});
+    await shot(page,`synthetic-first-device-empty-${locale}-${mobile?'390':'1440'}-dark`);
+    await page.getByRole('button',{name:locale==='de'?'Helles Design aktivieren':'Switch to light theme',exact:true}).click();
+    if(mobile){
+     await page.setViewportSize({width:320,height:844});await assertOverviewWorkStart({page,expect,empty:true});
+     await shot(page,`synthetic-first-device-empty-${locale}-320`);await page.setViewportSize({width:390,height:844});
+    }
     mark('keyboard setup entry without a dialog or write');
     await entry.focus();await page.keyboard.press('Enter');
     const panel=page.getByRole('region',{name:locale==='de'?'Geräte hinzufügen':'Add devices',exact:true});

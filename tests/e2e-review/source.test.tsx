@@ -2,6 +2,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from '../../web/node_modules/vitest/dist/index.js';
 import { act, cleanup, render, screen, fireEvent, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
 import App from '../../web/src/App';
+import { overviewNoOpenWork, contrastRatio } from './overview-work-start-browser.mjs';
 import { conciseShellFixture } from './concise-shell-gallery.mjs';
 import { defaultFilters, filterDevices, decodeRouteId, csvCell, noteBytes } from '../../web/src/utils';
 import { applicationStatusFixture, applicationHTTPStatusFixture, applicationMixedStatusFixture } from './application-checks-browser.mjs';
@@ -104,4 +105,12 @@ describe('Public-safe concise shell gallery boundary', () => {
   expect(JSON.stringify(sample)).not.toContain('PRIVATE');
   expect(sample).not.toHaveProperty('privateExtra');
  });
+});
+
+// This configured independent suite keeps the new capture projection in CI.
+it('overview no-open-work capture preserves synthetic device evidence and rejects private rows', () => {
+ const original={...overview,devices:[{...device,id:'demo-overview-fixture'}],cases:[{id:'case-demo-overview-fixture',synthetic:true}],stats:{...overview.stats,openCases:1,criticalCases:1}};
+ const output=overviewNoOpenWork(original);expect(output.devices).toBe(original.devices);expect(output.generatedAt).toBe(original.generatedAt);expect(output.stats.attentionDevices).toBe(original.stats.attentionDevices);expect(output.stats.openCases).toBe(0);expect(original.stats.openCases).toBe(1);
+ expect(()=>overviewNoOpenWork({...original,devices:[{...original.devices[0],synthetic:false}]})).toThrow('Synthetic populated overview required.');
+ expect(contrastRatio('rgb(5, 117, 106)','rgb(255, 255, 255)')).toBeGreaterThanOrEqual(3);expect(contrastRatio('rgb(119, 213, 191)','rgb(23, 36, 44)')).toBeGreaterThanOrEqual(3);
 });

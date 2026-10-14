@@ -6,13 +6,13 @@ import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from './capture-windows-enrollment.mjs';
-import { boundedRegular, captureMatrix, disclosure, scenes, validateDialogPNG } from './windows-enrollment-contract.mjs';
+import { boundedRegular, captureMatrix, disclosure, scenes, validateDialogPNG, visibilityControlCases } from './windows-enrollment-contract.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url)), hash = bytes => createHash('sha256').update(bytes).digest('hex');
 async function document(file, maximum) {
  const bytes = await boundedRegular(file, maximum), value = JSON.parse(bytes);
  assert.equal(bytes.toString('utf8'), JSON.stringify(value, null, 2) + '\n'); return value;
 }
-export const successfulReport = sourceSha => ({ sourceSha, status: 'PASS', browserAcceptance: true, scenes: scenes.length, screenshots: captureMatrix.length, contexts: 5, captureContexts: 4, controlContexts: 1, controlCases: 6, syntheticCreates: 4, requestsToRealAPI: 0, actualMutationRequests: 0, nativeAcceptance: false, disclosure });
+export const successfulReport = sourceSha => ({ sourceSha, status: 'PASS', browserAcceptance: true, scenes: scenes.length, screenshots: captureMatrix.length, contexts: 5, captureContexts: 4, controlContexts: 1, controlCases: visibilityControlCases.length, syntheticCreates: 4, requestsToRealAPI: 0, actualMutationRequests: 0, nativeAcceptance: false, disclosure });
 export function validateCaptureRow(row, index, bytes, sourceDigest) {
  const expected = captureMatrix[index]; assert(expected);
  let dimensions; try { dimensions = validateDialogPNG(bytes, expected.width, expected.height); } catch { throw new Error('Invalid PNG evidence'); }
@@ -22,8 +22,7 @@ export function validateCaptureRow(row, index, bytes, sourceDigest) {
 export function validateMetadata(report, manifest, sourceSha, compiled) {
  assert(/^[a-f0-9]{40}$/.test(sourceSha)); assert.deepEqual(report, successfulReport(sourceSha));
  assert.deepEqual(Object.keys(manifest).sort(), ['actualMutationRequests', 'appMounted', 'browserExecuted', 'captures', 'dependencyInputs', 'disclosure', 'nativeAcceptance', 'requestsToRealAPI', 'sourceDigest', 'sourceInputs', 'sourceSha', 'visibilityControls']);
- assert(['positive', 'empty'].includes(manifest.visibilityControls?.closedBodyRange));
- assert.deepEqual(manifest.visibilityControls, { contexts: 1, cases: 6, passed: true, closedBodyRange: manifest.visibilityControls.closedBodyRange, screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 });
+ assert.deepEqual(manifest.visibilityControls, { contexts: 1, cases: visibilityControlCases.length, passed: true, closedBodyRange: 'positive', closedBodyBox: 'positive', screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 });
  assert.equal(manifest.sourceSha, sourceSha); assert.equal(manifest.browserExecuted, true); assert.equal(manifest.appMounted, false); assert.equal(manifest.nativeAcceptance, false);
  assert.equal(manifest.actualMutationRequests, 0); assert.equal(manifest.requestsToRealAPI, 0); assert.equal(manifest.disclosure, disclosure);
  assert.deepEqual(manifest.sourceInputs, compiled.sourceInputs); assert.deepEqual(manifest.dependencyInputs, compiled.dependencyInputs); assert.equal(manifest.sourceDigest, compiled.sourceDigest); assert.equal(manifest.captures.length, captureMatrix.length);

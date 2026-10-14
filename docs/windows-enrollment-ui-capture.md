@@ -57,15 +57,17 @@ The returned invitation is a fixed inert string. The input must initially be
 masked. Existing `pagehide`/`pageshow` behavior clears that value and refreshes
 status before any screenshot. The capture then asserts that the secret input is
 absent and no secret or rendered raw fixture identity is inside the dialog.
-The target/profile disclosure stays in its ordinary closed state. A matching
-positive Range beneath it still fails, whatever native box visibility returns. No bootstrap
-file is downloaded or published, and no approval or termination is performed.
+The target/profile disclosure stays in its ordinary closed state. Secret-text
+matches always reject. An identifier-only positive Range inside a closed body may
+pass only with the independent own-parent-box and native-hidden evidence described
+below; closed ancestry alone is insufficient. No bootstrap file is downloaded or
+published, and no approval or termination is performed.
 
 ## Isolated native-browser visibility controls
 
 Before creating the four capture contexts, the hosted recipe creates and closes
 one separate control context: **five total contexts = four capture + one control**.
-The success report names both counts and six control cases explicitly. The
+The success report names both counts and fifteen control cases explicitly. The
 manifest requires the bounded control result; the eight production crops, four
 synthetic creations and existing browser-suite contracts are unchanged.
 
@@ -77,19 +79,28 @@ production markup/styles, downloads data or takes a screenshot. The fixed conten
 are known inert fixture strings, not user values. Its CSP allows no scripts or
 external resources. The synthetic control document is not uploaded.
 
-The six controls cover safe text, visible synthetic secret text, wrapped body text
-inside closed details, a closed summary, an open details body, and matched text
-**directly under `display:contents`**. The latter must remain rejected even though
-its parent has no box. Positive controls require positive Range geometry and
-privacy rejection; the safe control must pass. Closed-body geometry is recorded
-only as `positive` or `empty`, since a newly constructed fixture need not reproduce
-the application's layout. Native closed-body visibility must be false. A positive
-closed-body Range must still fail the unchanged privacy predicate.
+The fifteen controls cover safe text; visible and closed-body synthetic secrets;
+closed and open disclosure bodies; first and later summaries; nested disclosures;
+matching text directly under `display:contents`; hidden text followed by another
+visible match; and three `::details-content` visibility/display overrides.
+Every control requires a positive text Range. Closed-body controls also require
+positive own-parent box geometry, except the deliberate unboxed
+`display:contents` negative. Empty geometry cannot pass as unexercised coverage.
+Native visibility, Playwright visibility and the exact privacy-stage sequence are
+checked independently. Secrets, visible matches, first-summary matches, unboxed
+matches and overridden-visible bodies must reject; only the enumerated safe or
+proven native-hidden identifier cases pass.
 
-`Element.prototype.checkVisibility.call(parent)` is read only after an existing
-closed-body Range/text failure. All four native outcomes still reject. The default
-API checks the box/flat-tree state, not painted pixels, occlusion, clipping or
-opacity. It is deliberately diagnostic, not a new visibility policy. See
+The narrow identifier exception applies only below a closed disclosure body,
+excluding its first summary. `Element.prototype.checkVisibility.call(parent)`
+must return exactly false and the parent must have a finite positive own rectangle
+from `Element.prototype.getClientRects`. A missing/throwing native API, an
+unboxed parent, true or invalid native result rejects. A successful exception does
+not stop the scan: later matches and the existing input, URL, storage and protected
+element checks still run. Secret-text matches reject regardless of geometry.
+This is an explicit change from the earlier Range-only rejection rule, not a
+claim that all closed content is safe. Default native visibility reports
+box/flat-tree state, not painted pixels, occlusion, clipping or opacity. See
 [CSSOM View](https://drafts.csswg.org/cssom-view/#dom-element-checkvisibility),
 [HTML details rendering](https://html.spec.whatwg.org/multipage/rendering.html#the-details-and-summary-elements),
 and [pinned Playwright visibility](https://github.com/microsoft/playwright/blob/v1.58.2/packages/injected/src/domUtils.ts#L78-L131).
@@ -150,12 +161,27 @@ producer encoding, so duplicate or hidden extra fields are rejected.
 Diagnostics use a closed stage vocabulary and never export request bodies,
 bootstrap data, invitation values, cookies, page text, raw errors or traces.
 The public-safety checkpoint distinguishes protected-element presence, inspection
-errors, matching Range text (including ancestry below a closed disclosure and a
-fixed native parent-box true/false/unavailable/error subcategory), input
-values, URL and storage. These are fixed category names only. Closed-disclosure
-ancestry does not prove either visibility or invisibility; the same matching text
-still fails the unchanged privacy predicate. The category must be investigated
-before any capture-policy change. No screenshot is taken before all checks pass.
+errors, rejected matching text, the fixed native-parent-box failure categories,
+input values, URL and storage. It exports fixed category names only. The narrow
+closed-body identifier exception above does not exempt secret matches or bypass
+any later check.
+
+For each image, a whole-document mutation observer, sticky lifecycle/animation
+listeners, stylesheet/font snapshots and bounded frame checks guard the complete
+precheck, screenshot and postcheck interval. Active, paused or pending animations,
+observed mutations or stylesheet changes reject. Screenshot bytes stay in memory
+until both privacy checks, guard checks and guard cleanup succeed. The runner then
+checks runtime errors, route boundaries and PNG structure before an exclusive
+write. Screenshot preparation uses `animations: 'allow'` and `caret: 'initial'`
+to avoid hiding a caret or disabling animations as a capture-side mutation.
+
+This is a bounded persistence guard for the reviewed static synthetic bundle,
+not an atomic screenshot API or protection against arbitrary dynamic scripts.
+A transient CSSOM/WAAPI change reverted between every observation can escape it;
+source review must establish the absence of such writers in the bundled application
+inputs. The inert source tripwire is not a sandbox. The guarantee is per image:
+a later context or run failure can leave an earlier validated synthetic PNG locally,
+but the existing whole-job-success artifact gate prevents a partial public upload.
 Only the two verified manifests and eight named images are uploaded, for three
 days. Independent pixel review is still required before describing the UX as
 visually accepted.

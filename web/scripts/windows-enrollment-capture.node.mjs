@@ -7,11 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { test } from 'node:test';
-import { assertPublicSafe, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
+import { assertPublicSafe, capturePublicPNG, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
 import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG, visibilityControlCases, visibilityControlPhases, visibilityControlStage } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
-import { controlHTML, controlRoute, controlURL, runVisibilityControls } from './windows-enrollment-visibility-controls.mjs';
+import { controlHTML, controlRoute, controlURL, runVisibilityControls, hiddenControlCases, acceptedControlCases, controlFailure } from './windows-enrollment-visibility-controls.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
+import './windows-enrollment-capture-guard.node.mjs';
 const compiled = await compile(), sourceSha = 'a'.repeat(40);
 const requestId = `request_${'5'.repeat(32)}`, rawBody = approvedBody(requestId);
 const headers = { 'x-csrf-token': csrf, 'content-type': 'application/json', origin };
@@ -31,7 +32,7 @@ function fixturePNG(row, channels = 3) {
  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.alloc((width * channels + 1) * height))), chunk('IEND', Buffer.alloc(0))]);
 }
 const captureRow = (index, bytes = fixturePNG(captureMatrix[index])) => ({ ...captureMatrix[index], synthetic: true, publicSafe: true, fullPage: false, captureScope: 'production-dialog', imageWidth: bytes.readUInt32BE(16), imageHeight: bytes.readUInt32BE(20), sha256: createHash('sha256').update(bytes).digest('hex'), sourceDigest: compiled.sourceDigest, syntheticCreates: 1, csrfReads: 1, productionFontsLoaded: true });
-const manifest = () => ({ sourceSha, sourceInputs: compiled.sourceInputs, dependencyInputs: compiled.dependencyInputs, sourceDigest: compiled.sourceDigest, captures: captureMatrix.map((_, index) => captureRow(index)), visibilityControls: { contexts: 1, cases: 6, passed: true, closedBodyRange: 'positive', screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 }, disclosure, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, requestsToRealAPI: 0 });
+const manifest = () => ({ sourceSha, sourceInputs: compiled.sourceInputs, dependencyInputs: compiled.dependencyInputs, sourceDigest: compiled.sourceDigest, captures: captureMatrix.map((_, index) => captureRow(index)), visibilityControls: { contexts: 1, cases: visibilityControlCases.length, passed: true, closedBodyRange: 'positive', closedBodyBox: 'positive', screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 }, disclosure, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, requestsToRealAPI: 0 });
 
 test('eight unique instruction/release images in exactly four EN/DE desktop/mobile contexts', () => {
  assert.deepEqual(viewports, ['en', 'de'].flatMap(locale => [1440, 390].map(width => ({ locale, width, height: width === 390 ? 844 : 1100 }))));
@@ -107,7 +108,7 @@ test('every image row binds scene, viewport, cropped dimensions, hash and one sy
 });
 test('capture uses the unchanged real dialog, scoped scroll and lifecycle secret clearing', async () => {
  const source = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8');
- for (const pattern of ["dialog.locator('.enrollment-windows-install')", "window.dispatchEvent(new Event('pagehide'))", "window.dispatchEvent(new Event('pageshow'))", "await expect(input).toHaveCount(0)", "element.closest('[role=\"dialog\"]')", 'dialog.scrollTo', 'await assertPublicSafe(page, dialog, expect, stage => mark(stage, matrixIndex))', 'await dialog.screenshot(', 'await expect(target).toBeInViewport({ ratio: 1 })']) assert(source.includes(pattern), pattern);
+ for (const pattern of ["dialog.locator('.enrollment-windows-install')", "window.dispatchEvent(new Event('pagehide'))", "window.dispatchEvent(new Event('pageshow'))", "await expect(input).toHaveCount(0)", "element.closest('[role=\"dialog\"]')", 'dialog.scrollTo', 'await capturePublicPNG(page, dialog, expect, stage => mark(stage, matrixIndex))', 'await dialog.screenshot(', 'await expect(target).toBeInViewport({ ratio: 1 })']) assert(source.includes(pattern), pattern);
  assert.doesNotMatch(source, /page\.setContent|innerHTML\s*=|outerHTML\s*=|page\.addStyleTag|mask:|maskColor:|visibility: hidden|\.fill\(|\.type\(|\.pressSequentially\(/);
 });
 test('existing hosted browser job runs the strict capture gate and uploads its eight exact images', async () => {
@@ -207,7 +208,7 @@ test('bounded reader fails closed on descriptor swaps, changed metadata, extra b
 });
 
 // Read-only DOM/geometry model, not a browser or a claim about Chromium layout.
-function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles = [{ width: 1, height: 1 }], ancestry = 'ordinary', inputs = [], href = origin + '/', local = {}, session = {}, protectedCount = 0, inspectionError = false, returnedFailure, nativeOutcome = false } = {}) {
+function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles = [{ width: 1, height: 1 }], ancestry = 'ordinary', inputs = [], href = origin + '/', local = {}, session = {}, protectedCount = 0, inspectionError = false, returnedFailure, nativeOutcome = false, ownRectangles = [{ x: 0, y: 0, width: 1, height: 1 }], trailingText } = {}) {
  const element = (kind, parentElement = null) => ({
   kind, parentElement,
   matches(selector) { assert.equal(selector, 'details:not([open])'); return this.kind === 'closed-details'; },
@@ -216,26 +217,33 @@ function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles 
   closest(selector) { assert.equal(selector, 'script,style'); return ['script', 'style'].includes(this.kind) ? this : null; },
  });
  const root = element('dialog'); let parent = element('ordinary', root);
- if (['closed-body', 'closed-summary', 'open-body', 'nested-closed-body'].includes(ancestry)) {
+ if (['closed-body', 'closed-summary', 'open-body', 'nested-closed-body', 'summary-descendant', 'second-summary', 'outer-body-inner-summary', 'inner-body-outer-summary', 'no-summary'].includes(ancestry)) {
   const details = element(ancestry === 'open-body' ? 'open-details' : 'closed-details', root);
   details.summary = element('summary', details);
   parent = ancestry === 'closed-summary' ? details.summary : element('body', details);
   if (ancestry === 'nested-closed-body') parent = element('ordinary', parent);
+  if (ancestry === 'summary-descendant') parent = element('ordinary', details.summary);
+  if (ancestry === 'second-summary') parent = element('summary', details);
+  if (ancestry === 'no-summary') details.summary = null;
+  if (ancestry === 'outer-body-inner-summary') { const inner = element('open-details', parent); inner.summary = element('summary', inner); parent = inner.summary; }
+  if (ancestry === 'inner-body-outer-summary') { const inner = element('closed-details', details.summary); inner.summary = element('summary', inner); parent = element('ordinary', inner); }
  } else if (ancestry === 'script' || ancestry === 'style') parent = element(ancestry, root);
  else if (ancestry === 'detached') parent = null;
- const textNode = { textContent: text, parentElement: parent }, events = []; let inspected = false;
+ const textNode = { textContent: text, parentElement: parent }, trailing = { textContent: trailingText, parentElement: element('ordinary', root) }, events = []; let inspected = false;
+ const nodes = trailingText === undefined ? [textNode] : [textNode, trailing];
  const document = {
-  createTreeWalker(target, filter) { assert.equal(target, root); assert.equal(filter, 4); let used = false; return { nextNode: () => used ? null : (used = true, textNode) }; },
-  createRange() { return { selectNodeContents: node => assert.equal(node, textNode), getClientRects: () => rectangles }; },
+  createTreeWalker(target, filter) { assert.equal(target, root); assert.equal(filter, 4); let used = 0; return { nextNode: () => nodes[used++] ?? null }; },
+  createRange() { return { selectNodeContents: node => assert(nodes.includes(node)), getClientRects: () => rectangles }; },
   querySelectorAll(selector) { assert.equal(selector, 'input'); return inputs.map(value => ({ value })); },
  };
  const Element = function() {};
+ if (ownRectangles !== 'unavailable') Element.prototype.getClientRects = function() { assert.equal(this, parent); if (ownRectangles === 'throw') throw new Error('unexported geometry error'); return ownRectangles; };
  if (nativeOutcome !== 'unavailable') Element.prototype.checkVisibility = function() { assert.equal(this, parent); if (nativeOutcome === 'throw') throw new Error('unexported native error'); return nativeOutcome; };
  const evaluate = callback => new Function('document', 'NodeFilter', 'location', 'localStorage', 'sessionStorage', 'Element', `return (${callback.toString()});`)(document, { SHOW_TEXT: 4 }, { href }, local, session, Element)(root, { secret, invitation });
  const page = { locator(selector) { assert.equal(selector, '.enrollment-secret, .enrollment-fingerprint, .enrollment-comparison'); return { protectedCount }; } };
  const dialog = { async evaluate(callback, values) { inspected = true; assert.deepEqual(values, { secret, invitation }); if (inspectionError) throw new Error('unexported synthetic diagnostic'); if (returnedFailure !== undefined) return returnedFailure; return evaluate(callback); } };
  const expect = locator => ({ async toHaveCount(count) { assert.equal(count, 0); assert.equal(locator.protectedCount, count); } });
- return { page, dialog, expect, events, evaluate, inspected: () => inspected, run: () => assertPublicSafe(page, dialog, expect, stage => events.push(diagnostic(stage, 0))) };
+ return { page, dialog, expect, events, evaluate, setText: value => { textNode.textContent = value; }, inspected: () => inspected, run: () => assertPublicSafe(page, dialog, expect, stage => events.push(diagnostic(stage, 0))) };
 }
 // Exact former boolean predicate, retained solely to prove its acceptance set.
 function originalPublicSafetyPredicate(dialog, { secret, invitation }) {
@@ -249,28 +257,34 @@ function originalPublicSafetyPredicate(dialog, { secret, invitation }) {
  }
  return ![...document.querySelectorAll('input')].some(input => input.value.includes(secret) || identifier.test(input.value)) && !location.href.includes(secret) && !location.href.includes(invitation) && !JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret);
 }
-test('public-safety branches retain exact original acceptance across read-only DOM/geometry models', async () => {
- let cases = 0;
+test('public-safety acceptance delta is limited to boxed native-hidden closed-body identifiers; secret matches always reject', async () => {
+ let cases = 0, allowedDelta = 0, stricterSecrets = 0;
  for (const text of ['Reviewed instructions', secret, invitation, `manager_${'2'.repeat(32)}`, 'ab'.repeat(32), '12ab'.repeat(8)]) {
   for (const rectangles of [[], [{ width: 0, height: 1 }], [{ width: 1, height: 0 }], [{ width: 1, height: 1 }]]) {
    for (const ancestry of ['ordinary', 'closed-body', 'closed-summary', 'open-body', 'nested-closed-body', 'script', 'style', 'detached']) {
     for (const extra of [{}, { inputs: [secret] }, { inputs: [invitation] }, { href: origin + '/#' + secret }, { href: origin + '/#' + invitation }, { local: { value: secret } }, { session: { value: secret } }]) for (const nativeOutcome of [false, true, 'unavailable', 'throw']) {
-     const h = publicSafetyHarness({ text, rectangles, ancestry, nativeOutcome, ...extra }), expected = h.evaluate(originalPublicSafetyPredicate);
-     if (expected) await h.run(); else await assert.rejects(() => h.run(), /Unsafe public capture surface/);
-     assert(h.events.every(row => Object.keys(row).join(',') === 'stage,scene,locale,width'));
-     assert(h.events.every(row => row.scene === 'instructions' && row.locale === 'en' && row.width === 1440));
-     const serialized = JSON.stringify(h.events); assert(!serialized.includes(secret)); assert(!serialized.includes(invitation)); cases++;
+     for (const ownRectangles of [[], [{ x: 0, y: 0, width: 0, height: 1 }], [{ x: 0, y: 0, width: Infinity, height: 1 }], [{ x: 0, y: 0, width: 1, height: 1 }]]) {
+      const h = publicSafetyHarness({ text, rectangles, ancestry, nativeOutcome, ownRectangles, ...extra });
+      const original = h.evaluate(originalPublicSafetyPredicate), isSecret = text === secret, identifier = text !== secret && text !== 'Reviewed instructions';
+      const rendered = !['script', 'style', 'detached'].includes(ancestry) && rectangles.some(rect => rect.width > 0 && rect.height > 0);
+      const closedBody = ['closed-body', 'nested-closed-body'].includes(ancestry), finiteBox = ownRectangles.some(rect => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) && rect.width > 0 && rect.height > 0);
+      const expected = !isSecret && Object.keys(extra).length === 0 && (!identifier || !rendered || closedBody && finiteBox && nativeOutcome === false);
+      if (expected) await h.run(); else await assert.rejects(() => h.run(), /Unsafe public capture surface/);
+      if (expected && !original) { assert(identifier && rendered && closedBody && finiteBox && nativeOutcome === false); allowedDelta++; }
+      if (!expected && original) { assert(isSecret); stricterSecrets++; }
+      const serialized = JSON.stringify(h.events); assert(!serialized.includes(secret)); assert(!serialized.includes(invitation)); cases++;
+     }
     }
    }
   }
  }
- assert.equal(cases, 5376);
+ assert.equal(cases, 21504); assert.equal(allowedDelta, 8); assert(stricterSecrets > 0);
 });
-test('public-safety diagnostics identify fixed branches without exempting closed disclosure text', async () => {
+test('public-safety diagnostics retain strict unsafe branches after narrow identifier repair', async () => {
  const cases = [
   [{ text: invitation }, 'public-safe-text'],
-  [{ text: invitation, ancestry: 'closed-body' }, 'public-safe-text-closed-details-native-false'],
-  [{ text: secret, ancestry: 'nested-closed-body' }, 'public-safe-text-closed-details-native-false'],
+  [{ text: invitation, ancestry: 'closed-body', ownRectangles: [] }, 'public-safe-text-closed-details-native-false'],
+  [{ text: secret, ancestry: 'nested-closed-body' }, 'public-safe-text'],
   [{ text: invitation, ancestry: 'closed-summary' }, 'public-safe-text'],
   [{ text: invitation, ancestry: 'open-body' }, 'public-safe-text'],
   [{ inputs: [secret] }, 'public-safe-inputs'],
@@ -296,23 +310,72 @@ test('protected elements, inspection errors and unexpected diagnostic values fai
   assert.deepEqual(h.events, [diagnostic('public-safe-elements', 0), diagnostic('public-safe-inspection', 0)]);
  }
 });
-test('production prerequisites and privacy assertions still precede every screenshot with unchanged runner redaction', async () => {
+test('production prerequisites and guarded pre/post inspection precede persistence with unchanged runner redaction', async () => {
  const recipe = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8');
- const sequence = ["mark('secret-masked'", "mark('interrupt-clear'", 'await expect(input).toHaveCount(0)', "mark('refresh-restored'", "mark('instructions'", "mark('fonts'", "mark('scroll'", "mark('public-safe'", 'await assertPublicSafe(page, dialog, expect, stage => mark(stage, matrixIndex))', "mark('screenshot'"];
- let offset = -1; for (const item of sequence) { const next = recipe.indexOf(item); assert(next > offset, item); offset = next; }
+ const sequence = ["mark('secret-masked'", "mark('interrupt-clear'", 'await expect(input).toHaveCount(0)', "mark('refresh-restored'", "mark('instructions'", "mark('fonts'", "mark('scroll'", 'await capturePublicPNG(page, dialog, expect, stage => mark(stage, matrixIndex))', 'validateDialogPNG(bytes, width, height)', "await writeFile(path.join(output, row.file), bytes, { flag: 'wx' })"];
+ let offset = -1; for (const item of sequence) { const next = recipe.indexOf(item, offset + 1); assert(next > offset, item); offset = next; }
  assert.equal((recipe.match(/\.screenshot\(/g) || []).length, 1);
+ const guarded = recipe.slice(recipe.indexOf('export async function capturePublicPNG'), recipe.indexOf('export async function capture({'));
+ for (const item of ["mark('capture-guard')", "mark('public-safe')", "mark('capture-guard-pre')", "mark('screenshot')", "mark('public-safe-post')", "mark('capture-guard-post')"]) assert(guarded.includes(item));
+ assert.doesNotMatch(guarded, /writeFile|path:/);
  const runner = await readFile(new URL('./run-windows-enrollment-ci.mjs', import.meta.url), 'utf8');
  assert(runner.includes('} catch { failure = tag; }')); assert(runner.includes('JSON.stringify(report.failure)')); assert(runner.includes('raw diagnostics withheld.'));
  assert.doesNotMatch(runner, /console\.(?:error|debug|trace)|error\.message|error\.stack|\.innerText\(|\.textContent\(/);
 });
 
-test('native parent-box subcategories never exempt matching closed-disclosure text', async () => {
+test('native uncertainty and absent own parent boxes never exempt matching closed-disclosure text', async () => {
  for (const [nativeOutcome, suffix] of [[true, 'true'], [false, 'false'], ['unavailable', 'unavailable'], ['throw', 'error'], ['not-a-boolean', 'error']]) {
-  const h = publicSafetyHarness({ text: invitation, ancestry: 'closed-body', nativeOutcome }); await assert.rejects(() => h.run(), /Unsafe public capture surface/);
+  const h = publicSafetyHarness({ text: invitation, ancestry: 'closed-body', nativeOutcome, ownRectangles: [] }); await assert.rejects(() => h.run(), /Unsafe public capture surface/);
   assert.equal(h.events.at(-1).stage, `public-safe-text-closed-details-native-${suffix}`);
  }
  const h = publicSafetyHarness({ text: secret, nativeOutcome: false }); await assert.rejects(() => h.run(), /Unsafe public capture surface/); assert.equal(h.events.at(-1).stage, 'public-safe-text');
 });
+
+test('summary exceptions and nested closed disclosures follow first-direct-summary semantics', async () => {
+ for (const ancestry of ['closed-summary', 'summary-descendant', 'open-body']) {
+  const h = publicSafetyHarness({ text: invitation, ancestry }); await assert.rejects(() => h.run()); assert.equal(h.events.at(-1).stage, 'public-safe-text');
+ }
+ for (const ancestry of ['second-summary', 'outer-body-inner-summary', 'inner-body-outer-summary', 'no-summary']) {
+  await publicSafetyHarness({ text: invitation, ancestry }).run();
+  await assert.rejects(() => publicSafetyHarness({ text: invitation, ancestry, nativeOutcome: true }).run());
+ }
+});
+test('a hidden identifier never terminates scanning or exempts later secrets identifiers or global surfaces', async () => {
+ for (const trailingText of [secret, invitation, `manager_${'2'.repeat(32)}`]) await assert.rejects(() => publicSafetyHarness({ text: invitation, ancestry: 'closed-body', trailingText }).run());
+ await publicSafetyHarness({ text: invitation, ancestry: 'closed-body', trailingText: 'Public continuation' }).run();
+ for (const extra of [{ inputs: [secret] }, { inputs: [invitation] }, { href: origin + '/#' + invitation }, { local: { key: secret } }, { session: { key: secret } }]) await assert.rejects(() => publicSafetyHarness({ text: invitation, ancestry: 'closed-body', ...extra }).run());
+});
+test('finite own-box evidence and geometry APIs are mandatory for the only acceptance delta', async () => {
+ const valid = { x: 0, y: 0, width: 2, height: 2 };
+ for (const ownRectangles of ['unavailable', 'throw', [], ...['x', 'y', 'width', 'height'].flatMap(key => [NaN, Infinity, -Infinity, '2', undefined].map(value => [{ ...valid, [key]: value }]))]) await assert.rejects(() => publicSafetyHarness({ text: invitation, ancestry: 'closed-body', ownRectangles }).run());
+ for (const width of [0, -1]) await assert.rejects(() => publicSafetyHarness({ text: invitation, ancestry: 'closed-body', ownRectangles: [{ ...valid, width }] }).run());
+});
+test('memory-only screenshot orchestration returns bytes only after guarded pre/post checks and cleanup', async () => {
+ for (const fault of ['none', 'install', 'pre-secret', 'pre-guard', 'screenshot', 'post-secret', 'post-guard', 'nonboolean-guard', 'cleanup', 'dispose']) {
+  const h = publicSafetyHarness(), calls = [], bytes = Buffer.from('synthetic bytes only'); let checks = 0;
+  const state = { check() { calls.push('guard-check'); checks++; return fault === 'pre-guard' && checks === 1 || fault === 'post-guard' && checks === 2 ? false : fault === 'nonboolean-guard' ? 'true' : true; }, dispose() { calls.push('guard-cleanup'); if (fault === 'cleanup') throw new Error('unexported cleanup'); } };
+  h.dialog.evaluateHandle = async () => { calls.push('install'); if (fault === 'install') throw new Error('unexported install'); return { evaluate: async fn => fn(state), dispose: async () => { calls.push('handle-dispose'); if (fault === 'dispose') throw new Error('unexported dispose'); } }; };
+  h.dialog.screenshot = async options => { calls.push('screenshot'); assert.deepEqual(options, { animations: 'allow', caret: 'initial', timeout: 10000 }); if (fault === 'screenshot') throw new Error('unexported screenshot'); if (fault === 'post-secret') h.setText(secret); return bytes; };
+  if (fault === 'pre-secret') h.setText(secret);
+  const run = () => capturePublicPNG(h.page, h.dialog, h.expect, stage => calls.push(stage));
+  if (fault === 'none') { assert.equal(await run(), bytes); assert.deepEqual(calls.filter(name => ['install', 'guard-check', 'guard-cleanup', 'handle-dispose'].includes(name)), ['install', 'guard-check', 'guard-check', 'guard-cleanup', 'handle-dispose']); }
+  else await assert.rejects(run);
+  if (['install', 'pre-secret', 'pre-guard', 'nonboolean-guard'].includes(fault)) assert(!calls.includes('screenshot'));
+  if (fault !== 'install') assert(calls.includes('guard-cleanup') && calls.includes('handle-dispose'));
+ }
+});
+test('static source boundary excludes dynamic stylesheet and Web Animation writers; capture guard is source-bound', async () => {
+ // This explicit inspected-source boundary is not an arbitrary-script sandbox.
+ // Event/frame observation and snapshots cannot prove atomicity against a
+ // stylesheet/animation changed and reverted between every observation.
+ for (const input of compiled.sourceInputs.filter(input => /^web\/src\/.*\.[cm]?[jt]sx?$/.test(input.file))) {
+  const source = await readFile(new URL('../../' + input.file, import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /\b(?:insertRule|deleteRule|replaceSync|adoptedStyleSheets|CSSStyleSheet|KeyframeEffect|AnimationTimeline|startViewTransition)\b|\.animate\s*\(/, input.file);
+ }
+ for (const file of ['web/scripts/windows-enrollment-capture-guard.mjs', 'web/scripts/windows-enrollment-capture-guard.node.mjs']) assert(compiled.sourceInputs.some(input => input.file === file));
+ assert.match(disclosure, /no-CSSOM-mutation/); assert.match(disclosure, /does not provide general atomic screenshots/);
+});
+
 test('isolated control route serves only its one known document and never production or external routes', async () => {
  const request = (url = controlURL, method = 'GET', body = null, headers = {}) => ({ url: () => url, method: () => method, postData: () => body, headers: () => headers });
  for (const args of [[origin + '/'], [origin + '/api/session'], [origin + '/api/windows/enrollment/invitations', 'POST', '{}'], ['https://external.invalid/'], [controlURL + '?extra'], [controlURL, 'POST'], [controlURL, 'GET', '{}'], [controlURL, 'GET', null, { cookie: 'invented' }], [controlURL, 'GET', null, { authorization: 'invented' }]]) {
@@ -329,17 +392,17 @@ function visibilityControlHarness(mode = 'positive', fault = {}) {
  const page = {
   url: () => url, on: (event, callback) => { assert.equal(event, 'pageerror'); pageError = callback; },
   async goto(target) { if (fault.setup === 'document') throw new Error('unexported synthetic error'); calls.push(['control-goto', target]); assert.equal(target, controlURL); await handler({ request: () => ({ url: () => target, method: () => 'GET', postData: () => null, headers: () => ({}) }), fulfill: response => assert.equal(response.body, controlHTML), abort: () => assert.fail('Control navigation blocked') }); url = target; if (fault.setup === 'runtime-errors') pageError(); if (fault.setup === 'route-boundary') await handler({ request: () => ({ url: () => origin + '/api/session', method: () => 'GET', postData: () => null, headers: () => ({}) }), abort: () => {}, fulfill: () => assert.fail('Unexpected fulfillment') }); },
-  locator(selector) { const name = selector.slice(1); assert(['clear', 'visible', 'closed-body', 'closed-summary', 'open-body', 'contents'].includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async callback => { assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); if (name === fault.caseName && fault.measureError) throw new Error('unexported synthetic error'); if (name === fault.caseName && 'observation' in fault) return fault.observation; return { positiveRange: name !== 'closed-body' || mode !== 'empty', native: mode === 'wrong-native' ? false : name !== 'closed-body' && name !== 'contents' }; } }; } }; },
+  locator(selector) { const name = selector.slice(1); assert(visibilityControlCases.includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async callback => { assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); if (name === fault.caseName && fault.measureError) throw new Error('unexported synthetic error'); if (name === fault.caseName && 'observation' in fault) return fault.observation; return { positiveRange: name !== 'closed-body' || mode !== 'empty', positiveBox: name !== 'contents' && name !== 'body-contents', native: mode === 'wrong-native' ? false : !hiddenControlCases.includes(name) && name !== 'contents' }; } }; } }; },
  };
  const context = { route: async (pattern, fn) => { if (fault.setup === 'route') throw new Error('unexported synthetic error'); assert.equal(pattern, '**/*'); handler = fn; calls.push(['control-route']); }, newPage: async () => { if (fault.setup === 'page') throw new Error('unexported synthetic error'); calls.push(['new-control-page']); return page; }, close: async () => { closed = true; calls.push(['close-control-context']); if (fault.setup === 'close') throw new Error('unexported synthetic error'); } };
  const browser = { newContext: async options => { calls.push(['new-control-context', options]); return context; } };
- const expect = probe => ({ toBeHidden: async () => { if (probe.name === fault.caseName && fault.playwrightError) throw new Error('unexported synthetic error'); assert.equal(probe.name, 'closed-body'); }, toBeVisible: async () => { if (probe.name === fault.caseName && fault.playwrightError) throw new Error('unexported synthetic error'); assert.notEqual(probe.name, 'closed-body'); } });
+ const expect = probe => ({ toBeHidden: async () => { if (probe.name === fault.caseName && fault.playwrightError) throw new Error('unexported synthetic error'); assert(hiddenControlCases.includes(probe.name) && probe.name !== 'body-contents'); }, toBeVisible: async () => { if (probe.name === fault.caseName && fault.playwrightError) throw new Error('unexported synthetic error'); assert(!hiddenControlCases.includes(probe.name) || probe.name === 'body-contents'); } });
  const inspect = async (givenPage, region, givenExpect, mark) => {
   assert.equal(givenPage, page); assert.equal(region.owner, page); assert.equal(givenExpect, expect); calls.push(['privacy', region.name]);
   if (region.name === fault.caseName && fault.privacyStages) { for (const stage of fault.privacyStages) mark(stage); if (fault.privacyRejected) throw new Error('unexported synthetic error'); return; }
   mark('public-safe-elements'); mark('public-safe-inspection');
-  if (mode === 'accept-all' || region.name === 'clear' || region.name === 'closed-body' && mode === 'empty') return;
-  mark(region.name === 'closed-body' ? 'public-safe-text-closed-details-native-false' : 'public-safe-text'); throw new Error('Expected synthetic rejection');
+  if (mode === 'accept-all' || acceptedControlCases.includes(region.name)) return;
+  mark(controlFailure(region.name)); throw new Error('Expected synthetic rejection');
  };
  return { browser, expect, assertPublicSafe: inspect, mark: stage => marks.push(diagnostic(stage)), calls, marks, closed: () => closed };
 }
@@ -351,8 +414,8 @@ async function withHostedFixture(run) {
 test('native control driver owns one separate context/page and always closes it; only inert adapters execute here', async () => {
  for (const mode of ['positive', 'empty', 'wrong-native', 'accept-all']) {
   const h = visibilityControlHarness(mode);
-  if (mode === 'positive' || mode === 'empty') {
-   const result = await withHostedFixture(() => runVisibilityControls(h)); assert.deepEqual(result, { contexts: 1, cases: 6, passed: true, closedBodyRange: mode, screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 }); assert.equal(h.calls.filter(row => row[0] === 'privacy').length, 6);
+  if (mode === 'positive') {
+   const result = await withHostedFixture(() => runVisibilityControls(h)); assert.deepEqual(result, { contexts: 1, cases: visibilityControlCases.length, passed: true, closedBodyRange: 'positive', closedBodyBox: 'positive', screenshots: 0, syntheticDocumentRequests: 1, requestsToRealAPI: 0, actualMutationRequests: 0 }); assert.equal(h.calls.filter(row => row[0] === 'privacy').length, visibilityControlCases.length);
   } else await assert.rejects(() => withHostedFixture(() => runVisibilityControls(h)));
   assert(h.closed()); assert.equal(h.calls.filter(row => row[0] === 'new-control-context').length, 1); assert.deepEqual(h.calls[0][1], { viewport: { width: 800, height: 600 }, locale: 'en-US', reducedMotion: 'reduce', serviceWorkers: 'block' }); assert.equal(h.calls.filter(row => row[0] === 'new-control-page').length, 1); assert.deepEqual(h.calls.filter(row => row[0] === 'control-goto'), [['control-goto', controlURL]]); assert(h.calls.findIndex(row => row[0] === 'control-route') < h.calls.findIndex(row => row[0] === 'new-control-page'));
  }
@@ -361,32 +424,32 @@ test('native control driver owns one separate context/page and always closes it;
 });
 test('every isolated control assertion has a fixed failure phase without exporting observed values', async () => {
  const raw = 'UNTRUSTED_SYNTHETIC_DIAGNOSTIC_MUST_NOT_ESCAPE';
- const check = async (caseName, fault, phase, mode = 'positive') => {
-  const h = visibilityControlHarness(mode, { caseName, ...fault });
+ const check = async (caseName, fault, phase) => {
+  const h = visibilityControlHarness('positive', { caseName, ...fault });
   await assert.rejects(() => withHostedFixture(() => runVisibilityControls(h)));
   assert(h.closed()); assert.equal(h.marks.at(-1).stage, visibilityControlStage(caseName, phase));
   assert(!JSON.stringify(h.marks).includes(raw));
   for (const row of h.marks) assert.deepEqual(Object.keys(row), ['stage', 'scene', 'locale', 'width']);
  };
  for (const caseName of visibilityControlCases) {
-  const native = caseName !== 'closed-body' && caseName !== 'contents';
+  const native = !hiddenControlCases.includes(caseName) && caseName !== 'contents', positiveBox = caseName !== 'contents' && caseName !== 'body-contents';
+  const observation = { native, positiveBox, positiveRange: true };
   await check(caseName, { measureError: true }, 'measure');
-  for (const observation of [null, {}, { native, positiveRange: true, extra: raw }]) await check(caseName, { observation }, 'observation-shape');
-  await check(caseName, { observation: { native, positiveRange: raw } }, 'range-type');
-  await check(caseName, { observation: { native: !native, positiveRange: true } }, `native-${!native}-range-positive`);
-  await check(caseName, { observation: { native: raw, positiveRange: true } }, 'native-invalid-range-positive');
-  if (caseName !== 'closed-body') await check(caseName, { observation: { native, positiveRange: false } }, 'range-empty');
-  await check(caseName, { playwrightError: true }, caseName === 'closed-body' ? 'playwright-hidden-range-positive' : 'playwright-visible');
-  const privacyStages = ['public-safe-elements', 'public-safe-inspection'];
-  await check(caseName, { privacyStages, privacyRejected: caseName === 'clear' }, `privacy-${caseName === 'clear' ? 'rejected' : 'accepted'}-last-public-safe-inspection-range-positive`);
+  for (const value of [null, {}, { ...observation, extra: raw }]) await check(caseName, { observation: value }, 'observation-shape');
+  await check(caseName, { observation: { ...observation, positiveRange: raw } }, 'range-type');
+  await check(caseName, { observation: { ...observation, positiveBox: raw } }, 'box-type');
+  await check(caseName, { observation: { ...observation, positiveBox: !positiveBox } }, positiveBox ? 'box-empty' : 'box-positive');
+  await check(caseName, { observation: { ...observation, native: !native } }, `native-${!native}-range-positive`);
+  await check(caseName, { observation: { ...observation, native: raw } }, 'native-invalid-range-positive');
+  await check(caseName, { observation: { ...observation, positiveRange: false } }, 'range-empty');
+  await check(caseName, { playwrightError: true }, hiddenControlCases.includes(caseName) && caseName !== 'body-contents' ? 'playwright-hidden-range-positive' : 'playwright-visible');
+  const privacyStages = ['public-safe-elements', 'public-safe-inspection'], accepted = acceptedControlCases.includes(caseName);
+  await check(caseName, { privacyStages, privacyRejected: accepted }, `privacy-${accepted ? 'rejected' : 'accepted'}-last-public-safe-inspection-range-positive`);
   for (const last of ['none', 'public-safe-elements', 'public-safe-inputs', 'invalid']) {
    const faultyStages = last === 'none' ? [] : last === 'public-safe-elements' ? ['public-safe-elements'] : [...privacyStages, last === 'invalid' ? raw : last];
-   await check(caseName, { privacyStages: faultyStages, privacyRejected: caseName !== 'clear' }, `privacy-sequence-last-${last}-range-positive`);
+   await check(caseName, { privacyStages: faultyStages, privacyRejected: !accepted }, `privacy-sequence-last-${last}-range-positive`);
   }
  }
- await check('closed-body', { observation: { native: true, positiveRange: false } }, 'native-true-range-empty', 'empty');
- await check('closed-body', { playwrightError: true }, 'playwright-hidden-range-empty', 'empty');
- await check('closed-body', { privacyStages: ['public-safe-elements', 'public-safe-inspection'], privacyRejected: true }, 'privacy-rejected-last-public-safe-inspection-range-empty', 'empty');
 });
 test('isolated control setup, cleanup and final boundaries retain separate fail-closed checkpoints', async () => {
  for (const setup of ['route', 'page', 'blank', 'document', 'runtime-errors', 'route-boundary', 'close']) {
@@ -405,8 +468,8 @@ test('synthetic visibility control diagnostic vocabulary is closed and has no ra
  }
 });
 test('success counts explicitly separate one control context from four unchanged capture contexts', () => {
- const report = successfulReport(sourceSha); assert.equal(report.contexts, 5); assert.equal(report.captureContexts, 4); assert.equal(report.controlContexts, 1); assert.equal(report.controlCases, 6); assert.equal(report.syntheticCreates, 4); assert.equal(report.screenshots, 8);
- for (const closedBodyRange of ['positive', 'empty']) { const current = manifest(); current.visibilityControls.closedBodyRange = closedBodyRange; validateMetadata(report, current, sourceSha, compiled); }
+ const report = successfulReport(sourceSha); assert.equal(report.contexts, 5); assert.equal(report.captureContexts, 4); assert.equal(report.controlContexts, 1); assert.equal(report.controlCases, visibilityControlCases.length); assert.equal(report.syntheticCreates, 4); assert.equal(report.screenshots, 8);
+ for (const field of ['closedBodyRange', 'closedBodyBox']) for (const value of ['empty', null, false, 'unknown']) { const current = manifest(); current.visibilityControls[field] = value; assert.throws(() => validateMetadata(report, current, sourceSha, compiled)); }
  for (const field of ['contexts', 'cases', 'passed', 'screenshots', 'syntheticDocumentRequests', 'requestsToRealAPI', 'actualMutationRequests']) { const current = manifest(); current.visibilityControls[field] = field === 'passed' ? false : 99; assert.throws(() => validateMetadata(report, current, sourceSha, compiled)); }
 });
 

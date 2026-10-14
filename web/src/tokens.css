@@ -1,0 +1,18 @@
+/* Hallmark · existing Tracebolt system · additive overview roles only.
+ * Color and font roles keep the installed local Inter and light/dark palette. */
+:root {
+  --font-body: 'Inter', sans-serif;
+  --font-display: var(--font-body);
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --text-meta: 12px;
+  --text-body: 14px;
+  --text-section: 18px;
+  --text-value: 22px;
+  --text-title: 28px;
+  --radius-section: 8px;
+}
