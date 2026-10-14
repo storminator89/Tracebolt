@@ -47,6 +47,36 @@ it.each(['2020-01-01T12:00:00Z', '2026-10-13T12:00:00.123456789Z', '2026-10-13T1
     expect(time).toHaveAttribute('datetime', lastSeen); expect(time).toHaveAttribute('title', fullDate(lastSeen)); expect(time).toHaveTextContent(relativeTime(lastSeen));
 });
 
+it.each(['older-first', 'newer-first'] as const)('coalesces manual checks but accepts periodic invalidation with %s replies', async order => {
+    const timers = vi.spyOn(window, 'setInterval'), changed = vi.fn(), refreshReports = vi.fn();
+    render(<EnrollmentSection devices={[device()]} reportsAvailable deviceIds={[id]} onChanged={changed} onRefreshReports={refreshReports} onDevice={vi.fn()}/>);
+    const add = screen.getByRole('button', { name: 'Add device' });
+    await waitFor(() => expect(add).toBeEnabled()); fireEvent.click(add);
+    const consent = within(screen.getByRole('dialog')).getByRole('checkbox');
+    fireEvent.click(consent); expect(consent).toBeChecked();
+    const poll = timers.mock.calls.find(([, delay]) => delay === 10000)?.[0];
+    expect(typeof poll).toBe('function');
+    const olderValue = structuredClone(current), invalidValue = { ...structuredClone(current), collectionPrivacy: undefined };
+    let older!: (value: EnrollmentList) => void, newer!: (value: EnrollmentList) => void, olderSignal: AbortSignal | undefined;
+    vi.mocked(request).mockImplementationOnce(async (_path, options) => new Promise<EnrollmentList>(resolve => { older = resolve; olderSignal = options?.signal as AbortSignal; }));
+    vi.mocked(request).mockImplementationOnce(async () => new Promise<EnrollmentList>(resolve => { newer = resolve; }));
+    const refresh = screen.getByRole('button', { name: 'Refresh enrollment status' });
+    fireEvent.click(refresh); fireEvent.click(refresh);
+    expect(request).toHaveBeenCalledTimes(2); expect(refresh).toBeDisabled(); expect(olderSignal?.aborted).toBe(false);
+    await act(async () => { (poll as () => void)(); });
+    expect(request).toHaveBeenCalledTimes(3); expect(olderSignal?.aborted).toBe(true);
+    if (order === 'older-first') {
+        await act(async () => older(olderValue));
+        expect(refresh).toBeDisabled(); expect(refreshReports).not.toHaveBeenCalled(); expect(changed).not.toHaveBeenCalled();
+    }
+    await act(async () => newer(invalidValue));
+    expect(screen.getByRole('alert')).toBeVisible(); expect(add).toBeDisabled(); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    if (order === 'newer-first') await act(async () => older(olderValue));
+    expect(screen.getByRole('alert')).toBeVisible(); expect(add).toBeDisabled(); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('One-time invitation secret')).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Download bootstrap file' })).not.toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(3); expect(refreshReports).not.toHaveBeenCalled(); expect(changed).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+});
+
 for (const locale of ['en', 'de'] as const) describe(`conservative first-report state (${locale})`, () => {
     beforeEach(() => setLocale(locale, false)); const c = labels[locale];
     it.each(['approved', 'issuance_intent', 'issued'] as const)('keeps %s at activation pending', state => {

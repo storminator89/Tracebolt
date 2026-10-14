@@ -69,8 +69,12 @@ never authorize an action.
 Manual Check status and the enrollment refresh button now refresh the existing
 overview even when invitation IDs/revisions stay the same. Telemetry does not
 revise that snapshot. Automatic enrollment polls preserve their existing
-revision-change behavior and never unconditionally refetch the fleet. Enrollment
-reads and overview reads coalesce while pending; the explicit overview callback
+revision-change behavior and never unconditionally refetch the fleet. Manual
+enrollment reads coalesce while pending. Periodic status reads still supersede a
+stalled enrollment request, so a newer invalid consent contract can close the
+dialog and an older successful response cannot restore it. Once the enrollment
+response starts its follow-on overview read, both manual checks and polls
+coalesce until that read settles. The explicit overview callback
 does not advance unrelated fleet-detail refresh revisions; the manual check stays disabled
 until its overview result settles. A failed read withdraws waiting/activation
 claims while retaining a valid historical timestamp. No interval, endpoint,

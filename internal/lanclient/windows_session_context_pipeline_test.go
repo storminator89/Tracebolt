@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -228,6 +229,12 @@ func TestWindowsSessionContextFrameRejectsCrossScopeAndUnknownData(t *testing.T)
 }
 
 func TestWindowsSessionContextAllBlockedOptionalSourcesStillSendBase(t *testing.T) {
+	// These are cooperative source deadlines, not host-performance limits.
+	// Keep material creation inside the bubble so certificate time agrees.
+	synctest.Test(t, testWindowsSessionContextAllBlockedOptionalSourcesStillSendBase)
+}
+
+func testWindowsSessionContextAllBlockedOptionalSourcesStillSendBase(t *testing.T) {
 	m := windowsMaterialFixture(t, "http-test")
 	state, e := lanclientstate.InitializeNew(m.config.StateDirectory, m.binding)
 	if e != nil {

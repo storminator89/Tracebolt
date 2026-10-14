@@ -155,18 +155,20 @@ function EnrollmentPlatformSection({onChanged,onRefreshReports,onDevice,deviceId
   if(regressed)invalidateConfiguration();
   lastServerTime.current=authoritative;clock.current={server:authoritative+elapsed,...captureClock()};setNow(currentTime());return !regressed;
  },[currentTime,invalidateConfiguration]);
- const reading=useRef(false),reportRefreshRequested=useRef(false);
+ const reading=useRef<'enrollment'|'reports'|null>(null),reportRefreshRequested=useRef(false);
  const active=useRef(true),fetcher=useRef<AbortController|null>(null),lastState=useRef(''),lastConfiguration=useRef(''),changed=useRef(onChanged),reportRefresh=useRef(onRefreshReports);changed.current=onChanged;reportRefresh.current=onRefreshReports;
  const load=useCallback(async(refreshReports=false)=>{
   if(refreshReports)reportRefreshRequested.current=true;
-  if(reading.current&&fetcher.current&&!fetcher.current.signal.aborted)return;
-  reading.current=true;
+  // Coalesce manual clicks and the follow-on report read. Periodic reads must
+  // still replace a stalled enrollment request so newer consent can invalidate it.
+  if(reading.current&&fetcher.current&&!fetcher.current.signal.aborted&&(refreshReports||reading.current==='reports'))return;
+  reading.current='enrollment';
   fetcher.current?.abort();if(clock.current&&currentTime()===null)invalidateConfiguration();const controller=new AbortController();fetcher.current=controller;const startedAt=captureClock();setLoading(true);setError('');setMissingCapability(false);
   try{const next=await request<EnrollmentList>(enrollmentPath,{signal:controller.signal});if(!active.current||controller.signal.aborted||fetcher.current!==controller)return;if(!validEnrollmentList(next,platform,macProfile))throw new Error('invalid enrollment contract');
    const configuration=JSON.stringify([next.enabled,next.platforms,next.recordLimit,enrollmentCollectionProfile(next),next.collectionPrivacy??null]);if(lastConfiguration.current&&configuration!==lastConfiguration.current)invalidateConfiguration();lastConfiguration.current=configuration;
-   syncClock(next.serverNow,startedAt);if(configurationContext.current.signal.aborted)configurationContext.current=new AbortController();const signature=next.items.map(item=>`${item.invitationID}:${item.revision}`).join('|');const snapshotChanged=Boolean(lastState.current&&signature!==lastState.current),refreshReportEvidence=reportRefreshRequested.current;reportRefreshRequested.current=false;lastState.current=signature;setData(next);if(snapshotChanged)await changed.current();else if(refreshReportEvidence)await reportRefresh.current?.();
+   syncClock(next.serverNow,startedAt);if(configurationContext.current.signal.aborted)configurationContext.current=new AbortController();const signature=next.items.map(item=>`${item.invitationID}:${item.revision}`).join('|');const snapshotChanged=Boolean(lastState.current&&signature!==lastState.current),refreshReportEvidence=reportRefreshRequested.current;reportRefreshRequested.current=false;lastState.current=signature;setData(next);reading.current='reports';if(snapshotChanged)await changed.current();else if(refreshReportEvidence)await reportRefresh.current?.();
   }catch(error){if(active.current&&!controller.signal.aborted&&fetcher.current===controller){invalidateConfiguration();if(platform==='darwin'&&error instanceof APIError&&error.status===404)setMissingCapability(true);else setError(t('Enrollment-Status nicht verfügbar. Es werden keine Ersatzdaten angezeigt.'));}}
-  finally{if(fetcher.current===controller){reading.current=false;reportRefreshRequested.current=false;if(active.current&&!controller.signal.aborted)setLoading(false);}}
+  finally{if(fetcher.current===controller){reading.current=null;reportRefreshRequested.current=false;if(active.current&&!controller.signal.aborted)setLoading(false);}}
  },[syncClock,invalidateConfiguration,currentTime,enrollmentPath,platform,macProfile]);
  useEffect(()=>{active.current=true;void load();return()=>{active.current=false;fetcher.current?.abort();configurationContext.current.abort();};},[load]);
  useEffect(()=>{const invalidateSession=()=>{fetcher.current?.abort();invalidateConfiguration();};sessionSignal.addEventListener('abort',invalidateSession);if(sessionSignal.aborted)invalidateSession();return()=>sessionSignal.removeEventListener('abort',invalidateSession);},[sessionSignal,invalidateConfiguration]);
