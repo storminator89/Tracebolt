@@ -137,3 +137,81 @@ test('actual case36 callback waits for both content assertions before its origin
     assert.deepEqual(keys, ['Tab', 'Enter', 'PageDown']); assert.equal(globals.keyboardStage, 9);
     assert.equal(events.filter(event => event === 'bounds').length, 3);
 });
+
+// The real helper and real failure collector are exercised with fabricated
+// browser evidence. These are inert control-flow tests, never rendered proof.
+import { numericTypographyReview, shellGalleryCheckpoint, shellGalleryFailureCoordinate, shellGallerySurfaces, shellGalleryPhases } from './concise-shell-gallery.mjs';
+const { expect: browserExpect } = require('@playwright/test');
+const numericEvidence = () => ({ role: 'summary', font: { weight: '600', style: 'normal', family: 'Inter, sans-serif', numeric: 'tabular-nums' }, loadedInter: true,
+ originalText: '6', restoredText: '6', sameTextNode: true, restoredMarkup: true, restoredStyle: true, spans: [{ numeric: 'normal' }],
+ frames: [0, 1].map(() => ({ number: { x: 0, width: 24 }, container: { x: 0, width: 80 }, spans: [{ x: 30, width: 12 }], sibling: { x: 90, width: 10 } })), proportionalControl: [15, 25] });
+
+test('actual numeric assertions retain precise closed phases without changing failure identity', async () => {
+ const failures = [
+  ['font-role', e => { e.font.weight = '400'; }], ['font-role', e => { e.font.style = 'italic'; }],
+  ['loaded-face', e => { e.loadedInter = false; }], ['font-family', e => { e.font.family = 'serif'; }],
+  ['numeric-mode', e => { e.font.numeric = 'normal'; }], ['restoration', e => { e.restoredText = '7'; }],
+  ['restoration', e => { e.sameTextNode = false; }], ['restoration', e => { e.restoredMarkup = false; }], ['restoration', e => { e.restoredStyle = false; }],
+  ['span-mode', e => { e.spans[0].numeric = 'tabular-nums'; }], ['text-geometry', e => { e.frames[1].number.width++; }], ['text-geometry', e => { e.frames[1].number.x++; }],
+  ['container-geometry', e => { e.frames[1].container.width++; }], ['container-geometry', e => { e.frames[1].container.x++; }],
+  ['span-geometry', e => { e.frames[1].spans[0].x++; }], ['span-geometry', e => { e.frames[1].spans[0].width++; }],
+  ['sibling-geometry', e => { e.frames[1].sibling.x++; }], ['sibling-geometry', e => { e.frames[1].sibling.width++; }],
+  ['proportional-control', e => { e.proportionalControl = [24, 24]; }],
+ ];
+ for (const [phase, mutate] of failures) {
+  const evidence = numericEvidence(); mutate(evidence); let evaluations = 0, captured = false, original;
+  const target = { first() { return this; }, async evaluate() { return ++evaluations === 1 ? undefined : evidence; } };
+  const expect = value => value === target ? { async toBeVisible() {} } : new Proxy(browserExpect(value), { get(object, key) {
+   const member = object[key]; return typeof member === 'function' ? (...args) => { try { return member(...args); } catch (error) { original = error; throw error; } } : member;
+  } });
+  await assert.rejects(numericTypographyReview({ page: { locator: () => target }, expect, capture: async () => { captured = true; }, name: 'summary', selector: '.summary-strip strong', section: '.summary-strip', locale: 'en' }), error => error === original);
+  assert.equal(captured, false);
+  const diagnostic = createShellFailureDiagnostic(); diagnostic.failure(contract.cases[27], original);
+  assert.deepEqual(diagnostic.report('a'.repeat(40)).failures, [{ case: 28, category: 'assertion', surface: shellGallerySurfaces.indexOf('summary'), phase: shellGalleryPhases.indexOf(phase) }]);
+ }
+});
+
+test('actual screenshot producer locates source and artifact boundaries and rethrows the original failure', async () => {
+ const source = sourceFile('run.mjs'), shot = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'shot');
+ assert.ok(shot);
+ for (const phase of ['capture-position', 'screenshot', 'source-sha', 'source-head', 'source-clean', 'source-tree', 'font-resources', 'font-count', 'font-hashes', 'screenshot-hash', null]) {
+  const original = new Error('Synthetic source-boundary failure'), screenshots = []; let observed;
+  const locator = { evaluate: async () => ({}), getAttribute: async () => 'synthetic' };
+  const page = { getByRole: () => ({ count: async () => { if (phase === 'capture-position') throw original; return 0; } }), locator: () => locator,
+   screenshot: async () => { if (phase === 'screenshot') throw original; },
+   evaluate: async () => { if (phase === 'font-resources') throw original; return phase === 'font-count' ? [] : ['/assets/inter.woff2']; }, viewportSize: () => ({ width: 1440, height: 1000 }) };
+  const expect = value => new Proxy(browserExpect(value), { get(object, key) { const member = object[key]; return typeof member === 'function' ? (...args) => { try { return member(...args); } catch (error) { observed = error; throw error; } } : member; } });
+  const globals = { shellGalleryCheckpoint, expect, performance, sourceSha: phase === 'source-sha' ? 'invalid' : 'a'.repeat(40), root: '/synthetic/repository', out: '/synthetic/review', currentTest: 'synthetic', screenshots,
+   path: require('node:path'), createHash: require('node:crypto').createHash, browser: { version: () => '1.2.3' }, transportDiagnostics: new Map(), reportTransportFailure() {},
+   fs: { readFile: async file => { if (phase === 'font-hashes' && file.includes('web/dist') || phase === 'screenshot-hash' && file.includes('/review/')) throw original; return Buffer.from('synthetic bytes'); } },
+   execFileSync: (_command, args) => { if (args[0] === 'diff') { if (phase === 'source-clean') throw original; return ''; } if (args[1] === 'HEAD') return phase === 'source-head' ? 'b'.repeat(40) : 'a'.repeat(40); if (phase === 'source-tree') throw original; return 'c'.repeat(40); } };
+  shellGalleryCheckpoint('original-scene', 'summary');
+  const run = vm.runInNewContext('(' + shot.getText(source) + ')', globals);
+  if (phase) {
+   await assert.rejects(run(page, 'synthetic-concise-shell-numeric-summary-desktop-en', '.summary-strip', numericEvidence()), error => error === (observed ?? original));
+   assert.equal(screenshots.length, 0); assert.equal(shellGalleryFailureCoordinate().phase, shellGalleryPhases.indexOf(phase));
+  } else { await run(page, 'synthetic-concise-shell-numeric-summary-desktop-en', '.summary-strip', numericEvidence()); assert.equal(screenshots.length, 1); assert.equal(shellGalleryFailureCoordinate().phase, shellGalleryPhases.indexOf('manifest')); }
+ }
+});
+
+test('gallery coordinates snapshot only cases 28–31 and invalid coordinate inputs never leak', () => {
+ const diagnostic = createShellFailureDiagnostic(); shellGalleryCheckpoint('font-hashes', 'device-details');
+ for (let id = 28; id <= 31; id++) diagnostic.failure(contract.cases[id - 1], { matcherResult: {} });
+ shellGalleryCheckpoint('private-phase', 'private-surface');
+ diagnostic.failure(contract.cases[31], { matcherResult: {} });
+ const report = diagnostic.report('a'.repeat(40));
+ for (const row of report.failures.slice(0, 4)) assert.deepEqual(row, { case: row.case, category: 'assertion', surface: shellGallerySurfaces.indexOf('device-details'), phase: shellGalleryPhases.indexOf('font-hashes') });
+ assert.deepEqual(report.failures[4], { case: 32, category: 'assertion' });
+ assert.equal(JSON.stringify(report).includes('private-'), false);
+ assert.deepEqual(shellGalleryFailureCoordinate(), { surface: -1, phase: -1 });
+});
+
+test('target, font-load and in-page measurement failures retain their original error and phase', async () => {
+ for (const phase of ['target-visible', 'font-load', 'measure']) {
+  const original = new Error('Synthetic early probe failure'); let count = 0;
+  const target = { first() { return this; }, async evaluate() { count++; if (count === (phase === 'font-load' ? 1 : 2)) throw original; } };
+  const expect = value => { assert.equal(value, target); return { async toBeVisible() { if (phase === 'target-visible') throw original; } }; };
+  await assert.rejects(numericTypographyReview({ page: { locator: () => target }, expect, capture: async () => assert.fail('Unexpected capture'), name: 'summary', selector: '.summary-strip strong', section: '.summary-strip', locale: 'en' }), error => error === original);
+  assert.deepEqual(shellGalleryFailureCoordinate(), { surface: shellGallerySurfaces.indexOf('summary'), phase: shellGalleryPhases.indexOf(phase) });
+ }
+});

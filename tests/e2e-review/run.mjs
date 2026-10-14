@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAIReview } from './ai-scenarios.mjs';
 import { runShellReview } from './shell-scenarios.mjs';
-import { conciseShellGallery } from './concise-shell-gallery.mjs';
+import { conciseShellGallery, shellGalleryCheckpoint } from './concise-shell-gallery.mjs';
 import { createBrowserTransportDiagnostics, reportTransportFailure } from './browser-transport-diagnostics.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(path.join(root, 'web/package.json'));
@@ -68,6 +68,7 @@ let currentTest='';
 async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { shellDiagnostic.failure(name,error); results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); for(const diagnostics of transportDiagnostics.values()) diagnostics.dispose(); transportDiagnostics.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
 async function shot(page,name,section=null,numericTypography=null) {
+ shellGalleryCheckpoint('capture-position');
  const fullPage=false,dialog=await page.getByRole('dialog').count()>0;
  let layout=null;
  if(!dialog) {
@@ -79,6 +80,7 @@ async function shot(page,name,section=null,numericTypography=null) {
   const target=section || (name.includes('ai-fixture-case')?'.ai-analysis-panel':null);
   if(target) await page.locator(target).evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));
  }
+ shellGalleryCheckpoint('screenshot');
  const captureStarted=performance.now();
  try { await page.screenshot({path:path.join(out,`${name}.png`),fullPage,animations:'disabled'}); }
  catch(error) {
@@ -87,15 +89,24 @@ async function shot(page,name,section=null,numericTypography=null) {
  }
  let numericEvidence = {};
  if (numericTypography) {
+  shellGalleryCheckpoint('source-sha');
   expect(sourceSha).toMatch(/^[a-f0-9]{40}$/);
+  shellGalleryCheckpoint('source-head');
   expect(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()).toBe(sourceSha);
+  shellGalleryCheckpoint('source-clean');
   execFileSync('git', ['diff', '--quiet', sourceSha, '--'], { cwd: root });
+  shellGalleryCheckpoint('source-tree');
   const sourceTree = execFileSync('git', ['rev-parse', `${sourceSha}^{tree}`], { cwd: root, encoding: 'utf8' }).trim();
+  shellGalleryCheckpoint('font-resources');
   const resources = await page.evaluate(() => [...new Set(performance.getEntriesByType('resource').map(item => new URL(item.name)).filter(url => url.origin === location.origin && /^\/assets\/[^/]+\.woff2?$/.test(url.pathname)).map(url => url.pathname))]);
+  shellGalleryCheckpoint('font-count');
   expect(resources.length).toBeGreaterThan(0);
+  shellGalleryCheckpoint('font-hashes');
   const fontAssets = await Promise.all(resources.map(async asset => ({ asset, sha256: createHash('sha256').update(await fs.readFile(path.join(root, 'web/dist', asset))).digest('hex') })));
+  shellGalleryCheckpoint('screenshot-hash');
   numericEvidence = { numericTypography, sourceTree, fontAssets, browserVersion: browser.version(), sha256: createHash('sha256').update(await fs.readFile(path.join(out, `${name}.png`))).digest('hex') };
  }
+ shellGalleryCheckpoint('manifest');
  screenshots.push({...numericEvidence,fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:numericTypography?'Synthetic built-in gallery; temporary numeric-text shaping probe restored before this capture. No live React update, CLS, load-time or native zoom claim.':name.includes('concise-shell')?'Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.':name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
 }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }

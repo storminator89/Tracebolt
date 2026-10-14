@@ -2,18 +2,33 @@
  * disposable manager's built-in synthetic fixtures before any public capture. */
 import { assertDesktopNavigation, assertMobileDrawerClosed, shellDrawerKeyboardReview } from './shell-scenarios.mjs';
 
+// Closed source coordinates only. Invalid callers remain invalid; no payload,
+// DOM values or errors are retained, and recording cannot replace a failure.
+export const shellGallerySurfaces = Object.freeze(['setup', 'overview', 'summary', 'devices', 'compact', 'cases', 'settings', 'device-overview', 'device-details', 'device-evidence', 'linux-overview', 'shortcuts']);
+export const shellGalleryPhases = Object.freeze(['setup', 'original-scene', 'synthetic-guard', 'target-visible', 'font-load', 'measure', 'font-role', 'loaded-face', 'font-family', 'numeric-mode', 'restoration', 'span-mode', 'text-geometry', 'container-geometry', 'span-geometry', 'sibling-geometry', 'proportional-control', 'overflow', 'capture-position', 'screenshot', 'source-sha', 'source-head', 'source-clean', 'source-tree', 'font-resources', 'font-count', 'font-hashes', 'screenshot-hash', 'manifest', 'complete']);
+let gallerySurface = 0, galleryPhase = 0;
+export function shellGalleryCheckpoint(phase, surface) {
+ if (surface !== undefined) gallerySurface = shellGallerySurfaces.indexOf(surface);
+ galleryPhase = shellGalleryPhases.indexOf(phase);
+}
+export const shellGalleryFailureCoordinate = () => ({ surface: gallerySurface, phase: galleryPhase });
+
+
 /** Steady-state shaping probe on the actual rendered synthetic component. It
  * temporarily substitutes only its numeric text, measures a DOM Range, then
  * restores it before capture. This is not a React-update, CLS or loading test. */
 export async function numericTypographyReview({ page, expect, capture, name, selector, section, locale, decimal = false }) {
+ shellGalleryCheckpoint('target-visible', name);
  const target = page.locator(selector).first();
  await expect(target).toBeVisible();
  const samples = decimal ? locale === 'de' ? ['11,1', '88,8'] : ['11.1', '88.8'] : ['111', '888'];
+ shellGalleryCheckpoint('font-load');
  await target.evaluate(async element => {
   const style = getComputedStyle(element);
   await document.fonts.load(`${style.fontWeight} ${style.fontSize} Inter`, '0123456789');
   await document.fonts.ready;
  });
+ shellGalleryCheckpoint('measure');
  const evidence = await target.evaluate((element, samples) => {
   const number = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && /[0-9]/.test(node.data));
   if (!number) throw new Error('Synthetic numeric text is not a direct child');
@@ -44,19 +59,32 @@ export async function numericTypographyReview({ page, expect, capture, name, sel
  }, samples);
  // These existing styles.css weights are source-checked by the focused suite.
  const weights = { summary: '600', compact: '400', expanded: '500' };
+ shellGalleryCheckpoint('font-role');
  expect(evidence.font.weight).toBe(weights[evidence.role]); expect(evidence.font.style).toBe('normal');
- expect(evidence.loadedInter).toBe(true); expect(evidence.font.family).toMatch(/^\"?Inter\"?(?:,|$)/);
- expect(evidence.font.numeric).toBe('tabular-nums'); expect(evidence.restoredText).toBe(evidence.originalText);
+ shellGalleryCheckpoint('loaded-face');
+ expect(evidence.loadedInter).toBe(true);
+ shellGalleryCheckpoint('font-family'); expect(evidence.font.family).toMatch(/^\"?Inter\"?(?:,|$)/);
+ shellGalleryCheckpoint('numeric-mode');
+ expect(evidence.font.numeric).toBe('tabular-nums');
+ shellGalleryCheckpoint('restoration'); expect(evidence.restoredText).toBe(evidence.originalText);
+ shellGalleryCheckpoint('restoration');
  expect(evidence.sameTextNode && evidence.restoredMarkup && evidence.restoredStyle).toBe(true);
+ shellGalleryCheckpoint('span-mode');
  for (const span of evidence.spans) expect(span.numeric).toBe('normal');
  const [first, second] = evidence.frames;
  const stable = (a, b) => expect(Math.abs(a - b)).toBeLessThanOrEqual(0.1);
+ shellGalleryCheckpoint('text-geometry');
  stable(first.number.width, second.number.width); stable(first.number.x, second.number.x);
+ shellGalleryCheckpoint('container-geometry');
  stable(first.container.width, second.container.width); stable(first.container.x, second.container.x);
+ shellGalleryCheckpoint('span-geometry');
  for (let i = 0; i < first.spans.length; i++) { stable(first.spans[i].x, second.spans[i].x); stable(first.spans[i].width, second.spans[i].width); }
+ shellGalleryCheckpoint('sibling-geometry');
  if (first.sibling) { stable(first.sibling.x, second.sibling.x); stable(first.sibling.width, second.sibling.width); }
+ shellGalleryCheckpoint('proportional-control');
  expect(Math.abs(evidence.proportionalControl[0] - evidence.proportionalControl[1])).toBeGreaterThan(0.1);
  await capture(`numeric-${name}`, section, evidence);
+ shellGalleryCheckpoint('original-scene');
 }
 
 async function inventoryKeyboardReview({ page, expect, capture, locale, size }) {
@@ -121,25 +149,33 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
  const { fixture, device, statusDevice, selectedCase } = conciseShellTargets(data);
  for (const locale of ['en', 'de']) for (const [size, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
   await test(`Concise shell every-page synthetic gallery ${size} ${locale}`, async () => {
+   shellGalleryCheckpoint('setup', 'setup');
    const page = await pageAt('/overview', viewport, { reviewLocale: locale });
    await page.route('**/api/overview', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) }));
    await page.reload(); await loaded(page);
    const capture = async (name, section, numericTypography) => {
+    shellGalleryCheckpoint('overflow');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1 && document.body.scrollWidth <= innerWidth + 1)).toBe(true);
     await shot(page, `synthetic-concise-shell-${name}-${size}-${locale}`, section, numericTypography);
+    shellGalleryCheckpoint('original-scene');
    };
+   shellGalleryCheckpoint('synthetic-guard', 'overview');
    await expect(page.locator('.fleet-panel .device-table .source.real')).toHaveCount(0);
+   shellGalleryCheckpoint('original-scene');
    if (size === 'desktop') await assertDesktopNavigation({ page, expect });
    await numericTypographyReview({ page, expect, capture, locale, name: 'summary', selector: '.summary-strip strong', section: '.summary-strip' });
+   shellGalleryCheckpoint('synthetic-guard', 'overview');
    await expect(page.locator('.fleet-panel .device-table .source.real')).toHaveCount(0);
    await capture('overview');
    for (const route of ['devices', 'cases', 'settings']) {
+    shellGalleryCheckpoint('original-scene', route);
     await page.goto(new URL(`#/${route}`, page.url()).href); await loaded(page);
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
     if (route === 'devices' && size === 'desktop') {
      // Compact fleet metrics are intentionally hidden at the mobile breakpoint.
      await numericTypographyReview({ page, expect, capture, locale, name: 'compact', selector: '.device-table .metric-value:not(:has(.unavailable)):visible', section: '.device-table' });
     }
+    shellGalleryCheckpoint('original-scene', route);
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
     await capture(route);
     if (route === 'devices') {
@@ -153,6 +189,7 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     }
     if (route === 'settings') await capture('settings-runtime', '.settings-grid');
    }
+   shellGalleryCheckpoint('original-scene', 'device-overview');
    await page.goto(new URL(`#/devices/${device.id}`, page.url()).href);
    await expect(page.locator('.device-page h1')).toHaveText(device.name);
    if (size === 'mobile') {
@@ -164,12 +201,14 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     await expect(page).toHaveURL(deviceRoute); await capture('device-drawer-escape');
    }
    for (const [key, name] of [['overview', locale === 'de' ? 'Übersicht' : 'Overview'], ['details', 'Details'], ['evidence', locale === 'de' ? 'Belege' : 'Evidence']]) {
+    shellGalleryCheckpoint('original-scene', `device-${key}`);
     await page.getByRole('tab', { name, exact: true }).click();
     if (key === 'overview' || key === 'details') await numericTypographyReview({ page, expect, capture, locale, name: `device-${key}`, selector: '.device-metrics .metric-value:not(:has(.unavailable)):visible', section: '.device-metrics', decimal: key === 'overview' });
     await expect(page.locator('.device-page h1')).toHaveText(device.name);
     await capture(`device-${key}`);
    }
    if (locale === 'de') {
+    shellGalleryCheckpoint('original-scene', 'linux-overview');
     // Windows has its own overview. Exercise the original three-card contract
     // on a separately whitelisted Linux demo, without dropping Windows views.
     await page.goto(new URL(`#/devices/${statusDevice.id}`, page.url()).href);
@@ -196,12 +235,15 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     }
     await capture('linux-device-overview');
    }
+   shellGalleryCheckpoint('original-scene', 'cases');
    await page.goto(new URL(`#/cases/${selectedCase.id}`, page.url()).href);
    await expect(page.locator('.case-detail-header h1')).toHaveText(selectedCase.title);
    await capture('case'); await capture('case-steps', '.next-steps-panel');
+   shellGalleryCheckpoint('original-scene', 'shortcuts');
    await page.keyboard.press('?');
    await expect(page.getByRole('dialog', { name: locale === 'de' ? 'Tastenkürzel' : 'Keyboard shortcuts', exact: true })).toBeVisible();
    await capture('shortcuts'); await page.keyboard.press('Escape');
+   shellGalleryCheckpoint('complete');
   });
  }
 }
