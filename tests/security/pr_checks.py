@@ -1207,7 +1207,7 @@ def shell_route_loading_location(path, sha):
 SHELL_CASES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/shell-browser-cases.json'
 SHELL_FAILURE_CATEGORIES = ('assertion', 'timeout', 'other')
 SHELL_GALLERY_SURFACES = ('setup', 'overview', 'summary', 'devices', 'compact', 'cases', 'settings', 'device-overview', 'device-details', 'device-evidence', 'linux-overview', 'shortcuts')
-SHELL_GALLERY_PHASES = ('setup', 'original-scene', 'synthetic-guard', 'target-visible', 'font-load', 'measure', 'font-role', 'loaded-face', 'font-family', 'numeric-mode', 'restoration', 'span-mode', 'text-geometry', 'container-geometry', 'span-geometry', 'sibling-geometry', 'proportional-control', 'overflow', 'capture-position', 'screenshot', 'source-sha', 'source-head', 'source-clean', 'source-tree', 'font-resources', 'font-count', 'font-hashes', 'screenshot-hash', 'manifest', 'complete')
+SHELL_GALLERY_PHASES = ('setup', 'original-scene', 'synthetic-guard', 'target-visible', 'font-load', 'measure', 'font-role', 'loaded-face', 'font-family', 'numeric-mode', 'restoration', 'span-mode', 'text-geometry', 'container-geometry', 'span-geometry', 'sibling-geometry', 'proportional-control', 'overflow', 'capture-position', 'screenshot', 'source-sha', 'source-head', 'source-clean', 'source-tree', 'font-resources', 'font-count', 'font-hashes', 'screenshot-hash', 'manifest', 'complete', 'restoration-text', 'restoration-node', 'restoration-markup', 'restoration-style')
 SHELL_KEYBOARD_STAGES = ('navigation', 'case-content', 'initial-bounds', 'skip-focus', 'main-focus',
                          'page-scroll', 'scrolled-bounds', 'menu-navigation', 'final-bounds', 'complete')
 

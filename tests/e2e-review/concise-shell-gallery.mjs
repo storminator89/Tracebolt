@@ -5,7 +5,7 @@ import { assertDesktopNavigation, assertMobileDrawerClosed, shellDrawerKeyboardR
 // Closed source coordinates only. Invalid callers remain invalid; no payload,
 // DOM values or errors are retained, and recording cannot replace a failure.
 export const shellGallerySurfaces = Object.freeze(['setup', 'overview', 'summary', 'devices', 'compact', 'cases', 'settings', 'device-overview', 'device-details', 'device-evidence', 'linux-overview', 'shortcuts']);
-export const shellGalleryPhases = Object.freeze(['setup', 'original-scene', 'synthetic-guard', 'target-visible', 'font-load', 'measure', 'font-role', 'loaded-face', 'font-family', 'numeric-mode', 'restoration', 'span-mode', 'text-geometry', 'container-geometry', 'span-geometry', 'sibling-geometry', 'proportional-control', 'overflow', 'capture-position', 'screenshot', 'source-sha', 'source-head', 'source-clean', 'source-tree', 'font-resources', 'font-count', 'font-hashes', 'screenshot-hash', 'manifest', 'complete']);
+export const shellGalleryPhases = Object.freeze(['setup', 'original-scene', 'synthetic-guard', 'target-visible', 'font-load', 'measure', 'font-role', 'loaded-face', 'font-family', 'numeric-mode', 'restoration', 'span-mode', 'text-geometry', 'container-geometry', 'span-geometry', 'sibling-geometry', 'proportional-control', 'overflow', 'capture-position', 'screenshot', 'source-sha', 'source-head', 'source-clean', 'source-tree', 'font-resources', 'font-count', 'font-hashes', 'screenshot-hash', 'manifest', 'complete', 'restoration-text', 'restoration-node', 'restoration-markup', 'restoration-style']);
 let gallerySurface = 0, galleryPhase = 0;
 export function shellGalleryCheckpoint(phase, surface) {
  if (surface !== undefined) gallerySurface = shellGallerySurfaces.indexOf(surface);
@@ -66,8 +66,9 @@ export async function numericTypographyReview({ page, expect, capture, name, sel
  shellGalleryCheckpoint('font-family'); expect(evidence.font.family).toMatch(/^\"?Inter\"?(?:,|$)/);
  shellGalleryCheckpoint('numeric-mode');
  expect(evidence.font.numeric).toBe('tabular-nums');
- shellGalleryCheckpoint('restoration'); expect(evidence.restoredText).toBe(evidence.originalText);
- shellGalleryCheckpoint('restoration');
+ shellGalleryCheckpoint('restoration-text'); expect(evidence.restoredText).toBe(evidence.originalText);
+ // Locate the first failed term without changing the original combined guard.
+ shellGalleryCheckpoint(!evidence.sameTextNode ? 'restoration-node' : !evidence.restoredMarkup ? 'restoration-markup' : !evidence.restoredStyle ? 'restoration-style' : 'restoration');
  expect(evidence.sameTextNode && evidence.restoredMarkup && evidence.restoredStyle).toBe(true);
  shellGalleryCheckpoint('span-mode');
  for (const span of evidence.spans) expect(span.numeric).toBe('normal');

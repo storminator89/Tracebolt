@@ -150,8 +150,8 @@ test('actual numeric assertions retain precise closed phases without changing fa
  const failures = [
   ['font-role', e => { e.font.weight = '400'; }], ['font-role', e => { e.font.style = 'italic'; }],
   ['loaded-face', e => { e.loadedInter = false; }], ['font-family', e => { e.font.family = 'serif'; }],
-  ['numeric-mode', e => { e.font.numeric = 'normal'; }], ['restoration', e => { e.restoredText = '7'; }],
-  ['restoration', e => { e.sameTextNode = false; }], ['restoration', e => { e.restoredMarkup = false; }], ['restoration', e => { e.restoredStyle = false; }],
+  ['numeric-mode', e => { e.font.numeric = 'normal'; }], ['restoration-text', e => { e.restoredText = '7'; }],
+  ['restoration-node', e => { e.sameTextNode = false; }], ['restoration-markup', e => { e.restoredMarkup = false; }], ['restoration-style', e => { e.restoredStyle = false; }],
   ['span-mode', e => { e.spans[0].numeric = 'tabular-nums'; }], ['text-geometry', e => { e.frames[1].number.width++; }], ['text-geometry', e => { e.frames[1].number.x++; }],
   ['container-geometry', e => { e.frames[1].container.width++; }], ['container-geometry', e => { e.frames[1].container.x++; }],
   ['span-geometry', e => { e.frames[1].spans[0].x++; }], ['span-geometry', e => { e.frames[1].spans[0].width++; }],
@@ -214,4 +214,21 @@ test('target, font-load and in-page measurement failures retain their original e
   await assert.rejects(numericTypographyReview({ page: { locator: () => target }, expect, capture: async () => assert.fail('Unexpected capture'), name: 'summary', selector: '.summary-strip strong', section: '.summary-strip', locale: 'en' }), error => error === original);
   assert.deepEqual(shellGalleryFailureCoordinate(), { surface: shellGallerySurfaces.indexOf('summary'), phase: shellGalleryPhases.indexOf(phase) });
  }
+});
+
+
+test('restoration subphase names only the first failed invariant and preserves the combined guard', async () => {
+ const fields = ['sameTextNode', 'restoredMarkup', 'restoredStyle'], phases = ['restoration-node', 'restoration-markup', 'restoration-style'];
+ for (let mask = 1; mask < 8; mask++) {
+  const evidence = numericEvidence(); let evaluations = 0, captured = false;
+  fields.forEach((field, index) => { if (mask & (1 << index)) evidence[field] = false; });
+  const target = { first() { return this; }, async evaluate() { return ++evaluations === 1 ? undefined : evidence; } };
+  const expect = value => value === target ? { async toBeVisible() {} } : browserExpect(value);
+  await assert.rejects(numericTypographyReview({ page: { locator: () => target }, expect, capture: async () => { captured = true; }, name: 'summary', selector: '.summary-strip strong', section: '.summary-strip', locale: 'en' }));
+  assert.equal(captured, false);
+  const first = fields.findIndex(field => !evidence[field]);
+  assert.equal(shellGalleryFailureCoordinate().phase, shellGalleryPhases.indexOf(phases[first]));
+ }
+ const source = fs.readFileSync(new URL('concise-shell-gallery.mjs', import.meta.url), 'utf8');
+ assert.ok(source.includes('expect(evidence.sameTextNode && evidence.restoredMarkup && evidence.restoredStyle).toBe(true)'));
 });
