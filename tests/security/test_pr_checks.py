@@ -818,7 +818,11 @@ class LANFailureTests(unittest.TestCase):
 
     def test_lan_codes_match_existing_case_order_and_cve_stages(self):
         runner = (ROOT / p.FLOWS['lan']).read_text()
-        names = []
+        route_source = (ROOT / 'tests/e2e-review/route-loading-browser.mjs').read_text()
+        route_names = re.search(r'export const routeLoadingCaseNames = Object.freeze\(\[(.*?)\]\);', route_source, re.S)[1]
+        names = re.findall(r"'([^']+)'", route_names)
+        self.assertEqual(len(names), 4)
+        self.assertLess(runner.index('await runRouteLoadingChecks('), runner.index('await check('))
         for literal, symbol in re.findall(r"await check\((?:'([^']+)'|([A-Za-z][A-Za-z0-9_]+)),", runner):
             if literal:
                 names.append(literal)
@@ -828,7 +832,7 @@ class LANFailureTests(unittest.TestCase):
                 source = (ROOT / 'tests/e2e-review' / module).read_text()
                 names.append(re.search(r'export const ' + symbol + r"\s*=\s*'([^']+)'", source)[1])
         self.assertEqual(list(p.LAN_FAILURE_CASES), names)
-        self.assertEqual(len(names), 27)
+        self.assertEqual(len(names), 31)
         self.assertEqual(len(set(p.LAN_FAILURE_CASES.values())), len(names))
         for code in p.LAN_FAILURE_CASES.values(): self.assertRegex(code, r'^[a-z][a-z0-9-]{0,70}$')
         self.assertLessEqual(set(p.LAN_FAILURE_STAGES), set(p.LAN_FAILURE_CASES.values()))
@@ -844,6 +848,31 @@ class LANFailureTests(unittest.TestCase):
                              'expired retained input', 'device navigation isolation', 'session loss isolation',
                              'fresh login isolation', 'final guards'})
         for stage in p.LAN_FAILURE_STAGES['cve-detail-pages']: self.assertIn("'" + stage + "'", source)
+
+    def test_route_loading_stages_remain_closed_and_unknown_coordinates_are_rejected(self):
+        source = (ROOT / 'tests/e2e-review/route-loading-browser.mjs').read_text()
+        expected = {
+            'route-loading': {'setup', 'loading-captures', 'blurred-route-replacement'},
+            'route-loading-resume': {'setup', 'pending-pagehide', 'auth-revalidation'},
+            'route-loading-auth': {'setup', 'pending-logout', 'pending-auth-loss'},
+            'route-loading-recovery': {'setup', 'module-failure', 'failure-captures', 'deliberate-reload'},
+        }
+        for code, stages in expected.items():
+            self.assertEqual(p.LAN_FAILURE_STAGES[code], {stage: stage for stage in stages})
+            for stage in stages: self.assertIn("'" + stage + "'", source)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for code in expected:
+                    for key, value in [('name', 'Unknown route case'), ('stage', 'unreviewed-stage'),
+                                       ('stage', 'PRIVATE_RAW_STATE_MUST_STAY_WITHHELD'), ('raw', 'private'),
+                                       ('stage', 'sparse-search')]:
+                        report = self.report([code])
+                        next(row for row in report['results'] if row['status'] == 'FAIL')[key] = value
+                        target.write_text(json.dumps(report))
+                        with self.subTest(code=code, key=key, value=value):
+                            self.assertIsNone(p.lan_failure_location(SHA))
 
     def test_windows_inventory_service_stages_are_closed_source_vocabulary(self):
         source = (ROOT / 'tests/e2e-review/windows-service-health-browser.mjs').read_text()
@@ -899,8 +928,8 @@ class LANFailureTests(unittest.TestCase):
                            ('summary', []), ('createdAt', 1), ('scope', {}), ('faultInjection', []),
                            ('credentialMaterial', None), ('screenshots', []), ('raw', marker)]:
             cases.append({**good, key: value})
-        for key, value in [('passed', 27), ('failed', 0), ('passed', 26.0), ('failed', True),
-                           ('setupFailure', 0), ('setupFailure', 'false'), ('passed', -1), ('failed', 28), ('raw', marker)]:
+        for key, value in [('passed', len(p.LAN_FAILURE_CASES)), ('failed', 0), ('passed', float(len(p.LAN_FAILURE_CASES) - 1)), ('failed', True),
+                           ('setupFailure', 0), ('setupFailure', 'false'), ('passed', -1), ('failed', len(p.LAN_FAILURE_CASES) + 1), ('raw', marker)]:
             cases.append({**good, 'summary': {**good['summary'], key: value}})
         index = next(i for i, row in enumerate(good['results']) if row['status'] == 'FAIL')
         for key, value in [('name', marker), ('name', []), ('status', True), ('status', marker),
@@ -913,7 +942,7 @@ class LANFailureTests(unittest.TestCase):
             changed = deepcopy(good); del changed['results'][index][key]; cases.append(changed)
         for key in good:
             changed = deepcopy(good); del changed[key]; cases.append(changed)
-        for index in [0, 10, 26]:
+        for index in [0, 10, len(p.LAN_FAILURE_CASES) - 1]:
             changed = deepcopy(good); changed['results'][index] = changed['results'][1]; cases.append(changed)
         changed = deepcopy(good); changed['results'].reverse(); cases.append(changed)
         changed = deepcopy(good); changed['results'][0]['stage'] = 'setup'; cases.append(changed)

@@ -1,3 +1,4 @@
+import {routeLoadingDevelopmentCase,routeLoadingDevelopmentCaseName} from './route-loading-browser.mjs';
 /** Independent local-only acceptance checks.
  * Run from repository root: node tests/e2e-review/run.mjs
  * Uses the built web/dist, compiles a disposable manager, and creates a unique
@@ -86,6 +87,7 @@ async function shot(page,name,section=null) {
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
 try {
+ await test(routeLoadingDevelopmentCaseName,()=>routeLoadingDevelopmentCase({pageAt,expect,base,caseItem}));
  await test('Desktop light overview: real API, provenance, no layout overflow', async()=>{
   const page=await pageAt(); await loaded(page);
   await expect(page.getByRole('heading',{name:'Übersicht',exact:true,level:1})).toBeVisible();

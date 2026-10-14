@@ -630,6 +630,10 @@ def fleet_msi_failure_location(sha):
 # Closed coordinates from lan-browser.mjs and its reviewed case modules. These
 # literals, never report prose or nested diagnostics, are the only output labels.
 LAN_FAILURE_CASES = {
+    'Deferred details stay absent on login and overview, and respect blurred route replacement': 'route-loading',
+    'Deferred details wait through pagehide and completed auth revalidation': 'route-loading-resume',
+    'Deferred details cannot mount after logout or protected auth loss': 'route-loading-auth',
+    'Rejected detail module is contained and deliberate reload retries without mutation replay': 'route-loading-recovery',
     'Automatic certificate renewal metadata remains explicit and bounded': 'certificate-renewal',
     'Synthetic presentation-only service actions show exact review and uncertain outcomes without approval or execution': 'service-action-display',
     'Real HTTP-test login defaults to English, blocks protected data and retains a localized transport warning': 'login-warning',
@@ -661,11 +665,16 @@ LAN_FAILURE_CASES = {
 # Other existing cases may report stages, but only the detail-page coordinates
 # needed for this failure investigation are promoted to public output here.
 LAN_STAGE_CASES = {
+    'route-loading', 'route-loading-resume', 'route-loading-auth', 'route-loading-recovery',
     'service-action-display', 'application-status', 'application-settings', 'windows-inventory',
     'resource-history', 'capabilities', 'journal-browse', 'journal-ai', 'package-updates',
     'proactive-ai', 'investigations', 'cve-detail-pages',
 }
 LAN_FAILURE_STAGES = {
+    'route-loading': {stage: stage for stage in ('setup', 'loading-captures', 'blurred-route-replacement')},
+    'route-loading-resume': {stage: stage for stage in ('setup', 'pending-pagehide', 'auth-revalidation')},
+    'route-loading-auth': {stage: stage for stage in ('setup', 'pending-logout', 'pending-auth-loss')},
+    'route-loading-recovery': {stage: stage for stage in ('setup', 'module-failure', 'failure-captures', 'deliberate-reload')},
     'windows-inventory': {stage: stage for stage in (
         'services-source', 'services-disabled', 'services-pending', 'services-attention',
         'services-unknown', 'services-recovered', 'services-policy-changed',

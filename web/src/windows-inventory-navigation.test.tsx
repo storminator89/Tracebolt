@@ -10,6 +10,8 @@ vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(
 const prefix = `/devices/${windowsDeviceId}`;
 const inventoryPath = `${prefix}/windows-inventory`;
 const flush = () => act(async () => {});
+// These resource-lifecycle checks start after the actual lazy route has mounted.
+async function mountApp() { render(<App/>); await flush(); await act(async () => { await vi.dynamicImportSettled(); }); }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function route(hash: string) {
     // replaceState avoids jsdom queuing a second synthetic hashchange later.
@@ -42,7 +44,7 @@ describe('Windows inventory navigation lifecycle', () => {
     it('rereads after batched away-and-back navigation before the first inventory response', async () => {
         const old = deferred<ReturnType<typeof windowsStorageIOView>>(), fresh = deferred<ReturnType<typeof windowsStorageIOView>>();
         nextInventory = () => old.promise;
-        render(<App/>); await flush(); expect(inventoryReads()).toHaveLength(1);
+        await mountApp(); await flush(); expect(inventoryReads()).toHaveLength(1);
         const signal = inventoryReads()[0][1]?.signal;
         nextInventory = () => fresh.promise;
         act(() => { route('/devices'); route(prefix); }); await flush();
@@ -54,7 +56,7 @@ describe('Windows inventory navigation lifecycle', () => {
         expect(storage()).toHaveTextContent('120.5 ops/s');
     });
     it('clears already displayed values until the same device has a fresh post-navigation response', async () => {
-        render(<App/>); await flush(); openStorage(); expect(storage()).toHaveTextContent('120.5 ops/s');
+        await mountApp(); await flush(); openStorage(); expect(storage()).toHaveTextContent('120.5 ops/s');
         const fresh = deferred<ReturnType<typeof windowsStorageIOView>>(); nextInventory = () => fresh.promise;
         act(() => { route('/devices'); route(prefix); }); await flush();
         expect(storage()).toBeNull(); expect(inventoryReads()).toHaveLength(2);
@@ -63,7 +65,7 @@ describe('Windows inventory navigation lifecycle', () => {
         expect(storage()).toHaveTextContent('120.5 ops/s');
     });
     it('clears visible private values and does not read the departed device after navigation away', async () => {
-        render(<App/>); await flush(); openStorage(); expect(storage()).toHaveTextContent('120.5 ops/s');
+        await mountApp(); await flush(); openStorage(); expect(storage()).toHaveTextContent('120.5 ops/s');
         const old = deferred<ReturnType<typeof windowsStorageIOView>>(); nextInventory = () => old.promise;
         fireEvent.click(screen.getByRole('button', { name: 'Refresh Windows inventory' }));
         const signal = inventoryReads().at(-1)![1]?.signal, count = inventoryReads().length;
@@ -73,7 +75,7 @@ describe('Windows inventory navigation lifecycle', () => {
         expect(storage()).toBeNull(); expect(inventoryReads()).toHaveLength(count);
     });
     it('keeps authentication loss terminal across a batched return and a late response', async () => {
-        render(<App/>); await flush(); openStorage(); expect(storage()).toHaveTextContent('120.5 ops/s');
+        await mountApp(); await flush(); openStorage(); expect(storage()).toHaveTextContent('120.5 ops/s');
         const late = deferred<ReturnType<typeof windowsStorageIOView>>(); nextInventory = () => late.promise;
         fireEvent.click(screen.getByRole('button', { name: 'Refresh Windows inventory' }));
         const signal = inventoryReads().at(-1)![1]?.signal, count = inventoryReads().length;
