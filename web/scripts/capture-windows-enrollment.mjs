@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boundedRegular, captureMatrix, diagnostic, disclosure, origin, requireHosted, scenes, validateDialogPNG, viewports } from './windows-enrollment-contract.mjs';
+import { boundedRegular, captureMatrix, diagnostic, disclosure, origin, publicSafeFailures, requireHosted, scenes, validateDialogPNG, viewports } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, listing, now, record, secret } from './windows-enrollment-fixtures.mjs';
 export { captureMatrix, disclosure, origin, scenes, viewports };
 const root = fileURLToPath(new URL('../../', import.meta.url)), require = createRequire(new URL('../package.json', import.meta.url));
@@ -90,21 +90,34 @@ export async function check() {
 }
 /** The captured production dialog must contain no secret or rendered raw fixture
  * identity/bootstrap value. Background fixture IDs are not private identities. */
-export async function assertPublicSafe(page, dialog, expect) {
+export async function assertPublicSafe(page, dialog, expect, mark = () => {}) {
+ mark('public-safe-elements');
  await expect(page.locator('.enrollment-secret, .enrollment-fingerprint, .enrollment-comparison')).toHaveCount(0);
- const safe = await dialog.evaluate((dialog, { secret, invitation }) => {
+ mark('public-safe-inspection');
+ const failure = await dialog.evaluate((dialog, { secret, invitation }) => {
   const identifier = /(?:invite|manager|request|claim|agent)_[a-f0-9]{32}|(?:ab){32}|(?:12ab){8}/;
-  // Range rectangles respect the unchanged closed Target & profile disclosure.
+  // Keep the existing Range predicate unchanged. Closed-disclosure ancestry
+  // labels a failure only; it never exempts text or proves pixel visibility.
   const walker = document.createTreeWalker(dialog, NodeFilter.SHOW_TEXT); let node;
   while ((node = walker.nextNode())) {
    const parent = node.parentElement;
    if (!parent || parent.closest('script,style')) continue;
    const range = document.createRange(); range.selectNodeContents(node);
-   if ([...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0) && (node.textContent.includes(secret) || identifier.test(node.textContent))) return false;
+   if ([...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0) && (node.textContent.includes(secret) || identifier.test(node.textContent))) {
+    for (let ancestor = parent; ancestor; ancestor = ancestor.parentElement) {
+     if (ancestor.matches('details:not([open])') && !ancestor.querySelector(':scope > summary')?.contains(parent)) return 'public-safe-text-closed-details';
+    }
+    return 'public-safe-text';
+   }
   }
-  return ![...document.querySelectorAll('input')].some(input => input.value.includes(secret) || identifier.test(input.value)) && !location.href.includes(secret) && !location.href.includes(invitation) && !JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret);
+  if ([...document.querySelectorAll('input')].some(input => input.value.includes(secret) || identifier.test(input.value))) return 'public-safe-inputs';
+  if (location.href.includes(secret) || location.href.includes(invitation)) return 'public-safe-location';
+  if (JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret)) return 'public-safe-storage';
+  return null;
  }, { secret, invitation });
- assert(safe, 'Unsafe public capture surface');
+ assert(failure === null || publicSafeFailures.includes(failure), 'Invalid public-safety diagnostic');
+ if (failure !== null) mark(failure);
+ assert(failure === null, 'Unsafe public capture surface');
 }
 export async function capture({ browser, expect, output, onStage = () => {} }) {
  requireHosted(); const mark = (stage, index = null) => onStage(diagnostic(stage, index));
@@ -149,7 +162,7 @@ export async function capture({ browser, expect, output, onStage = () => {} }) {
     await target.evaluate(element => { const dialog = element.closest('[role="dialog"]'); if (!dialog) throw new Error('Missing dialog'); const top = element.getBoundingClientRect().top - dialog.getBoundingClientRect().top + dialog.scrollTop; dialog.scrollTo({ top: Math.max(0, top - 24), behavior: 'instant' }); });
     await expect(target).toBeInViewport({ ratio: 1 });
     mark('no-overflow', matrixIndex); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-    mark('public-safe', matrixIndex); await assertPublicSafe(page, dialog, expect);
+    mark('public-safe', matrixIndex); await assertPublicSafe(page, dialog, expect, stage => mark(stage, matrixIndex));
     mark('screenshot', matrixIndex); await dialog.screenshot({ path: path.join(output, row.file), animations: 'disabled' });
     mark('runtime-errors', matrixIndex); assert.equal(runtimeErrors, 0);
     mark('route-boundary', matrixIndex); assert.equal(state.external + state.unexpected + state.writes, 0); assert.equal(state.syntheticCreates, 1); assert.equal(state.csrfReads, 1);

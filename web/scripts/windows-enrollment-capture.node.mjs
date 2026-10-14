@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { test } from 'node:test';
-import { capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
-import { boundedRegular, diagnostic, stages, requireHosted, validateDialogPNG } from './windows-enrollment-contract.mjs';
+import { assertPublicSafe, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
+import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
 const compiled = await compile(), sourceSha = 'a'.repeat(40);
@@ -105,7 +105,7 @@ test('every image row binds scene, viewport, cropped dimensions, hash and one sy
 });
 test('capture uses the unchanged real dialog, scoped scroll and lifecycle secret clearing', async () => {
  const source = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8');
- for (const pattern of ["dialog.locator('.enrollment-windows-install')", "window.dispatchEvent(new Event('pagehide'))", "window.dispatchEvent(new Event('pageshow'))", "await expect(input).toHaveCount(0)", "element.closest('[role=\"dialog\"]')", 'dialog.scrollTo', 'await assertPublicSafe(page, dialog, expect)', 'await dialog.screenshot(', 'await expect(target).toBeInViewport({ ratio: 1 })']) assert(source.includes(pattern), pattern);
+ for (const pattern of ["dialog.locator('.enrollment-windows-install')", "window.dispatchEvent(new Event('pagehide'))", "window.dispatchEvent(new Event('pageshow'))", "await expect(input).toHaveCount(0)", "element.closest('[role=\"dialog\"]')", 'dialog.scrollTo', 'await assertPublicSafe(page, dialog, expect, stage => mark(stage, matrixIndex))', 'await dialog.screenshot(', 'await expect(target).toBeInViewport({ ratio: 1 })']) assert(source.includes(pattern), pattern);
  assert.doesNotMatch(source, /page\.setContent|innerHTML\s*=|outerHTML\s*=|page\.addStyleTag|mask:|maskColor:|visibility: hidden|\.fill\(|\.type\(|\.pressSequentially\(/);
 });
 test('existing hosted browser job runs the strict capture gate and uploads its eight exact images', async () => {
@@ -202,4 +202,102 @@ test('bounded reader fails closed on descriptor swaps, changed metadata, extra b
   if (mode === 'pass') assert.equal((await reader('/fixture/input', 3)).toString(), 'aaa'); else await assert.rejects(() => reader('/fixture/input', 3), mode);
   assert(closed);
  }
+});
+
+// Read-only DOM/geometry model, not a browser or a claim about Chromium layout.
+function publicSafetyHarness({ text = 'Reviewed setup instructions', rectangles = [{ width: 1, height: 1 }], ancestry = 'ordinary', inputs = [], href = origin + '/', local = {}, session = {}, protectedCount = 0, inspectionError = false, returnedFailure } = {}) {
+ const element = (kind, parentElement = null) => ({
+  kind, parentElement,
+  matches(selector) { assert.equal(selector, 'details:not([open])'); return this.kind === 'closed-details'; },
+  querySelector(selector) { assert.equal(selector, ':scope > summary'); return this.summary ?? null; },
+  contains(target) { for (let node = target; node; node = node.parentElement) if (node === this) return true; return false; },
+  closest(selector) { assert.equal(selector, 'script,style'); return ['script', 'style'].includes(this.kind) ? this : null; },
+ });
+ const root = element('dialog'); let parent = element('ordinary', root);
+ if (['closed-body', 'closed-summary', 'open-body', 'nested-closed-body'].includes(ancestry)) {
+  const details = element(ancestry === 'open-body' ? 'open-details' : 'closed-details', root);
+  details.summary = element('summary', details);
+  parent = ancestry === 'closed-summary' ? details.summary : element('body', details);
+  if (ancestry === 'nested-closed-body') parent = element('ordinary', parent);
+ } else if (ancestry === 'script' || ancestry === 'style') parent = element(ancestry, root);
+ else if (ancestry === 'detached') parent = null;
+ const textNode = { textContent: text, parentElement: parent }, events = []; let inspected = false;
+ const document = {
+  createTreeWalker(target, filter) { assert.equal(target, root); assert.equal(filter, 4); let used = false; return { nextNode: () => used ? null : (used = true, textNode) }; },
+  createRange() { return { selectNodeContents: node => assert.equal(node, textNode), getClientRects: () => rectangles }; },
+  querySelectorAll(selector) { assert.equal(selector, 'input'); return inputs.map(value => ({ value })); },
+ };
+ const evaluate = callback => new Function('document', 'NodeFilter', 'location', 'localStorage', 'sessionStorage', `return (${callback.toString()});`)(document, { SHOW_TEXT: 4 }, { href }, local, session)(root, { secret, invitation });
+ const page = { locator(selector) { assert.equal(selector, '.enrollment-secret, .enrollment-fingerprint, .enrollment-comparison'); return { protectedCount }; } };
+ const dialog = { async evaluate(callback, values) { inspected = true; assert.deepEqual(values, { secret, invitation }); if (inspectionError) throw new Error('unexported synthetic diagnostic'); if (returnedFailure !== undefined) return returnedFailure; return evaluate(callback); } };
+ const expect = locator => ({ async toHaveCount(count) { assert.equal(count, 0); assert.equal(locator.protectedCount, count); } });
+ return { page, dialog, expect, events, evaluate, inspected: () => inspected, run: () => assertPublicSafe(page, dialog, expect, stage => events.push(diagnostic(stage, 0))) };
+}
+// Exact former boolean predicate, retained solely to prove its acceptance set.
+function originalPublicSafetyPredicate(dialog, { secret, invitation }) {
+ const identifier = /(?:invite|manager|request|claim|agent)_[a-f0-9]{32}|(?:ab){32}|(?:12ab){8}/;
+ const walker = document.createTreeWalker(dialog, NodeFilter.SHOW_TEXT); let node;
+ while ((node = walker.nextNode())) {
+  const parent = node.parentElement;
+  if (!parent || parent.closest('script,style')) continue;
+  const range = document.createRange(); range.selectNodeContents(node);
+  if ([...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0) && (node.textContent.includes(secret) || identifier.test(node.textContent))) return false;
+ }
+ return ![...document.querySelectorAll('input')].some(input => input.value.includes(secret) || identifier.test(input.value)) && !location.href.includes(secret) && !location.href.includes(invitation) && !JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret);
+}
+test('public-safety branches retain exact original acceptance across read-only DOM/geometry models', async () => {
+ let cases = 0;
+ for (const text of ['Reviewed instructions', secret, invitation, `manager_${'2'.repeat(32)}`, 'ab'.repeat(32), '12ab'.repeat(8)]) {
+  for (const rectangles of [[], [{ width: 0, height: 1 }], [{ width: 1, height: 0 }], [{ width: 1, height: 1 }]]) {
+   for (const ancestry of ['ordinary', 'closed-body', 'closed-summary', 'open-body', 'nested-closed-body', 'script', 'style', 'detached']) {
+    for (const extra of [{}, { inputs: [secret] }, { inputs: [invitation] }, { href: origin + '/#' + secret }, { href: origin + '/#' + invitation }, { local: { value: secret } }, { session: { value: secret } }]) {
+     const h = publicSafetyHarness({ text, rectangles, ancestry, ...extra }), expected = h.evaluate(originalPublicSafetyPredicate);
+     if (expected) await h.run(); else await assert.rejects(() => h.run(), /Unsafe public capture surface/);
+     assert(h.events.every(row => Object.keys(row).join(',') === 'stage,scene,locale,width'));
+     assert(h.events.every(row => row.scene === 'instructions' && row.locale === 'en' && row.width === 1440));
+     const serialized = JSON.stringify(h.events); assert(!serialized.includes(secret)); assert(!serialized.includes(invitation)); cases++;
+    }
+   }
+  }
+ }
+ assert.equal(cases, 1344);
+});
+test('public-safety diagnostics identify fixed branches without exempting closed disclosure text', async () => {
+ const cases = [
+  [{ text: invitation }, 'public-safe-text'],
+  [{ text: invitation, ancestry: 'closed-body' }, 'public-safe-text-closed-details'],
+  [{ text: secret, ancestry: 'nested-closed-body' }, 'public-safe-text-closed-details'],
+  [{ text: invitation, ancestry: 'closed-summary' }, 'public-safe-text'],
+  [{ text: invitation, ancestry: 'open-body' }, 'public-safe-text'],
+  [{ inputs: [secret] }, 'public-safe-inputs'],
+  [{ href: origin + '/#' + invitation }, 'public-safe-location'],
+  [{ local: { value: secret } }, 'public-safe-storage'],
+  [{ session: { value: secret } }, 'public-safe-storage'],
+ ];
+ assert.deepEqual(publicSafeFailures, ['public-safe-text', 'public-safe-text-closed-details', 'public-safe-inputs', 'public-safe-location', 'public-safe-storage']);
+ for (const [options, failure] of cases) {
+  const h = publicSafetyHarness(options); await assert.rejects(() => h.run(), /Unsafe public capture surface/);
+  assert.deepEqual(h.events.map(row => row.stage), ['public-safe-elements', 'public-safe-inspection', failure]);
+ }
+ const h = publicSafetyHarness({ text: invitation, ancestry: 'closed-body', rectangles: [] }); await h.run();
+ assert.deepEqual(h.events.map(row => row.stage), ['public-safe-elements', 'public-safe-inspection']);
+});
+test('protected elements, inspection errors and unexpected diagnostic values fail closed with fixed checkpoints', async () => {
+ const protectedElement = publicSafetyHarness({ protectedCount: 1 }); await assert.rejects(() => protectedElement.run());
+ assert.equal(protectedElement.inspected(), false); assert.deepEqual(protectedElement.events, [diagnostic('public-safe-elements', 0)]);
+ const inspection = publicSafetyHarness({ inspectionError: true }); await assert.rejects(() => inspection.run());
+ assert.deepEqual(inspection.events, [diagnostic('public-safe-elements', 0), diagnostic('public-safe-inspection', 0)]);
+ for (const returnedFailure of [secret, invitation, { text: secret }, false, true, 1, '']) {
+  const h = publicSafetyHarness({ returnedFailure }); await assert.rejects(() => h.run(), /Invalid public-safety diagnostic/);
+  assert.deepEqual(h.events, [diagnostic('public-safe-elements', 0), diagnostic('public-safe-inspection', 0)]);
+ }
+});
+test('production prerequisites and privacy assertions still precede every screenshot with unchanged runner redaction', async () => {
+ const recipe = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8');
+ const sequence = ["mark('secret-masked'", "mark('interrupt-clear'", 'await expect(input).toHaveCount(0)', "mark('refresh-restored'", "mark('instructions'", "mark('fonts'", "mark('scroll'", "mark('public-safe'", 'await assertPublicSafe(page, dialog, expect, stage => mark(stage, matrixIndex))', "mark('screenshot'"];
+ let offset = -1; for (const item of sequence) { const next = recipe.indexOf(item); assert(next > offset, item); offset = next; }
+ assert.equal((recipe.match(/\.screenshot\(/g) || []).length, 1);
+ const runner = await readFile(new URL('./run-windows-enrollment-ci.mjs', import.meta.url), 'utf8');
+ assert(runner.includes('} catch { failure = tag; }')); assert(runner.includes('JSON.stringify(report.failure)')); assert(runner.includes('raw diagnostics withheld.'));
+ assert.doesNotMatch(runner, /console\.(?:error|debug|trace)|error\.message|error\.stack|\.innerText\(|\.textContent\(/);
 });

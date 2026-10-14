@@ -10,7 +10,8 @@ export const disclosure = 'Synthetic Windows TLS inventory enrollment DTOs in th
 export const viewports = Object.freeze(['en', 'de'].flatMap(locale => [1440, 390].map(width => Object.freeze({ locale, width, height: width === 390 ? 844 : 1100 }))));
 export const scenes = Object.freeze(['instructions', 'release']);
 export const captureMatrix = Object.freeze(viewports.flatMap(view => scenes.map(scene => Object.freeze({ ...view, scene, file: `windows-enrollment-${scene}-${view.locale}-${view.width}.png` }))));
-export const stages = Object.freeze(['launch', 'compile', 'prepare-output', 'new-context', 'route', 'new-page', 'navigate', 'initial-status', 'select-windows', 'open-create', 'consent', 'submit-create', 'secret-masked', 'interrupt-clear', 'refresh-restored', 'instructions', 'fonts', 'scroll', 'no-overflow', 'public-safe', 'screenshot', 'runtime-errors', 'route-boundary', 'image-hash', 'close-context', 'manifest', 'close-browser', 'evidence']);
+export const publicSafeFailures = Object.freeze(['public-safe-text', 'public-safe-text-closed-details', 'public-safe-inputs', 'public-safe-location', 'public-safe-storage']);
+export const stages = Object.freeze(['launch', 'compile', 'prepare-output', 'new-context', 'route', 'new-page', 'navigate', 'initial-status', 'select-windows', 'open-create', 'consent', 'submit-create', 'secret-masked', 'interrupt-clear', 'refresh-restored', 'instructions', 'fonts', 'scroll', 'no-overflow', 'public-safe', 'public-safe-elements', 'public-safe-inspection', ...publicSafeFailures, 'screenshot', 'runtime-errors', 'route-boundary', 'image-hash', 'close-context', 'manifest', 'close-browser', 'evidence']);
 export function diagnostic(stage, index = null) {
  assert(stages.includes(stage), 'Unknown Windows enrollment capture stage');
  assert(index === null || Number.isSafeInteger(index) && index >= 0 && index < captureMatrix.length, 'Invalid capture index');

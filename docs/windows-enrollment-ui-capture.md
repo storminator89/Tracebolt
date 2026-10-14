@@ -97,6 +97,12 @@ path is also checked before reading. JSON evidence must match the canonical
 producer encoding, so duplicate or hidden extra fields are rejected.
 Diagnostics use a closed stage vocabulary and never export request bodies,
 bootstrap data, invitation values, cookies, page text, raw errors or traces.
+The public-safety checkpoint distinguishes protected-element presence, inspection
+errors, matching Range text (including ancestry below a closed disclosure), input
+values, URL and storage. These are fixed category names only. Closed-disclosure
+ancestry does not prove either visibility or invisibility; the same matching text
+still fails the unchanged privacy predicate. The category must be investigated
+before any capture-policy change. No screenshot is taken before all checks pass.
 Only the two verified manifests and eight named images are uploaded, for three
 days. Independent pixel review is still required before describing the UX as
 visually accepted.
