@@ -102,9 +102,66 @@ describe('Windows enrollment contract and creation consent', () => {
   expect(within(dialog).getByText('Use the reviewed Windows Setup preview')).toBeVisible();
   expect(within(dialog).getByText(/select that public JSON export in its wizard/)).toHaveTextContent('compatibility before making changes');
   expect(within(dialog).getByText(/select that public JSON export in its wizard/)).toHaveTextContent('HTTP-test needs a separate plaintext-risk acknowledgement');
-  expect(within(dialog).getByText(/No released Windows installer or download command is available/)).toBeVisible();
+  expect(within(dialog).getByText(/Unsigned Windows preview\.3 is published/)).toHaveTextContent('This page does not provide a verified installer download or command.');
   expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument();
   expect(dialog.textContent).not.toMatch(/rc\.3|Run as root|sha256sum|curl|agent-service/);
+  expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(secret);
+ });
+ it.each(['en', 'de'] as const)('keeps released Setup guidance separate from unchanged bounded inventory consent in %s', async locale => {
+  setLocale(locale, false); operator.insecureTestMode = true; jsdom.reconfigure({ url: 'http://localhost:8080/' });
+  const de = locale === 'de', addLabel = de ? 'Gerät hinzufügen' : 'Add device', createLabel = de ? 'Einladung erstellen' : 'Create invitation';
+  const consentLabel = de ? 'Ich bestätige diese Windows-Inventarerfassung für das neue Gerät.' : collectionConsent;
+  const httpLabel = de ? 'Ich akzeptiere ausdrücklich das unverschlüsselte HTTP-Test-Enrollment und die Übertragung des Windows-Inventars.' : httpConsent;
+  const unchangedScope = de ? [
+   'Begrenztes Windows-Inventar',
+   'Hostname, Schnittstellen-IP-Adressen, Prozessnamen und IDs, Dienstmetadaten und Metadaten installierter Software können persönliche oder sensible Angaben enthalten.',
+   'Jeder Snapshot enthält höchstens 1 Hostnamen, 128 Prozesszeilen, 128 Dienstzeilen, 128 Softwarezeilen und 64 Schnittstellenadresszeilen innerhalb von 48 KiB. Teilergebnisse und Zählungen als Untergrenze werden ausdrücklich angezeigt; diese Werte belegen keine vollständige Geräteabdeckung.',
+   'Keine Befehlszeilen, Umgebungsvariablen, Rohprotokolle, Zugangsdaten, Fernbefehle, Windows-Update- oder CVE-Analyse. Kein KI-Export. Die Sichtbarkeit hängt von der nativen Quelle und den Agent-Berechtigungen ab.',
+   'HTTP-Test: Die Einladung und freigegebene Hostnamen-, Netzwerk-, Prozess-, Dienst- und Softwaremetadaten werden unverschlüsselt übertragen und können abgefangen oder verändert werden. Nur in einer bewusst isolierten Testumgebung verwenden.',
+  ] : [
+   'Bounded Windows inventory',
+   'Hostname, interface IP addresses, process names and IDs, service metadata, and installed software metadata may contain personal or sensitive information.',
+   'Each snapshot carries at most 1 hostname, 128 process rows, 128 service rows, 128 software rows and 64 interface-address rows within 48 KiB. Partial results and lower-bound counts are shown explicitly; these counts do not prove whole-device coverage.',
+   'No command lines, environment variables, raw logs, credentials, remote commands, Windows Update or CVE analysis. No AI export. Visibility depends on the native source and the agent’s permissions.',
+   'HTTP test: the invitation and approved hostname, network, process, service and software metadata travel without encryption and may be intercepted or altered. Use only in a deliberately isolated test environment.',
+  ];
+  vi.mocked(mutate).mockResolvedValue(creation()); render(section());
+  await waitFor(() => expect(screen.getByRole('button', { name: addLabel })).toBeEnabled()); select('windows');
+  await screen.findByText(de ? 'Windows · Einzelne Einladung · Manuelle Freigabe' : 'Windows · Single invitation · Manual approval');
+  fireEvent.click(screen.getByRole('button', { name: addLabel })); const dialog = screen.getByRole('dialog', { name: addLabel });
+  for (const text of unchangedScope) expect(within(dialog).getByText(text, { exact: true })).toBeVisible();
+  expect(dialog).toHaveTextContent(de ? 'Lokale Installation und dauerhafte Identitätserstellung erfordern eine separate Zustimmung.' : 'Local installation and persistent identity creation require separate approval.');
+  const collection = within(dialog).getByRole('checkbox', { name: consentLabel }), http = within(dialog).getByRole('checkbox', { name: httpLabel }), button = within(dialog).getByRole('button', { name: createLabel });
+  expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2); expect(collection).not.toBeChecked(); expect(http).not.toBeChecked(); expect(button).toBeDisabled();
+  fireEvent.click(collection); expect(button).toBeDisabled(); fireEvent.click(button); expect(mutate).not.toHaveBeenCalled();
+  fireEvent.click(http); expect(button).toBeEnabled(); fireEvent.click(button);
+  const input = await within(dialog).findByLabelText(de ? 'Einmaliger Einladungsschlüssel' : 'One-time invitation secret');
+  expect(input).toHaveAttribute('type', 'password');
+  expect(mutate).toHaveBeenCalledExactlyOnceWith('/windows/enrollment/invitations', { requestId: expect.stringMatching(/^request_[a-f0-9]{32}$/), platform: 'windows', collectionAcknowledged: true, insecureHTTPAcknowledged: true }, expect.any(AbortSignal));
+  expect(dialog).toHaveTextContent('windows-inventory-v1');
+  for (const text of de ? [
+   'die zu diesem Manager und dem gewählten Profil passt', 'Setup prüft vor Änderungen die Manager- und Profil-Kompatibilität',
+   'ausdrückliche lokale Zustimmung zu seinen offengelegten Lesebereichen sowie zur dauerhaften Dienst- und Identitätserstellung',
+   'verdeckte Einladungseingabe', 'Diese Dashboard-Bestätigung ersetzt nicht die lokale Bereichsfreigabe in Setup.',
+   'vollständigen Geräte-Fingerabdruck und Vergleichswert', 'HTTPS ist Standard; HTTP-Test braucht eine zusätzliche Klartext-Zustimmung.',
+   'Vorhandene Installationen oder unvollständiger Zustand werden nicht überschrieben oder zurückgesetzt.',
+   'Die unsignierte Windows-preview.3 ist für einen begrenzten Setup-Teilumfang auf Server 2025 x64 veröffentlicht.',
+   'Diese Seite bietet keinen verifizierten Installer-Download oder Download-Befehl.',
+   'Verwende nur geprüfte Artefakte mit passendem Manager und Profil', 'belegt weder Installation noch Dienst- oder Systemneustart auf deinem Windows-Gerät.',
+  ] : [
+   'matches this manager and the selected profile', 'verifies manager/profile compatibility before making changes',
+   'explicit local approval of its disclosed read scopes and persistent service/identity creation',
+   'hidden invitation prompt', 'This dashboard acknowledgement does not replace Setup’s local scope approval.',
+   'full device fingerprint and comparison value', 'HTTPS is default; HTTP-test needs a separate plaintext-risk acknowledgement.',
+   'Existing installations and partial state cannot be overwritten or reset.',
+   'Unsigned Windows preview.3 is published for a limited Server 2025 x64 Setup subset.',
+   'This page does not provide a verified installer download or command.',
+   'Use only reviewed artifacts with a matching manager and profile', 'does not establish installation, service restart or reboot acceptance on your Windows device.',
+  ]) expect(dialog).toHaveTextContent(text);
+  expect(dialog.textContent).not.toMatch(/five local read scopes|fünf lokalen Lesebereichen|No released Windows installer|Ein veröffentlichter Windows-Installer|twenty-one|einundzwanzig|21[- ]scope/);
+  expect(within(dialog).getByRole('button', { name: de ? 'Bootstrap-Datei herunterladen' : 'Download bootstrap file' })).toBeVisible();
+  expect(within(dialog).queryByRole('button', { name: de ? 'Öffentlichen Installationsbefehl kopieren' : 'Copy public installation command' })).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole('link')).not.toBeInTheDocument();
   expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(secret);
  });
  it('requires a second unchecked HTTP-test acknowledgement and sends true only after both approvals', async () => {

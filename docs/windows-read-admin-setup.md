@@ -5,13 +5,19 @@ user installations; a published preview is not evidence of deployments. No
 migration or existing-binary upgrade plan is required for this increment.
 
 The fresh twenty-one-scope profile is available in unsigned x64
-[preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2).
-Follow its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
-with matching reviewed manager/frontend source. Native acceptance covers only the
-Server 2025 packaged-Setup install/remove, hidden-input cancellation and interrupted
-transport subset. Complete provider access, real Linux-manager/shared-dashboard
-interoperability and native restart/reboot remain unproved; see [Windows status](windows-status.md).
-Publication does not authorize running an installer on any host.
+[preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3),
+published as a prerelease on 2026-10-13 at 09:38:48 UTC. Follow its
+[attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
+with Windows artifacts and a matching reviewed manager/frontend from exact source
+[`992b8d8c9d9693a97bd63301a3c147e1b2681357`](https://github.com/storminator89/Tracebolt/tree/992b8d8c9d9693a97bd63301a3c147e1b2681357),
+tree `7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c`. An existing manager or another
+profile is not automatically compatible. Native acceptance covers only the
+Server 2025 x64 current21 packaged-Setup install/remove, hidden-input cancellation
+and interrupted-transport subset with a loopback TLS fixture manager. Complete
+provider access, real Linux-manager/shared-dashboard interoperability, Windows 11,
+native restart/reboot and optional MSI/WUA/service actions remain unproved; see
+[Windows status](windows-status.md). Publication does not authorize running an
+installer on any host.
 
 ## Fresh Read admin, seven readable groups
 
@@ -232,12 +238,13 @@ synthetic source evidence only.
 
 ## Required native acceptance
 
-Native acceptance remains deferred until the missing Admin-data features are
-ready. Existing launch/aggregation guards stay closed: historical profile fixture
-approvals cannot validate the current twenty-one-scope receipt12/v14 profile. No native controller was extended or run by this increment.
+Published preview.3 establishes only the Server 2025 x64 three-case current21
+packaged-Setup subset described above. Broader native acceptance remains open;
+historical profile fixture approvals cannot validate the current twenty-one-scope
+receipt12/v14 profile, and the published subset does not close the gates below.
 
-Before release, separately approve an exact-artifact disposable fresh-install
-run covering TLS/HTTP disclosure, initially unchecked full consent, GUI
+Before claiming broader acceptance, separately approve an exact-artifact disposable
+fresh-install run covering TLS/HTTP disclosure, initially unchecked full consent, GUI
 Back/Cancel/repeated-click flows, disabled staging, all twenty-one scopes and
 actual unchanged LocalService readable/denied/absent providers. Include grant/
 startup interruptions, original-age private data, and reboot/shutdown. Fixture

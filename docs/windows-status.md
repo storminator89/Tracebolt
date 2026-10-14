@@ -1,19 +1,23 @@
 # Windows: current functionality and limits
 
-Unsigned [Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
-is available for fresh x64 Read admin setup. Its native acceptance is limited to
-three hosted Server 2025 packaged-Setup cases; complete provider coverage and
-real Linux-manager/shared-dashboard interoperability remain unproved. The source
-also contains separate optional features with their own acceptance gates.
+Unsigned [Windows preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+is published as a prerelease (2026-10-13, 09:38:48 UTC) for fresh x64 Read admin
+setup. Its exact Windows and matching Linux manager/frontend source is
+[`992b8d8c9d9693a97bd63301a3c147e1b2681357`](https://github.com/storminator89/Tracebolt/tree/992b8d8c9d9693a97bd63301a3c147e1b2681357),
+tree `7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c`. Use the release's
+[attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
+and exact manifests; a moving branch or existing manager is not a compatibility
+guarantee. Publication does not authorize installation, enrollment or host changes.
 
-**Preview.3 release preparation.** It pairs the selected Windows source with
-its matching Linux manager/frontend build. The three-case Server 2025 native
-Setup subset and aggregation passed in
+Native acceptance is limited to the three-case **current21 packaged GUI subset**
+on Windows Server 2025 x64: install/service removal, hidden-input cancellation and
+pending-transport interruption, using a loopback TLS fixture manager. The cases
+and aggregation passed in
 [run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
-Publication requires successful exact-source full Validate and publisher
-review/CI. Verify the linked validation run’s current state in the release guide. Use the
-[candidate installation guide](windows-prerelease-install.md) only after its
-release is verified. Optional features remain separately configured and approved.
+This does not establish Windows 11, complete native provider coverage, real
+Linux-manager/shared-dashboard interoperability, native restart/reboot or optional
+MSI/WUA/service-action acceptance. Optional features remain separately configured
+and approved; source and browser fixtures do not establish their native acceptance.
 
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
 
@@ -101,8 +105,8 @@ This does not establish native Windows collection or released-profile coverage.*
 
 ## Published preview
 
-Use [v0.1.0-windows-preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
-and its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+Use [v0.1.0-windows-preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+and its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
 for the exact binaries, checksums, matching manager/frontend source and approval
 requirements. Setup and service remain unsigned and retain their original
 `v0.0.0-setup-candidate` filenames and embedded version. Keep OS protections intact.
@@ -111,7 +115,7 @@ The Linux rc.3 endpoint download is separate and does not supply a matching mana
 For older five-scope preview.1 bytes, use the
 [historical installation guide](windows-prerelease-historical/windows-prerelease-install.md).
 
-## Published preview.2 hosted Setup acceptance
+## Historical preview.2 hosted Setup acceptance
 
 The [released source](https://github.com/storminator89/Tracebolt/tree/62435ef7e605df0b102e030bf1d68cb255829a90)
 passed [full Validate](https://github.com/storminator89/Tracebolt/actions/runs/38303779043)
