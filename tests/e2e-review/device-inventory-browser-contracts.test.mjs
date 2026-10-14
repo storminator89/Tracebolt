@@ -94,3 +94,54 @@ test('capture-details focus keeps the opaque theme accent and contrast in light 
   }
  }
 });
+
+// Execute the exact callback chain without starting run.mjs (which owns a
+// browser/manager). This proves capture positioning, never rendered pixels.
+function keyboardCaptureHarness({ locale = 'en', size = 'desktop', dark = false } = {}) {
+ const gallery = read('./concise-shell-gallery.mjs'), runner = read('./run.mjs');
+ const helper = gallery.slice(gallery.indexOf('async function inventoryKeyboardReview('), gallery.indexOf('export function conciseShellFixture('));
+ const capture = gallery.match(/   const capture = async [\s\S]*?\n   };/)?.[0];
+ const darkCallback = gallery.match(/capture: (\(name, section[^)]*\) => capture\(`\$\{name\}-dark`[^;]*?), locale, size/)?.[1];
+ const shot = runner.slice(runner.indexOf('async function shot('), runner.indexOf('async function noOverflow('));
+ assert.ok(helper && capture && darkCallback && shot);
+ const calls = [], screenshots = [], pressed = [], main = { scrollTop: 240, scrollTo: () => { calls.push('reset'); main.scrollTop = 0; }, getBoundingClientRect: () => ({ width: 1200, height: 940 }) };
+ const labels = locale === 'de' ? ['Geräte durchsuchen', 'Nach Betriebssystem filtern', 'Nach Status filtern', 'Ansicht speichern', 'Geräte sortieren'] : ['Search devices', 'Filter by operating system', 'Filter by status', 'Save view', 'Sort devices'];
+ let focused = 0, saved = false;
+ const nodes = labels.map((name, index) => ({ name, index, matches: value => value === ':focus-visible', focus: async () => { focused = index; }, evaluate: async reader => reader(nodes[index]), locator: () => ({ hidden: size === 'mobile' }) }));
+ const page = {
+  keyboard: { press: async key => { pressed.push(key); if (key === 'Tab') focused++; else { assert.equal(key, 'Enter'); assert.equal(focused, 3); saved = true; } } },
+  getByRole: (role, options) => role === 'dialog' ? { count: async () => 0 } : nodes.find(node => node.name === options.name),
+  evaluate: async reader => reader(),
+  locator: selector => selector === '.save-view' ? nodes[3] : selector === 'html' ? { getAttribute: async name => name === 'lang' ? locale : dark ? 'dark' : 'light' } : {
+   evaluate: async reader => reader(selector === '.main-content' ? main : { scrollIntoView: () => { calls.push('align'); main.scrollTop = 620; } }),
+  },
+  viewportSize: () => size === 'mobile' ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+  screenshot: async options => { assert.equal(options.fullPage, false); assert.equal(options.animations, 'disabled'); calls.push({ top: main.scrollTop, focused, file: options.path }); },
+ };
+ const expect = actual => ({
+  toBe: expected => assert.equal(actual, expected), toEqual: expected => assert.equal(JSON.stringify(actual), JSON.stringify(expected)),
+  toBeFocused: () => assert.equal(focused, actual.index), toBeInViewport: () => assert.ok(actual.index > 0),
+  toHaveAccessibleName: expected => assert.equal(saved && actual.index === 3 ? locale === 'de' ? 'Gespeichert' : 'Saved' : actual.name, expected),
+  toHaveAttribute: (name, expected) => { assert.equal(name, 'aria-label'); assert.equal(saved ? locale === 'de' ? 'Gespeichert' : 'Saved' : labels[3], expected); },
+  toBeHidden: () => assert.equal(actual.hidden, true), toBeVisible: () => assert.equal(actual.hidden, false),
+ });
+ const context = { page, expect, locale, size, dark, screenshots, sourceSha: 'a'.repeat(40), currentTest: 'inert keyboard capture', out: 'inert-no-output', path: { join: (...parts) => parts.join('/') }, performance, transportDiagnostics: new Map(), reportTransportFailure: () => assert.fail('Unexpected screenshot failure'), innerWidth: 1440, innerHeight: 1000, document: { documentElement: { scrollWidth: 390, clientWidth: 1440, clientHeight: 1000 }, body: { scrollWidth: 390 } }, getComputedStyle: () => ({ outlineStyle: 'solid', outlineWidth: '2px', outlineOffset: '2px', outlineColor: '#17b8a6' }) };
+ const chain = vm.runInNewContext(`${shot}\n${helper}\n${capture}\n({ run: () => inventoryKeyboardReview({ page, expect, capture: dark ? ${darkCallback} : capture, locale, size }), ordinary: () => shot(page, 'ordinary-inventory', '.inventory-meta') })`, context);
+ return { ...chain, calls, screenshots, pressed };
+}
+test('every EN/DE light/dark desktop/mobile keyboard capture preserves the exact checked landing', async () => {
+ for (const locale of ['en', 'de']) for (const size of ['desktop', 'mobile']) for (const dark of [false, true]) {
+  const probe = keyboardCaptureHarness({ locale, size, dark }); await probe.run();
+  assert.equal(probe.calls.length, 4, 'no reset or section alignment may run after keyboard assertions');
+  assert.deepEqual(probe.calls.map(call => [call.top, call.focused]), [[240, 1], [240, 2], [240, 3], [240, 4]]);
+  assert.deepEqual(probe.pressed, ['Tab', 'Tab', 'Tab', 'Enter', 'Tab']);
+  assert.equal(probe.screenshots.length, 4);
+  for (const shot of probe.screenshots) { assert.equal(shot.sourceSha, 'a'.repeat(40)); assert.equal(shot.contentScrollTop, 240); assert.equal(shot.fullPage, false); assert.equal(shot.publicSafe, true); }
+  assert.ok(probe.screenshots.at(-1).file.includes(`devices-sort-keyboard-focus${dark ? '-dark' : ''}-${size}-${locale}`));
+ }
+});
+test('ordinary inventory captures retain their original top reset and explicit section alignment', async () => {
+ const probe = keyboardCaptureHarness(); await probe.ordinary();
+ assert.equal(probe.calls[0], 'reset'); assert.equal(probe.calls[1], 'align'); assert.equal(probe.calls[2].top, 620);
+ assert.equal(probe.screenshots[0].section, '.inventory-meta'); assert.equal(probe.screenshots[0].contentScrollTop, 620);
+});

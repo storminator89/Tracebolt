@@ -1,3 +1,4 @@
+import { reviewDevicesWorkspace } from './devices-workspace-browser.mjs';
 /** Page-by-page rendered copy review. Overview rows are restricted to the
  * disposable manager's built-in synthetic fixtures before any public capture. */
 import { reviewOverviewWorkStart } from './overview-work-start-browser.mjs';
@@ -22,7 +23,7 @@ async function inventoryKeyboardReview({ page, expect, capture, locale, size }) 
    return { visible: element.matches(':focus-visible'), style: style.outlineStyle, width: style.outlineWidth, offset: style.outlineOffset,
     colored: style.outlineColor !== 'transparent' && style.outlineColor !== 'rgba(0, 0, 0, 0)' };
   })).toEqual({ visible: true, style: 'solid', width: '2px', offset: '2px', colored: true });
-  await capture(screenshot, section);
+  await capture(screenshot, section, { preserveScroll: true });
  };
  await page.getByRole('textbox', { name: labels.search, exact: true }).focus();
  await focusSelect(labels.platform, 'devices-platform-keyboard-focus', '.filter-toolbar');
@@ -32,7 +33,7 @@ async function inventoryKeyboardReview({ page, expect, capture, locale, size }) 
  await expect(save).toHaveAttribute('aria-label', labels.save);
  if (size === 'mobile') await expect(save.locator('span')).toBeHidden();
  else await expect(save.locator('span')).toBeVisible();
- await capture('devices-save-view-keyboard-name', '.filter-toolbar');
+ await capture('devices-save-view-keyboard-name', '.filter-toolbar', { preserveScroll: true });
  await page.keyboard.press('Enter');
  await expect(save).toHaveAccessibleName(labels.saved); await expect(save).toHaveAttribute('aria-label', labels.saved);
  await focusSelect(labels.sort, 'devices-sort-keyboard-focus', '.inventory-meta');
@@ -68,9 +69,9 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
    const page = await pageAt('/overview', viewport, { reviewLocale: locale });
    await page.route('**/api/overview', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) }));
    await page.reload(); await loaded(page);
-   const capture = async (name, section) => {
+   const capture = async (name, section, options) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1 && document.body.scrollWidth <= innerWidth + 1)).toBe(true);
-    await shot(page, `synthetic-concise-shell-${name}-${size}-${locale}`, section);
+    await shot(page, `synthetic-concise-shell-${name}-${size}-${locale}`, section, options);
    };
    await expect(page.locator('.fleet-panel .device-table .source.real')).toHaveCount(0);
    if (size === 'desktop') await assertDesktopNavigation({ page, expect });
@@ -81,10 +82,11 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
     await capture(route);
     if (route === 'devices') {
+     await reviewDevicesWorkspace({ page, expect, capture, locale, size, viewport });
      await inventoryKeyboardReview({ page, expect, capture, locale, size });
      await page.getByRole('button', { name: locale === 'de' ? 'Dunkles Design aktivieren' : 'Switch to dark theme', exact: true }).click();
      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-     await inventoryKeyboardReview({ page, expect, capture: (name, section) => capture(`${name}-dark`, section), locale, size });
+     await inventoryKeyboardReview({ page, expect, capture: (name, section, options) => capture(`${name}-dark`, section, options), locale, size });
      await page.getByRole('button', { name: locale === 'de' ? 'Helles Design aktivieren' : 'Switch to light theme', exact: true }).click();
      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
      if (size === 'mobile') await shellDrawerKeyboardReview({ page, expect, capture, locale, viewport });
