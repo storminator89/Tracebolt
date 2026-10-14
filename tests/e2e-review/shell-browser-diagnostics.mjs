@@ -1,5 +1,6 @@
 /** Passive failure coordinates only. Raw errors and case names never enter the
  * report, and this collector cannot change an assertion or retry a request. */
+import { shellGalleryFailureCoordinate } from './concise-shell-gallery.mjs';
 import { shellKeyboardFailureStage } from './shell-scenarios.mjs';
 import contract from './shell-browser-cases.json' with { type: 'json' };
 export const shellFailureCategories = Object.freeze(['assertion', 'timeout', 'other']);
@@ -18,7 +19,7 @@ export function createShellFailureDiagnostic() {
         failure(name, error) {
             const id = caseIDs.get(name);
             if (id === undefined) { unknownCase = true; return; }
-            failures.set(id, { category: category(error), ...(id === 36 ? { stage: shellKeyboardFailureStage() } : {}) });
+            failures.set(id, { category: category(error), ...(id >= 28 && id <= 31 ? shellGalleryFailureCoordinate() : {}), ...(id === 36 ? { stage: shellKeyboardFailureStage() } : {}) });
         },
         runtime(name) {
             const id = caseIDs.get(name);
