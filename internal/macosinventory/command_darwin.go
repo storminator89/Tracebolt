@@ -17,6 +17,12 @@ func runFixedCommand(parent context.Context, which fixedCommand) ([]byte, error)
 	if e != nil {
 		return nil, e
 	}
+	if parent == nil {
+		return nil, ErrInvalid
+	}
+	if parent.Err() != nil {
+		return nil, ErrBudget
+	}
 	ctx, cancel := context.WithTimeout(parent, CommandBudget)
 	defer cancel()
 	out := newOutputBudget(spec.maxBytes, cancel)

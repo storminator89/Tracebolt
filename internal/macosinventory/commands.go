@@ -61,12 +61,22 @@ func commandSources(run commandRunner) Sources {
 		},
 		Network: func(ctx context.Context) (Network, error) {
 			n := EmptyNetwork(ErrUnavailable.Error())
+			// The network source has one shared provider deadline. Skip a native
+			// family read when that deadline (or caller cancellation) is known.
+			// A completed sibling still keeps its independently observed value.
+			if ctx.Err() != nil {
+				return EmptyNetwork(ErrBudget.Error()), nil
+			}
 			b, e := run(ctx, ipv4Command)
 			if e == nil {
 				n.IPv4, e = ParseInterfaces(b, false)
 			}
 			if e != nil {
 				n.IPv4 = EmptyInterfaces(IPv4Source, SafeReason(e))
+			}
+			if ctx.Err() != nil {
+				n.IPv6 = EmptyInterfaces(IPv6Source, ErrBudget.Error())
+				return n, nil
 			}
 			b, e = run(ctx, ipv6Command)
 			if e == nil {
