@@ -65,7 +65,7 @@ func validateMacOSInventoryServicePreflight(ctx context.Context, path string, d 
 	if e != nil {
 		return e
 	}
-	valid := state.ValidateCheckpoint(raw, enable) == nil
+	valid := state.ValidateCheckpointAt(raw, enable, d.now().UTC()) == nil
 	closeErr := storage.Close()
 	if !valid || closeErr != nil {
 		return ErrState
@@ -74,6 +74,9 @@ func validateMacOSInventoryServicePreflight(ctx context.Context, path string, d 
 	// artifacts, same current leaf, local revocation/clock floors and cancellation.
 	if _, e = active.Check(d.now().UTC()); e != nil {
 		return e
+	}
+	if state.ValidateCheckpointAt(raw, enable, d.now().UTC()) != nil {
+		return ErrState
 	}
 	return ctx.Err()
 }

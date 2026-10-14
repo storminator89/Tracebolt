@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "d5fac47e15248f2f1d89f739a74c529c374dc32634c2f300b9ac828813bd7f7f",
+  "goSourceSha256": "9b7bec28b7d08f94463988a3178a822b626ac90cb52abbb5e7df6b772517fa83",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1601,6 +1601,8 @@
       "TestMacOSInventoryReopenedTrustAndExhaustedAuthority",
       "TestMacOSInventoryServicePreflightCurrentSuccessorKeepsOriginalState",
       "TestMacOSInventoryServicePreflightRechecksContextAndAuthority",
+      "TestMacOSInventoryServicePreflightRechecksSenderClock",
+      "TestMacOSInventoryServicePreflightRejectsFutureSenderClock",
       "TestMacOSInventoryServicePreflightRequiresLiveLocalAuthority",
       "TestMacOSInventoryServicePreflightStorageAndCloseFailures",
       "TestMacOSRouteSelectionUsesTrustedRuntimeOnly",
@@ -3555,6 +3557,7 @@
       "TestInactiveProductionDependenciesAndNoCollectors",
       "TestLostReservationConsumesFloorAndPacingAcrossReopen",
       "TestMissingUsedStateCannotBecomeFresh",
+      "TestReadOnlyCheckpointAdmissionUsesDurableClockFloor",
       "TestReceiptMustBindExactPendingBytesAndTime",
       "TestRecoveredAdapterPanicLeavesLiveOwnerPoisoned",
       "TestRetainedReportFailureOrderingAndPendingGate",
@@ -3611,6 +3614,7 @@
       "TestRenewableBasicTLSUsesExactManifestWithoutScopeExpansion",
       "TestRequestStrict",
       "TestSnapshotDetectsIdentityAndMetadataChanges",
+      "TestSourceArchiveRejectsHeldInstallationDirectoryAlias",
       "TestSourceHashIsBoundedExactAndCancelable",
       "TestUnavailableAndInvalidRequestsNeverInspect"
     ],

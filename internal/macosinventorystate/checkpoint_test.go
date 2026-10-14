@@ -258,6 +258,38 @@ func TestClockAndSequenceBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestReadOnlyCheckpointAdmissionUsesDurableClockFloor(t *testing.T) {
+	s, m := fresh(t, true)
+	at := control().ChangedAt
+	if _, e := s.Inspect(at.Add(time.Minute)); e != nil {
+		t.Fatal(e)
+	}
+	raw := m.snapshot()
+	for _, tc := range []struct {
+		name string
+		at   time.Time
+		want error
+	}{
+		{"equal", at.Add(time.Minute), nil},
+		{"later", at.Add(2 * time.Minute), nil},
+		{"earlier", at, ErrClock},
+		{"non-UTC", at.Add(2 * time.Minute).In(time.FixedZone("non-UTC", 3600)), ErrClock},
+		{"zero", time.Time{}, ErrClock},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if e := ValidateCheckpointAt(raw, enableBytes(t), tc.at); e != tc.want {
+				t.Fatal(e)
+			}
+			if !bytes.Equal(raw, m.snapshot()) {
+				t.Fatal("read-only admission changed checkpoint")
+			}
+		})
+	}
+	if e := ValidateCheckpointAt(raw, []byte(`{}`), at.Add(2*time.Minute)); e != ErrConflict {
+		t.Fatal("original enable mismatch", e)
+	}
+}
 func TestStagingNeverRewritesBindingOrOriginalCapture(t *testing.T) {
 	s, m := fresh(t, true)
 	at := control().ChangedAt

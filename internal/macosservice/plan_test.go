@@ -80,7 +80,7 @@ func TestRequestStrict(t *testing.T) {
 			t.Fatalf("accepted identity %q", raw)
 		}
 	}
-	for _, raw := range []string{"", "relative.tar", "/a/../b", "/a/./b", "/", "//a", "/a/", "/a\nfile", AgentPath, ConfigPath, PlistPath, InstallDirectory, StateDirectory + "/foo"} {
+	for _, raw := range []string{"", "relative.tar", "/a/../b", "/a/./b", "/", "//a", "/a/", "/a\nfile", AgentPath, ConfigPath, PlistPath, "/library/launchdaemons/COM.TRACEBOLT.AGENT.PLIST", InstallDirectory, "/library/application support/TRACEBOLTAGENT", StateDirectory + "/foo", "/library/application support/traceboltagent/reviewed-source.tar"} {
 		r := fixtureRequest()
 		r.SourceArchive = raw
 		if _, err := Plan(r); !errors.Is(err, ErrRequest) {
@@ -98,6 +98,31 @@ func TestRequestStrict(t *testing.T) {
 		if _, err := Plan(r); !errors.Is(err, ErrRequest) {
 			t.Fatal("bad source digest")
 		}
+	}
+}
+
+func TestSourceArchiveRejectsHeldInstallationDirectoryAlias(t *testing.T) {
+	install := fileIdentity{device: 17, inode: 500}
+	for _, test := range []struct {
+		name      string
+		ancestors []fileIdentity
+		allowed   bool
+	}{
+		{"separate-root-owned-tree", []fileIdentity{{17, 2}, {17, 510}, {17, 511}}, true},
+		{"same-inode-other-volume", []fileIdentity{{17, 2}, {19, 500}, {19, 511}}, true},
+		{"aliased-install-ancestor", []fileIdentity{{17, 2}, {17, 500}, {17, 511}}, false},
+		{"aliased-install-leaf", []fileIdentity{{17, 2}, {17, 500}}, false},
+		{"unknown-ancestor", []fileIdentity{{17, 2}, {17, 0}}, false},
+		{"missing-ancestors", nil, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := sourceOutsideInstall(install, test.ancestors); got != test.allowed {
+				t.Fatalf("outside fixed installation directory = %t, want %t", got, test.allowed)
+			}
+		})
+	}
+	if sourceOutsideInstall(fileIdentity{device: 17}, []fileIdentity{{17, 2}, {17, 511}}) {
+		t.Fatal("unknown installation inode accepted")
 	}
 }
 func TestRenderNeverInspects(t *testing.T) {
