@@ -1,3 +1,5 @@
+import {createShellFailureDiagnostic} from './shell-browser-diagnostics.mjs';
+import {routeLoadingDevelopmentCase,routeLoadingDevelopmentCaseName,routeLoadingDevelopmentDiagnostic} from './route-loading-browser.mjs';
 /** Independent local-only acceptance checks.
  * Run from repository root: node tests/e2e-review/run.mjs
  * Uses the built web/dist, compiles a disposable manager, and creates a unique
@@ -52,6 +54,7 @@ const allPages = new Set();
 const transportDiagnostics = new Map();
 function trackTransport(page) { const diagnostics=createBrowserTransportDiagnostics(page,browser); transportDiagnostics.set(page,diagnostics); return page; }
 const runtimeErrors = [];
+const shellDiagnostic = createShellFailureDiagnostic();
 async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra={}) {
  const {reviewLocale='de',...contextOptions}=extra;
  const context = await browser.newContext({ viewport, locale:'de-DE', ...contextOptions });
@@ -61,7 +64,7 @@ async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra
  await page.goto(`${base}/#${hash}`); return page;
 }
 let currentTest='';
-async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); for(const diagnostics of transportDiagnostics.values()) diagnostics.dispose(); transportDiagnostics.clear(); } }
+async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { shellDiagnostic.failure(name,error); results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); for(const diagnostics of transportDiagnostics.values()) diagnostics.dispose(); transportDiagnostics.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
 async function shot(page,name,section=null) {
  const fullPage=false,dialog=await page.getByRole('dialog').count()>0;
@@ -86,6 +89,7 @@ async function shot(page,name,section=null) {
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
 try {
+ await test(routeLoadingDevelopmentCaseName,()=>routeLoadingDevelopmentCase({pageAt,expect,base,caseItem}));
  await test('Desktop light overview: real API, provenance, no layout overflow', async()=>{
   const page=await pageAt(); await loaded(page);
   await expect(page.getByRole('heading',{name:'Übersicht',exact:true,level:1})).toBeVisible();
@@ -238,6 +242,14 @@ try {
 } finally {
  await browser.close(); await stop(); await log.close();
  const report={createdAt:new Date().toISOString(),sourceSha,base,aiFixtureReview:process.env.TRACEBOLT_REVIEW_AI==='1',viewportDesktop:'1440×1000',viewportMobile:'390×844',browser:process.env.CHROMIUM_PATH ? `Chromium at ${process.env.CHROMIUM_PATH}` : 'Playwright Chromium headless shell',database:'disposable unique temporary database (never production)',results,runtimeErrors,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,runtimeErrorCount:runtimeErrors.length}};
+ if(process.env.TRACEBOLT_SHELL_DIAGNOSTIC) {
+  for(const row of runtimeErrors) shellDiagnostic.runtime(row.test);
+  await fs.writeFile(process.env.TRACEBOLT_SHELL_DIAGNOSTIC,JSON.stringify(shellDiagnostic.report(sourceSha)));
+ }
+ if(process.env.TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC) {
+  const result=results.find(row=>row.name===routeLoadingDevelopmentCaseName);
+  await fs.writeFile(process.env.TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC,JSON.stringify(routeLoadingDevelopmentDiagnostic(sourceSha,result?.status??'NOT_RUN',runtimeErrors.some(row=>row.test===routeLoadingDevelopmentCaseName))));
+ }
  await fs.writeFile(path.join(out,'results.json'),JSON.stringify(report,null,2)); await fs.writeFile(path.join(out,'screenshot-manifest.json'),JSON.stringify({sourceSha,createdAt:report.createdAt,screenshots},null,2)); console.log(JSON.stringify(report.summary)); await fs.rm(temp,{recursive:true,force:true});
 }
 process.exitCode=results.some(r=>r.status==='FAIL') || runtimeErrors.length ? 1 : 0;

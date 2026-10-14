@@ -14,7 +14,7 @@ test('the only inventory POST is a strictly bounded public synthetic read',async
 test('display setup reloads intercepted authentication and selects supported Inventory then Services tabs', async()=>{
  const {openServiceActionDisplay}=await import('./service-action-display-navigation.mjs');
  const events=[];const page={goto:async url=>events.push(['goto',url]),reload:async()=>events.push(['reload']),getByRole:(role,options)=>({click:async()=>events.push(['click',role,options.name,options.exact])})};
- await openServiceActionDisplay(page,'http://127.0.0.1:19886',serviceActionDisplayFixtures().device.id);
+ await openServiceActionDisplay(page,'http://127.0.0.1:19886',serviceActionDisplayFixtures().device.id,async()=>events.push(['detail-ready']));
  assert.equal(events[0][0],'goto');assert.match(events[0][1],/^http:\/\/127\.0\.0\.1:19886\/#\/devices\/agent_[a-f0-9]+$/);
- assert.deepEqual(events.slice(1),[['reload'],['click','tab','Inventory',true],['click','tab','Services',true]]);
+ assert.deepEqual(events.slice(1),[['reload'],['detail-ready'],['click','tab','Inventory',true],['click','tab','Services',true]]);
 });

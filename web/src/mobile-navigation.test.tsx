@@ -111,7 +111,11 @@ it.each([390, 761])('returns Help focus to visible navigation after resizing fro
 });
 
 it('keeps a device page and its selected tab mounted when drawer Escape is consumed', async () => {
-    window.history.replaceState({}, '', `/#/devices/${device.id}`); render(<App/>);
+    window.history.replaceState({}, '', `/#/devices/${device.id}`);
+    await act(async () => { render(<App/>); });
+    // Settle authentication and the render-triggered lazy import before the
+    // existing DOM deadline. This does not preload or mock the route.
+    await act(async () => { await vi.dynamicImportSettled(); });
     const detail = await screen.findByRole('region', { name: 'Device Keyboard fixture' });
     const detailsTab = within(detail).getByRole('tab', { name: 'Details' }); fireEvent.click(detailsTab);
     await openDrawer(); await userEvent.keyboard('{Escape}'); expectClosed();

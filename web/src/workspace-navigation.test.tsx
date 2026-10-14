@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
@@ -6,7 +6,7 @@ import { emptyEndpointView } from './endpoint-identity-fixtures';
 import { journalDevice as id, journalNow as now, journalSession, journalView } from './journal-fixtures';
 import { setLocale } from './i18n';
 import type { InvestigationScope, InvestigationsView } from './investigations-types';
-import type { Device } from './types';
+import type { Case, Device } from './types';
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status});
 const metric={value:null,unit:'%',quality:'unknown' as const,source:'fixture',collectedAt:now};
 const device:Device={id,name:'Fixture Linux',platform:'linux',os:'Linux',site:'',group:'',ip:null,status:'unknown',source:'lan',synthetic:false,lastSeen:now,agentVersion:'fixture',cpu:metric,memory:metric,disk:metric,uptime:'',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
@@ -59,4 +59,37 @@ it('labels unobserved Settings health readiness unknown without starting a backg
  window.history.replaceState({},'', '/#/settings');const fetch=server();render(<App/>);await screen.findByText('Rule-based investigations');
  expect(screen.getByText('Rule-based investigations').closest('.capability-line')).toHaveTextContent('Status unknown');
  expect(fetch.mock.calls.some(([url])=>url.startsWith('/api/investigations'))).toBe(false);
+});
+
+
+const heldCase:Case={id:'case-synthetic-readiness',title:'Synthetic delayed case content',deviceId:id,deviceName:'Fixture Linux',severity:'info',status:'open',category:'service',summary:'Synthetic detail-read readiness only.',ruleId:'fixture-readiness',confidence:'limited',createdAt:now,updatedAt:now,evidenceIds:[],evidence:[],runbookId:'fixture',nextSteps:['Inspect the synthetic state.'],timeline:[],notes:[],synthetic:true};
+function heldCaseRead(){
+ const fetch=server('development'),original=fetch.getMockImplementation()!;
+ let release!:(response:Response)=>void;
+ const pending=new Promise<Response>(resolve=>{release=resolve;});
+ fetch.mockImplementation(async(url:string)=>url===`/api/cases/${heldCase.id}`?pending:original(url));
+ window.history.replaceState({},'',`/#/cases/${heldCase.id}`);
+ return {fetch,release};
+}
+it('does not confuse the real App footer with deferred case-content readiness',async()=>{
+ const held=heldCaseRead();render(<App/>);
+ await waitFor(()=>expect(document.querySelector('.page-footer')).toBeVisible());
+ await waitFor(()=>expect(held.fetch.mock.calls.filter(([url])=>url===`/api/cases/${heldCase.id}`)).toHaveLength(1),{timeout:4000});
+ // Negative control for the old browser gate: the footer passes while the real
+ // detail response is held. jsdom does not establish native PageDown geometry.
+ expect(document.querySelector('.case-detail-header h1')).toBeNull();expect(document.querySelector('.notes-panel')).toBeNull();
+ expect(screen.getByRole('main')).not.toHaveFocus();
+ await act(async()=>{held.release(json(heldCase));});
+ await screen.findByRole('heading',{name:heldCase.title,level:1});expect(document.querySelector('.notes-panel')).toBeVisible();
+ expect(document.querySelector('.page-footer')).toBeVisible();expect(screen.getByRole('main')).not.toHaveFocus();
+ expect(held.fetch.mock.calls.filter(([url])=>url===`/api/cases/${heldCase.id}`)).toHaveLength(1);
+});
+it('keeps failed case reads outside content readiness even though the App footer remains visible',async()=>{
+ const held=heldCaseRead();render(<App/>);
+ await waitFor(()=>expect(document.querySelector('.page-footer')).toBeVisible());
+ await waitFor(()=>expect(held.fetch.mock.calls.filter(([url])=>url===`/api/cases/${heldCase.id}`)).toHaveLength(1),{timeout:4000});
+ await act(async()=>{held.release(json({error:{message:'Synthetic unavailable case'}},503));});
+ await screen.findByRole('heading',{name:'Investigation unavailable'});
+ expect(document.querySelector('.page-footer')).toBeVisible();expect(document.querySelector('.case-detail-header h1')).toBeNull();expect(document.querySelector('.notes-panel')).toBeNull();
+ expect(held.fetch.mock.calls.filter(([url])=>url===`/api/cases/${heldCase.id}`)).toHaveLength(1);
 });

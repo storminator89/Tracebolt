@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 /** Invented metadata and Health DTOs, rendered by the production device page.
  * Extends the existing Investigations/Health case; no additional LAN case or
  * permission, target operation, provider send or real telemetry is introduced. */
@@ -42,7 +43,7 @@ export async function openHealthDisclosure(button,page){await button.click();awa
 /** Use the existing real fixture login, read-only guards and source-bound shots. */
 export async function healthDashboardBrowserCase({page,expect,shot,setPhase,mark,fixtureDisclosure}){
  const health=page.locator('.health-panel');
- const change=async phase=>{setPhase(phase);await page.reload();await expect(health.locator(phase==='unavailable'?'.health-unavailable':'.health-hero')).toBeVisible();};
+ const change=async phase=>{setPhase(phase);await page.reload();mark(`health-${phase}-detail-route-readiness`);await settlePausedDetailRoute(page,expect,health);mark(`health-${phase}-assertions`);await expect(health.locator(phase==='unavailable'?'.health-unavailable':'.health-hero')).toBeVisible();};
  const capture=async name=>{mark(name);await layout(page,health,expect);await health.locator('.health-heading').scrollIntoViewIfNeeded();await shot(page,name,fixtureDisclosure);};
  mark('health-dashboard-clear');await page.setViewportSize({width:1440,height:1000});await change('clear');
  await expect(health.locator('[data-health-state]')).toHaveAttribute('data-health-state','clear');await expect(health).toContainText('Monitored checks clear');await expect(health).toContainText('Selected checks only');await expect(health.locator('.health-cards li')).toHaveCount(4);await expect(health.locator('.health-cards')).toContainText('7.4%');await expect(health.locator('.health-cards')).toContainText('46.8%');await expect(health).toContainText('No service checks selected');await expect(health.locator('.health-disclosure[open]')).toHaveCount(0);await expect(health.getByRole('searchbox')).toHaveCount(0);await capture('synthetic-http-test-health-clear-desktop-en');

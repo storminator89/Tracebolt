@@ -1,4 +1,10 @@
 /** English/German state continuity and viewport-owned scrolling, real app/API. */
+export const shellKeyboardStages = Object.freeze([
+ 'navigation', 'case-content', 'initial-bounds', 'skip-focus', 'main-focus',
+ 'page-scroll', 'scrolled-bounds', 'menu-navigation', 'final-bounds', 'complete',
+]);
+let keyboardStage = 0;
+export const shellKeyboardFailureStage = () => keyboardStage;
 import { installWorkspaceContinuity } from './workspace-navigation-browser.mjs';
 
 /** Browser-only assertions. Captures are supplied only by the whitelisted
@@ -173,8 +179,20 @@ export async function runShellReview({test,pageAt,loaded,shot,expect,caseItem,cl
  await test('200 percent equivalent CSS viewport keeps keyboard navigation and content usable',async()=>{
   // 720x500 CSS pixels is the space available from a 1440x1000 display at 200%.
   // This is responsive/keyboard coverage, not an OS/browser zoom certification.
-  const page=await pageAt(`/cases/${caseItem.id}`,{width:720,height:500});await loaded(page);await bounds(page);await page.keyboard.press('Tab');await expect(page.getByRole('link',{name:'Zum Inhalt'})).toBeFocused();await page.keyboard.press('Enter');expect(await page.evaluate(()=>document.activeElement?.id)).toBe('main-content');await page.keyboard.press('PageDown');await expect.poll(()=>page.locator('.main-content').evaluate(el=>el.scrollTop)).toBeGreaterThan(0);await bounds(page);
-  await page.getByRole('button',{name:'Menü öffnen'}).click();const settings=page.locator('.sidebar .nav-item').filter({hasText:'Einstellungen'});await settings.scrollIntoViewIfNeeded();await settings.click();await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);await bounds(page);
+  keyboardStage=0;
+  const page=await pageAt(`/cases/${caseItem.id}`,{width:720,height:500});await loaded(page);
+  keyboardStage=1;
+  // The global footer can render while CaseDetail is still loading. Wait for
+  // this case's actual content, without moving focus or scrolling for it.
+  await expect(page.locator('.case-detail-header h1')).toHaveText(caseItem.title,{timeout:10000});
+  await expect(page.locator('.notes-panel')).toBeVisible({timeout:10000});
+  keyboardStage=2;await bounds(page);
+  keyboardStage=3;await page.keyboard.press('Tab');await expect(page.getByRole('link',{name:'Zum Inhalt'})).toBeFocused();
+  keyboardStage=4;await page.keyboard.press('Enter');expect(await page.evaluate(()=>document.activeElement?.id)).toBe('main-content');
+  keyboardStage=5;await page.keyboard.press('PageDown');await expect.poll(()=>page.locator('.main-content').evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  keyboardStage=6;await bounds(page);
+  keyboardStage=7;await page.getByRole('button',{name:'Menü öffnen'}).click();const settings=page.locator('.sidebar .nav-item').filter({hasText:'Einstellungen'});await settings.scrollIntoViewIfNeeded();await settings.click();await expect(page.getByRole('heading',{name:'Einstellungen',exact:true,level:1})).toBeVisible();await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
+  keyboardStage=8;await bounds(page);keyboardStage=9;
  });
  await test('Mobile shell has no desktop gutter and navigation survives long content and dismissals',async()=>{
   const page=await pageAt(`/cases/${caseItem.id}`,{width:390,height:844},{isMobile:true,hasTouch:true});await loaded(page);await scrollMain(page,'.notes-panel');const main=await page.locator('.main-shell').boundingBox();expect(main.x).toBe(0);expect(main.width).toBe(390);

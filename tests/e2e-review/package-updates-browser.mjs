@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 /** Public synthetic package workflow only. All package requests terminate here;
  * the hosted fixture supplies only its existing real login and CSRF lifecycle. */
 import fs from 'node:fs';
@@ -12,7 +13,7 @@ export const packageUpdatesFixtureDisclosure='UI-only production rendering with 
 const stored=JSON.parse(fs.readFileSync(new URL('../../web/src/package-update-go-fixtures.json',import.meta.url),'utf8'));
 const inventoryStored=JSON.parse(fs.readFileSync(new URL('../../web/src/complete-updates-go-fixture.json',import.meta.url),'utf8'));
 const clone=value=>structuredClone(value);
-const stages=new Set(['setup','login','unavailable','selection','review','consent','unknown','guards']);
+const stages=new Set(['setup','login','detail-route-readiness','unavailable','selection','review','consent','unknown','guards']);
 let stage='setup';
 export const packageUpdatesFailureStage=()=>stage;
 const mark=value=>{stage=stages.has(value)?value:'unknown';};
@@ -125,6 +126,7 @@ export async function packageUpdatesBrowserCase({pageAt,login,expect,base,shot})
  const fixture=createPackageUpdatesFixture({anchor:new Date(start-5000).toISOString(),now:()=>Date.now()}),state={unexpected:[],external:[],loginRequests:0,namedReads:0};
  await page.route('**/*',packageUpdatesRoute({base,fixture,state}));
  mark('login');await login(page);await page.reload();
+ mark('detail-route-readiness');await settlePausedDetailRoute(page,expect,page.getByRole('button',{name:'View updates',exact:true}));
  await page.getByRole('button',{name:'View updates',exact:true}).click();
  const panel=page.locator('.package-update-workflow'),review=page.locator('.package-update-review');
  const language=()=>page.locator('select[aria-label="Language"],select[aria-label="Sprache"]');

@@ -476,3 +476,61 @@ blobs in that commit. All previous action/update scenes and the 120-second budge
 remain. The artifact upload includes the separate complete-service manifest and
 images. The inert `--check` and Node contract tests generate no browser evidence;
 successful hosted captures still require independent pixel review.
+
+## Paused presentation clocks and cold detail routes
+
+The service-action display, package-update display, and Investigations' Health
+reloads retain their paused fixture clocks. After a cold document loads React
+under that clock, its resolved Suspense retry can wait for a 300 ms commit timer.
+`paused-detail-route.mjs` first observes the loading fallback or the real ready
+locator, advances once by exactly 300 ms only when the fallback is visible, then
+requires the original ready state. It does not resume the clock, drain timers,
+retry simulated time, rewrite fixture timestamps, or extend assertion deadlines.
+
+This adds at most 300 ms to each service/package case and 2,100 ms across the
+seven Health reloads. The existing three 32 ms disclosure ticks remain, giving
+at most 2,196 ms total controlled Health progress. Source tests use production
+React, the actual route boundary and pinned Playwright clock in inert jsdom,
+including command replay across all seven documents and unchanged deadline
+rejection. These are a reproduced scheduling mechanism and a bounded harness
+correction; only the normal hosted LAN run can establish browser acceptance.
+The three cases' diagnostics expose reviewed finite stage codes only.
+
+The same test-only readiness gate covers the paused Windows managed-MSI and
+mutation-coexistence direct documents/reloads, Storage IO's initial detail and
+warm list/detail mounts, and the service-actions runner's service, history,
+update, download, retirement, standalone/background schedule and prepared-MSI
+detail recipes. The eager fleet-schedule list and standalone complete-service
+health capture are excluded. No fixture, consent, request, privacy guard or
+acceptance assertion is changed. Each genuine cold detail document consumes at
+most 300 ms. Managed-MSI, coexistence, service, update, download, retirement,
+prepared MSI and each schedule profile therefore add at most 600 ms per isolated
+context; history adds at most 300 ms. Contexts do not share clock budgets.
+
+Storage IO advances only 300 ms for its first cold detail. Its four same-document
+list/detail mounts are warm and consume zero, leaving 200 ms before the existing
+retained sample's original initial+500 ms deadline. Its unchanged 1,000 ms expiry
+step crosses that deadline (1,300 ms total controlled progress). Capture and
+retained timestamps are unchanged. The previous immediate away/back mount could
+bypass the initial fallback, so no prior Storage IO browser failure is claimed.
+
+Run `node --test tests/e2e-review/paused-windows-routes.test.mjs` for the inert
+full-App reproduction and actual driver-prefix regression. It bundles production
+App/auth/details/React, holds only the emitted lazy import until the real route
+fallback commits, and injects the actual pinned Playwright clock before React
+loads into each fresh jsdom document. It checks the 299/300 ms boundary, both
+locales, real direct/reload readiness prefixes, zero-progress warm mounts and
+the unchanged Storage IO expiry transition. It does not run the drivers' later
+interactions, produce screenshots or establish hosted browser acceptance.
+The selected Windows failure diagnostics expose only finite source-defined
+case/stage coordinates; service-action diagnostics retain their exact
+source/invocation/locale/viewport binding and shared stage contract.
+
+Storage IO's retained age assertion derives the exact displayed seconds from the
+original retained sample end and the paused clock. Initial readiness accepts only
+zero or 300 ms; each warm mount and retained-age checkpoint must remain at that
+same time. This keeps the exact EN/DE assertion valid across the second boundary
+(3,608 to 3,609 seconds) without permitting extra advancement. The original
+sample timestamp, 24-hour retention deadline, initial+500 ms near-expiry sample
+and subsequent 1,000 ms expiry check remain unchanged. A finite `retained-age`
+diagnostic isolates this assertion without exposing sample or runtime values.

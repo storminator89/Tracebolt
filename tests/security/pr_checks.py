@@ -80,6 +80,9 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'tests/e2e-review/paused-windows-routes.test.mjs': {
+        'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions',
+    },
     'tests/e2e-review/fleet-groups-browser.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-evidence.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-fixtures.test.mjs': {'fleet-groups'},
@@ -442,6 +445,11 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if {'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions'} & set(plan.get('flows', [])):
+        run(['node', '--test', 'tests/e2e-review/paused-windows-routes.test.mjs'], stage='ui-paused-windows-routes-contract')
+    if 'shell' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/route-loading-fixtures.test.mjs'], stage='ui-route-loading-contract')
+        run(['node', '--test', 'tests/e2e-review/shell-browser-diagnostics.test.mjs'], stage='ui-shell-diagnostic-contract')
     if 'fleet-groups' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/fleet-groups-fixtures.test.mjs'], stage='ui-fleet-groups-contract')
     if 'windows-fleet-software' in plan.get('flows', []):
@@ -630,6 +638,10 @@ def fleet_msi_failure_location(sha):
 # Closed coordinates from lan-browser.mjs and its reviewed case modules. These
 # literals, never report prose or nested diagnostics, are the only output labels.
 LAN_FAILURE_CASES = {
+    'Deferred details stay absent on login and overview, and respect blurred route replacement': 'route-loading',
+    'Deferred details wait through pagehide and completed auth revalidation': 'route-loading-resume',
+    'Deferred details cannot mount after logout or protected auth loss': 'route-loading-auth',
+    'Rejected detail module is contained and deliberate reload retries without mutation replay': 'route-loading-recovery',
     'Automatic certificate renewal metadata remains explicit and bounded': 'certificate-renewal',
     'Synthetic presentation-only service actions show exact review and uncertain outcomes without approval or execution': 'service-action-display',
     'Real HTTP-test login defaults to English, blocks protected data and retains a localized transport warning': 'login-warning',
@@ -661,11 +673,101 @@ LAN_FAILURE_CASES = {
 # Other existing cases may report stages, but only the detail-page coordinates
 # needed for this failure investigation are promoted to public output here.
 LAN_STAGE_CASES = {
+    'route-loading', 'route-loading-resume', 'route-loading-auth', 'route-loading-recovery',
     'service-action-display', 'application-status', 'application-settings', 'windows-inventory',
     'resource-history', 'capabilities', 'journal-browse', 'journal-ai', 'package-updates',
     'proactive-ai', 'investigations', 'cve-detail-pages',
 }
 LAN_FAILURE_STAGES = {
+    'service-action-display': {stage: stage for stage in (
+        'agent-reported-result',
+        'detail-route-readiness',
+        'final-no-action-guards',
+        'fixture-document',
+        'inventory-tab',
+        'services-tab',
+        'setup',
+        'stale-helper',
+        'synthetic-display-service-action-consent-mobile-de',
+        'synthetic-display-service-action-preview-desktop-en',
+        'synthetic-display-service-action-preview-mobile-de',
+        'synthetic-display-service-action-result-desktop-en',
+        'synthetic-display-service-action-result-mobile-en',
+        'synthetic-display-service-action-stale-mobile-de',
+        'synthetic-display-service-action-unknown-mobile-de',
+        'unapproved-review',
+        'unknown-result',
+    )},
+    'package-updates': {stage: stage for stage in (
+        'consent',
+        'detail-route-readiness',
+        'guards',
+        'login',
+        'review',
+        'selection',
+        'setup',
+        'unavailable',
+        'unknown',
+    )},
+    'investigations': {stage: stage for stage in (
+        'browser-back',
+        'expired-current-evidence',
+        'final-read-only-guards',
+        'health-awaiting-assertions',
+        'health-awaiting-detail-route-readiness',
+        'health-clear-assertions',
+        'health-clear-detail-route-readiness',
+        'health-dashboard-clear',
+        'health-dashboard-healthy-services',
+        'health-dashboard-issues',
+        'health-healthy-services-assertions',
+        'health-healthy-services-detail-route-readiness',
+        'health-issue-assertions',
+        'health-issue-detail-route-readiness',
+        'health-layout-cards',
+        'health-layout-issues',
+        'health-layout-summaries',
+        'health-layout-viewport',
+        'health-mobile-de-clear-reading',
+        'health-mobile-de-clear-reload',
+        'health-mobile-de-clear-summary',
+        'health-mobile-de-settings-layout-cards',
+        'health-mobile-de-settings-layout-issues',
+        'health-mobile-de-settings-layout-summaries',
+        'health-mobile-de-settings-layout-viewport',
+        'health-mobile-de-settings-open',
+        'health-mobile-de-settings-scroll',
+        'health-mobile-de-settings-visible',
+        'health-stale-assertions',
+        'health-stale-detail-route-readiness',
+        'health-unavailable-assertions',
+        'health-unavailable-detail-route-readiness',
+        'issue',
+        'mobile-issue',
+        'no-current-assessment',
+        'setup',
+        'stable-device-navigation',
+        'synthetic-http-test-health-clear-desktop-de',
+        'synthetic-http-test-health-clear-desktop-en',
+        'synthetic-http-test-health-clear-mobile-de',
+        'synthetic-http-test-health-controls-mobile-de',
+        'synthetic-http-test-health-desktop-en',
+        'synthetic-http-test-health-issue-mobile-en',
+        'synthetic-http-test-health-mobile-de',
+        'synthetic-http-test-health-services-desktop-en',
+        'synthetic-http-test-health-stale-mobile-en',
+        'synthetic-http-test-health-unavailable-mobile-en',
+        'synthetic-http-test-health-unknown-mobile-en',
+        'synthetic-http-test-investigations-issue-desktop-en',
+        'synthetic-http-test-investigations-issue-mobile-de',
+        'synthetic-http-test-investigations-issue-mobile-en',
+        'synthetic-http-test-investigations-stale-desktop-en',
+        'synthetic-http-test-investigations-unknown-mobile-en',
+    )},
+    'route-loading': {stage: stage for stage in ('setup', 'loading-captures', 'blurred-route-replacement')},
+    'route-loading-resume': {stage: stage for stage in ('setup', 'pending-pagehide', 'auth-revalidation')},
+    'route-loading-auth': {stage: stage for stage in ('setup', 'pending-logout', 'pending-auth-loss')},
+    'route-loading-recovery': {stage: stage for stage in ('setup', 'module-failure', 'failure-captures', 'deliberate-reload')},
     'windows-inventory': {stage: stage for stage in (
         'services-source', 'services-disabled', 'services-pending', 'services-attention',
         'services-unknown', 'services-recovered', 'services-policy-changed',
@@ -793,6 +895,106 @@ def cve_review_failure_location(sha):
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
         return None
 
+
+
+# Closed coordinates for the selected single-case Windows detail runners. The
+# report's prose, source hashes, browser version and fixture values never leave
+# this decoder. These diagnostics do not participate in acceptance validation.
+WINDOWS_DETAIL_FAILURE_CASES = {
+    'windows-managed-msi': 'Synthetic central MSI bounded upload, separate delivery, unchecked exact approval and durable outcome',
+    'windows-mutation-coexistence': 'Synthetic shared MSI and WUA blocking, exact recovery details and released status in both compiled views',
+    'windows-storage-io': 'Private Windows PerfDisk aggregate with invented transport',
+}
+WINDOWS_DETAIL_FAILURE_STAGES = {
+    'windows-managed-msi': (
+        'setup', 'document', 'detail-route-readiness', 'upload', 'deliver', 'imported',
+        'review', 'ready', 'approve', 'outcome', 'reload', 'reload-detail-route-readiness', 'complete',
+    ),
+    'windows-mutation-coexistence': (
+        'setup', 'document', 'detail-route-readiness', 'blocked', 'released', 'reload',
+        'reload-detail-route-readiness', 'complete',
+    ),
+    'windows-storage-io': (
+        'setup', 'mount', 'detail-route-readiness', 'mount-detail-route-readiness',
+        'summary', 'details', 'navigation', 'idle', 'partial', 'denied', 'unsupported',
+        'retained', 'retained-age', 'legacy', 'expiry', 'focus', 'revoked', 'session', 'complete',
+    ),
+}
+
+
+def clear_windows_detail_failure_report(flow):
+    """Remove only this runner's old result through a no-follow directory FD."""
+    directory = None
+    try:
+        if type(flow) is not str or flow not in WINDOWS_DETAIL_FAILURE_CASES:
+            raise ValueError('invalid Windows detail diagnostic flow')
+        path = ROOT / 'artifacts/review' / BROWSER_REPORTS[flow]
+        directory = reporter.open_log(path.parent)
+        if not stat.S_ISDIR(os.fstat(directory).st_mode):
+            raise ValueError('invalid Windows detail diagnostic directory')
+        os.unlink(path.name, dir_fd=directory)
+    except FileNotFoundError:
+        pass  # A missing result or parent cannot contribute a stale coordinate.
+    except OSError:
+        raise ValueError('could not prepare fresh Windows detail diagnostics') from None
+    finally:
+        if directory is not None:
+            os.close(directory)
+
+
+def windows_detail_failure_location(flow, sha):
+    """Project only same-source, exact-case labels from bounded failed reports."""
+    try:
+        if (type(flow) is not str or flow not in WINDOWS_DETAIL_FAILURE_CASES
+                or type(sha) is not str or not HEX.fullmatch(sha)):
+            return None
+        path = ROOT / 'artifacts/review' / BROWSER_REPORTS[flow]
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        common = {'name', 'status', 'stage', 'sourceSha', 'createdAt', 'runtimeErrorCount',
+                  'browserAcceptance', 'nativeAcceptance'}
+        storage = flow == 'windows-storage-io'
+        extra = ({'sourceState', 'uiSourceSha256', 'compiledBundleSha256', 'browserVersion',
+                  'customPreinstalledBrowser', 'fixtureDisclosure', 'details',
+                  'liveAuthenticationAcceptance', 'liveStoreAcceptance'} if storage else
+                 {'scope', 'variants', 'requestsToRealAPI', 'durableStoreAcceptance',
+                  'secretsExported', 'realTelemetryExported'})
+        if (type(value) is not dict or set(value) != common | extra
+                or value['sourceSha'] != sha or value['name'] != WINDOWS_DETAIL_FAILURE_CASES[flow]
+                or value['status'] != 'FAIL' or value['browserAcceptance'] is not False
+                or value['nativeAcceptance'] is not False
+                or type(value['stage']) is not str or value['stage'] not in WINDOWS_DETAIL_FAILURE_STAGES[flow]
+                or type(value['createdAt']) is not str or not 1 <= len(value['createdAt']) <= 64
+                or type(value['runtimeErrorCount']) is not int or not 0 <= value['runtimeErrorCount'] <= 1000000):
+            return None
+        prose = 'fixtureDisclosure' if storage else 'scope'
+        if type(value[prose]) is not str or not 1 <= len(value[prose]) <= 4096:
+            return None
+        if storage:
+            if (value['sourceState'] != 'sourceSha identifies checkout HEAD; source and compiled bundle hashes identify the tested bytes'
+                    or any(type(value[key]) is not str or not re.fullmatch(r'[a-f0-9]{64}', value[key])
+                           for key in ['uiSourceSha256', 'compiledBundleSha256'])
+                    or (value['browserVersion'] is not None and
+                        (type(value['browserVersion']) is not str or not 1 <= len(value['browserVersion']) <= 128))
+                    or type(value['customPreinstalledBrowser']) is not bool or value['details'] is not None
+                    or value['liveAuthenticationAcceptance'] is not False or value['liveStoreAcceptance'] is not False):
+                return None
+        elif (type(value['variants']) is not list or value['variants'] != []
+              or type(value['requestsToRealAPI']) is not int or value['requestsToRealAPI'] != 0
+              or any(value[key] is not False for key in ['durableStoreAcceptance', 'secretsExported', 'realTelemetryExported'])):
+            return None
+        # Select emitted labels from source, never from report strings.
+        case = next(name for name in WINDOWS_DETAIL_FAILURE_CASES if name == flow)
+        stage = next(name for name in WINDOWS_DETAIL_FAILURE_STAGES[case] if name == value['stage'])
+        return 'case=%s stage=%s' % (case, stage)
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
 
 
 # This source vocabulary is shared with the Windows producer, never loaded from
@@ -925,6 +1127,116 @@ def journal_failure_location(path, sha):
         return None
 
 
+ROUTE_LOADING_STAGES = (
+    'fixture', 'overview-navigation', 'initial-deferral', 'interception-setup',
+    'cold-navigation', 'module-interception', 'loading-fallback', 'module-transfer',
+    'module-evaluation', 'final-render', 'final-counts', 'complete',
+)
+
+
+def shell_route_loading_location(path, sha):
+    """Read only a closed direct-case coordinate from this invocation's private file."""
+    try:
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 2048:
+                return None
+            raw = stream.read(2049)
+        if len(raw) > 2048:
+            return None
+        value = reporter.decode(raw)
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schema', 'sourceSha', 'status', 'stage', 'runtimeError'}
+                or type(value['schema']) is not int or value['schema'] != 1 or value['sourceSha'] != sha
+                or type(value['status']) is not str or value['status'] not in ('PASS', 'FAIL', 'NOT_RUN')
+                or type(value['stage']) is not str or value['stage'] not in ROUTE_LOADING_STAGES
+                or type(value['runtimeError']) is not bool
+                or (value['status'] == 'PASS' and value['stage'] != 'complete')
+                or (value['status'] == 'NOT_RUN' and (value['stage'] != 'fixture' or value['runtimeError']))):
+            return None
+        # Reconstruct from source literals, never echo an arbitrary report string.
+        status = next(name.lower() for name in ('PASS', 'FAIL', 'NOT_RUN') if name == value['status'])
+        stage = next(name for name in ROUTE_LOADING_STAGES if name == value['stage'])
+        return 'case=direct-case status=%s stage=%s%s' % (status, stage, ' runtime-errors' if value['runtimeError'] else '')
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+SHELL_CASES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/shell-browser-cases.json'
+SHELL_FAILURE_CATEGORIES = ('assertion', 'timeout', 'other')
+SHELL_KEYBOARD_STAGES = ('navigation', 'case-content', 'initial-bounds', 'skip-focus', 'main-focus',
+                         'page-scroll', 'scrolled-bounds', 'menu-navigation', 'final-bounds', 'complete')
+
+
+def shell_failure_location(path, sha):
+    """Project source-bound numeric IDs and closed categories, never report names."""
+    try:
+        def read_bounded(path, limit):
+            with os.fdopen(reporter.open_log(path), 'rb') as stream:
+                metadata = os.fstat(stream.fileno())
+                if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= limit:
+                    raise ValueError('invalid')
+                raw = stream.read(limit + 1)
+            if len(raw) > limit:
+                raise ValueError('invalid')
+            return reporter.decode(raw)
+        contract = read_bounded(SHELL_CASES_SOURCE, 16384)
+        if (type(contract) is not dict or set(contract) != {'schema', 'cases'}
+                or type(contract['schema']) is not int or contract['schema'] != 1
+                or type(contract['cases']) is not list or len(contract['cases']) != 45
+                or any(type(name) is not str or not 0 < len(name) <= 200 for name in contract['cases'])
+                or len(set(contract['cases'])) != 45):
+            return None
+        value = read_bounded(path, 8192)
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schema', 'sourceSha', 'failures', 'runtimeCases', 'unknownCase'}
+                or type(value['schema']) is not int or value['schema'] != 1 or value['sourceSha'] != sha
+                or type(value['unknownCase']) is not bool
+                or type(value['failures']) is not list or len(value['failures']) > 45
+                or type(value['runtimeCases']) is not list or len(value['runtimeCases']) > 45):
+            return None
+        previous, locations = 0, []
+        for row in value['failures']:
+            if (type(row) is not dict or set(row) != ({'case', 'category', 'stage'} if row.get('case') == 36 else {'case', 'category'})
+                    or type(row['case']) is not int or not previous < row['case'] <= 45
+                    or type(row['category']) is not str or row['category'] not in SHELL_FAILURE_CATEGORIES
+                    or (row['case'] == 36 and (type(row['stage']) is not int or not 0 <= row['stage'] < len(SHELL_KEYBOARD_STAGES)))):
+                return None
+            previous = row['case']
+            category = next(name for name in SHELL_FAILURE_CATEGORIES if name == row['category'])
+            locations.append('case=%d category=%s%s' % (row['case'], category, ' stage=%d' % row['stage'] if row['case'] == 36 else ''))
+        previous = 0
+        for case in value['runtimeCases']:
+            if type(case) is not int or not previous < case <= 45:
+                return None
+            previous = case
+            locations.append('case=%d category=runtime' % case)
+        if value['unknownCase']:
+            locations.append('unknown-case')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_shell_browser(env, sha):
+    # A fresh private path prevents stale same-head results and is removed on
+    # every exit. No raw errors, fixture values or browser logs are released.
+    with tempfile.TemporaryDirectory(prefix='tracebolt-private-route-loading-') as private:
+        path = Path(private) / 'coordinates.json'
+        shell_path = Path(private) / 'shell-coordinates.json'
+        try:
+            run(['node', FLOWS['shell']], stage='browser-shell',
+                env={**env, 'TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC': str(path), 'TRACEBOLT_SHELL_DIAGNOSTIC': str(shell_path)})
+        except ValueError:
+            location = shell_route_loading_location(path, sha)
+            if location is not None:
+                print('FAIL shell route-load location: ' + location, flush=True)
+            location = shell_failure_location(shell_path, sha)
+            if location is not None:
+                print('FAIL shell location: ' + location, flush=True)
+            raise
+
+
 def run_journal_browser(env, sha):
     # Fresh exclusive path per invocation, never under artifacts and always
     # removed. A previous same-head run cannot supply this run's diagnostic.
@@ -952,6 +1264,10 @@ def browser_checks(plan):
         if flow == 'windows-service-actions':
             invocation = secrets.token_hex(16)
             env['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'] = invocation
+        if flow in WINDOWS_DETAIL_FAILURE_CASES:
+            # Before the failure handler: a cleanup error must never decode the
+            # old file, and a failed launch without a new report stays generic.
+            clear_windows_detail_failure_report(flow)
         if flow == 'fleet-identity':
             # This legacy runner otherwise guesses /usr/bin/chromium. Bind only
             # this invocation to the locked Playwright browser installed by CI.
@@ -960,7 +1276,9 @@ def browser_checks(plan):
                 raise ValueError('installed browser unavailable')
             env['CHROMIUM_PATH'] = executable
         try:
-            if flow == 'journal':
+            if flow == 'shell':
+                run_shell_browser(env, plan['sha'])
+            elif flow == 'journal':
                 run_journal_browser(env, plan['sha'])
             else:
                 run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
@@ -981,6 +1299,10 @@ def browser_checks(plan):
                 location = windows_action_failure_location(plan['sha'], invocation)
                 if location is not None:
                     print('FAIL Windows action location: ' + location, flush=True)
+            if flow in WINDOWS_DETAIL_FAILURE_CASES:
+                location = windows_detail_failure_location(flow, plan['sha'])
+                if location is not None:
+                    print('FAIL Windows detail location: ' + location, flush=True)
             raise  # Diagnostics never turn a failed browser flow into success.
         if flow == 'windows-fleet-msi':
             # Three bounded changed flows accompany the existing MSI selection;

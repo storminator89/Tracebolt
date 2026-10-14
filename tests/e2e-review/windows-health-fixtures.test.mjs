@@ -1,3 +1,4 @@
+import {routeLoadingCaseNames,routeLoadingFailureStage} from './route-loading-browser.mjs';
 import {requireWindowsResourceContextEvidence,windowsResourceContextDisclosure} from './windows-resource-context-browser.mjs';
 import {requireWindowsSecurityCoverageEvidence,windowsSecurityCoverageDisclosure} from './windows-security-coverage-browser.mjs';
 import {requireWindowsStorageContextEvidence,windowsStorageContextDisclosure} from './windows-storage-context-browser.mjs';
@@ -55,7 +56,7 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  // and teardown are inert here; no Playwright assertion is mocked or replaced.
  // Bind full-run mode explicitly: the focused smoke tier excludes this case,
  // while this fixture must exercise every Windows completion guard below.
- const globals={prSmoke:false,Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,requireWindowsSecurityCoverageEvidence,requireWindowsSecurityPostureEvidence,requireWindowsSessionContextEvidence,requireWindowsHardwareContextEvidence,requireWindowsStorageContextEvidence,requireWindowsResourceContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
+ const globals={routeLoadingCaseNames,routeLoadingFailureStage,prSmoke:false,Date,console:{log(){}},start:async()=>{},stop:async()=>{},context:null,currentTest:'',results:[],screenshots:[],sourceSha:'a'.repeat(40),requireWindowsHealthEvidence,requireWindowsAdapterContextEvidence,requireWindowsPatchContextEvidence,requireWindowsSecurityCoverageEvidence,requireWindowsSecurityPostureEvidence,requireWindowsSessionContextEvidence,requireWindowsHardwareContextEvidence,requireWindowsStorageContextEvidence,requireWindowsResourceContextEvidence,windowsInventoryFailureStage:()=> 'fixture-before-completion'};
  for(const name of new Set([...check.getText(parsed).matchAll(/\b\w+CaseName\b/g)].map(match=>match[0])))globals[name]=name;
  const run=vm.runInNewContext('('+check.getText(parsed)+')',globals);
  await run(globals.windowsInventoryCaseName,async()=>{});
@@ -104,6 +105,9 @@ test('the real runner success boundary rejects a no-op Windows callback before r
  for(const kind of ['summary','details','current-failure','retained-details'])for(const locale of ['en','de'])for(const width of [1440,390])globals.screenshots.push({file:`synthetic-windows-resource-context-${kind}-${width}-${locale}.png`,sourceSha:globals.sourceSha,test:globals.windowsInventoryCaseName,locale,viewport:{width,height:width===390?844:1000},publicSafe:true,fullPage:false,fixtureDisclosure:windowsResourceContextDisclosure});
  await run(globals.windowsInventoryCaseName,async()=>{});
  assert.equal(globals.results[0].status,'PASS');
+ globals.results.length=0;
+ await run(routeLoadingCaseNames[0],async()=>{throw new Error('inert route-load failure');});
+ assert.equal(globals.results[0].status,'FAIL');assert.equal(globals.results[0].stage,routeLoadingFailureStage());
 });
 
 test('interleaved contact aging preserves the real Health watermark without poisoning the next viewport',async()=>{

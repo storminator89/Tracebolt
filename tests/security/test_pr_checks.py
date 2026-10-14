@@ -241,7 +241,28 @@ class SelectionTests(unittest.TestCase):
                 if source.suffix in {'.js', '.mjs', '.ts', '.tsx', '.mts'} and 'windows-update-retirement-browser.mjs' in source.read_text():
                     consumers.add(source.relative_to(ROOT).as_posix())
         self.assertEqual(consumers, {'tests/e2e-review/windows-service-actions-runner.mjs',
-                                     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs'})
+                                     'tests/e2e-review/windows-update-retirement-fixtures.test.mjs',
+                                     'tests/e2e-review/paused-windows-routes.test.mjs'})
+
+    def test_paused_windows_route_regression_selects_exact_owners_and_runs_once(self):
+        path = 'tests/e2e-review/paused-windows-routes.test.mjs'
+        flows = {'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions'}
+        self.assertEqual(p.DOMAIN_SCRIPTS[path], flows)
+        for status in ['A', 'M']:
+            plan = self.select((status, path))
+            self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
+            self.assertEqual(set(plan['flows']), flows)
+        for selected in [*([flow] for flow in sorted(flows)), sorted(flows), ['lan'], ['shell'], []]:
+            with patch.object(p, 'run') as run, patch.object(p, 'run_vitest'):
+                p.web_checks({'flows': selected, 'broadWeb': False, 'web': []})
+            calls = [call for call in run.call_args_list if call.args[0] == ['node', '--test', path]]
+            self.assertEqual(len(calls), int(bool(flows & set(selected))))
+            if calls: self.assertEqual(calls[0].kwargs['stage'], 'ui-paused-windows-routes-contract')
+        for status, other in [('D', path), ('T', path), ('M', 'tests/e2e-review/paused-detail-route.mjs'),
+                              ('M', 'tests/e2e-review/paused-windows-new.test.mjs')]:
+            plan = self.select((status, other))
+            self.assertTrue(plan['broadGo']); self.assertTrue(plan['broadWeb'])
+            self.assertEqual(set(plan['flows']), set(p.FLOWS))
 
     def test_retirement_browser_report_uses_the_canonical_source_validator(self):
         plan = self.select(('M', 'tests/e2e-review/windows-update-retirement-browser.mjs'))
@@ -376,7 +397,8 @@ class SelectionTests(unittest.TestCase):
         plan = p.select(changes, self.packages, self.files, SHA, generated_allowlist_verified=True)
         self.assertEqual(plan['packages'], expected['packages'])
         self.assertEqual(plan['web'], expected['web'])
-        self.assertEqual(plan['flows'], ['fleet-groups', 'linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance', 'windows-service-actions'])
+        self.assertEqual(plan['flows'], ['fleet-groups', 'linux-cve-update-review', 'windows-fleet-msi', 'windows-fleet-software', 'windows-maintenance',
+                                        'windows-managed-msi', 'windows-mutation-coexistence', 'windows-service-actions', 'windows-storage-io'])
         self.assertFalse(plan['broadGo']); self.assertFalse(plan['broadWeb'])
         self.assertEqual(plan, p.select(list(reversed(changes)), self.packages, self.files, SHA,
                                       generated_allowlist_verified=True))
@@ -818,7 +840,11 @@ class LANFailureTests(unittest.TestCase):
 
     def test_lan_codes_match_existing_case_order_and_cve_stages(self):
         runner = (ROOT / p.FLOWS['lan']).read_text()
-        names = []
+        route_source = (ROOT / 'tests/e2e-review/route-loading-browser.mjs').read_text()
+        route_names = re.search(r'export const routeLoadingCaseNames = Object.freeze\(\[(.*?)\]\);', route_source, re.S)[1]
+        names = re.findall(r"'([^']+)'", route_names)
+        self.assertEqual(len(names), 4)
+        self.assertLess(runner.index('await runRouteLoadingChecks('), runner.index('await check('))
         for literal, symbol in re.findall(r"await check\((?:'([^']+)'|([A-Za-z][A-Za-z0-9_]+)),", runner):
             if literal:
                 names.append(literal)
@@ -828,7 +854,7 @@ class LANFailureTests(unittest.TestCase):
                 source = (ROOT / 'tests/e2e-review' / module).read_text()
                 names.append(re.search(r'export const ' + symbol + r"\s*=\s*'([^']+)'", source)[1])
         self.assertEqual(list(p.LAN_FAILURE_CASES), names)
-        self.assertEqual(len(names), 27)
+        self.assertEqual(len(names), 31)
         self.assertEqual(len(set(p.LAN_FAILURE_CASES.values())), len(names))
         for code in p.LAN_FAILURE_CASES.values(): self.assertRegex(code, r'^[a-z][a-z0-9-]{0,70}$')
         self.assertLessEqual(set(p.LAN_FAILURE_STAGES), set(p.LAN_FAILURE_CASES.values()))
@@ -844,6 +870,64 @@ class LANFailureTests(unittest.TestCase):
                              'expired retained input', 'device navigation isolation', 'session loss isolation',
                              'fresh login isolation', 'final guards'})
         for stage in p.LAN_FAILURE_STAGES['cve-detail-pages']: self.assertIn("'" + stage + "'", source)
+
+    def test_route_loading_stages_remain_closed_and_unknown_coordinates_are_rejected(self):
+        source = (ROOT / 'tests/e2e-review/route-loading-browser.mjs').read_text()
+        expected = {
+            'route-loading': {'setup', 'loading-captures', 'blurred-route-replacement'},
+            'route-loading-resume': {'setup', 'pending-pagehide', 'auth-revalidation'},
+            'route-loading-auth': {'setup', 'pending-logout', 'pending-auth-loss'},
+            'route-loading-recovery': {'setup', 'module-failure', 'failure-captures', 'deliberate-reload'},
+        }
+        for code, stages in expected.items():
+            self.assertEqual(p.LAN_FAILURE_STAGES[code], {stage: stage for stage in stages})
+            for stage in stages: self.assertIn("'" + stage + "'", source)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for code in expected:
+                    for key, value in [('name', 'Unknown route case'), ('stage', 'unreviewed-stage'),
+                                       ('stage', 'PRIVATE_RAW_STATE_MUST_STAY_WITHHELD'), ('raw', 'private'),
+                                       ('stage', 'sparse-search')]:
+                        report = self.report([code])
+                        next(row for row in report['results'] if row['status'] == 'FAIL')[key] = value
+                        target.write_text(json.dumps(report))
+                        with self.subTest(code=code, key=key, value=value):
+                            self.assertIsNone(p.lan_failure_location(SHA))
+
+    def test_paused_detail_cases_expose_only_complete_fixed_source_stage_sets(self):
+        directory = ROOT / 'tests/e2e-review'
+        def literals(*names):
+            return {stage for name in names for stage in re.findall(
+                r"(?:mark|capture)\('([^']+)'", (directory / name).read_text())}
+        health = (directory / 'health-dashboard-browser.mjs').read_text()
+        phases = re.findall(r"'([^']+)'", re.search(r'healthDashboardPhases=\[(.*?)\]', health)[1])
+        package = (directory / 'package-updates-browser.mjs').read_text()
+        expected = {
+            'service-action-display': literals('service-action-display-browser.mjs', 'service-action-display-navigation.mjs'),
+            'package-updates': set(re.findall(r"'([^']+)'", re.search(r'const stages=new Set\(\[(.*?)\]\)', package)[1])),
+            'investigations': literals('investigations-browser.mjs', 'health-dashboard-browser.mjs')
+                | {f'health-{phase}-{point}' for phase in phases for point in ['detail-route-readiness', 'assertions']}
+                | {f'{prefix}-{part}' for prefix in ['health-layout', 'health-mobile-de-settings-layout']
+                   for part in ['viewport', 'cards', 'issues', 'summaries']},
+        }
+        for code, stages in expected.items():
+            self.assertEqual(p.LAN_FAILURE_STAGES[code], {stage: stage for stage in stages})
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for code in expected:
+                    other_case_stage = {'service-action-display': 'consent', 'package-updates': 'inventory-tab',
+                                        'investigations': 'consent'}[code]
+                    for stage in ['unreviewed-stage', 'PRIVATE_RAW_STATE_MUST_STAY_WITHHELD',
+                                  other_case_stage, '::error::injected', '', None, 300, True]:
+                        report = self.report([code])
+                        next(row for row in report['results'] if row['status'] == 'FAIL')['stage'] = stage
+                        target.write_text(json.dumps(report))
+                        with self.subTest(code=code, stage=stage):
+                            self.assertIsNone(p.lan_failure_location(SHA))
 
     def test_windows_inventory_service_stages_are_closed_source_vocabulary(self):
         source = (ROOT / 'tests/e2e-review/windows-service-health-browser.mjs').read_text()
@@ -899,8 +983,8 @@ class LANFailureTests(unittest.TestCase):
                            ('summary', []), ('createdAt', 1), ('scope', {}), ('faultInjection', []),
                            ('credentialMaterial', None), ('screenshots', []), ('raw', marker)]:
             cases.append({**good, key: value})
-        for key, value in [('passed', 27), ('failed', 0), ('passed', 26.0), ('failed', True),
-                           ('setupFailure', 0), ('setupFailure', 'false'), ('passed', -1), ('failed', 28), ('raw', marker)]:
+        for key, value in [('passed', len(p.LAN_FAILURE_CASES)), ('failed', 0), ('passed', float(len(p.LAN_FAILURE_CASES) - 1)), ('failed', True),
+                           ('setupFailure', 0), ('setupFailure', 'false'), ('passed', -1), ('failed', len(p.LAN_FAILURE_CASES) + 1), ('raw', marker)]:
             cases.append({**good, 'summary': {**good['summary'], key: value}})
         index = next(i for i, row in enumerate(good['results']) if row['status'] == 'FAIL')
         for key, value in [('name', marker), ('name', []), ('status', True), ('status', marker),
@@ -913,7 +997,7 @@ class LANFailureTests(unittest.TestCase):
             changed = deepcopy(good); del changed['results'][index][key]; cases.append(changed)
         for key in good:
             changed = deepcopy(good); del changed[key]; cases.append(changed)
-        for index in [0, 10, 26]:
+        for index in [0, 10, len(p.LAN_FAILURE_CASES) - 1]:
             changed = deepcopy(good); changed['results'][index] = changed['results'][1]; cases.append(changed)
         changed = deepcopy(good); changed['results'].reverse(); cases.append(changed)
         changed = deepcopy(good); changed['results'][0]['stage'] = 'setup'; cases.append(changed)
@@ -991,6 +1075,262 @@ class LANFailureTests(unittest.TestCase):
             validate.assert_not_called()
 
 
+class WindowsDetailFailureTests(unittest.TestCase):
+    MARKER = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD\n::error::injected'
+
+    def report(self, flow, stage='detail-route-readiness'):
+        value = {'name': p.WINDOWS_DETAIL_FAILURE_CASES[flow], 'status': 'FAIL', 'stage': stage,
+                 'sourceSha': SHA, 'createdAt': '2026-10-14T00:00:00.000Z', 'runtimeErrorCount': 0,
+                 'browserAcceptance': False, 'nativeAcceptance': False}
+        if flow == 'windows-storage-io':
+            value.update(sourceState='sourceSha identifies checkout HEAD; source and compiled bundle hashes identify the tested bytes',
+                         uiSourceSha256='b' * 64, compiledBundleSha256='c' * 64, browserVersion='139.0.7258.5',
+                         customPreinstalledBrowser=False, fixtureDisclosure='Synthetic fixture only', details=None,
+                         liveAuthenticationAcceptance=False, liveStoreAcceptance=False)
+        else:
+            value.update(scope='Synthetic fixture only', variants=[], requestsToRealAPI=0,
+                         durableStoreAcceptance=False, secretsExported=False, realTelemetryExported=False)
+        return value
+
+    def target(self, root, flow):
+        path = root / 'artifacts/review' / p.BROWSER_REPORTS[flow]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def test_exact_selected_case_membership_and_stages_match_driver_source(self):
+        fixtures = {
+            'windows-managed-msi': ('windowsManagedMSI', 'exerciseWindowsManagedMSI'),
+            'windows-mutation-coexistence': ('windowsMutationCoexistence', 'exerciseWindowsMutationCoexistence'),
+            'windows-storage-io': ('windowsStorageIO', 'windowsStorageIOBrowserCase'),
+        }
+        self.assertEqual(set(p.WINDOWS_DETAIL_FAILURE_CASES), set(fixtures))
+        self.assertEqual(set(p.WINDOWS_DETAIL_FAILURE_STAGES), set(fixtures))
+        for flow, (prefix, function) in fixtures.items():
+            with self.subTest(flow=flow):
+                source = (ROOT / ('tests/e2e-review/' + flow + '-browser.mjs')).read_text()
+                self.assertEqual(p.WINDOWS_DETAIL_FAILURE_CASES[flow],
+                                 re.search(r'export const ' + prefix + r"CaseName='([^']+)'", source)[1])
+                body = source.split('export async function ' + function + '(', 1)[1].split('\nexport ', 1)[0]
+                stages = {'setup'} | set(re.findall(r"\bstage\s*=\s*'([^']+)'", body))
+                if flow == 'windows-storage-io':
+                    # The only dynamic stage comes from this fixed source tuple.
+                    self.assertIn("for(const [mode,en,deText] of [['denied','Access denied','Zugriff verweigert'],['unsupported','Source unsupported','Quelle nicht unterstützt']]){stage=mode;", body)
+                    stages.update(['denied', 'unsupported'])
+                else:
+                    declared = re.search(r'const stages=new Set\(\[(.*?)\]\)', source)[1]
+                    self.assertEqual(set(re.findall(r"'([^']+)'", declared)), stages)
+                self.assertEqual(set(p.WINDOWS_DETAIL_FAILURE_STAGES[flow]), stages)
+                self.assertEqual(len(p.WINDOWS_DETAIL_FAILURE_STAGES[flow]), len(stages))
+                self.assertIn("import {settlePausedDetailRoute} from './paused-detail-route.mjs';", source)
+                helper_labels = re.findall(r"stage='([^']+)';await settlePausedDetailRoute\(page,expect,", body)
+                self.assertCountEqual(helper_labels, [stage for stage in stages if stage.endswith('detail-route-readiness')])
+                self.assertIn("page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));", body)
+                runner = (ROOT / p.FLOWS[flow]).read_text()
+                self.assertIn('name:' + prefix + 'CaseName', runner)
+                self.assertIn('stage:' + prefix + 'FailureStage()', runner)
+                self.assertIn("'" + Path(p.BROWSER_REPORTS[flow]).name + "'", runner)
+
+    def test_all_closed_source_stages_and_ignored_private_prose(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.object(p, 'ROOT', root):
+                for flow, stages in p.WINDOWS_DETAIL_FAILURE_STAGES.items():
+                    target = self.target(root, flow)
+                    for stage in stages:
+                        report = self.report(flow, stage)
+                        report['fixtureDisclosure' if flow == 'windows-storage-io' else 'scope'] = self.MARKER
+                        if flow == 'windows-storage-io': report['browserVersion'] = self.MARKER
+                        target.write_text(json.dumps(report))
+                        with self.subTest(flow=flow, stage=stage):
+                            self.assertEqual(p.windows_detail_failure_location(flow, SHA),
+                                             'case=%s stage=%s' % (flow, stage))
+
+    def test_rejects_unknown_wrong_case_stages_and_raw_payloads(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.object(p, 'ROOT', root):
+                for flow, stages in p.WINDOWS_DETAIL_FAILURE_STAGES.items():
+                    target = self.target(root, flow); good = self.report(flow)
+                    foreign_stages = set().union(*map(set, p.WINDOWS_DETAIL_FAILURE_STAGES.values())) - set(stages)
+                    for stage in [None, True, 1, [], {}, 'unknown', 'DETAIL-ROUTE-READINESS',
+                                  'detail-route-readiness\n', self.MARKER, 'x' * 8193, *sorted(foreign_stages)]:
+                        target.write_text(json.dumps({**good, 'stage': stage}))
+                        with self.subTest(flow=flow, stage=stage):
+                            self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    for other, name in p.WINDOWS_DETAIL_FAILURE_CASES.items():
+                        if other == flow: continue
+                        target.write_text(json.dumps({**good, 'name': name}))
+                        self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    for key in ['error', 'raw', 'case', 'runtimeErrors', 'dto']:
+                        target.write_text(json.dumps({**good, key: self.MARKER}))
+                        self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+
+    def test_rejects_malformed_shapes_types_counts_success_and_foreign_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.object(p, 'ROOT', root):
+                for flow in p.WINDOWS_DETAIL_FAILURE_CASES:
+                    good = self.report(flow); target = self.target(root, flow); cases = []
+                    for key in good:
+                        missing = dict(good); del missing[key]; cases.append(missing)
+                        for value in [None, True, False, 0, 1, [], {}]:
+                            if type(value) is type(good[key]) and value == good[key]: continue
+                            if key == 'browserVersion' and value is None: continue
+                            if key == 'customPreinstalledBrowser' and value is True: continue
+                            if key == 'runtimeErrorCount' and type(value) is int and value in [0, 1]: continue
+                            cases.append({**good, key: value})
+                    cases.extend({**good, key: value} for key, value in [
+                        ('sourceSha', SHA.upper()), ('sourceSha', SHA + '\n'), ('sourceSha', 'b' * 40),
+                        ('status', 'PASS'), ('status', 'fail'), ('runtimeErrorCount', -1),
+                        ('runtimeErrorCount', 1000001), ('runtimeErrorCount', 1.5), ('createdAt', ''),
+                        ('createdAt', 'x' * 65), ('name', self.MARKER)])
+                    prose = 'fixtureDisclosure' if flow == 'windows-storage-io' else 'scope'
+                    cases.extend([{**good, prose: ''}, {**good, prose: 'x' * 4097}])
+                    if flow == 'windows-storage-io':
+                        cases.extend([{**good, 'browserVersion': ''}, {**good, 'browserVersion': 'x' * 129},
+                                      {**good, 'sourceState': self.MARKER}])
+                        for key in ['uiSourceSha256', 'compiledBundleSha256']:
+                            cases.extend({**good, key: value} for value in ['b' * 63, 'B' * 64, 'b' * 64 + '\n', self.MARKER])
+                    else:
+                        cases.extend([{**good, 'variants': [self.MARKER]}, {**good, 'requestsToRealAPI': 1}])
+                    cases.extend([None, [], True, 1, self.MARKER])
+                    for index, value in enumerate(cases):
+                        target.write_text(json.dumps(value))
+                        with self.subTest(flow=flow, index=index):
+                            self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    target.write_text(json.dumps(good))
+                    for sha in [None, True, 1, [], {}, '', SHA.upper(), SHA + '\n', 'b' * 40, self.MARKER]:
+                        self.assertIsNone(p.windows_detail_failure_location(flow, sha))
+                for flow in [None, True, 1, [], {}, '', 'windows-service-actions', '../windows-managed-msi', self.MARKER]:
+                    self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+
+    def test_strict_json_bounds_regular_file_and_nofollow_guards(self):
+        for flow in p.WINDOWS_DETAIL_FAILURE_CASES:
+            with self.subTest(flow=flow), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp); target = self.target(root, flow)
+                report = self.report(flow); good = json.dumps(report).encode()
+                raw_values = [b'', b'{', b'\xff', b'[]', good + b'{}', b' ' * 8193]
+                for key, value in report.items():
+                    member = json.dumps(key).encode() + b': ' + json.dumps(value).encode()
+                    raw_values.append(good.replace(member, member + b', ' + member, 1))
+                raw_values.extend(good.replace(b'"runtimeErrorCount": 0', b'"runtimeErrorCount": ' + value)
+                                  for value in [b'NaN', b'Infinity', b'-Infinity'])
+                with patch.object(p, 'ROOT', root):
+                    self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    for raw in raw_values:
+                        target.write_bytes(raw); self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    target.write_bytes(good + b' ' * (8192 - len(good)))
+                    self.assertIsNotNone(p.windows_detail_failure_location(flow, SHA))
+                    target.write_bytes(good + b' ' * (8193 - len(good)))
+                    self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    with patch.object(p.os, 'fstat', return_value=SimpleNamespace(st_mode=0o100600, st_size=1)):
+                        self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    target.unlink(); target.mkdir()
+                    self.assertIsNone(p.windows_detail_failure_location(flow, SHA)); target.rmdir()
+                    backing = root / 'backing.json'; backing.write_bytes(good); target.symlink_to(backing)
+                    self.assertIsNone(p.windows_detail_failure_location(flow, SHA)); target.unlink()
+                    target.parent.rmdir(); target.parent.symlink_to(root, target_is_directory=True)
+                    (root / target.name).write_bytes(good)
+                    self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+                    with patch.object(p.reporter, 'open_log', side_effect=PermissionError(self.MARKER)):
+                        self.assertIsNone(p.windows_detail_failure_location(flow, SHA))
+
+    def test_failed_process_emits_only_closed_location_and_preserves_failure(self):
+        for flow in p.WINDOWS_DETAIL_FAILURE_CASES:
+            with self.subTest(flow=flow), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp); target = self.target(root, flow); report = self.report(flow)
+                report['fixtureDisclosure' if flow == 'windows-storage-io' else 'scope'] = self.MARKER
+                def process(args, **kwargs):
+                    kwargs['stdout'].write(self.MARKER.encode())
+                    if args == ['node', p.FLOWS[flow]]:
+                        target.write_text(json.dumps(report))
+                    return SimpleNamespace(returncode=int(args == ['node', p.FLOWS[flow]]))
+                output = io.StringIO()
+                with patch.object(p, 'ROOT', root), patch.object(p.subprocess, 'run', side_effect=process), \
+                     patch.object(p, 'browser_report') as validate, redirect_stdout(output):
+                    with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                        p.browser_checks({'flows': [flow], 'sha': SHA})
+                self.assertIn('FAIL Windows detail location: case=%s stage=detail-route-readiness' % flow, output.getvalue())
+                self.assertIn('FAIL stage: browser-' + flow, output.getvalue())
+                for text in [self.MARKER, SHA, 'PASS:']: self.assertNotIn(text, output.getvalue())
+                validate.assert_not_called()
+
+    def test_old_same_source_result_is_removed_before_launch_and_cannot_supply_failure(self):
+        for flow in p.WINDOWS_DETAIL_FAILURE_CASES:
+            with self.subTest(flow=flow), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp); target = self.target(root, flow)
+                target.write_text(json.dumps(self.report(flow)))
+                unrelated = target.parent / 'manifest.json'; unrelated.write_text('preserved')
+                original = ValueError(self.MARKER)
+                def run(args, **kwargs):
+                    if args == ['node', p.FLOWS[flow]]:
+                        self.assertFalse(target.exists())
+                        raise original
+                output = io.StringIO()
+                with patch.object(p, 'ROOT', root), patch.object(p, 'run', side_effect=run), \
+                     patch.object(p, 'browser_report') as validate, redirect_stdout(output):
+                    with self.assertRaises(ValueError) as failure: p.browser_checks({'flows': [flow], 'sha': SHA})
+                self.assertIs(failure.exception, original)
+                self.assertEqual(unrelated.read_text(), 'preserved')
+                self.assertNotIn('FAIL Windows detail location:', output.getvalue())
+                self.assertNotIn(self.MARKER, output.getvalue()); validate.assert_not_called()
+
+    def test_report_reset_is_bounded_nofollow_and_failure_never_launches_or_decodes(self):
+        for flow in p.WINDOWS_DETAIL_FAILURE_CASES:
+            with self.subTest(flow=flow), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                with patch.object(p, 'ROOT', root):
+                    p.clear_windows_detail_failure_report(flow)  # Missing parent is safe.
+                    target = self.target(root, flow)
+                    p.clear_windows_detail_failure_report(flow)  # Missing report is safe.
+                    backing = root / 'unrelated.json'; backing.write_text(self.MARKER)
+                    target.symlink_to(backing)
+                    p.clear_windows_detail_failure_report(flow)
+                    self.assertFalse(target.is_symlink()); self.assertEqual(backing.read_text(), self.MARKER)
+                    target.mkdir()
+                    with self.assertRaisesRegex(ValueError, 'could not prepare fresh'):
+                        p.clear_windows_detail_failure_report(flow)
+                    self.assertTrue(target.is_dir()); target.rmdir()
+                    target.parent.rmdir(); target.parent.symlink_to(root, target_is_directory=True)
+                    stale = root / target.name; stale.write_text(json.dumps(self.report(flow)))
+                    with patch.object(p, 'run') as run, patch.object(p, 'windows_detail_failure_location') as location, \
+                         patch.object(p, 'browser_report') as validate:
+                        with self.assertRaisesRegex(ValueError, 'could not prepare fresh'):
+                            p.browser_checks({'flows': [flow], 'sha': SHA})
+                        run.assert_called_once_with(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
+                        location.assert_not_called(); validate.assert_not_called()
+                    self.assertTrue(stale.is_file())
+                    with patch.object(p.reporter, 'open_log', side_effect=PermissionError(self.MARKER)):
+                        with self.assertRaisesRegex(ValueError, '^could not prepare fresh Windows detail diagnostics$'):
+                            p.clear_windows_detail_failure_report(flow)
+                    with patch.object(p.os, 'fstat', return_value=SimpleNamespace(st_mode=0o100600)), \
+                         patch.object(p.reporter, 'open_log', return_value=os.open(backing, os.O_RDONLY)):
+                        with self.assertRaisesRegex(ValueError, 'invalid Windows detail diagnostic directory'):
+                            p.clear_windows_detail_failure_report(flow)
+
+    def test_diagnostics_preserve_exception_and_skip_smoke_other_flows_success_and_validation(self):
+        for flow in p.WINDOWS_DETAIL_FAILURE_CASES:
+            original = ValueError(self.MARKER)
+            with patch.object(p, 'run', side_effect=[None, original]), \
+                 patch.object(p, 'windows_detail_failure_location', return_value=None) as location, \
+                 patch.object(p, 'browser_report') as validate:
+                with self.assertRaises(ValueError) as failure: p.browser_checks({'flows': [flow], 'sha': SHA})
+                self.assertIs(failure.exception, original); location.assert_called_once_with(flow, SHA)
+                validate.assert_not_called()
+            with patch.object(p, 'run'), patch.object(p, 'browser_report') as validate, \
+                 patch.object(p, 'windows_detail_failure_location') as location:
+                p.browser_checks({'flows': [flow], 'sha': SHA})
+                location.assert_not_called(); validate.assert_called_once_with(flow, SHA)
+            with patch.object(p, 'run'), patch.object(p, 'browser_report', side_effect=original), \
+                 patch.object(p, 'windows_detail_failure_location') as location:
+                with self.assertRaises(ValueError): p.browser_checks({'flows': [flow], 'sha': SHA})
+                location.assert_not_called()
+        for flow, effects in [('windows-managed-msi', [ValueError('smoke')]), ('shell', [None, ValueError('other')])]:
+            with patch.object(p, 'run', side_effect=effects), patch.object(p, 'windows_detail_failure_location') as location:
+                with self.assertRaises(ValueError): p.browser_checks({'flows': [flow], 'sha': SHA})
+                location.assert_not_called()
+
+
 class WindowsActionFailureTests(unittest.TestCase):
     TOKEN = 'b' * 32
     MARKER = 'PRIVATE_RAW_EXCEPTION_URL_DTO_MUST_STAY_WITHHELD\n::error::injected'
@@ -1027,6 +1367,28 @@ class WindowsActionFailureTests(unittest.TestCase):
                                 expected = 'case=%s step=%s locale=%s width=%s' % (case, step, locale or '-', width or '-')
                                 self.assertEqual(p.windows_action_failure_location(SHA, self.TOKEN), expected)
 
+    def test_detail_readiness_labels_belong_only_to_reviewed_detail_cases(self):
+        cases = p.windows_action_diagnostic_contract()
+        detail = {'service-actions', 'action-history', 'update-jobs', 'update-download',
+                  'update-retirement', 'update-schedule', 'background-schedule', 'software-jobs'}
+        self.assertEqual({case for case, steps in cases.items() if 'detail-route-readiness' in steps}, detail)
+        self.assertEqual({case for case, steps in cases.items() if 'reload-detail-route-readiness' in steps},
+                         detail - {'action-history'})
+        self.assertEqual(set(cases), detail | {'runner', 'fleet-schedule'})
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = self.target(root)
+            with patch.object(p, 'ROOT', root):
+                for case in cases:
+                    for step in ['detail-route-readiness', 'reload-detail-route-readiness', 'mount-detail-route-readiness']:
+                        report = self.report(case, step, None if case == 'runner' else 'de', None if case == 'runner' else 390)
+                        target.write_text(json.dumps(report))
+                        with self.subTest(case=case, step=step):
+                            result = p.windows_action_failure_location(SHA, self.TOKEN)
+                            if step in cases[case]:
+                                self.assertEqual(result, 'case=%s step=%s locale=de width=390' % (case, step))
+                            else:
+                                self.assertIsNone(result)
+
     def test_javascript_producer_and_python_projection_share_the_source_vocabulary(self):
         cases = p.windows_action_diagnostic_contract()
         helper = (ROOT / 'tests/e2e-review/windows-service-actions-diagnostics.mjs').read_text()
@@ -1055,6 +1417,11 @@ class WindowsActionFailureTests(unittest.TestCase):
                 stages = set(re.findall(r'\b' + variable + r"\s*=\s*'([^']+)'", body))
                 self.assertTrue(stages)
                 self.assertEqual(set(cases[case]), wrappers | stages)
+                helper_labels = re.findall(r"stage='([^']+)';await settlePausedDetailRoute\(page,expect,", body)
+                self.assertCountEqual(helper_labels, [step for step in cases[case] if step.endswith('detail-route-readiness')])
+                if helper_labels:
+                    self.assertIn("import {settlePausedDetailRoute} from './paused-detail-route.mjs';", source)
+                    self.assertIn("page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));", body)
                 self.assertIn("'" + case + "'", runner)
                 self.assertIn('diagnostic.track(' + getter + ')', runner)
                 self.assertIn('await ' + function + '(', runner)
@@ -1463,6 +1830,197 @@ class JournalDiagnosticTests(unittest.TestCase):
         with patch.object(p, 'run'), patch.object(p, 'run_journal_browser') as journal, patch.object(p, 'browser_report'):
             p.browser_checks({'flows': ['shell'], 'sha': SHA})
         journal.assert_not_called()
+
+
+class ShellRouteLoadingDiagnosticTests(unittest.TestCase):
+    def report(self, **extra):
+        return {'schema': 1, 'sourceSha': SHA, 'status': 'FAIL', 'stage': 'cold-navigation', 'runtimeError': False, **extra}
+
+    def test_every_closed_stage_and_producer_contract_match(self):
+        source = (ROOT / 'tests/e2e-review/route-loading-browser.mjs').read_text()
+        stages = re.search(r'routeLoadingDevelopmentStages = Object.freeze\(\[(.*?)\]\)', source, re.S)
+        self.assertIsNotNone(stages)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", stages[1])), p.ROUTE_LOADING_STAGES)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for stage in p.ROUTE_LOADING_STAGES:
+                path.write_text(json.dumps(self.report(stage=stage)))
+                self.assertEqual(p.shell_route_loading_location(path, SHA), 'case=direct-case status=fail stage=' + stage)
+            for extra, expected in [({'status': 'PASS', 'stage': 'complete'}, 'status=pass stage=complete'),
+                                    ({'status': 'NOT_RUN', 'stage': 'fixture'}, 'status=not_run stage=fixture'),
+                                    ({'runtimeError': True}, 'status=fail stage=cold-navigation runtime-errors')]:
+                path.write_text(json.dumps(self.report(**extra)))
+                self.assertEqual(p.shell_route_loading_location(path, SHA), 'case=direct-case ' + expected)
+
+    def test_unknown_raw_stale_malformed_and_oversized_records_are_withheld(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for extra in [{'schema': True}, {'schema': 2}, {'sourceSha': 'b' * 40}, {'status': 'raw-private-marker'},
+                          {'stage': 'raw-private-marker'}, {'stage': []}, {'runtimeError': 1}, {'error': 'raw-private-marker'},
+                          {'status': 'PASS'}, {'status': 'NOT_RUN'}, {'status': 'NOT_RUN', 'stage': 'fixture', 'runtimeError': True}]:
+                path.write_text(json.dumps(self.report(**extra)))
+                self.assertIsNone(p.shell_route_loading_location(path, SHA), extra)
+            for raw in [b'{', b'\xff', b'x' * 2049,
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": 1, "schema": 1').encode(),
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": NaN').encode()]:
+                path.write_bytes(raw)
+                self.assertIsNone(p.shell_route_loading_location(path, SHA))
+            path.write_text(json.dumps(self.report()))
+            self.assertIsNone(p.shell_route_loading_location(path, 'not-a-sha'))
+
+    def test_nonregular_and_symlink_files_are_rejected_without_blocking(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); path = root / 'record.json'; path.write_text(json.dumps(self.report()))
+            link = root / 'link'; link.symlink_to(path)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            alias = root / 'alias'; alias.symlink_to(root, target_is_directory=True)
+            for unsafe in [link, fifo, root, alias / 'record.json', root / 'missing']:
+                self.assertIsNone(p.shell_route_loading_location(unsafe, SHA))
+
+    def test_invocation_is_private_fresh_removed_and_never_releases_raw_output(self):
+        paths, output = [], io.StringIO()
+        def process(args, **kwargs):
+            self.assertEqual(args, ['node', p.FLOWS['shell']])
+            kwargs['stdout'].write(b'raw-private-marker')
+            path = Path(kwargs['env']['TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC'])
+            self.assertFalse(path.exists()); self.assertNotIn('artifacts', path.parts)
+            paths.append(path)
+            if len(paths) == 1:
+                path.write_text(json.dumps(self.report()))
+            return SimpleNamespace(returncode=1)
+        with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                    p.run_shell_browser({'TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC': '/not-used'}, SHA)
+        self.assertNotEqual(paths[0], paths[1]); self.assertTrue(all(not path.parent.exists() for path in paths))
+        self.assertEqual(output.getvalue().count('FAIL shell route-load location: case=direct-case status=fail stage=cold-navigation'), 1)
+        for forbidden in ['raw-private-marker', SHA, 'PASS:', *map(str, paths)]:
+            self.assertNotIn(forbidden, output.getvalue())
+
+    def test_original_failure_and_browser_acceptance_stay_unchanged(self):
+        original = ValueError('inert failure')
+        with patch.object(p, 'run', side_effect=original), patch.object(p, 'shell_route_loading_location', return_value=None):
+            with self.assertRaises(ValueError) as caught:
+                p.run_shell_browser({}, SHA)
+        self.assertIs(caught.exception, original)
+        with patch.object(p, 'run'), patch.object(p, 'shell_route_loading_location') as projection:
+            p.run_shell_browser({}, SHA)
+        projection.assert_not_called()
+        with patch.object(p, 'run'), patch.object(p, 'run_shell_browser', side_effect=original) as shell, patch.object(p, 'browser_report') as acceptance:
+            with self.assertRaises(ValueError) as caught:
+                p.browser_checks({'flows': ['shell'], 'sha': SHA})
+        self.assertIs(caught.exception, original); shell.assert_called_once(); acceptance.assert_not_called()
+
+
+class ShellFailureDiagnosticTests(unittest.TestCase):
+    def report(self, **extra):
+        return {'schema': 1, 'sourceSha': SHA, 'failures': [{'case': 2, 'category': 'assertion'}], 'runtimeCases': [], 'unknownCase': False, **extra}
+
+    def test_exact_closed_categories_ids_runtime_and_unknown_flag(self):
+        source = (ROOT / 'tests/e2e-review/shell-browser-diagnostics.mjs').read_text()
+        categories = re.search(r'shellFailureCategories = Object.freeze\(\[(.*?)\]\)', source, re.S)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", categories[1])), p.SHELL_FAILURE_CATEGORIES)
+        contract = json.loads(p.SHELL_CASES_SOURCE.read_text())
+        self.assertEqual(len(contract['cases']), 45); self.assertEqual(len(set(contract['cases'])), 45)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for category in p.SHELL_FAILURE_CATEGORIES:
+                path.write_text(json.dumps(self.report(failures=[{'case': 45, 'category': category}], runtimeCases=[1, 45], unknownCase=True)))
+                self.assertEqual(p.shell_failure_location(path, SHA), 'case=45 category=' + category + '; case=1 category=runtime; case=45 category=runtime; unknown-case')
+            path.write_text(json.dumps(self.report(failures=[])))
+            self.assertIsNone(p.shell_failure_location(path, SHA))
+
+    def test_only_case36_accepts_each_closed_stage_and_rejects_unknown_or_misplaced_stage(self):
+        source = (ROOT / 'tests/e2e-review/shell-scenarios.mjs').read_text()
+        stages = re.search(r'shellKeyboardStages = Object.freeze\(\[(.*?)\]\)', source, re.S)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", stages[1])), p.SHELL_KEYBOARD_STAGES)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for stage in range(len(p.SHELL_KEYBOARD_STAGES)):
+                path.write_text(json.dumps(self.report(failures=[{'case': 36, 'category': 'other', 'stage': stage}])))
+                self.assertEqual(p.shell_failure_location(path, SHA), 'case=36 category=other stage=%d' % stage)
+            for row in [{'case': 36, 'category': 'other'},
+                        *[{'case': 36, 'category': 'other', 'stage': stage} for stage in [True, -1, 10, 'private-marker']],
+                        {'case': 35, 'category': 'other', 'stage': 1}]:
+                path.write_text(json.dumps(self.report(failures=[row])))
+                self.assertIsNone(p.shell_failure_location(path, SHA), row)
+
+    def test_unknown_names_categories_raw_fields_bad_types_stale_and_out_of_range_rejected(self):
+        invalid = [{'sourceSha': 'b' * 40}, {'schema': True}, {'schema': 2}, {'unknownCase': 1}, {'error': 'private-marker'},
+                   {'failures': [{'case': 2, 'category': 'private-marker'}]},
+                   {'failures': [{'case': 'private-name', 'category': 'assertion'}]},
+                   {'failures': [{'case': 2, 'category': 'assertion', 'name': 'private-name'}]},
+                   {'failures': [{'case': True, 'category': 'assertion'}]},
+                   {'failures': [{'case': 0, 'category': 'assertion'}]},
+                   {'failures': [{'case': 46, 'category': 'assertion'}]},
+                   {'failures': [{'case': 2, 'category': 'assertion'}] * 2},
+                   {'failures': [{'case': 3, 'category': 'assertion'}, {'case': 2, 'category': 'timeout'}]},
+                   {'failures': [{'case': 2, 'category': 'assertion'}] * 46},
+                   {'runtimeCases': [True]}, {'runtimeCases': [0]}, {'runtimeCases': [46]},
+                   {'runtimeCases': [2, 1]}, {'runtimeCases': [1, 1]}, {'runtimeCases': ['private-name']},
+                   {'runtimeCases': list(range(1, 47))}, {'runtimeCases': {}}, {'failures': {}}]
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for extra in invalid:
+                path.write_text(json.dumps(self.report(**extra)))
+                self.assertIsNone(p.shell_failure_location(path, SHA), extra)
+            for raw in [b'{', b'\xff', b'x' * 8193,
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": 1, "schema": 1').encode(),
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": NaN').encode()]:
+                path.write_bytes(raw); self.assertIsNone(p.shell_failure_location(path, SHA))
+            path.write_text(json.dumps(self.report()))
+            self.assertIsNone(p.shell_failure_location(path, 'invalid-source'))
+
+    def test_symlink_nonregular_and_invalid_source_manifest_withheld(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); path = root / 'record.json'; path.write_text(json.dumps(self.report()))
+            link = root / 'link'; link.symlink_to(path)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            alias = root / 'alias'; alias.symlink_to(root, target_is_directory=True)
+            for unsafe in [link, fifo, root, alias / 'record.json', root / 'missing']:
+                self.assertIsNone(p.shell_failure_location(unsafe, SHA))
+            contract = root / 'contract.json'
+            valid = json.loads(p.SHELL_CASES_SOURCE.read_text())
+            for raw in [b'{}', b'x' * 16385, json.dumps({**valid, 'schema': True}).encode(),
+                        json.dumps({**valid, 'cases': valid['cases'][:44]}).encode(),
+                        json.dumps({**valid, 'cases': ['same'] * 45}).encode()]:
+                contract.write_bytes(raw)
+                with patch.object(p, 'SHELL_CASES_SOURCE', contract):
+                    self.assertIsNone(p.shell_failure_location(path, SHA))
+
+    def test_fresh_private_invocation_preserves_direct_case_diagnostic_and_original_failure(self):
+        paths, output = [], io.StringIO()
+        def process(args, **kwargs):
+            self.assertEqual(args, ['node', p.FLOWS['shell']])
+            kwargs['stdout'].write(b'private-marker')
+            path = Path(kwargs['env']['TRACEBOLT_SHELL_DIAGNOSTIC'])
+            direct = Path(kwargs['env']['TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC'])
+            self.assertEqual(path.parent, direct.parent); self.assertNotEqual(path, direct)
+            self.assertFalse(path.exists()); self.assertFalse(direct.exists()); self.assertNotIn('artifacts', path.parts)
+            paths.append(path)
+            if len(paths) == 1:
+                path.write_text(json.dumps(self.report()))
+                direct.write_text(json.dumps({'schema': 1, 'sourceSha': SHA, 'status': 'PASS', 'stage': 'complete', 'runtimeError': False}))
+            return SimpleNamespace(returncode=1)
+        with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                    p.run_shell_browser({'TRACEBOLT_SHELL_DIAGNOSTIC': '/not-used'}, SHA)
+        self.assertNotEqual(paths[0], paths[1]); self.assertTrue(all(not path.parent.exists() for path in paths))
+        self.assertEqual(output.getvalue().count('FAIL shell location: case=2 category=assertion'), 1)
+        self.assertEqual(output.getvalue().count('FAIL shell route-load location: case=direct-case status=pass stage=complete'), 1)
+        for forbidden in ['private-marker', SHA, *map(str, paths)]:
+            self.assertNotIn(forbidden, output.getvalue())
+
+    def test_success_never_projects_and_failure_identity_remains(self):
+        original = ValueError('inert failure')
+        with patch.object(p, 'run', side_effect=original), patch.object(p, 'shell_failure_location', return_value=None):
+            with self.assertRaises(ValueError) as caught:
+                p.run_shell_browser({}, SHA)
+        self.assertIs(caught.exception, original)
+        with patch.object(p, 'run'), patch.object(p, 'shell_failure_location') as projection:
+            p.run_shell_browser({}, SHA)
+        projection.assert_not_called()
 
 
 if __name__ == '__main__':

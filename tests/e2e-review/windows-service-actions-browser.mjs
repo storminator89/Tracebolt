@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 /** Entirely intercepted browser fixture, including named-session metadata.
  * Real manager/broker persistence and fake SCM execution remain separate Go tests.
  * Importing this module never starts a browser, server, host action or grant. */
@@ -12,7 +13,7 @@ const {windowsView,windowsNow,windowsHealthDevice,validWindowsActionView}=await 
 const golden=JSON.parse(fs.readFileSync(new URL('../fixtures/windows-service-action-view.json',import.meta.url),'utf8'));
 export const windowsServiceActionsCaseName='Synthetic Windows service review, explicit approval and saved-result readback in the compiled UI';
 export const windowsServiceActionsDisclosure='Entirely intercepted invented named-session, inventory and action responses using Go API golden vectors. Browser review, explicit approval and saved-status GET survive page reload in an in-memory fixture only. No real login, durable manager/broker write, SCM control, local grant, installation, credential, external request or native acceptance; real HTTP/store/fake-SCM evidence is separate.';
-const stages=new Set(['setup','document','review','approve','saved-status','reload','capture','complete']);let stage='setup';
+const stages=new Set(['detail-route-readiness','reload-detail-route-readiness','setup','document','review','approve','saved-status','reload','capture','complete']);let stage='setup';
 export const windowsServiceActionsFailureStage=()=>stages.has(stage)?stage:'setup';
 const csrf='PUBLIC_SYNTHETIC_WINDOWS_ACTION_CSRF';
 const stamp=(value,from,to)=>{
@@ -81,7 +82,7 @@ const text={
 export async function exerciseWindowsServiceActions({page,expect,base,fixture,locale,width,shot}){
  const c=text[locale],panel=page.locator('.windows-service-actions');
  const open=async()=>{await page.getByRole('tab',{name:c.inventory,exact:true}).click();await page.getByRole('tab',{name:c.services,exact:true}).click();await expect(panel).toBeVisible();};
- stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);await open();
+ stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='document';await open();
  stage='review';await panel.getByRole('button',{name:c.select,exact:true}).click();await panel.getByRole('combobox').selectOption('restart');await panel.getByRole('button',{name:c.review,exact:true}).click();
  const review=panel.getByRole('group',{name:c.review,exact:true}),approve=review.getByRole('button',{name:c.approve,exact:true});
  await expect(review).toContainText('FixtureService');await expect(approve).toBeDisabled();await expect(review.getByRole('checkbox',{name:c.ack,exact:true})).not.toBeChecked();expect(fixture.counts).toEqual({preview:1,approve:0,status:1});
@@ -91,7 +92,7 @@ export async function exerciseWindowsServiceActions({page,expect,base,fixture,lo
  stage='saved-status';await panel.getByRole('button',{name:c.refresh,exact:true}).click();await expect(panel.getByRole('status').locator('strong')).toHaveText(c.outcome);const receipt=panel.locator('.windows-service-action-receipt');await expect(receipt).not.toHaveAttribute('open');await expect(panel.getByText(c.flags,{exact:true})).toBeHidden();
  await receipt.getByText(c.receipt,{exact:true}).click();await expect(panel.getByText(c.flags,{exact:true})).toBeVisible();
  const deadline=await receipt.locator('time').getAttribute('datetime');expect(deadline).toBe(fixture.complete.job.startDeadline);
- stage='reload';await page.reload();await open();await expect(panel.getByRole('status').locator('strong')).toHaveText(c.outcome);await expect(receipt).not.toHaveAttribute('open');await expect(receipt.locator('time')).toHaveAttribute('datetime',deadline);await expect(panel.getByRole('checkbox')).toHaveCount(0);expect(fixture.counts).toEqual({preview:1,approve:1,status:3});
+ stage='reload';await page.reload();stage='reload-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='reload';await open();await expect(panel.getByRole('status').locator('strong')).toHaveText(c.outcome);await expect(receipt).not.toHaveAttribute('open');await expect(receipt.locator('time')).toHaveAttribute('datetime',deadline);await expect(panel.getByRole('checkbox')).toHaveCount(0);expect(fixture.counts).toEqual({preview:1,approve:1,status:3});
  stage='capture';await panel.evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await expect(panel.getByText(c.outcome,{exact:true})).toBeInViewport();await expect(receipt.getByText(c.receipt,{exact:true})).toBeInViewport();
  await shot(page,`synthetic-windows-service-actions-${width}-${locale}`,windowsServiceActionsDisclosure);
  stage='complete';return {preview:1,approve:1,status:3,reloadReadback:true,durableStoreAcceptance:false,nativeAcceptance:false};

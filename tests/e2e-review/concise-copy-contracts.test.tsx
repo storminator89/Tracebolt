@@ -106,7 +106,7 @@ it('the display setup helper reaches the actual Services action control through 
   reload:async()=>{loaded=true;render(<DeviceDetail id={fixture.device.id} onClose={vi.fn()} onCase={vi.fn()}/>);await flush();},
   getByRole:(_role:string,options:{name:string;exact:boolean})=>({click:async()=>{expect(loaded).toBe(true);fireEvent.click(await screen.findByRole('tab',{name:options.name,exact:options.exact}));await flush();}}),
  };
- await openServiceActionDisplay(page,'http://127.0.0.1',fixture.device.id);
+ await openServiceActionDisplay(page,'http://127.0.0.1',fixture.device.id,async()=>expect(await screen.findByRole('tab',{name:'Inventory',exact:true})).toBeVisible());
  await waitFor(()=>expect(screen.getByRole('button',{name:'Preview try-restart: fixture.service'})).toBeEnabled());
  expect(screen.getByRole('tab',{name:'Services'})).toHaveAttribute('aria-selected','true');
  expect(vi.mocked(mutateRaw).mock.calls.every(([path])=>path.endsWith('/inventory/system/query'))).toBe(true);
