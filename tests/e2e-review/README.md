@@ -551,3 +551,31 @@ controls with forward Tab, reject bounded top/side clipping and LAN-header
 occlusion, and record geometry/hit-test evidence. Only tall table bottoms may
 remain cropped. See the linked correction notes for the exact exposure contract
 and remaining marker/pixel review; no local browser result is implied.
+
+### Conditional failure checkpoint in PR CI
+
+The PR wrapper still withholds all browser stdout/stderr. On a failed Conditional
+run it now reads only that invocation's freshly written
+`conditional-browser-results.json` through the existing no-follow, bounded JSON
+decoder. An exact source SHA, fixed report metadata, case order/counts, summary,
+redacted error sentence, stage vocabulary and optional diagnostic shapes must
+match. Unknown fields, private/raw strings, duplicate JSON keys, symlinks and
+source mismatches yield no checkpoint. Existing optional coverage/lifecycle
+diagnostics are validated but never printed.
+
+Public output is limited to fixed source-owned labels such as
+`FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-outline-exposure`.
+The three Conditional focus targets share the existing four check phases and
+EN/DE × desktop/mobile × light/dark matrix, giving 96 allowed coordinates. A
+previous same-head report is removed through a no-follow directory descriptor
+before launching this runner; cleanup failure cannot expose old evidence. The
+original failing process/exception remains a failure, and success never enters
+the projector. No screenshot gates, assertions, retries, time budgets, CSS or
+keyboard paths change.
+
+`ConditionalFailureTests` in `tests/security/test_pr_checks.py` exercises the
+actual source-owned `check()` producer and report-object construction in an inert
+Node VM, then Python `run()` and the public checkpoint. It does not import or
+launch the browser runner. These synthetic failure tests establish the diagnostic
+path only; a fresh exact-head hosted run is still needed to identify the actual
+Conditional failure. V3 retains its existing reporting and is outside this change.
