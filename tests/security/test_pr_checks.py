@@ -1592,6 +1592,21 @@ class ShellFailureDiagnosticTests(unittest.TestCase):
             path.write_text(json.dumps(self.report(failures=[])))
             self.assertIsNone(p.shell_failure_location(path, SHA))
 
+    def test_only_case36_accepts_each_closed_stage_and_rejects_unknown_or_misplaced_stage(self):
+        source = (ROOT / 'tests/e2e-review/shell-scenarios.mjs').read_text()
+        stages = re.search(r'shellKeyboardStages = Object.freeze\(\[(.*?)\]\)', source, re.S)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", stages[1])), p.SHELL_KEYBOARD_STAGES)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for stage in range(len(p.SHELL_KEYBOARD_STAGES)):
+                path.write_text(json.dumps(self.report(failures=[{'case': 36, 'category': 'other', 'stage': stage}])))
+                self.assertEqual(p.shell_failure_location(path, SHA), 'case=36 category=other stage=%d' % stage)
+            for row in [{'case': 36, 'category': 'other'},
+                        *[{'case': 36, 'category': 'other', 'stage': stage} for stage in [True, -1, 10, 'private-marker']],
+                        {'case': 35, 'category': 'other', 'stage': 1}]:
+                path.write_text(json.dumps(self.report(failures=[row])))
+                self.assertIsNone(p.shell_failure_location(path, SHA), row)
+
     def test_unknown_names_categories_raw_fields_bad_types_stale_and_out_of_range_rejected(self):
         invalid = [{'sourceSha': 'b' * 40}, {'schema': True}, {'schema': 2}, {'unknownCase': 1}, {'error': 'private-marker'},
                    {'failures': [{'case': 2, 'category': 'private-marker'}]},

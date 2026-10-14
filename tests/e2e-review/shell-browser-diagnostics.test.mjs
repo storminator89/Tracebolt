@@ -96,3 +96,44 @@ test('actual shell test wrapper keeps failed results and cleanup after passive r
     assert.equal(globals.allPages.size, 0); assert.equal(globals.transportDiagnostics.size, 0);
     assert.deepEqual(diagnostic.report('a'.repeat(40)).failures, [{ case: 2, category: 'assertion' }]);
 });
+
+test('only case36 records its closed stage and other cases retain the existing shape', () => {
+    const diagnostic = createShellFailureDiagnostic();
+    diagnostic.failure(contract.cases[35], new Error('inert-marker'));
+    diagnostic.failure(contract.cases[34], new Error('inert-marker'));
+    assert.deepEqual(diagnostic.report('a'.repeat(40)).failures, [
+        { case: 35, category: 'other' }, { case: 36, category: 'other', stage: 0 },
+    ]);
+});
+
+test('actual case36 callback waits for both content assertions before its original keyboard sequence', async () => {
+    const source = sourceFile('shell-scenarios.mjs');
+    let callback;
+    function find(node) {
+        if (ts.isCallExpression(node) && node.expression.getText(source) === 'test' && node.arguments[0]?.text === contract.cases[35]) callback = node.arguments[1];
+        ts.forEachChild(node, find);
+    }
+    find(source); assert.ok(callback);
+    let releaseHeading, releaseNotes;
+    const heading = new Promise(resolve => { releaseHeading = resolve; }), notes = new Promise(resolve => { releaseNotes = resolve; });
+    const events = [], keys = [];
+    const locator = selector => ({ selector, filter() { return this; }, click: async () => {}, scrollIntoViewIfNeeded: async () => {} });
+    const page = { locator, getByRole: (_role, options) => locator(options.name), keyboard: { press: async key => keys.push(key) }, evaluate: async () => 'main-content' };
+    const expect = target => ({
+        toHaveText: async (title, options) => { assert.equal(target.selector, '.case-detail-header h1'); assert.equal(title, 'Synthetic title'); assert.equal(options.timeout, 10000); events.push('heading-wait'); await heading; },
+        toBeVisible: async options => { if (target.selector === '.notes-panel') { assert.equal(options.timeout, 10000); events.push('notes-wait'); await notes; } },
+        toBeFocused: async () => {}, toBe: value => assert.equal(target, value), not: { toHaveClass: async () => {} },
+    });
+    expect.poll = () => ({ toBeGreaterThan: async () => {} });
+    const globals = { keyboardStage: 0, caseItem: { id: 'synthetic', title: 'Synthetic title' },
+        pageAt: async (_route, viewport) => { assert.equal(viewport.width, 720); assert.equal(viewport.height, 500); return page; },
+        loaded: async () => events.push('footer'), bounds: async () => events.push('bounds'), expect };
+    const run = vm.runInNewContext('(' + callback.getText(source) + ')', globals);
+    const pending = run(); await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(events, ['footer', 'heading-wait']); assert.deepEqual(keys, []); assert.equal(globals.keyboardStage, 1);
+    releaseHeading(); await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(events, ['footer', 'heading-wait', 'notes-wait']); assert.deepEqual(keys, []);
+    releaseNotes(); await pending;
+    assert.deepEqual(keys, ['Tab', 'Enter', 'PageDown']); assert.equal(globals.keyboardStage, 9);
+    assert.equal(events.filter(event => event === 'bounds').length, 3);
+});
