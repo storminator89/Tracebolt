@@ -48,6 +48,28 @@ The coherent LAN/i18n source runs 32 baseline/shell scenarios, or 40 with the ei
 
 All new screenshots are `fullPage:false`, exactly the configured viewport. The manifest records language, selected content section and `main-content.scrollTop`. Detailed AI captures scroll the actual content pane; they do not extend the document beyond the sidebar. Do not reuse old full-document gallery images as evidence of this shell.
 
+### Keyboard access in the responsive shell
+
+The existing concise synthetic gallery cases also check keyboard focus outlines
+on the OS, status and sort selects, plus the localized Save view/Saved accessible
+name while the mobile caption is hidden. They reuse the built-in synthetic-only
+overview projection and existing viewport screenshot/source-SHA manifest.
+
+The mobile cases check that a closed drawer cannot take focus, trap forward and
+reverse Tab when open, and cover Escape, explicit close, backdrop, navigation and
+Help dismissal. Resizing across 760/761 CSS pixels must clear the mobile overlay,
+keep desktop navigation usable and retain the shell DOM. These are responsive
+browser checks, not real zoom or assistive-technology certification.
+
+The focused real-App jsdom suite is `web/src/mobile-navigation.test.tsx`.
+It checks drawer semantics, focus ownership and return, device-route Escape,
+breakpoint changes, retained children and localized button names without API
+mutations. jsdom does not implement native inert Tab traversal or rendered CSS
+outlines; the hosted gallery checks those. Source/type/syntax checks produce no
+screenshots. Hosted execution and independent pixel review remain required
+before claiming visual acceptance. No auth, consent, evidence or action scope
+changes are part of these navigation checks.
+
 ## Authenticated HTTP-test browser acceptance
 
 Run after the normal and managed targets:

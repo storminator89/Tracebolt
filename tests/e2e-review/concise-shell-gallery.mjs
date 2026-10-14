@@ -1,5 +1,42 @@
 /** Page-by-page rendered copy review. Overview rows are restricted to the
  * disposable manager's built-in synthetic fixtures before any public capture. */
+import { assertDesktopNavigation, assertMobileDrawerClosed, shellDrawerKeyboardReview } from './shell-scenarios.mjs';
+
+async function inventoryKeyboardReview({ page, expect, capture, locale, size }) {
+ const labels = locale === 'de'
+  ? { search: 'Geräte durchsuchen', platform: 'Nach Betriebssystem filtern', status: 'Nach Status filtern', sort: 'Geräte sortieren', save: 'Ansicht speichern', saved: 'Gespeichert' }
+  : { search: 'Search devices', platform: 'Filter by operating system', status: 'Filter by status', sort: 'Sort devices', save: 'Save view', saved: 'Saved' };
+ const save = page.locator('.save-view');
+ // The second theme pass starts only after the existing temporary Saved notice
+ // resets; keep the runner's assertion deadline and avoid a fixed delay.
+ await expect(save).toHaveAccessibleName(labels.save);
+ const focusSelect = async (name, screenshot, section) => {
+  await page.keyboard.press('Tab');
+  const select = page.getByRole('combobox', { name, exact: true });
+  await expect(select).toBeFocused(); await expect(select).toBeInViewport();
+  // Test computed cascade and true keyboard focus, rather than matching a
+  // stylesheet rule that a later selector could silently override.
+  expect(await select.evaluate(element => {
+   const style = getComputedStyle(element);
+   return { visible: element.matches(':focus-visible'), style: style.outlineStyle, width: style.outlineWidth, offset: style.outlineOffset,
+    colored: style.outlineColor !== 'transparent' && style.outlineColor !== 'rgba(0, 0, 0, 0)' };
+  })).toEqual({ visible: true, style: 'solid', width: '2px', offset: '2px', colored: true });
+  await capture(screenshot, section);
+ };
+ await page.getByRole('textbox', { name: labels.search, exact: true }).focus();
+ await focusSelect(labels.platform, 'devices-platform-keyboard-focus', '.filter-toolbar');
+ await focusSelect(labels.status, 'devices-status-keyboard-focus', '.filter-toolbar');
+ await page.keyboard.press('Tab');
+ await expect(save).toBeFocused(); await expect(save).toHaveAccessibleName(labels.save);
+ await expect(save).toHaveAttribute('aria-label', labels.save);
+ if (size === 'mobile') await expect(save.locator('span')).toBeHidden();
+ else await expect(save.locator('span')).toBeVisible();
+ await capture('devices-save-view-keyboard-name', '.filter-toolbar');
+ await page.keyboard.press('Enter');
+ await expect(save).toHaveAccessibleName(labels.saved); await expect(save).toHaveAttribute('aria-label', labels.saved);
+ await focusSelect(labels.sort, 'devices-sort-keyboard-focus', '.inventory-meta');
+}
+
 export function conciseShellFixture(data) {
  const devices = data.devices.filter(item => item.synthetic === true && item.id.startsWith('demo-'));
  const deviceIds = new Set(devices.map(item => item.id));
@@ -35,15 +72,33 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     await shot(page, `synthetic-concise-shell-${name}-${size}-${locale}`, section);
    };
    await expect(page.locator('.fleet-panel .device-table .source.real')).toHaveCount(0);
+   if (size === 'desktop') await assertDesktopNavigation({ page, expect });
    await capture('overview');
    for (const route of ['devices', 'cases', 'settings']) {
     await page.goto(new URL(`#/${route}`, page.url()).href); await loaded(page);
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
     await capture(route);
+    if (route === 'devices') {
+     await inventoryKeyboardReview({ page, expect, capture, locale, size });
+     await page.getByRole('button', { name: locale === 'de' ? 'Dunkles Design aktivieren' : 'Switch to dark theme', exact: true }).click();
+     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+     await inventoryKeyboardReview({ page, expect, capture: (name, section) => capture(`${name}-dark`, section), locale, size });
+     await page.getByRole('button', { name: locale === 'de' ? 'Helles Design aktivieren' : 'Switch to light theme', exact: true }).click();
+     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+     if (size === 'mobile') await shellDrawerKeyboardReview({ page, expect, capture, locale, viewport });
+    }
     if (route === 'settings') await capture('settings-runtime', '.settings-grid');
    }
    await page.goto(new URL(`#/devices/${device.id}`, page.url()).href);
    await expect(page.locator('.device-page h1')).toHaveText(device.name);
+   if (size === 'mobile') {
+    const deviceRoute = page.url();
+    await page.locator('.mobile-menu').focus(); await page.keyboard.press('Enter');
+    await expect(page.locator('.sidebar')).toHaveClass(/is-open/);
+    await page.keyboard.press('Escape'); await assertMobileDrawerClosed({ page, expect, returnFocus: true });
+    // Drawer Escape must not leak to DeviceDetail's existing Back shortcut.
+    await expect(page).toHaveURL(deviceRoute); await capture('device-drawer-escape');
+   }
    for (const [key, name] of [['overview', locale === 'de' ? 'Übersicht' : 'Overview'], ['details', 'Details'], ['evidence', locale === 'de' ? 'Belege' : 'Evidence']]) {
     await page.getByRole('tab', { name, exact: true }).click();
     await capture(`device-${key}`);
