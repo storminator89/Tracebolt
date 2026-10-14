@@ -32,6 +32,25 @@ class SelectionTests(unittest.TestCase):
     def select(self, *changes):
         return p.select(changes, self.packages, self.files, SHA)
 
+    def test_macos_foreground_builder_fixture_is_fail_closed_in_pr_selector(self):
+        workflow = (ROOT / '.github/workflows/pr-checks.yml').read_text()
+        anchor = '      - name: Verify selector and full-suite contracts with inert fixtures\n        run: |\n'
+        command = "          python3 -I -B -m unittest discover -s tests/release -p 'test_macos_foreground_candidate.py' -v\n"
+
+        def has_exact_registration(text):
+            if text.count(anchor) != 1 or text.count(command) != 1:
+                return False
+            step = text.split(anchor, 1)[1].split('      - name:', 1)[0]
+            return (step.count(command) == 1 and 'continue-on-error:' not in step
+                    and '|| true' not in step and '; true' not in step)
+
+        self.assertTrue(has_exact_registration(workflow))
+        for altered in (workflow.replace(command, ''),
+                        workflow.replace(command, command + command),
+                        workflow.replace(command, command.rstrip('\n') + ' || true\n'),
+                        workflow.replace(command, command.replace("test_macos_foreground_candidate.py", "test_*.py"))):
+            self.assertFalse(has_exact_registration(altered))
+
     def test_verified_generated_allowlist_does_not_erase_actual_go_dependency_selection(self):
         edits = [('M', 'internal/api/windows_maintenance.go')]
         expected = self.select(*edits)
