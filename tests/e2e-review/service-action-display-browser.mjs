@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 import {openServiceActionDisplay} from './service-action-display-navigation.mjs';
 /** Invented display DTOs only, including authentication. No request in this
  * gallery reaches an action API or helper. The real action suite remains
@@ -76,7 +77,7 @@ export async function serviceActionDisplayBrowserCase({pageAt,expect,base,shot})
  const state={forbidden:[],external:[],phase:'ready',previewReads:0,inventoryReads:0};
  await page.clock.install({time:new Date(actionNow)});await page.clock.pauseAt(new Date(Date.parse(actionNow)+100));
  await page.route('**/*',serviceActionDisplayRoute({base,fixture,state}));
- mark('fixture-document');await openServiceActionDisplay(page,base,actionDevice,mark);
+ mark('fixture-document');await openServiceActionDisplay(page,base,actionDevice,()=>settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:'Inventory',exact:true})),mark);
  const panel=page.locator('.service-action-panel'),review=()=>page.locator('.service-action-review'),refresh=()=>panel.getByRole('button',{name:/^(Check action status|Aktionsstatus prüfen)$/});
  const capture=async (name,anchor=panel)=>{
   mark(name);await anchor.scrollIntoViewIfNeeded();

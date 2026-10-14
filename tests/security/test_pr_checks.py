@@ -874,6 +874,39 @@ class LANFailureTests(unittest.TestCase):
                         with self.subTest(code=code, key=key, value=value):
                             self.assertIsNone(p.lan_failure_location(SHA))
 
+    def test_paused_detail_cases_expose_only_complete_fixed_source_stage_sets(self):
+        directory = ROOT / 'tests/e2e-review'
+        def literals(*names):
+            return {stage for name in names for stage in re.findall(
+                r"(?:mark|capture)\('([^']+)'", (directory / name).read_text())}
+        health = (directory / 'health-dashboard-browser.mjs').read_text()
+        phases = re.findall(r"'([^']+)'", re.search(r'healthDashboardPhases=\[(.*?)\]', health)[1])
+        package = (directory / 'package-updates-browser.mjs').read_text()
+        expected = {
+            'service-action-display': literals('service-action-display-browser.mjs', 'service-action-display-navigation.mjs'),
+            'package-updates': set(re.findall(r"'([^']+)'", re.search(r'const stages=new Set\(\[(.*?)\]\)', package)[1])),
+            'investigations': literals('investigations-browser.mjs', 'health-dashboard-browser.mjs')
+                | {f'health-{phase}-{point}' for phase in phases for point in ['detail-route-readiness', 'assertions']}
+                | {f'{prefix}-{part}' for prefix in ['health-layout', 'health-mobile-de-settings-layout']
+                   for part in ['viewport', 'cards', 'issues', 'summaries']},
+        }
+        for code, stages in expected.items():
+            self.assertEqual(p.LAN_FAILURE_STAGES[code], {stage: stage for stage in stages})
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); target = root / 'artifacts/review/lan-browser-results.json'
+            target.parent.mkdir(parents=True)
+            with patch.object(p, 'ROOT', root):
+                for code in expected:
+                    other_case_stage = {'service-action-display': 'consent', 'package-updates': 'inventory-tab',
+                                        'investigations': 'consent'}[code]
+                    for stage in ['unreviewed-stage', 'PRIVATE_RAW_STATE_MUST_STAY_WITHHELD',
+                                  other_case_stage, '::error::injected', '', None, 300, True]:
+                        report = self.report([code])
+                        next(row for row in report['results'] if row['status'] == 'FAIL')['stage'] = stage
+                        target.write_text(json.dumps(report))
+                        with self.subTest(code=code, stage=stage):
+                            self.assertIsNone(p.lan_failure_location(SHA))
+
     def test_windows_inventory_service_stages_are_closed_source_vocabulary(self):
         source = (ROOT / 'tests/e2e-review/windows-service-health-browser.mjs').read_text()
         expected = {'services-source', 'services-disabled', 'services-pending', 'services-attention',

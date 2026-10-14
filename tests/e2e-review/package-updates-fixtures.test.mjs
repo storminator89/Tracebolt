@@ -77,3 +77,18 @@ test('one additive diagnostic hosted case discloses projections and covers local
  assert.match(packageUpdatesCaseName,/Synthetic/);assert.equal(packageUpdatesFailureStage(),'setup');assert.match(packageUpdatesFixtureDisclosure,/Named operator capabilities are an intercepted display proxy only/);assert.match(packageUpdatesFixtureDisclosure,/No actual preparation, install, grant, provider request, key entry or native operation/);assert.match(packageUpdatesFixtureDisclosure,/No native acceptance or signed-plan proof/);
  for(const name of ['unavailable','selection','review','unknown'])assert.ok(source.includes(`gallery('${name}'`));assert.match(source,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);assert.match(source,/synthetic-package-capture-label/);assert.match(source,/input\[type="password"\]/);assert.match(source,/headers\['x-csrf-token'\]===csrf/);assert.doesNotMatch(source,/ignoreHTTPSErrors|chromium\.launch|child_process|execFile|spawn\(/);
 });
+
+test('one bounded cold-route tick retains exact simulation expiry and all admission deadlines',async()=>{
+ const {pausedDetailCommitMs}=await import('./paused-detail-route.mjs');
+ const s=setup(),f=s.fixture;f.loadSimulation();const originalExpiry=f.project('preview_ready').preview.expiresAt;
+ await preflight(s);s.advance(pausedDetailCommitMs);
+ assert.equal(last(await route(s,f.prefix+'/prepare',{method:'POST',body:prepare(f)})).kind,'fulfill');
+ assert.equal(f.project().preview.expiresAt,originalExpiry);
+ await preflight(s);
+ assert.equal(last(await route(s,f.prefix+'/approve',{method:'POST',body:approve(f)})).kind,'fulfill');
+ for(const elapsed of [10000,55000]){
+  const stopped=setup();stopped.fixture.loadSimulation();await preflight(stopped);stopped.advance(elapsed);
+  assert.equal(last(await route(stopped,stopped.fixture.prefix+'/prepare',{method:'POST',body:prepare(stopped.fixture)})).kind,'abort');
+  assert.equal(stopped.fixture.counts.prepare,0);
+ }
+});

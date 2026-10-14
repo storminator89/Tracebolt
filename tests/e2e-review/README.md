@@ -48,6 +48,28 @@ The coherent LAN/i18n source runs 32 baseline/shell scenarios, or 40 with the ei
 
 All new screenshots are `fullPage:false`, exactly the configured viewport. The manifest records language, selected content section and `main-content.scrollTop`. Detailed AI captures scroll the actual content pane; they do not extend the document beyond the sidebar. Do not reuse old full-document gallery images as evidence of this shell.
 
+### Keyboard access in the responsive shell
+
+The existing concise synthetic gallery cases also check keyboard focus outlines
+on the OS, status and sort selects, plus the localized Save view/Saved accessible
+name while the mobile caption is hidden. They reuse the built-in synthetic-only
+overview projection and existing viewport screenshot/source-SHA manifest.
+
+The mobile cases check that a closed drawer cannot take focus, trap forward and
+reverse Tab when open, and cover Escape, explicit close, backdrop, navigation and
+Help dismissal. Resizing across 760/761 CSS pixels must clear the mobile overlay,
+keep desktop navigation usable and retain the shell DOM. These are responsive
+browser checks, not real zoom or assistive-technology certification.
+
+The focused real-App jsdom suite is `web/src/mobile-navigation.test.tsx`.
+It checks drawer semantics, focus ownership and return, device-route Escape,
+breakpoint changes, retained children and localized button names without API
+mutations. jsdom does not implement native inert Tab traversal or rendered CSS
+outlines; the hosted gallery checks those. Source/type/syntax checks produce no
+screenshots. Hosted execution and independent pixel review remain required
+before claiming visual acceptance. No auth, consent, evidence or action scope
+changes are part of these navigation checks.
+
 ## Authenticated HTTP-test browser acceptance
 
 Run after the normal and managed targets:
@@ -454,3 +476,22 @@ blobs in that commit. All previous action/update scenes and the 120-second budge
 remain. The artifact upload includes the separate complete-service manifest and
 images. The inert `--check` and Node contract tests generate no browser evidence;
 successful hosted captures still require independent pixel review.
+
+## Paused presentation clocks and cold detail routes
+
+The service-action display, package-update display, and Investigations' Health
+reloads retain their paused fixture clocks. After a cold document loads React
+under that clock, its resolved Suspense retry can wait for a 300 ms commit timer.
+`paused-detail-route.mjs` first observes the loading fallback or the real ready
+locator, advances once by exactly 300 ms only when the fallback is visible, then
+requires the original ready state. It does not resume the clock, drain timers,
+retry simulated time, rewrite fixture timestamps, or extend assertion deadlines.
+
+This adds at most 300 ms to each service/package case and 2,100 ms across the
+seven Health reloads. The existing three 32 ms disclosure ticks remain, giving
+at most 2,196 ms total controlled Health progress. Source tests use production
+React, the actual route boundary and pinned Playwright clock in inert jsdom,
+including command replay across all seven documents and unchanged deadline
+rejection. These are a reproduced scheduling mechanism and a bounded harness
+correction; only the normal hosted LAN run can establish browser acceptance.
+The three cases' diagnostics expose reviewed finite stage codes only.
