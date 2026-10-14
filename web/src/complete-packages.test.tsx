@@ -83,6 +83,24 @@ describe('complete dpkg inventory browsing', () => {
         expect(within(rowElements[1]).getByText('1.0')).toBeVisible(); expect(within(rowElements[1]).getByText('1.0+b1')).toBeVisible();
         expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
     });
+    it.each(['en', 'de'] as const)('reveals each focused complete-package mapping summary without changing disclosure or reads in %s', async locale => {
+        setLocale(locale, false); view = completeView(2); rows = completeRows(2);
+        render(<CompletePackagesPanel deviceId={completeDevice} inline/>);
+        const table = await screen.findByRole('table'), region = table.closest('[tabindex="0"]') as HTMLElement;
+        const summaries = [...table.querySelectorAll('summary')], reveals = summaries.map(summary => {
+            const reveal = vi.fn(function (this: HTMLElement) { expect(this).toBe(summary); expect(summary).toHaveFocus(); });
+            Object.defineProperty(summary, 'scrollIntoView', { configurable: true, value: reveal }); return reveal;
+        });
+        region.focus(); for (const reveal of reveals) expect(reveal).not.toHaveBeenCalled();
+        for (const [index, summary] of summaries.entries()) {
+            summary.focus(); expect(reveals[index]).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+            expect(summary).toHaveFocus(); expect(summary.closest('details')).not.toHaveAttribute('open');
+            fireEvent.click(summary); expect(summary.closest('details')).toHaveAttribute('open');
+            fireEvent.click(summary); expect(summary.closest('details')).not.toHaveAttribute('open');
+            expect(reveals[index]).toHaveBeenCalledTimes(1);
+        }
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
     it('still searches mapping evidence while it is collapsed and clears expanded details when search changes', async () => {
         view = completeView(2); rows = completeRows(2);
         Object.assign(rows[1], { sourcePackage: 'fixture-source', sourceVersion: '1.0', sourceMapping: 'source-field' });
