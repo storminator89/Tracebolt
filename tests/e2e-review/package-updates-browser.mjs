@@ -128,11 +128,11 @@ export async function packageUpdatesBrowserCase({pageAt,login,expect,base,shot})
  mark('login');await login(page);await page.reload();
  mark('detail-route-readiness');await settlePausedDetailRoute(page,expect,page.getByRole('button',{name:'View updates',exact:true}));
  await page.getByRole('button',{name:'View updates',exact:true}).click();
- const panel=page.locator('.package-update-workflow'),review=page.locator('.package-update-review');
+ const panel=page.locator('.package-update-workspace'),status=page.locator('.package-update-workflow'),selection=page.locator('.package-update-selection'),review=page.locator('.package-update-review');
  const language=()=>page.locator('select[aria-label="Language"],select[aria-label="Sprache"]');
  const prepare=()=>panel.getByRole('button',{name:/^(Prepare selected updates \(simulation\)|Ausgewählte Updates vorbereiten \(Simulation\))$/});
  const approve=()=>panel.getByRole('button',{name:/^(Confirm this exact update \(simulation\)|Dieses genaue Update bestätigen \(Simulation\))$/});
- const capture=async(name,anchor=panel)=>{
+ const capture=async(name,anchor=status)=>{
   await anchor.scrollIntoViewIfNeeded();await expect(page.locator('input[type="password"]')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&document.body.scrollWidth<=innerWidth+1)).toBe(true);
   expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
@@ -143,17 +143,23 @@ export async function packageUpdatesBrowserCase({pageAt,login,expect,base,shot})
   if(name.includes('-review-')){await anchor.evaluate(el=>el.scrollIntoView({block:'center'}));await expect(review.locator('ol > li').first()).toBeInViewport({ratio:1});await expect(review.getByText('1.0-1 → 1.0-2',{exact:true})).toBeInViewport({ratio:1});await expect(review.getByText('sample-bin 1.0-2 · Synthetic fixture repository / trixie / main',{exact:true})).toBeInViewport({ratio:1});}
   await shot(page,name,packageUpdatesFixtureDisclosure);
  };
- const gallery=async(name,anchor=panel)=>{for(const locale of ['en','de'])for(const width of [1440,390]){await page.setViewportSize({width,height:width===390?844:1000});await language().selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);await capture(`synthetic-package-updates-${name}-${width===390?'mobile':'desktop'}-${locale}`,anchor);}await language().selectOption('en');};
+ const gallery=async(name,anchor=status)=>{for(const locale of ['en','de'])for(const width of [1440,390]){await page.setViewportSize({width,height:width===390?844:1000});await language().selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);await capture(`synthetic-package-updates-${name}-${width===390?'mobile':'desktop'}-${locale}`,anchor);}await language().selectOption('en');};
  mark('unavailable');await expect(panel).toContainText('Native package updates are not ready on this device.');await expect(page.getByText('Complete update storage is not configured',{exact:true})).toBeVisible();await expect(prepare()).toBeDisabled();await expect(panel.locator('.package-update-simulation')).toHaveCount(0);await gallery('unavailable');expect(fixture.counts.prepare).toBe(0);
  mark('selection');await page.getByLabel('Update view',{exact:true}).selectOption('preview');
- const selected=page.getByRole('checkbox',{name:'Select sample-bin:amd64',exact:true});await expect(selected).toBeEnabled();await selected.check();await expect(prepare()).toBeDisabled();
- fixture.loadSimulation();await panel.getByRole('button',{name:'Refresh saved update status',exact:true}).click();await expect(panel).toContainText('SIMULATION ONLY');await expect(prepare()).toBeEnabled();await gallery('selection');
+ const inventory=page.locator('.cached-updates');await expect(inventory.getByRole('table')).toBeVisible();
+ await expect(status).toHaveClass(/package-update-workflow-idle/);
+ const inventoryNode=await inventory.elementHandle(),tableNode=await inventory.getByRole('table').elementHandle();
+ const unchangedInventory=async()=>{expect(await inventory.evaluate((el,prior)=>el===prior,inventoryNode)).toBe(true);expect(await inventory.getByRole('table').evaluate((el,prior)=>el===prior,tableNode)).toBe(true);expect(await inventory.evaluate(el=>Boolean(el.compareDocumentPosition(document.querySelector('.package-update-selection'))&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);};
+ await gallery('unavailable-inventory',inventory);await unchangedInventory();
+ const selected=page.getByRole('checkbox',{name:'Select sample-bin:amd64',exact:true});await expect(selected).toBeEnabled();await selected.check();await expect(prepare()).toBeDisabled();await expect(status).not.toHaveClass(/package-update-workflow-idle/);await unchangedInventory();
+ await selected.uncheck();await expect(status).toHaveClass(/package-update-workflow-idle/);await unchangedInventory();await selected.check();
+ fixture.loadSimulation();await panel.getByRole('button',{name:'Refresh saved update status',exact:true}).click();await expect(panel).toContainText('SIMULATION ONLY');await expect(prepare()).toBeEnabled();await gallery('selection',selection);await unchangedInventory();
  mark('review');await prepare().click();await expect(review).toBeVisible();
  const preview=fixture.project().preview;for(const value of [preview.requestId,preview.digest,preview.actorId,preview.expiresAt,'disposable-http-test','sample-bin:amd64','1.0-1 → 1.0-2','sample-bin 1.0-2 · Synthetic fixture repository / trixie / main',preview.items[0].archiveSHA256])await expect(review).toContainText(value);
- await expect(review.getByRole('checkbox')).not.toBeChecked();await expect(approve()).toBeDisabled();await expect(prepare()).toBeDisabled();expect(fixture.counts.prepare).toBe(1);const exactPackage=review.locator('ol > li').first();await gallery('review',exactPackage);
+ await expect(review.getByRole('checkbox')).not.toBeChecked();await expect(approve()).toBeDisabled();await expect(prepare()).toBeDisabled();expect(fixture.counts.prepare).toBe(1);const exactPackage=review.locator('ol > li').first();await gallery('review',exactPackage);await unchangedInventory();await expect(status).not.toHaveClass(/package-update-workflow-idle/);
  mark('consent');await review.getByRole('checkbox').check();await expect(approve()).toBeEnabled();await review.getByRole('checkbox').uncheck();await expect(approve()).toBeDisabled();await review.getByRole('checkbox').check();await expect(review).toContainText('No automatic reboot or guaranteed rollback.');await capture('synthetic-package-updates-consent-mobile-en',review.locator('.package-update-ack'));
  await approve().click();
  mark('unknown');await expect(panel).toContainText('Needs intervention; outcome not verified');await expect(panel).toContainText('Observed version: Unknown');await expect(panel).toContainText('runner_state_unknown');await expect(panel).toContainText('Unknown · simulation');await expect(approve()).toHaveCount(0);await expect(prepare()).toBeDisabled();await expect(panel).not.toContainText('All approved versions verified');await gallery('unknown',panel.getByRole('region',{name:/^(Saved operation|Gespeicherter Vorgang)$/}));
- mark('guards');expect(fixture.counts.prepare).toBe(1);expect(fixture.counts.approve).toBe(1);expect(state.loginRequests).toBe(1);expect(state.namedReads).toBeGreaterThanOrEqual(3);expect(state.unexpected).toEqual([]);expect(state.external).toEqual([]);
+ mark('guards');await unchangedInventory();await expect(status).not.toHaveClass(/package-update-workflow-idle/);expect(fixture.counts.prepare).toBe(1);expect(fixture.counts.approve).toBe(1);expect(state.loginRequests).toBe(1);expect(state.namedReads).toBeGreaterThanOrEqual(3);expect(state.unexpected).toEqual([]);expect(state.external).toEqual([]);
  expect(await page.evaluate(()=>sessionStorage.getItem('tracebolt.package-update-intent'))).toBeNull();
 }
