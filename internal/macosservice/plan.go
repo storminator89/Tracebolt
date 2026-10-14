@@ -92,7 +92,12 @@ func validDigest(s string) bool {
 	return err == nil && len(b) == sha256.Size && hex.EncodeToString(b) == s
 }
 func validSourcePath(s string) bool {
-	if !path.IsAbs(s) || path.Clean(s) != s || s == "/" || len(s) > 4096 || s == AgentPath || s == PlistPath || s == InstallDirectory || strings.HasPrefix(s, InstallDirectory+"/") {
+	// The usual macOS volume is case-insensitive. A spelling-only comparison
+	// would accept an archive inside the fixed installation tree under a
+	// differently cased path. The native preflight also compares held directory
+	// identities, since textual checks cannot rule out every filesystem alias.
+	insideInstall := len(s) > len(InstallDirectory) && s[len(InstallDirectory)] == '/' && strings.EqualFold(s[:len(InstallDirectory)], InstallDirectory)
+	if !path.IsAbs(s) || path.Clean(s) != s || s == "/" || len(s) > 4096 || strings.EqualFold(s, PlistPath) || strings.EqualFold(s, InstallDirectory) || insideInstall {
 		return false
 	}
 	for _, r := range s {
