@@ -6,6 +6,7 @@ import {routeLoadingDevelopmentCase,routeLoadingDevelopmentCaseName,routeLoading
  * temporary SQLite database. No production state or external origin is used.
  */
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -66,7 +67,7 @@ async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra
 let currentTest='';
 async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { shellDiagnostic.failure(name,error); results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); for(const diagnostics of transportDiagnostics.values()) diagnostics.dispose(); transportDiagnostics.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
-async function shot(page,name,section=null) {
+async function shot(page,name,section=null,numericTypography=null) {
  const fullPage=false,dialog=await page.getByRole('dialog').count()>0;
  let layout=null;
  if(!dialog) {
@@ -84,7 +85,18 @@ async function shot(page,name,section=null) {
   reportTransportFailure(transportDiagnostics.get(page),'screenshot',error,{elapsedMs:performance.now()-captureStarted,layout});
   throw error;
  }
- screenshots.push({fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:name.includes('concise-shell')?'Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.':name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
+ let numericEvidence = {};
+ if (numericTypography) {
+  expect(sourceSha).toMatch(/^[a-f0-9]{40}$/);
+  expect(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()).toBe(sourceSha);
+  execFileSync('git', ['diff', '--quiet', sourceSha, '--'], { cwd: root });
+  const sourceTree = execFileSync('git', ['rev-parse', `${sourceSha}^{tree}`], { cwd: root, encoding: 'utf8' }).trim();
+  const resources = await page.evaluate(() => [...new Set(performance.getEntriesByType('resource').map(item => new URL(item.name)).filter(url => url.origin === location.origin && /^\/assets\/[^/]+\.woff2?$/.test(url.pathname)).map(url => url.pathname))]);
+  expect(resources.length).toBeGreaterThan(0);
+  const fontAssets = await Promise.all(resources.map(async asset => ({ asset, sha256: createHash('sha256').update(await fs.readFile(path.join(root, 'web/dist', asset))).digest('hex') })));
+  numericEvidence = { numericTypography, sourceTree, fontAssets, browserVersion: browser.version(), sha256: createHash('sha256').update(await fs.readFile(path.join(out, `${name}.png`))).digest('hex') };
+ }
+ screenshots.push({...numericEvidence,fullPage,file:`${name}.png`,sourceSha,publicSafe:name.startsWith('synthetic-'),fixtureDisclosure:numericTypography?'Synthetic built-in gallery; temporary numeric-text shaping probe restored before this capture. No live React update, CLS, load-time or native zoom claim.':name.includes('concise-shell')?'Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.':name.includes('ai-fixture')?'Testanbieter / keine reale Modellanalyse':null,viewport:page.viewportSize(),section:section || (name.includes('ai-fixture-case')?'AI analysis':dialog?'dialog':'top'),contentScrollTop:await page.locator('.main-content').evaluate(el=>el.scrollTop).catch(()=>null),theme:await page.locator('html').getAttribute('data-theme'),locale:await page.locator('html').getAttribute('lang'),test:currentTest});
 }
 async function noOverflow(page) { const size=await page.evaluate(()=>({view:innerWidth,body:document.body.scrollWidth,html:document.documentElement.scrollWidth})); expect(size.body).toBeLessThanOrEqual(size.view+1); expect(size.html).toBeLessThanOrEqual(size.view+1); }
 async function rows(page) { return page.locator('.device-table tbody tr'); }
