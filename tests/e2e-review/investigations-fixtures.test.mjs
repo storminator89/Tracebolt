@@ -1,3 +1,7 @@
+import './overview-work-start-browser.test.mjs';
+import './paused-windows-routes.test.mjs';
+import './route-loading-fixtures.test.mjs';
+import './shell-browser-diagnostics.test.mjs';
 import './health-dashboard-browser.test.mjs';
 import './device-inventory-browser-contracts.test.mjs';
 import './workspace-navigation-browser.test.mjs';
