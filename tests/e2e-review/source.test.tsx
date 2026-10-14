@@ -1,6 +1,6 @@
 /** Supplemental DOM/source tests. These are not browser or screenshot evidence. */
 import { beforeEach, afterEach, describe, expect, it, vi } from '../../web/node_modules/vitest/dist/index.js';
-import { cleanup, render, screen, fireEvent, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
+import { act, cleanup, render, screen, fireEvent, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
 import App from '../../web/src/App';
 import { conciseShellFixture } from './concise-shell-gallery.mjs';
 import { defaultFilters, filterDevices, decodeRouteId, csvCell, noteBytes } from '../../web/src/utils';
@@ -29,6 +29,8 @@ describe('Independent source/DOM regressions',()=>{
  it('help modal owns Escape before the device page returns to the focused inventory',async()=>{
   vi.stubGlobal('fetch',fetchMock((url:string)=>response(url.includes('/devices/')?device:overview)));
   render(<App/>);await screen.findByRole('heading',{name:'Geräte',exact:true,level:1});fireEvent.click(screen.getByRole('button',{name:'REVIEW-DEMO: Details öffnen'}));
+  // Wait for the render-triggered lazy module before the unchanged DOM deadline.
+  await act(async()=>{await vi.dynamicImportSettled();});
   const detail=await screen.findByRole('region',{name:'Gerät REVIEW-DEMO'});expect(detail).toHaveFocus();expect(screen.queryByRole('dialog')).toBeNull();expect(document.querySelector('.inventory-panel')).toBeNull();
   fireEvent.keyDown(window,{key:'?'});await screen.findByRole('dialog',{name:'Tastenkürzel'});
   fireEvent.keyDown(document,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
