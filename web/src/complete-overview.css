@@ -8,6 +8,9 @@
 .overview-coverage, .overview-progress { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 12px 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .overview-coverage dt, .overview-progress dt { font-size: 11px; color: var(--secondary); }
 .overview-coverage dd, .overview-progress dd { margin: 4px 0 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.overview-coverage { gap: 6px 16px; padding: 6px 0; }
+.overview-coverage > div { display: flex; align-items: baseline; gap: 6px; }
+.overview-coverage dd { margin: 0; }
 .overview-provenance { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 7px; }
 .overview-provenance summary { cursor: pointer; font-size: 12px; font-weight: 600; }
 .overview-provenance .package-facts { margin-top: 12px; }

@@ -4,6 +4,16 @@
 .complete-package-search input:focus-visible { outline: 3px solid #3aab9877; outline-offset: 2px; }
 .complete-package-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .complete-packages .package-facts dd { font-variant-numeric: tabular-nums; }
+.inventory-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.inventory-capture-details { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 7px; }
+.inventory-capture-details > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.inventory-capture-details > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.inventory-capture-details .package-facts { margin-top: 12px; }
+@media (max-width: 640px) {
+    .package-counts.inventory-summary { grid-template-columns: 1fr; gap: 6px; }
+    .inventory-summary > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .inventory-summary dd { margin: 0; flex-shrink: 0; }
+}
 @media (max-width: 540px) { .complete-package-search > div { flex-direction: column; } .complete-package-pagination .button { width: 100%; justify-content: center; } }
 
 .inventory-source-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }

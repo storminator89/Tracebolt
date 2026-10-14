@@ -15,6 +15,33 @@ beforeEach(() => { setLocale('en', false); operator.authenticated = true; view =
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('complete process and mount panels', () => {
+    it.each([['en', 'processes'], ['de', 'processes'], ['en', 'volumes'], ['de', 'volumes']] as const)('keeps %s %s coverage, age and search ahead of the capture disclosure, directly before rows', async (locale, section) => {
+        setLocale(locale, false); open(section);
+        const table = await screen.findByRole('table'), disclosure = document.querySelector('.overview-provenance')!, summary = disclosure.querySelector('summary')!;
+        expect(document.querySelectorAll('.complete-overview > details')).toHaveLength(1);
+        const search = screen.getByLabelText(locale === 'de' ? 'Abschnitt durchsuchen' : 'Search this section');
+        expect(search.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(search.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(disclosure.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(disclosure.previousElementSibling?.tagName).toBe('DL');
+        expect(disclosure.nextElementSibling).toContainElement(table);
+        expect(disclosure).not.toHaveAttribute('open'); expect(summary).toHaveTextContent(locale === 'de' ? 'Erfassungsdetails' : 'Capture details');
+        expect(document.querySelector('.overview-coverage')).toBeVisible(); expect(document.querySelector('.overview-coverage')).not.toContainElement(disclosure as HTMLElement);
+        expect(screen.getByText(locale === 'de' ? 'Ursprüngliches Beobachtungsalter (Minuten)' : 'Original observation age (minutes)').nextElementSibling).toHaveTextContent(section === 'processes' ? '5' : '20');
+        const original = view[section].complete!, facts = within(disclosure as HTMLElement);
+        expect(facts.getByText(original.binding.generationId)).not.toBeVisible();
+        summary.focus(); expect(summary).toHaveFocus(); fireEvent.click(summary);
+        for (const [label, value] of [
+            [locale === 'de' ? 'Abschnittsgeneration' : 'Section generation', original.binding.generationId],
+            [locale === 'de' ? 'Sequenz' : 'Sequence', original.binding.sequence],
+            [locale === 'de' ? 'Erfassung begonnen' : 'Capture started', original.manifest.captureStartedAt],
+            [locale === 'de' ? 'Erfassung beendet' : 'Capture finished', original.manifest.captureFinishedAt],
+            [locale === 'de' ? 'Ursprüngliche Aufbewahrungsfrist' : 'Original retention deadline', original.retainedUntil],
+        ]) { expect(facts.getByText(label).nextElementSibling).toHaveTextContent(value); expect(facts.getByText(label).nextElementSibling).toBeVisible(); }
+        fireEvent.click(summary); expect(disclosure).not.toHaveAttribute('open'); expect(screen.getByRole('table')).toBe(table);
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1])).toMatchObject({ section, generationId: original.binding.generationId, cursor: '', search: '', limit: 100 });
+    });
     it('pages all 350 processes instead of a 64-row capture sample', async () => {
         open(); await screen.findByText('fixture-process-000099'); expect(screen.queryByText('fixture-process-000100')).not.toBeInTheDocument();
         expect(screen.getByText('Complete enumeration rows').nextElementSibling).toHaveTextContent('350');
@@ -29,8 +56,8 @@ describe('complete process and mount panels', () => {
     it('renders actual Go process zero values, missing outcomes, latest failure, and original independent ages', async () => {
         const f = overviewGolden(); view = f.view; vi.mocked(mutateRaw).mockResolvedValue(f.processPage); open(); await screen.findByRole('table');
         expect(screen.getByText('kworker/0:0')).toBeVisible(); expect(screen.getByText('fixture\\worker')).toBeVisible();
-        expect(screen.getByText('Latest collection attempt failed')).toBeVisible(); expect(screen.getByText('Collection timed out', { exact: false })).toBeVisible(); expect(screen.getByText('Original observation age (minutes)').nextElementSibling).toHaveTextContent('5');
-        expect(screen.getByText(/Mixed captures:/)).toHaveTextContent('2026-10-04T18:15:00Z'); expect(screen.getByText('Denied').nextElementSibling).toHaveTextContent('1'); expect(screen.getByText('Exited').nextElementSibling).toHaveTextContent('1');
+        expect(screen.getByText('Latest collection attempt failed', { selector: 'strong' })).toBeVisible(); expect(screen.getByText('Collection timed out', { exact: false })).toBeVisible(); expect(screen.getByText('Original observation age (minutes)').nextElementSibling).toHaveTextContent('5');
+        expect(screen.getByText(/Mixed captures\./)).toBeVisible(); expect(screen.getByText(/Mixed captures\./)).not.toHaveTextContent('2026-10-04T18:15:00Z'); expect(within(document.querySelector('.overview-provenance')! as HTMLElement).getByText('Mounts · original capture started').nextElementSibling).toHaveTextContent('2026-10-04T18:15:00Z'); expect(screen.getByText('Denied').nextElementSibling).toHaveTextContent('1'); expect(screen.getByText('Exited').nextElementSibling).toHaveTextContent('1');
         const observed = f.processPage.items.find(row => row.process!.observation.status === 'observed')!.process!;
         const row = screen.getByRole('rowheader', { name: String(observed.pid) }).closest('tr')!; expect(within(row).getByText('0 B')).toBeVisible(); expect(within(row).getAllByText('0')).toHaveLength(2);
         expect(screen.getByRole('columnheader', { name: 'CPU time (s), cumulative' })).toBeVisible(); expect(screen.getAllByText('Exited during capture').length).toBeGreaterThan(0);
@@ -51,6 +78,8 @@ describe('complete process and mount panels', () => {
         fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'fixture-process-002199' } }); expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Search' }));
         await screen.findByText('No matches in this scan window. More rows remain; continue searching.'); expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('2,048 / 2,200'); fireEvent.click(screen.getByRole('button', { name: 'Continue search' })); await screen.findByText('fixture-process-002199'); expect(screen.getByText('Rows scanned so far').nextElementSibling).toHaveTextContent('2,200 / 2,200');
         expect(screen.getByText('Matches found so far').nextElementSibling).toHaveTextContent('1');
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toEqual({ section: 'processes', generationId: view.processes.complete!.binding.generationId, cursor: 'cursor_2048', search: 'fixture-process-002199', limit: 100 });
+        fireEvent.click(screen.getByText('Capture details')); expect(screen.getByText('Capture started').nextElementSibling).toHaveTextContent(view.processes.complete!.manifest.captureStartedAt); expect(screen.getByText('Original retention deadline').nextElementSibling).toHaveTextContent(view.processes.complete!.retainedUntil); expect(request).toHaveBeenCalledTimes(1);
     });
     it('distinguishes successful zero from awaiting or expired observations', async () => {
         view = overviewView(0); vi.mocked(mutateRaw).mockImplementation(async (_path, raw) => overviewPage(view, [], volumeRows(), raw)); const rendered = open(); await screen.findByText('Successful complete enumeration contained zero rows.'); rendered.unmount();
@@ -61,7 +90,7 @@ describe('complete process and mount panels', () => {
         view.processes.transfer = { ...c, state: 'pending', declaredRows: 350, acceptedRows: 128, expectedChunks: c.manifest.chunkCount, acceptedChunks: 1, collectedAt: c.manifest.collectedAt, startedAt: c.completedAt, expiresAt: '2026-10-04T18:40:00Z' };
         // Transfer has its own exact DTO fields, with no completion metadata.
         delete (view.processes.transfer as unknown as Record<string, unknown>).completedAt; delete (view.processes.transfer as unknown as Record<string, unknown>).retainedUntil;
-        open(); await screen.findByRole('table'); expect(screen.getByText('Latest transfer', { exact: false })).toHaveTextContent('pending'); expect(screen.getByText(/128 \/ 350 rows received/)).toBeVisible(); expect(screen.getByText('Complete enumeration rows').nextElementSibling).toHaveTextContent('350');
+        open(); await screen.findByRole('table'); expect(screen.getByText('Latest transfer', { exact: false, selector: 'strong' })).toHaveTextContent('Transfer pending'); expect(screen.getByText(/128 \/ 350 rows received/)).not.toBeVisible(); fireEvent.click(screen.getByText('Capture details')); expect(screen.getByText(/128 \/ 350 rows received/)).toBeVisible(); expect(screen.getByText('Complete enumeration rows').nextElementSibling).toHaveTextContent('350');
     });
     it.each(['auth', 'pagehide', 'blur', 'hashchange'] as const)('aborts and suppresses late pages after %s', async transition => {
         let finish!: (v: OverviewPage) => void, signal!: AbortSignal;
