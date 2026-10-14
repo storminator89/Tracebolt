@@ -83,9 +83,12 @@ The fifteen controls cover safe text; visible and closed-body synthetic secrets;
 closed and open disclosure bodies; first and later summaries; nested disclosures;
 matching text directly under `display:contents`; hidden text followed by another
 visible match; and three `::details-content` visibility/display overrides.
-Every control requires a positive text Range. Closed-body controls also require
+The closed-secret negative requires an empty text Range and must still reach
+unconditional secret rejection. Every other control requires a positive text
+Range, including all identifier-exception cases. Closed-body controls also require
 positive own-parent box geometry, except the deliberate unboxed
-`display:contents` negative. Empty geometry cannot pass as unexercised coverage.
+`display:contents` negative. Each source-enumerated geometry expectation is exact;
+empty identifier geometry cannot pass as unexercised exception coverage.
 Native visibility, Playwright visibility and the exact privacy-stage sequence are
 checked independently. Secrets, visible matches, first-summary matches, unboxed
 matches and overridden-visible bodies must reject; only the enumerated safe or

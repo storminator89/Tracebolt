@@ -24,6 +24,25 @@ export const controlHTML = `<!doctype html><html><head><meta charset="utf-8"><me
 <section id="override-contents"><details><summary>Overridden contents display</summary><p data-probe>${invitation}</p></details></section>
 <section id="override-inline"><details><summary>Overridden inline display</summary><p data-probe>${invitation}</p></details></section>
 </body></html>`;
+// Each fixture must exercise its intended geometry, never an unknown/optional
+// Range path. The closed secret is a negative control even with empty text Range.
+export const controlRangeExpectations = Object.freeze({
+ clear: true,
+ visible: true,
+ 'closed-body': true,
+ 'closed-summary': true,
+ 'open-body': true,
+ contents: true,
+ 'closed-secret': false,
+ 'second-summary': true,
+ 'outer-body': true,
+ 'inner-body': true,
+ 'body-contents': true,
+ 'closed-then-visible': true,
+ 'override-body': true,
+ 'override-contents': true,
+ 'override-inline': true,
+});
 export const hiddenControlCases = Object.freeze(['closed-body', 'closed-secret', 'second-summary', 'outer-body', 'inner-body', 'body-contents', 'closed-then-visible']);
 export const acceptedControlCases = Object.freeze(['clear', 'closed-body', 'second-summary', 'outer-body', 'inner-body']);
 export function controlFailure(name) {
@@ -70,9 +89,9 @@ export async function runVisibilityControls({ browser, expect, assertPublicSafe,
    const rangeKind = observed.positiveRange ? 'positive' : 'empty';
    const nativeKind = observed.native === true ? 'true' : observed.native === false ? 'false' : 'invalid';
    checkpoint(`native-${nativeKind}-range-${rangeKind}`); assert.equal(observed.native, !hiddenControlCases.includes(name) && name !== 'contents');
-   // Hard prerequisites: a browser with empty closed-body geometry cannot prove
-   // the reviewed repair. Do not silently treat that unexercised path as a pass.
-   checkpoint(`range-${rangeKind}`); assert.equal(observed.positiveRange, true);
+   // Identifier exceptions still require positive Range evidence. Only the exact
+   // closed-secret negative requires empty Range before unconditional rejection.
+   checkpoint(`range-${rangeKind}`); assert.equal(observed.positiveRange, controlRangeExpectations[name]);
    if (hiddenControlCases.includes(name) && name !== 'body-contents') { checkpoint(`playwright-hidden-range-${rangeKind}`); await expect(probe).toBeHidden(); }
    else { checkpoint('playwright-visible'); await expect(probe).toBeVisible(); }
    // Playwright's display:contents visibility also uses Range geometry. Its
