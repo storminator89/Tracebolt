@@ -1,3 +1,4 @@
+import { ReportTime } from './report-time';
 import type { ReactNode } from 'react';
 import { ArrowRight, Clock3, Download, HardDrive, Info, MemoryStick, Radio, ShieldAlert, Terminal } from 'lucide-react';
 import { useLocale } from './i18n';
@@ -45,11 +46,11 @@ function StatusSummaries({ deviceId, sessionKey, onWarnings, onUpdates }: { devi
         </Card>
     </>;
 }
-export function DeviceEssentials({ device, sessionKey, readReady, onWarnings, onUpdates, onDetails }: { device: Device; sessionKey: string | null; readReady: boolean; onWarnings?: () => void; onUpdates?: () => void; onDetails: () => void }) {
+export function DeviceEssentials({ device, sessionKey, readReady, onWarnings, onUpdates, onDetails, reportsAvailable = true }: { device: Device; sessionKey: string | null; readReady: boolean; reportsAvailable?: boolean; onWarnings?: () => void; onUpdates?: () => void; onDetails: () => void }) {
     const [locale] = useLocale(), c = copy[locale], certificate = certificateExpiry(device.agentCertificate);
     return <div className="device-essentials">
         <div className="device-essentials-status">
-            <Card title={c.contact} icon={Radio} action={c.details} onOpen={onDetails}><strong className="device-essential-value detail-time">{relativeTime(device.lastSeen)}</strong></Card>
+            <Card title={c.contact} icon={Radio} action={c.details} onOpen={onDetails}><strong className="device-essential-value detail-time"><ReportTime device={device} available={reportsAvailable}/></strong></Card>
             {device.platform !== 'macos' && (onUpdates && readReady ? <StatusSummaries key={`${device.id}:${sessionKey ?? ''}`} deviceId={device.id} sessionKey={sessionKey} onWarnings={onWarnings} onUpdates={onUpdates}/> : <><Card title={c.warnings} icon={ShieldAlert} action={c.review} onOpen={onWarnings} busy={Boolean(onWarnings && onUpdates)}><strong className="device-essential-value">{c.unknown}</strong><p>{c.scope}</p></Card><Card title={c.updates} icon={Download} action={c.viewUpdates} onOpen={onUpdates} busy={Boolean(onUpdates)}><strong className="device-essential-value">{c.unknown}</strong><p>{c.candidates}</p></Card></>)}
         </div>
         <section aria-label={c.resources} className="device-essential-resources"><div className="device-metrics">{[{ label: 'CPU', metric: device.cpu, icon: Terminal }, { label: c.memory, metric: device.memory, icon: MemoryStick }, { label: c.disk, metric: device.disk, icon: HardDrive }].map(({ label, metric, icon: Icon }) => <div className="device-metric-card" key={label}><span className="device-metric-label"><Icon size={16} aria-hidden="true"/>{label}</span><MetricValue metric={metric} precision={1}/><time className="device-metric-time" dateTime={metric.collectedAt} title={fullDate(metric.collectedAt)}>{locale === 'de' ? 'Messung' : 'Measured'} · {fullDate(metric.collectedAt)}</time></div>)}</div>{device.platform !== 'macos' && <ResourceHistoryCharts deviceId={device.id} sessionKey={sessionKey} ready={readReady}/>}<button type="button" className="text-button" onClick={onDetails}>{c.sources}<ArrowRight size={13} aria-hidden="true"/></button></section>

@@ -7,9 +7,10 @@ import { mutate, request } from './api';
 import { groupedHex } from './enrollment-types';
 import type { EnrollmentList, EnrollmentSnapshot, EnrollmentState, InvitationCreation } from './enrollment-types';
 import { setLocale } from './i18n';
+import type { Device } from './types';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
-const operator = vi.hoisted(() => ({ insecureTestMode: false }));
+const operator = vi.hoisted(() => ({ insecureTestMode: false, mode: 'lan', authenticated: true }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: () => operator }));
 const serverNow = '2026-10-03T15:00:00Z', seconds = Date.parse(serverNow) / 1000;
 const invitation = `invite_${'1'.repeat(32)}`, device = `agent_${'6'.repeat(32)}`, secret = 'S'.repeat(43);
@@ -20,7 +21,7 @@ function record(state: EnrollmentState = 'created', revision = 1): EnrollmentSna
   invitationID: invitation, createRequestID: `request_${'3'.repeat(32)}`, platform: 'linux', revision, state, createdAt: seconds, deadlineAt: seconds + 600, updatedAt: seconds,
   claim: { claimID: `claim_${'4'.repeat(32)}`, requestID: '', keyFingerprint: 'ab'.repeat(32), csrHash: '', claimHash: '', comparisonCode: '12ab'.repeat(8), at: seconds },
   approval: { requestID: '', deviceID: ['created', 'claimed_pending'].includes(state) ? '' : device, keyFingerprint: 'ab'.repeat(32), at: seconds },
-  intent: { intentID: '', requestID: '', serialHex: '', templateVersion: '', deviceID: '', keyFingerprint: '', notBefore: 0, notAfter: 0, at: 0 }, issuance: { requestID: '', certificateHash: '', at: 0 }, activation: { requestID: '', at: 0 }, termination: { requestID: '', from: '', at: 0 },
+  intent: { intentID: '', requestID: '', serialHex: '', templateVersion: '', deviceID: '', keyFingerprint: '', notBefore: 0, notAfter: state === 'activated' ? seconds + 86400 : 0, at: 0 }, issuance: { requestID: '', certificateHash: '', at: 0 }, activation: { requestID: '', at: 0 }, termination: { requestID: '', from: '', at: 0 },
  };
 }
 function creation(complete = true): InvitationCreation {
@@ -30,7 +31,11 @@ function creation(complete = true): InvitationCreation {
 }
 let current: EnrollmentList;
 const clipboard = vi.fn(), onDevice = vi.fn();
-function section() { return <EnrollmentSection onChanged={() => {}} onDevice={onDevice} deviceIds={[device]}/>; }
+function section() {
+ const metric = { value: null, unit: '%', quality: 'unknown' as const, source: 'Synthetic placeholder', collectedAt: serverNow };
+ const reportDevice: Device = { id: device, name: 'Synthetic admitted device', platform: 'linux', os: 'Linux', site: '', group: '', ip: null, status: 'unknown', source: 'lan', synthetic: false, lastSeen: '0001-01-01T00:00:00Z', agentVersion: 'unknown', cpu: metric, memory: metric, disk: metric, uptime: '', tags: [], capabilities: [{ id: 'agent_identity', name: 'Enrolled agent identity', status: 'supported', detail: 'Synthetic committed activation' }], evidence: [], trend: [], caseIds: [], agentCertificate: { source: 'guided-enrollment', checkedAt: serverNow, expiresAt: new Date((seconds + 86400) * 1000).toISOString() } };
+ return <EnrollmentSection devices={[reportDevice]} reportsAvailable onChanged={() => {}} onDevice={onDevice} deviceIds={[device]}/>;
+}
 async function add() {
  render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
  fireEvent.click(screen.getByRole('button', { name: 'Add device' })); return screen.getByRole('dialog', { name: 'Add device' });
