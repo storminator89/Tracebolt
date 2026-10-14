@@ -59,3 +59,38 @@ test('overview typography accepts the narrow production rule and retains readabl
  for(const unreadable of [12.99,16.01,18])assert.throws(()=>verify(unreadable,true));
  assert.throws(()=>verify(18,false));assert.throws(()=>verify(21.99,false));
 });
+
+// Authored hosted coverage remains distinct from executed browser proof.
+test('read-first inventory captures use existing safe helpers with bilingual desktop/mobile and keyboard details',()=>{
+ const helper=read('./inventory-read-first.mjs'),overview=read('./complete-overview-browser.mjs');
+ for(const source of [v3,overview])assert.ok(source.includes("import {checkInventoryReadFirst} from './inventory-read-first.mjs'"));
+ for(const selector of ['.complete-packages','.complete-overview'])assert.ok((v3+overview).includes(`selector:'${selector}'`));
+ for(const value of ["['en','de']","[false,true]",'width:390,height:844','width:1440,height:1000',"press('Enter')","press('Space')",'toBeInViewport()',"getByText(fact,{exact:true})",'Node.DOCUMENT_POSITION_FOLLOWING'])assert.ok(helper.includes(value),value);
+ assert.ok(helper.includes('await shot(page,'));assert.doesNotMatch(helper,/fetch\(|newContext|chromium|route\.fulfill|waitForTimeout|setDefaultTimeout/);
+ for(const value of ['originalPackage.binding.generationId','originalPackage.manifest.collectedAt','originalPackage.retainedUntil'])assert.ok(compact.includes(value),value);
+ for(const value of ['initial.processes.complete.binding.generationId','originalMount.binding.generationId','originalMount.manifest.captureStartedAt','originalMount.retainedUntil'])assert.ok(overview.includes(value),value);
+});
+
+test('capture-details focus keeps the opaque theme accent and contrast in light and dark palettes',()=>{
+ const inventory=read('../../web/src/complete-packages.css'),styles=read('../../web/src/styles.css');
+ const focus=inventory.match(/\.inventory-capture-details > summary:focus-visible\s*\{([^}]+)\}/);assert.ok(focus);
+ assert.match(focus[1],/outline:\s*3px solid var\(--accent\)/);assert.match(focus[1],/outline-offset:\s*3px/);
+ const luminance=hex=>{
+  assert.match(hex,/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,'focus colors must be opaque source colors');
+  const rgb=hex.length===4?hex.slice(1).split('').map(c=>c+c).join(''):hex.slice(1);
+  const linear=rgb.match(/../g).map(c=>parseInt(c,16)/255).map(c=>c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4);
+  return linear.reduce((sum,c,i)=>sum+c*[0.2126,0.7152,0.0722][i],0);
+ };
+ for(const theme of ['light','dark']){
+  const palette={};
+  for(const [,selector,body] of styles.matchAll(/:root([^{}]*)\{([^{}]*)\}/g)){
+   if(selector!==''&&selector!==(theme==='dark'?'[data-theme=dark]':':not([data-theme=dark])'))continue;
+   for(const [,name,value] of body.matchAll(/--([a-z-]+):([^;}]+)/g))palette[name]=value.trim();
+  }
+  for(const surface of ['bg','panel']){
+   const accent=luminance(palette.accent),background=luminance(palette[surface]);
+   const contrast=(Math.max(accent,background)+0.05)/(Math.min(accent,background)+0.05);
+   assert.ok(contrast>=3,`${theme} ${surface} focus contrast must remain at least 3:1`);
+  }
+ }
+});

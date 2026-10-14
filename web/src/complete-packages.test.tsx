@@ -18,6 +18,36 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('complete dpkg inventory browsing', () => {
+    it.each(['en', 'de'] as const)('puts package search and result counts before reachable capture details and rows without changing reads in %s', async locale => {
+        setLocale(locale, false); render(<CompletePackagesPanel deviceId={completeDevice} inline/>);
+        const table = await screen.findByRole('table'), disclosure = document.querySelector('.inventory-capture-details')!, summary = disclosure.querySelector('summary')!;
+        const search = screen.getByLabelText(locale === 'de' ? 'Pakete durchsuchen' : 'Search packages');
+        expect(search.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(search.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(disclosure.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(disclosure.previousElementSibling?.tagName).toBe('DL');
+        expect(disclosure.nextElementSibling).toContainElement(table);
+        expect(disclosure).not.toHaveAttribute('open'); expect(summary).toHaveTextContent(locale === 'de' ? 'Erfassungsdetails' : 'Capture details');
+        expect(screen.getByText(locale === 'de' ? 'Zeilen der Generation' : 'Generation rows').nextElementSibling).toHaveTextContent('350');
+        expect(screen.getByText(locale === 'de' ? 'Alter der Beobachtung (Minuten)' : 'Observation age (minutes)').nextElementSibling).toHaveTextContent('0');
+        const original = view.complete!;
+        for (const value of [original.binding.generationId, original.binding.sequence, original.manifest.collectedAt, original.completedAt, original.retainedUntil]) expect(within(disclosure as HTMLElement).getByText(value)).not.toBeVisible();
+        summary.focus(); expect(summary).toHaveFocus(); fireEvent.click(summary);
+        for (const value of [original.binding.generationId, original.binding.sequence, original.manifest.collectedAt, original.completedAt, original.retainedUntil]) expect(within(disclosure as HTMLElement).getByText(value)).toBeVisible();
+        fireEvent.click(summary); expect(disclosure).not.toHaveAttribute('open'); expect(screen.getByRole('table')).toBe(table);
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1])).toMatchObject({ generationId: original.binding.generationId, cursor: '', search: '', limit: 100 });
+    });
+    it.each(['pending', 'failed', 'expired'] as const)('keeps the latest %s transfer visible outside capture details without replacing retained rows', async state => {
+        view.complete!.binding.sequence = '1';
+        view.transfer = { binding: { sequence: '2', generationId: `sample_${'d'.repeat(32)}`, manifestHash: 'e'.repeat(64) }, state, declaredRows: 500, acceptedRows: 128, expectedChunks: 4, acceptedChunks: 1, collectedAt: '2026-10-04T00:00:06Z', startedAt: '2026-10-04T00:00:07Z', expiresAt: state === 'expired' ? '2026-10-04T00:00:09Z' : '2026-10-04T00:15:07Z' };
+        await open(); const status = screen.getByText(`Latest transfer: Transfer ${state}`);
+        expect(status).toBeVisible(); expect(status.closest('details')).toBeNull();
+        expect(screen.getByText('Declared counts are not completion. Pending or failed transfers leave the prior generation and its age unchanged.')).toBeVisible();
+        expect(within(screen.getByRole('table')).getAllByRole('rowheader')).toHaveLength(100);
+        expect(screen.getByText(view.complete!.binding.generationId)).not.toBeVisible();
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]).generationId).toBe(view.complete!.binding.generationId);
+    });
     it('is lazy and enumerates all 350 rows with a bounded 100-row DOM page rather than a global 128/256 prefix', async () => {
         render(<CompletePackagesPanel deviceId={completeDevice}/>); expect(request).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Complete dpkg inventory' }));
@@ -65,7 +95,7 @@ describe('complete dpkg inventory browsing', () => {
             expect(screen.getByText(evidence)).not.toBeVisible(); expect(screen.getByRole('table').querySelector('details')).not.toHaveAttribute('open');
             expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ search, cursor: '', limit: 100 });
         }
-        expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
+        expect(screen.getByText('2026-10-04T00:00:00Z')).not.toBeVisible(); fireEvent.click(screen.getByText('Capture details')); expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
     });
     it('continues an empty 2048-row search window and finds a match beyond row 2299', async () => {
         view = completeView(2300); rows = completeRows(2300); await open();
@@ -73,6 +103,8 @@ describe('complete dpkg inventory browsing', () => {
         expect(screen.queryByRole('table')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Search' }));
         await screen.findByText('No matches in this scan window. More rows remain; continue the search.'); expect(screen.queryByText('No matches in the complete generation.')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Continue search' })); await screen.findByText('fixture-002299', { selector: 'th' }); expect(screen.getByText('2,300 / 2,300')).toBeVisible();
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toEqual({ generationId: view.complete!.binding.generationId, cursor: 'cursor_2048', search: 'fixture-002299', limit: 100 });
+        fireEvent.click(screen.getByText('Capture details')); expect(screen.getByText(view.complete!.manifest.collectedAt)).toBeVisible(); expect(screen.getByText(view.complete!.retainedUntil)).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
     });
     it('only reports no matches after exhausting the complete generation', async () => {
         await open(); fireEvent.change(screen.getByLabelText('Search packages'), { target: { value: 'absent-fixture' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('No matches in the complete generation.');
@@ -80,7 +112,7 @@ describe('complete dpkg inventory browsing', () => {
     it('keeps prior complete rows and original age when a newer transfer is pending or a collection attempt failed', async () => {
         view.complete!.binding.sequence = '1'; view.transfer = { binding: { sequence: '2', generationId: `sample_${'d'.repeat(32)}`, manifestHash: 'e'.repeat(64) }, state: 'pending', declaredRows: 500, acceptedRows: 128, expectedChunks: 4, acceptedChunks: 1, collectedAt: '2026-10-04T00:00:06Z', startedAt: '2026-10-04T00:00:07Z', expiresAt: '2026-10-04T00:15:07Z' };
         view.failure = { sequence: '3', generationId: `sample_${'f'.repeat(32)}`, attemptedAt: '2026-10-04T00:00:08Z', receivedAt: '2026-10-04T00:00:09Z', reason: 'collection_failed' }; await open();
-        expect(screen.getByText('Transfer pending')).toBeVisible(); expect(screen.getByText('Latest collection attempt failed')).toBeVisible(); expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(screen.getByText('128 / 500')).toBeVisible();
+        expect(screen.getByText('Latest transfer: Transfer pending')).toBeVisible(); expect(screen.getByText('Latest collection attempt failed: Collection failed')).toBeVisible(); expect(screen.getByText('Observation age (minutes)').nextElementSibling).toHaveTextContent('0'); expect(screen.getByText('2026-10-04T00:00:00Z')).not.toBeVisible(); expect(screen.getByText('128 / 500')).not.toBeVisible(); fireEvent.click(screen.getByText('Capture details')); expect(screen.getByText('2026-10-04T00:00:00Z')).toBeVisible(); expect(screen.getByText('128 / 500')).toBeVisible();
     });
     it('preserves expired zero-row metadata without reporting successful empty inventory', async () => {
         view = completeView(0); view.complete!.state = 'expired'; view.serverNow = '2026-10-05T00:00:00Z'; render(<CompletePackagesPanel deviceId={completeDevice}/>); fireEvent.click(screen.getByRole('button', { name: 'Complete dpkg inventory' })); await screen.findByText(/The retained generation has expired/); expect(mutateRaw).not.toHaveBeenCalled(); expect(screen.queryByText(/completed generation contains zero/)).not.toBeInTheDocument();
