@@ -1,7 +1,7 @@
 # Windows incident inbox and operator acknowledgement
 
 This manager-side source increment adds a compact, on-demand **Windows incidents**
-inbox above the fleet device list. It projects the existing durable Windows
+inbox below the fleet device list. It projects the existing durable Windows
 contact, system-volume disk, observed-group CPU, physical-RAM and selected-service
 episodes. The inbox itself adds no collector, native permission, enrollment, policy, endpoint
 action, Linux Health input or AI scope. Separately approved Windows notifications

@@ -487,10 +487,29 @@ export async function checkWindowsSavedMSIFixtures() {
     retiredNativeOutcomesPreserved: true, allowedPreviewReads, rejectedMutationRequests, actualMutations: 0, browserExecuted: false, screenshotsCaptured: 0 };
 }
 
-export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, width, shot, onCase = () => {} }) {
+export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, width, shot, inventoryShot = async () => {}, onCase = () => {} }) {
   const de = locale === 'de', title = de ? 'Windows-MSI-Arbeitsliste' : 'Windows MSI worklist';
   await page.goto(`${windowsFleetMSIOrigin}/#/devices`);
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
+  // Four supplemental inventory views reuse this exact intercepted App. The
+  // existing expanded MSI scenes and their original 16-image identity stay intact.
+  const inventory = page.locator('.inventory-panel');
+  await expect(inventory.locator('.device-table tbody tr')).toHaveCount(fixture.devices.length);
+  expect(await inventory.evaluate(element => {
+    const selectors = ['.filter-toolbar', '.fleet-groups', '.inventory-meta', '.fleet-identity-notice', '.device-table', '.table-footer', '.windows-incident-inbox', '.windows-fleet-software', '.windows-fleet-update-worklist:not(.windows-fleet-managed-msi)', '.windows-fleet-managed-msi', '.windows-maintenance', '.windows-notifications'];
+    const nodes = selectors.map(selector => element.querySelector(selector));
+    return nodes.every((node, index) => node && (!index || Boolean(nodes[index - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)));
+  })).toBe(true);
+  const toggles = inventory.locator(':scope > section button[aria-expanded]');
+  await expect(toggles).toHaveCount(6);
+  for (const toggle of await toggles.all()) await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(fixture.reads.artifact).toBe(0);
+  expect(Object.values(fixture.reads.devices)).toEqual([0, 0]);
+  await page.evaluate(() => document.fonts.ready);
+  await inventory.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+  expect(await inventory.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await inventoryShot(page, `synthetic-fleet-inventory-default-${width}-${locale}`);
   const worklist = page.getByRole('region', { name: title, exact: true });
   await worklist.getByRole('button', { name: title, exact: true }).click();
   await expect(worklist).toContainText(fixture.artifact.package.name);
@@ -772,7 +791,7 @@ export async function captureWindowsSavedMSIFixtures({ browser, expect, output, 
 export async function captureWindowsFleetMSIFixtures({ browser, expect, output, onCase = () => {} }) {
   assert(browser && typeof browser.newContext === 'function' && typeof expect === 'function');
   assert(typeof output === 'string' && output.length > 0);
-  const compiled = await compileWindowsFleetMSIAssets(), captures = [];
+  const compiled = await compileWindowsFleetMSIAssets(), captures = [], inventoryCaptures = [];
   await mkdir(output, { recursive: true });
   for (const testCase of windowsFleetMSICases) {
     const { locale, width, height } = testCase;
@@ -786,7 +805,11 @@ export async function captureWindowsFleetMSIFixtures({ browser, expect, output, 
       const page = await context.newPage();
       page.on('pageerror', error => state.pageErrors.push(error.message));
       const pendingCaptures = [];
-      const result = await exerciseWindowsFleetMSI({ page, expect, fixture, ...testCase, onCase, shot: async (target, name) => {
+      const result = await exerciseWindowsFleetMSI({ page, expect, fixture, ...testCase, onCase, inventoryShot: async (target, name) => {
+        const file = `${name}.png`;
+        await target.screenshot({ path: path.join(output, file), animations: 'disabled', fullPage: false });
+        inventoryCaptures.push({ file, ...testCase, synthetic: true, sourceDigest: compiled.sourceDigest, disclosure: windowsFleetMSIDisclosure, assertions: { tableBeforeTools: true, collapsedTools: 6, automaticMSIReads: 0, actualMutationRequests: 0 } });
+      }, shot: async (target, name) => {
         const file = `${name}.png`;
         await target.screenshot({ path: path.join(output, file), animations: 'disabled', fullPage: false });
         pendingCaptures.push({ file, ...testCase, synthetic: true, sourceDigest: compiled.sourceDigest, disclosure: windowsFleetMSIDisclosure });
@@ -797,7 +820,7 @@ export async function captureWindowsFleetMSIFixtures({ browser, expect, output, 
       await context.close();
     }
   }
-  const manifest = { browserExecuted: true, nativeAcceptance: false, capturedAt: new Date().toISOString(), sourceDigest: compiled.sourceDigest, sourceInputs: compiled.sourceInputs, disclosure: windowsFleetMSIDisclosure, captures };
+  const manifest = { browserExecuted: true, nativeAcceptance: false, capturedAt: new Date().toISOString(), sourceDigest: compiled.sourceDigest, sourceInputs: compiled.sourceInputs, disclosure: windowsFleetMSIDisclosure, captures, inventoryCaptures };
   await writeFile(path.join(output, 'windows-fleet-msi-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   return manifest;
 }
