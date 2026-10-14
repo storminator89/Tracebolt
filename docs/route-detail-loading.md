@@ -64,6 +64,15 @@ Existing device/resource tests retain all abort, private-clear, late-response
 and one-read assertions. Resource-lifecycle tests wait explicitly for bootstrap
 and module settlement before exercising an already mounted detail.
 
+The pagehide/event-first same-task fixture has a bounded CI diagnostic. Its
+failure hook records only a fixed phase: bootstrap, suspend-import, blocked-mount,
+blocked-dom, resume-dom or resumed-mount. The sanitized reporter accepts that
+enum only for this exact source-known case at its current numeric position;
+unknown or extra metadata is withheld. Assertions, deadlines and execution order
+are unchanged. Raw errors, DOM and runtime values remain private, and a failed
+run stays failed. This diagnostic does not establish the cause of an earlier
+failure or change production lifecycle behavior.
+
 The existing hosted browser runners include four focused synthetic LAN cases
 and one direct development-case entry. They use the existing disposable
 fixture and real auth handlers, delay/fail only the detail script or explicit

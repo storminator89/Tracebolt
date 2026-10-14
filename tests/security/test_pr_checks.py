@@ -1690,6 +1690,85 @@ class VitestFailureTests(unittest.TestCase):
         return {'testResults': [{'name': str(source), 'status': 'failed', 'message': marker,
                 'assertionResults': [{'status': 'passed'}, {'status': 'failed', 'fullName': marker, 'failureMessages': [marker]}]}]}
 
+    def route_fixture(self, root, phase='blocked-mount'):
+        source = root / 'web/src/route-details.test.tsx'; source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('source fixture')
+        assertions = [{'status': 'passed'} for _ in range(19)]
+        assertions[10] = {'status': 'failed', 'title': p.ROUTE_FIRST_COMMIT_TITLE,
+                          'ancestorTitles': [p.ROUTE_FIRST_COMMIT_SUITE],
+                          'fullName': p.ROUTE_FIRST_COMMIT_SUITE + ' ' + p.ROUTE_FIRST_COMMIT_TITLE,
+                          'failureMessages': ['PRIVATE_RAW_VALUE'],
+                          'meta': {'routeFirstCommitPhase': phase}}
+        return {'testResults': [{'name': str(source), 'status': 'failed', 'message': 'PRIVATE_RAW_VALUE',
+                                'assertionResults': assertions}]}
+
+    def test_route_phase_is_a_closed_enum_for_the_exact_source_known_case(self):
+        phases = {'bootstrap', 'suspend-import', 'blocked-mount', 'blocked-dom', 'resume-dom', 'resumed-mount'}
+        self.assertEqual(p.ROUTE_FIRST_COMMIT_PHASES, phases)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'
+            with patch.object(p, 'ROOT', root):
+                for phase in sorted(phases):
+                    report.write_text(json.dumps(self.route_fixture(root, phase)))
+                    self.assertEqual(p.vitest_failure_location(report),
+                                     'web/src/route-details.test.tsx assertions=11 route-first-commit=11:' + phase)
+
+    def test_route_phase_rejects_unknown_extra_and_malformed_metadata(self):
+        bad = [None, {}, [], 'PRIVATE_RAW_VALUE', {'other': 'blocked-mount'},
+               {'routeFirstCommitPhase': 'blocked-mount', 'extra': 'PRIVATE_RAW_VALUE'}]
+        bad += [{'routeFirstCommitPhase': value} for value in [
+            None, True, 11, [], {}, 'PRIVATE_RAW_VALUE', 'blocked-mount\nPRIVATE_RAW_VALUE',
+            'blocked-mount ', 'prefix-blocked-mount', 'x' * 10000,
+        ]]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'; value = self.route_fixture(root)
+            with patch.object(p, 'ROOT', root):
+                for meta in bad:
+                    value['testResults'][0]['assertionResults'][10]['meta'] = meta
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report), 'web/src/route-details.test.tsx assertions=11')
+                value['testResults'][0]['assertionResults'][10]['meta'] = {'routeFirstCommitPhase': 'blocked-mount'}
+                raw = json.dumps(value).replace('"routeFirstCommitPhase": "blocked-mount"',
+                    '"routeFirstCommitPhase": "blocked-mount", "routeFirstCommitPhase": "PRIVATE_RAW_VALUE"')
+                report.write_text(raw); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_route_phase_is_withheld_for_other_files_positions_cases_and_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'
+            with patch.object(p, 'ROOT', root):
+                for field, invalid in [('title', 'PRIVATE_RAW_VALUE'), ('fullName', 'PRIVATE_RAW_VALUE'),
+                                       ('ancestorTitles', ['PRIVATE_RAW_VALUE'])]:
+                    value = self.route_fixture(root); value['testResults'][0]['assertionResults'][10][field] = invalid
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report), 'web/src/route-details.test.tsx assertions=11')
+                value = self.route_fixture(root); row = value['testResults'][0]
+                other = root / 'web/src/other.test.tsx'; other.write_text('source fixture'); row['name'] = str(other)
+                report.write_text(json.dumps(value))
+                self.assertEqual(p.vitest_failure_location(report), 'web/src/other.test.tsx assertions=11')
+                for position in [0, 9, 11, 18]:
+                    value = self.route_fixture(root); assertions = value['testResults'][0]['assertionResults']
+                    assertions[position], assertions[10] = assertions[10], assertions[position]
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report),
+                                     'web/src/route-details.test.tsx assertions=' + str(position + 1))
+                value = self.route_fixture(root); row = value['testResults'][0]
+                row['status'] = 'passed'; row['assertionResults'][10]['status'] = 'passed'
+                report.write_text(json.dumps(value)); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_route_phase_preserves_failed_process_and_private_report_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); value = self.route_fixture(root, 'resumed-mount'); reports = []; output = io.StringIO()
+            def failure(args, cwd, stage):
+                report = Path(next(a.split('=', 1)[1] for a in args if a.startswith('--outputFile=')))
+                self.assertNotIn('artifacts', report.parts); reports.append(report)
+                report.write_text(json.dumps(value)); raise ValueError('original failure')
+            with patch.object(p, 'ROOT', root), patch.object(p, 'run', side_effect=failure), redirect_stdout(output):
+                with self.assertRaisesRegex(ValueError, 'original failure'):
+                    p.run_vitest(['vitest', 'run', '--maxWorkers=1'], root / 'web', stage='ui-test')
+            self.assertEqual(output.getvalue(),
+                             'FAIL UI location: web/src/route-details.test.tsx assertions=11 route-first-commit=11:resumed-mount\n')
+            self.assertFalse(reports[0].exists())
+
     def test_only_source_file_and_numeric_coordinates_are_released(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); report = root / 'private.json'; value = self.fixture(root)
