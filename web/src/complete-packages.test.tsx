@@ -101,6 +101,28 @@ describe('complete dpkg inventory browsing', () => {
         }
         expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
     });
+    it.each(['en', 'de'] as const)('reveals only the indicated complete table region while retaining 100 rows, mapping focus and reads in %s', async locale => {
+        setLocale(locale, false); render(<CompletePackagesPanel deviceId={completeDevice} inline/>);
+        const table = await screen.findByRole('table'), region = table.closest('[tabindex="0"]') as HTMLElement;
+        const capture = document.querySelector('.inventory-capture-details > summary') as HTMLElement;
+        const summary = table.querySelector('summary')!;
+        let indicatesFocus = true;
+        const nativeMatches = region.matches.bind(region);
+        vi.spyOn(region, 'matches').mockImplementation(selector => selector === ':focus-visible' ? indicatesFocus : nativeMatches(selector));
+        const revealRegion = vi.fn(function (this: HTMLElement) { expect(this).toBe(region); expect(region).toHaveFocus(); });
+        const revealSummary = vi.fn(function (this: HTMLElement) { expect(this).toBe(summary); expect(summary).toHaveFocus(); });
+        Object.defineProperty(region, 'scrollIntoView', { configurable: true, value: revealRegion });
+        Object.defineProperty(summary, 'scrollIntoView', { configurable: true, value: revealSummary });
+        capture.focus(); expect(revealRegion).not.toHaveBeenCalled();
+        region.focus(); expect(revealRegion).toHaveBeenCalledExactlyOnceWith({ block: 'start', inline: 'nearest', behavior: 'instant' });
+        summary.focus(); expect(revealSummary).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+        expect(revealRegion).toHaveBeenCalledTimes(1); expect(summary.closest('details')).not.toHaveAttribute('open');
+        indicatesFocus = false; region.focus(); expect(region).toHaveFocus(); expect(revealRegion).toHaveBeenCalledTimes(1);
+        expect(within(table).getAllByRole('rowheader')).toHaveLength(100); expect(table.closest('[role="region"]')).toBe(region);
+        expect(capture.closest('details')).not.toHaveAttribute('open');
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1])).toMatchObject({ generationId: view.complete!.binding.generationId, cursor: '', search: '', limit: 100 });
+    });
     it('still searches mapping evidence while it is collapsed and clears expanded details when search changes', async () => {
         view = completeView(2); rows = completeRows(2);
         Object.assign(rows[1], { sourcePackage: 'fixture-source', sourceVersion: '1.0', sourceMapping: 'source-field' });
