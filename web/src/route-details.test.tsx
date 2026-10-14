@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { lazy, useEffect, useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { AuthBoundary, OperatorAccount, useOperator } from './auth';
 import type { OperatorSession } from './auth';
 import { AUTH_REQUIRED_EVENT, mutate, request } from './api';
@@ -101,7 +101,14 @@ describe('route-local deferred detail lifecycle', () => {
         ['blur', 'event-first'], ['blur', 'resolve-first'],
         ['pagehide', 'event-first'], ['pagehide', 'resolve-first'],
     ])('blocks first commit for same-task %s and import completion (%s)', async (suspension, order) => {
+        // Fixed source-only diagnosis for the reported pagehide/event-first case.
+        // Observe the existing checks without adding waits or changing scheduling.
+        let phase: 'bootstrap' | 'suspend-import' | 'blocked-mount' | 'blocked-dom' | 'resume-dom' | 'resumed-mount' | undefined = 'bootstrap';
+        if (suspension === 'pagehide' && order === 'event-first') onTestFailed(({ task }) => {
+            if (phase !== undefined) Object.assign(task.meta, { routeFirstCommitPhase: phase });
+        });
         const detail = pendingDetail(); await open(detail);
+        phase = 'suspend-import';
         await act(async () => {
             // No intermediate await/render: the pending Suspense retry and
             // eager suspension update must settle together in this task.
@@ -109,11 +116,17 @@ describe('route-local deferred detail lifecycle', () => {
             detail.resolve();
             if (order === 'resolve-first') window.dispatchEvent(new Event(suspension));
         });
+        phase = 'blocked-mount';
         expect(mounted).not.toHaveBeenCalled();
+        phase = 'blocked-dom';
         expect(screen.queryByLabelText('Private draft')).not.toBeInTheDocument();
+        phase = 'resume-dom';
         if (suspension === 'pagehide') event('pageshow', true); else event('focus');
         await screen.findByRole('region', { name: 'Private A' });
+        phase = 'resumed-mount';
         expect(mounted).toHaveBeenCalledTimes(1);
+        // A later cleanup-hook failure must not be attributed to a passed check.
+        phase = undefined;
     });
     it.each(['pagehide', 'hidden'])('waits through %s and real auth revalidation before first mount', async suspension => {
         const detail = pendingDetail(); await open(detail);
