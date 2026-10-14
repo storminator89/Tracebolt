@@ -566,8 +566,8 @@ diagnostics are validated but never printed.
 Public output is limited to fixed source-owned labels such as
 `FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-outline-exposure`.
 The three Conditional focus targets retain the four original check phases and
-add fourteen fixed exposure subphases. Across the unchanged EN/DE ×
-desktop/mobile × light/dark matrix, this gives 432 allowed coordinates. A
+add fourteen fixed exposure subphases plus nine fixed right-boundary reasons. Across the unchanged EN/DE ×
+desktop/mobile × light/dark matrix, this gives 648 allowed coordinates. A
 previous same-head report is removed through a no-follow directory descriptor
 before launching this runner; cleanup failure cannot expose old evidence. The
 original failing process/exception remains a failure, and success never enters
@@ -588,13 +588,34 @@ the existing left/right/top/top-band/header checks, and the existing final
 acceptance check. For that unchanged aggregate assertion, a fixed bottom-edge
 or hit-edge label is selected from its existing boolean inputs; no assertion or
 measurement is relaxed, replaced or added. The historical broad `outline exposure`
-phase remains valid. Every original assertion, the geometry classifier, browser
-measurement callbacks and forward-Tab function retain their source behavior.
+phase remains valid. Every original assertion, the geometry classifier, original
+numerical geometry inputs, hit-test callback and forward-Tab function retain their
+source behavior. Diagnostic-only CSSOM reads do not alter acceptance.
 
-Thirteen synthetic failing paths execute the actual focus helper, Conditional
+Twenty-two synthetic failing paths execute the actual focus helper, Conditional
 `check()` catch/report producer, Python wrapper and strict decoder in inert tests.
 The public checkpoint contains only a closed phase label, never geometry values,
-hit-test data, DOM text or raw errors. These diagnostics do not establish which
-subphase failed in the earlier hosted run and do not justify a speculative CSS
-change. A fresh exact-head hosted run and the existing 80-image pixel gate remain
+hit-test data, DOM text or raw errors. The right-edge checkpoint identifies a failed original clipping assertion; it
+does not establish the responsible boundary or justify a speculative CSS change. A fresh exact-head hosted run and the existing 80-image pixel gate remain
 required.
+
+The right-edge refinement identifies viewport-only, other-ancestor-only, mixed,
+or package-table-only violations. Table-only labels distinguish a target wider
+than an offending scrollport, a measured overhang at most one CSS pixel versus
+larger overflow, and a guarded fractional-client-edge discrepancy. The small
+bucket is diagnostic only; the original 0.5 px failure threshold is unchanged.
+All violating layers are considered, so a table comparison cannot hide another
+ancestor or viewport violation. Unknown metadata retains the broad right-edge
+label rather than exporting an arbitrary value.
+
+The independent fractional edge is the table border-box right minus its computed
+right border; its padding width subtracts both computed borders. The wider-target
+label uses that fractional width only after the same guards pass, never a scaled
+DOMRect width compared with unscaled integer clientWidth. It is considered only with no target/ancestor transform or zoom,
+LTR horizontal writing, automatic scrollbar gutter, no forced vertical scrollbar
+and no measured vertical overflow. If any offending table lacks those guards,
+the fixed label explicitly says unverified. A fractional label only records that
+the independently computed edge contains the outline while the integer-client
+edge fails; it does not prove rendered ring clearance or identify client rounding
+as the sole cause. The original failing assertion still fails. No raw coordinate,
+CSS value, element name or diagnostic object is added to public output.

@@ -2222,7 +2222,7 @@ class ConditionalFailureTests(unittest.TestCase):
         # Execute only the inert stage producer, never import a browser runner.
         script = "import {focusContrastStage} from './tests/e2e-review/focus-contrast-browser.mjs'; const result=[]; for(const target of " + json.dumps(targets) + ") for(const size of ['desktop','mobile']) for(const locale of ['en','de']) for(const theme of ['light','dark']) for(const phase of " + json.dumps(p.FOCUS_PHASES) + ") result.push(focusContrastStage(target,size,locale,theme,phase)); process.stdout.write(JSON.stringify(result));"
         values = json.loads(p.subprocess.check_output(['node', '--input-type=module', '-e', script], cwd=ROOT))
-        self.assertEqual(values, list(p.CONDITIONAL_FOCUS_STAGES)); self.assertEqual(len(values), 432)
+        self.assertEqual(values, list(p.CONDITIONAL_FOCUS_STAGES)); self.assertEqual(len(values), 648)
 
     def test_all_focus_coordinates_and_earlier_unrelated_failure_project_only_fixed_labels(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
@@ -2264,6 +2264,22 @@ class ConditionalFailureTests(unittest.TestCase):
             self.write(Path(tmp), good)
             for sha in [None, True, self.marker, SHA + '\n']:
                 self.assertIsNone(p.conditional_failure_location(sha))
+
+    def test_right_edge_phases_reject_forged_coordinates_private_fields_and_wrong_source(self):
+        phases = [phase for phase in p.FOCUS_PHASES if phase.startswith('outline right ') and phase != 'outline right edge']
+        self.assertEqual(len(phases), 9)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+            for phase in phases:
+                stage = 'focus contrast legacy-package-details mobile en light: ' + phase
+                good = self.report({'legacy-gallery': stage})
+                for mutation in ['unknown-suffix', 'raw-geometry', 'wrong-source', 'wrong-case']:
+                    report = deepcopy(good)
+                    if mutation == 'unknown-suffix': report['results'][2]['stage'] += ' ' + self.marker
+                    if mutation == 'raw-geometry': report['results'][2]['fractionalRight'] = 355.875
+                    if mutation == 'wrong-source': report['sourceSha'] = 'b' * 40
+                    if mutation == 'wrong-case': report = self.report({'managed-consent': stage})
+                    self.write(Path(tmp), report)
+                    self.assertIsNone(p.conditional_failure_location(SHA), (phase, mutation))
 
     def test_optional_diagnostics_are_strictly_validated_but_never_released(self):
         self.assertTrue(p.conditional_diagnostic_shape(self.coverage(), 'lazy-reads'))
@@ -2342,7 +2358,10 @@ process.stdout.write(marker);process.stderr.write(marker);process.exitCode=1;
         phases = ['outline geometry read', 'outline geometry classify', 'outline hit-test read',
                   'outline left edge', 'outline right edge', 'outline top edge', 'outline top band',
                   'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left',
-                  'outline hit right', 'outline hit bottom']
+                  'outline hit right', 'outline hit bottom', 'outline right viewport', 'outline right ancestor',
+                  'outline right mixed', 'outline right table wider', 'outline right table fractional',
+                  'outline right table subpixel', 'outline right table overflow',
+                  'outline right table unverified subpixel', 'outline right table unverified overflow']
         original_run = p.subprocess.run
         script = r"""
 import fs from 'node:fs'; import vm from 'node:vm'; import path from 'node:path';
@@ -2360,6 +2379,16 @@ const hits={top:true,left:true,right:true,bottom:true};
 if(phase==='outline geometry classify')geometry.outlineWidth=NaN;
 if(phase==='outline left edge')geometry.bounds.left=34;
 if(phase==='outline right edge')geometry.bounds.right=356;
+if(phase==='outline right viewport'){geometry.clips=[];geometry.bounds.right=391;}
+if(phase==='outline right ancestor'){geometry.bounds.right=356;geometry.clips[0].kind='ancestor';}
+if(phase==='outline right mixed'){geometry.bounds.right=391;geometry.clips[0].kind='table';}
+if(phase.startsWith('outline right table ')){
+ geometry.clips[0].kind='table';geometry.clips[0].fractionalGuard=true;geometry.clips[0].fractionalRight=355;geometry.clips[0].fractionalWidth=320;
+ geometry.bounds.right=phase.endsWith('subpixel')?355.75:357;
+ if(phase==='outline right table wider'){geometry.bounds.left=35;geometry.bounds.right=357;}
+ if(phase==='outline right table fractional'){geometry.bounds.right=355.75;geometry.clips[0].fractionalRight=355.875;}
+ if(phase.includes('unverified'))geometry.clips[0].fractionalGuard=false;
+}
 if(phase==='outline top edge')geometry.bounds.top=149;
 if(phase==='outline top band'){geometry.bounds.top=843;geometry.bounds.bottom=900;}
 if(phase==='outline header'){geometry.clips=[];geometry.bounds.top=120;geometry.bounds.bottom=180;}
@@ -2398,7 +2427,7 @@ process.stdout.write(marker);process.stderr.write(marker);process.exitCode=1;
                 text = output.getvalue()
                 self.assertIn('FAIL stage: browser-conditional', text)
                 self.assertIn('FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-' + phase.replace(' ', '-'), text)
-                for private in [self.marker, 'bounds', 'hitTests', 'outlineWidth', '277', '355', 'PASS: authenticated']:
+                for private in [self.marker, 'bounds', 'hitTests', 'outlineWidth', 'fractionalRight', 'fractionalWidth', 'fractionalGuard', '277', '355', 'PASS: authenticated']:
                     self.assertNotIn(private, text)
 
     def real_lifecycle_report(self, repeats, fulfill_failure):
