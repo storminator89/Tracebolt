@@ -1,0 +1,117 @@
+{
+  "sourceCommit": "ccb807c7a02ed4475e543f2bda4128102ee27a1b",
+  "sourceTree": "0cd1734d59d9a44b0a32a612f4f82fffc437c009",
+  "workflowRun": "https://github.com/storminator89/Tracebolt/actions/runs/38628439200",
+  "artifactId": 11925154183,
+  "artifactName": "focused-ui-review-ccb807c7a02ed4475e543f2bda4128102ee27a1b",
+  "workflowAttempt": 1,
+  "artifactSHA256": "3929540c90dfcd694938690d4d9253b4e568c3e5778bc0117e005632644966a0",
+  "captureCommands": [
+    "node tests/e2e-review/run.mjs",
+    "node tests/e2e-review/lan-browser.mjs"
+  ],
+  "capturedOn": "2026-10-14",
+  "images": [
+    {
+      "file": "overview-desktop.png",
+      "originalFile": "synthetic-concise-shell-overview-desktop-en.png",
+      "originalManifest": "screenshot-manifest.json",
+      "sha256": "f5088b139abb5088052bd957632b34b72b4e3c3a4a0ba306728dddf7b415b081",
+      "size": 104753,
+      "capture": {
+        "fullPage": false,
+        "file": "synthetic-concise-shell-overview-desktop-en.png",
+        "sourceSha": "ccb807c7a02ed4475e543f2bda4128102ee27a1b",
+        "publicSafe": true,
+        "fixtureDisclosure": "Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "section": "top",
+        "contentScrollTop": 0,
+        "theme": "light",
+        "locale": "en",
+        "test": "Concise shell every-page synthetic gallery desktop en"
+      },
+      "unchangedOriginal": true
+    },
+    {
+      "file": "devices-desktop.png",
+      "originalFile": "synthetic-concise-shell-devices-desktop-en.png",
+      "originalManifest": "screenshot-manifest.json",
+      "sha256": "b040ca79269adc1f540ad949194d50cb02706c7f7bf2561182d230974b4be347",
+      "size": 103195,
+      "capture": {
+        "fullPage": false,
+        "file": "synthetic-concise-shell-devices-desktop-en.png",
+        "sourceSha": "ccb807c7a02ed4475e543f2bda4128102ee27a1b",
+        "publicSafe": true,
+        "fixtureDisclosure": "Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "section": "top",
+        "contentScrollTop": 0,
+        "theme": "light",
+        "locale": "en",
+        "test": "Concise shell every-page synthetic gallery desktop en"
+      },
+      "unchangedOriginal": true
+    },
+    {
+      "file": "overview-mobile.png",
+      "originalFile": "synthetic-concise-shell-overview-mobile-en.png",
+      "originalManifest": "screenshot-manifest.json",
+      "sha256": "7f8f8f5eeb59b4a2d14d7034ca4dea5389c489c2aa2bc6571eb0acc3c2f74ef6",
+      "size": 52138,
+      "capture": {
+        "fullPage": false,
+        "file": "synthetic-concise-shell-overview-mobile-en.png",
+        "sourceSha": "ccb807c7a02ed4475e543f2bda4128102ee27a1b",
+        "publicSafe": true,
+        "fixtureDisclosure": "Disposable manager restricted to built-in synthetic devices, cases and activity; no real telemetry or provider call.",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "section": "top",
+        "contentScrollTop": 0,
+        "theme": "light",
+        "locale": "en",
+        "test": "Concise shell every-page synthetic gallery mobile en"
+      },
+      "unchangedOriginal": true
+    },
+    {
+      "file": "device-overview.png",
+      "originalFile": "synthetic-resource-history-desktop-en.png",
+      "originalManifest": "lan-browser-manifest.json",
+      "sha256": "0adf5e09bc2d30eb336368b238596a1b29be09a8cb9e010b50cd32dd38682b6d",
+      "size": 109026,
+      "capture": {
+        "file": "synthetic-resource-history-desktop-en.png",
+        "sourceSha": "ccb807c7a02ed4475e543f2bda4128102ee27a1b",
+        "publicSafe": true,
+        "fullPage": false,
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "locale": "en",
+        "fixtureDisclosure": "Real loopback HTTP-test fixture login and production compiled UI with intercepted invented CPU, memory and root-filesystem history. UI-only evidence; no native telemetry, user VM, collection, external requests, or deployment.",
+        "test": "Synthetic 24-hour resource charts preserve real sample times, missing intervals and protected access"
+      },
+      "unchangedOriginal": true
+    }
+  ],
+  "verification": {
+    "sourceInputsCompared": 2563,
+    "sourceBoundBrowserReports": 30,
+    "captureManifests": 34,
+    "artifactImagesVerified": 1295,
+    "selectedImagesVisuallyInspected": 4,
+    "scope": "Rendered production frontend with synthetic browser fixtures; no native installation, collection, deployment or provider-coverage claim."
+  }
+}
