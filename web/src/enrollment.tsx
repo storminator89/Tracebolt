@@ -1,6 +1,7 @@
+import type { EnrollmentAttention } from './enrollment-attention';
 import { activatedEnrollmentDisplay, EnrollmentReport, enrollmentReportIdentity, matchingReportDevice } from './enrollment-report';
 import type { Device } from './types';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowRight, Check, ChevronDown, Copy, Eye, EyeOff, Fingerprint, Info, KeyRound, LoaderCircle, Monitor, Plus, RefreshCw, ShieldCheck, Terminal, TriangleAlert, X } from 'lucide-react';
 import { APIError, mutate, request } from './api';
 import './enrollment-windows.css';
@@ -124,7 +125,7 @@ function displayExpired(item:EnrollmentSnapshot,now:number|null,device:Device|un
 function displayAvailable(item:EnrollmentSnapshot,now:number|null,device:Device|undefined,available:boolean):boolean {return now!==null&&(item.state==='activated'?activatedEnrollmentDisplay(item,device,now,available)==='activated':!deadlinePassed(item,now));}
 
 
-type EnrollmentSectionProps={onChanged:()=>void|Promise<void>;onRefreshReports?:()=>void|Promise<void>;onDevice:(id:string)=>void;deviceIds:string[];devices?:Device[];reportsAvailable?:boolean};
+type EnrollmentSectionProps={onAttention?:(value:EnrollmentAttention|null)=>void;onChanged:()=>void|Promise<void>;onRefreshReports?:()=>void|Promise<void>;onDevice:(id:string)=>void;deviceIds:string[];devices?:Device[];reportsAvailable?:boolean};
 export function EnrollmentSection(props:EnrollmentSectionProps) {
  const [platform,setPlatform]=useState<EnrollmentPlatform>('linux');
  const [macProfile,setMacProfile]=useState<'basic-readonly-v1'|'macos-read-inventory-v1'>('basic-readonly-v1');
@@ -133,10 +134,14 @@ export function EnrollmentSection(props:EnrollmentSectionProps) {
  const selectMacProfile=(next:typeof macProfile)=>{if(!['basic-readonly-v1','macos-read-inventory-v1'].includes(next)||next===macProfile)return;session.current.abort();session.current=new AbortController();setMacProfile(next);};
  return <EnrollmentPlatformSection key={`${platform}:${macProfile}`} macProfile={macProfile} onSelectMacProfile={selectMacProfile} {...props} platform={platform} sessionSignal={session.current.signal} onSelectPlatform={selectPlatform}/>;
 }
-function EnrollmentPlatformSection({onChanged,onRefreshReports,onDevice,deviceIds,devices,reportsAvailable=false,platform,sessionSignal,onSelectPlatform,macProfile,onSelectMacProfile}:EnrollmentSectionProps&{platform:EnrollmentPlatform;macProfile:'basic-readonly-v1'|'macos-read-inventory-v1';onSelectMacProfile:(profile:'basic-readonly-v1'|'macos-read-inventory-v1')=>void;sessionSignal:AbortSignal;onSelectPlatform:(platform:EnrollmentPlatform)=>void}) {
+function EnrollmentPlatformSection({onAttention,onChanged,onRefreshReports,onDevice,deviceIds,devices,reportsAvailable=false,platform,sessionSignal,onSelectPlatform,macProfile,onSelectMacProfile}:EnrollmentSectionProps&{platform:EnrollmentPlatform;macProfile:'basic-readonly-v1'|'macos-read-inventory-v1';onSelectMacProfile:(profile:'basic-readonly-v1'|'macos-read-inventory-v1')=>void;sessionSignal:AbortSignal;onSelectPlatform:(platform:EnrollmentPlatform)=>void}) {
  const operator=useOperator();
  const [locale]=useLocale();
  const enrollmentPath=platform==='windows'?'/windows/enrollment':platform==='darwin'?(macProfile==='macos-read-inventory-v1'?'/macos-inventory/enrollment':'/macos/enrollment'):'/enrollment';
+ // Session identity stays inside this source owner; only the display projection
+ // is invalidated when a response belongs to a replaced operator session.
+ const attentionSessionKey=useRef(''),attentionSourceSession=useRef<string|null>(null);
+ attentionSessionKey.current=JSON.stringify([operator?.mode,operator?.actorId,operator?.expiresAt,operator?.insecureTestMode]);
  const [data,setData]=useState<EnrollmentList|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[loading,setLoading]=useState(false),[expanded,setExpanded]=useState(false),[all,setAll]=useState(false);
  const [missingCapability,setMissingCapability]=useState(false);
  const [dialog,setDialog]=useState<{kind:'create'}|{kind:'record';id:string}|null>(null);
@@ -163,10 +168,10 @@ function EnrollmentPlatformSection({onChanged,onRefreshReports,onDevice,deviceId
   // still replace a stalled enrollment request so newer consent can invalidate it.
   if(reading.current&&fetcher.current&&!fetcher.current.signal.aborted&&(refreshReports||reading.current==='reports'))return;
   reading.current='enrollment';
-  fetcher.current?.abort();if(clock.current&&currentTime()===null)invalidateConfiguration();const controller=new AbortController();fetcher.current=controller;const startedAt=captureClock();setLoading(true);setError('');setMissingCapability(false);
+  fetcher.current?.abort();if(clock.current&&currentTime()===null)invalidateConfiguration();const controller=new AbortController();fetcher.current=controller;const startedAt=captureClock(),attentionReadSession=attentionSessionKey.current;setLoading(true);setError('');setMissingCapability(false);
   try{const next=await request<EnrollmentList>(enrollmentPath,{signal:controller.signal});if(!active.current||controller.signal.aborted||fetcher.current!==controller)return;if(!validEnrollmentList(next,platform,macProfile))throw new Error('invalid enrollment contract');
    const configuration=JSON.stringify([next.enabled,next.platforms,next.recordLimit,enrollmentCollectionProfile(next),next.collectionPrivacy??null]);if(lastConfiguration.current&&configuration!==lastConfiguration.current)invalidateConfiguration();lastConfiguration.current=configuration;
-   syncClock(next.serverNow,startedAt);if(configurationContext.current.signal.aborted)configurationContext.current=new AbortController();const signature=next.items.map(item=>`${item.invitationID}:${item.revision}`).join('|');const snapshotChanged=Boolean(lastState.current&&signature!==lastState.current),refreshReportEvidence=reportRefreshRequested.current;reportRefreshRequested.current=false;lastState.current=signature;setData(next);reading.current='reports';if(snapshotChanged)await changed.current();else if(refreshReportEvidence)await reportRefresh.current?.();
+   syncClock(next.serverNow,startedAt);if(configurationContext.current.signal.aborted)configurationContext.current=new AbortController();const signature=next.items.map(item=>`${item.invitationID}:${item.revision}`).join('|');const snapshotChanged=Boolean(lastState.current&&signature!==lastState.current),refreshReportEvidence=reportRefreshRequested.current;reportRefreshRequested.current=false;lastState.current=signature;attentionSourceSession.current=attentionReadSession;setData(next);reading.current='reports';if(snapshotChanged)await changed.current();else if(refreshReportEvidence)await reportRefresh.current?.();
   }catch(error){if(active.current&&!controller.signal.aborted&&fetcher.current===controller){invalidateConfiguration();if(platform==='darwin'&&error instanceof APIError&&error.status===404)setMissingCapability(true);else setError(t('Enrollment-Status nicht verfügbar. Es werden keine Ersatzdaten angezeigt.'));}}
   finally{if(fetcher.current===controller){reading.current=null;reportRefreshRequested.current=false;if(active.current&&!controller.signal.aborted)setLoading(false);}}
  },[syncClock,invalidateConfiguration,currentTime,enrollmentPath,platform,macProfile]);
@@ -187,6 +192,22 @@ function EnrollmentPlatformSection({onChanged,onRefreshReports,onDevice,deviceId
  const pending=platformItems.filter(item=>item.state==='claimed_pending').length;
  const reportDevice=selected?matchingReportDevice(devices,selected.approval.deviceID):undefined;
  const reportEvidenceAvailable=reportsAvailable&&!loading&&!error&&operator?.mode==='lan'&&operator.authenticated===true;
+ // Copy only scalar display state to the page index. The source owner retains
+ // every snapshot, identity, clock, request and acknowledgement. In particular,
+ // unknown/refreshing/unconfirmed states never export a stale pending count.
+ const attentionProfile=collectionProfile??(platform==='darwin'?macProfile:null);
+ const attentionSession=operator?.mode==='lan'&&operator.authenticated===true&&!operator.checkingAccess&&!sessionSignal.aborted&&(!operator.expiresAt||now===null||Number.isFinite(Date.parse(operator.expiresAt))&&now<Date.parse(operator.expiresAt));
+ const attentionItems=platformItems.filter(item=>item.binding.collectionProfile===attentionProfile);
+ const livePending=attentionItems.filter(item=>item.state==='claimed_pending'&&!deadlinePassed(item,now)).length;
+ const attentionReplaced=attentionSourceSession.current!==null&&attentionSourceSession.current!==attentionSessionKey.current;
+ const attentionState:EnrollmentAttention['state']=
+  !attentionSession||attentionReplaced?'unknown':notice?'unconfirmed':loading?'checking':error?'unknown':
+  missingCapability?'unavailable':now===null||configurationContext.current.signal.aborted?'unknown':
+  !supported?'unavailable':livePending>0?'pending-review':attentionItems.some(item=>item.state==='claimed_pending')?'expired':pending>0?'retained-review':'manual';
+ const attentionPending=attentionState==='pending-review'?livePending:null;
+ const attentionCallback=useRef(onAttention);attentionCallback.current=onAttention;
+ useLayoutEffect(()=>()=>{attentionCallback.current?.(null);},[]);
+ useLayoutEffect(()=>{attentionCallback.current?.({platform,profile:attentionProfile,state:attentionState,pendingCount:attentionPending});},[platform,attentionProfile,attentionState,attentionPending]);
  return <section className="panel enrollment-panel" tabIndex={-1} aria-label={t('Geräte hinzufügen')}>
   <label className="enrollment-platform-picker"><span>{locale==='de'?'Betriebssystem':'Operating system'}</span><select value={platform} onChange={event=>onSelectPlatform(event.target.value as EnrollmentPlatform)}><option value="linux">Linux</option><option value="windows">Windows</option><option value="darwin">macOS</option></select></label>
   {platform==='darwin'&&<label className="enrollment-platform-picker"><span>{locale==='de'?'macOS-Erfassungsumfang':'macOS collection scope'}</span><select value={macProfile} onChange={event=>onSelectMacProfile(event.target.value as typeof macProfile)}><option value="basic-readonly-v1">{locale==='de'?'Basis · nur lesend':'Basic · read-only'}</option><option value="macos-read-inventory-v1">{locale==='de'?'Inventar · neue explizite Zustimmung':'Inventory · fresh explicit approval'}</option></select></label>}

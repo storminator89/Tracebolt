@@ -1,7 +1,9 @@
+import {assertDevicesWorkspace,captureDevicesWorkspaceDestinations,reviewSelectedSetupAttention} from './devices-workspace-browser.mjs';
 /** Real HTTP-test operator + guided-enrollment handlers, disposable Linux native
  * client library and built React. No real endpoint, telemetry, external sharing,
  * TLS warning bypass, secret screenshots, traces, request logs or storage dumps.
  */
+import {assertOverviewWorkStart} from './overview-work-start-browser.mjs';
 import {createRequire} from 'node:module';
 import {validSnapshot} from '../../web/src/enrollment-types.ts';
 import {installEnrollmentPrimaryBody} from './enrollment-primary-body.mjs';
@@ -160,7 +162,16 @@ try{
     await expect(page.getByRole('heading',{name:locale==='de'?'Noch keine Geräte':'No devices yet',exact:true})).toBeVisible();
     await expect(entry).toBeEnabled();await expect(page.locator('.summary-strip')).toHaveCount(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+    await assertOverviewWorkStart({page,expect,empty:true});
     await shot(page,`synthetic-first-device-empty-${locale}-${mobile?'390':'1440'}`);
+    await page.getByRole('button',{name:locale==='de'?'Dunkles Design aktivieren':'Switch to dark theme',exact:true}).click();
+    await assertOverviewWorkStart({page,expect,empty:true});
+    await shot(page,`synthetic-first-device-empty-${locale}-${mobile?'390':'1440'}-dark`);
+    await page.getByRole('button',{name:locale==='de'?'Helles Design aktivieren':'Switch to light theme',exact:true}).click();
+    if(mobile){
+     await page.setViewportSize({width:320,height:844});await assertOverviewWorkStart({page,expect,empty:true});
+     await shot(page,`synthetic-first-device-empty-${locale}-320`);await page.setViewportSize({width:390,height:844});
+    }
     mark('keyboard setup entry without a dialog or write');
     await entry.focus();await page.keyboard.press('Enter');
     const panel=page.getByRole('region',{name:locale==='de'?'Geräte hinzufügen':'Add devices',exact:true});
@@ -170,6 +181,8 @@ try{
     mark('Back and Forward do not reopen or refocus setup');
     await page.goBack();await expect(entry).toBeVisible();await page.goForward();
     await expect(panel).toBeVisible();await expect(panel).not.toBeFocused();await expect(page.getByRole('dialog')).toHaveCount(0);
+    await assertDevicesWorkspace({page,expect,locale,tools:true});
+    await captureDevicesWorkspaceDestinations({page,expect,shot,locale,mobile});
     expect((await list()).items.length).toBe(0);expect(entryMutations).toBe(0);await checkClean(page);
    }
    page.off('request',countEntryMutation);await page.setViewportSize({width:1440,height:1000});await page.locator('.language-control select').selectOption('en');
@@ -205,7 +218,7 @@ try{
    mark('close reload and cancellation');await page.keyboard.press('Escape');await page.reload();await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await expect(page.getByRole('dialog')).toContainText('only at creation');await terminate(page,'Cancel invitation',created.snapshot);expect((await list()).items[0].state).toBe('canceled');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);await checkClean(page);
   });
   await check('Native claim comparison gates one approval, activation remains unknown without telemetry, and revocation stops the native identity',async()=>{
-   const page=await pageAt();const created=await create(page);const native=await nativeClaim(created);await review(page,created.snapshot.invitationID);mark('bound comparison');const text=(await page.locator('.enrollment-fingerprint code').innerText()).replace(/\s/g,'');const comparison=(await page.locator('.enrollment-comparison code').innerText()).replace(/\s/g,'');expect(text===native.keyFingerprint&&comparison===native.comparisonCode).toBe(true);await expect(page.getByRole('button',{name:'Approve device',exact:true})).toBeDisabled();const checkbox=page.getByRole('checkbox',{name:'I compared the full fingerprint and comparison value on the device.'});await checkbox.check();await page.keyboard.press('Escape');await review(page,created.snapshot.invitationID);await expect(checkbox).not.toBeChecked();await checkbox.check();
+   const page=await pageAt();const created=await create(page);const native=await nativeClaim(created);await review(page,created.snapshot.invitationID);mark('bound comparison');const text=(await page.locator('.enrollment-fingerprint code').innerText()).replace(/\s/g,'');const comparison=(await page.locator('.enrollment-comparison code').innerText()).replace(/\s/g,'');expect(text===native.keyFingerprint&&comparison===native.comparisonCode).toBe(true);await expect(page.getByRole('button',{name:'Approve device',exact:true})).toBeDisabled();const checkbox=page.getByRole('checkbox',{name:'I compared the full fingerprint and comparison value on the device.'});await checkbox.check();await page.keyboard.press('Escape');await reviewSelectedSetupAttention({page,expect,shot,state:'pending-review'});await review(page,created.snapshot.invitationID);await expect(checkbox).not.toBeChecked();await checkbox.check();
    mark('single approval and real native activation');let approvals=0;page.on('request',r=>{if(r.url().endsWith('/approve'))approvals++;});await page.getByRole('button',{name:'Approve device',exact:true}).dblclick();await expect.poll(async()=>(await control('status')).phase,{timeout:18000}).toBe('activated');expect(approvals).toBe(1);await page.getByRole('button',{name:'Check status',exact:true}).click();await expect(page.locator('.enrollment-created-meta')).toContainText('Identity activated');await expect(page.getByRole('dialog')).toContainText('do not confirm');await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.device-table tbody tr')).toHaveCount(1);await expect(page.locator('.device-table')).toContainText('Unknown');
    mark('revoke confirmation and terminal native status');await page.getByRole('button',{name:/^Invitations/}).click();await review(page,created.snapshot.invitationID);await page.getByRole('button',{name:'Revoke identity'}).click();await page.getByRole('button',{name:'Back',exact:true}).click();expect((await list()).items[0].state).toBe('activated');await terminate(page,'Revoke identity',created.snapshot,native);expect((await list()).items[0].state).toBe('revoked');await control('resume');await expect.poll(async()=>(await control('status')).phase,{timeout:12000}).toBe('terminal');await checkClean(page);
   });
@@ -213,7 +226,7 @@ try{
    const page=await pageAt();const created=await create(page);const native=await nativeClaim(created);await review(page,created.snapshot.invitationID);await terminate(page,'Reject',created.snapshot,native);mark('terminal rejection');const state=(await list()).items[0];expect(state.state).toBe('rejected');expect(state.approval.deviceID).toBe('');await expect.poll(async()=>(await control('status')).phase,{timeout:12000}).toBe('terminal');await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);
   });
   await check('Lost committed creation response stays uncertain, reconciles one record and never retries or restores the secret',async()=>{
-   const page=await pageAt();mark('lost creation response');let posts=0;await page.route('**/api/enrollment/invitations',async route=>{posts++;await route.fetch();await route.abort('failed');});await page.getByRole('button',{name:'Add device',exact:true}).click();await page.getByRole('button',{name:'Create invitation',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Creation is unconfirmed');await expect(page.getByRole('button',{name:'Create invitation',exact:true})).toHaveCount(0);await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);expect((await list()).items.length).toBe(1);await page.getByRole('dialog').getByRole('button',{name:'Check status',exact:true}).click();expect(posts).toBe(1);await page.keyboard.press('Escape');await page.reload();expect((await list()).items.length).toBe(1);expect(posts).toBe(1);await checkClean(page);
+   const page=await pageAt();mark('lost creation response');let posts=0;await page.route('**/api/enrollment/invitations',async route=>{posts++;await route.fetch();await route.abort('failed');});await page.getByRole('button',{name:'Add device',exact:true}).click();await page.getByRole('button',{name:'Create invitation',exact:true}).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Creation is unconfirmed');await expect(page.getByRole('button',{name:'Create invitation',exact:true})).toHaveCount(0);await expect(page.getByLabel('One-time invitation secret')).toHaveCount(0);expect((await list()).items.length).toBe(1);await page.getByRole('dialog').getByRole('button',{name:'Check status',exact:true}).click();expect(posts).toBe(1);await page.keyboard.press('Escape');await reviewSelectedSetupAttention({page,expect,shot,state:'unconfirmed'});await page.reload();expect((await list()).items.length).toBe(1);expect(posts).toBe(1);await checkClean(page);
   });
   await check('Stale pending revision cannot approve after another operator action and clears the comparison decision',async()=>{
    const page=await pageAt();const created=await create(page);await nativeClaim(created);await control('stop');await review(page,created.snapshot.invitationID);await page.getByRole('checkbox',{name:'I compared the full fingerprint and comparison value on the device.'}).check();mark('real revision conflict');const pending=(await list()).items[0];const response=await post(`${pending.invitationID}/terminate`,{requestId:requestID(),expectedRevision:pending.revision,action:'rejected'});expect(response.status()).toBe(200);const attempt=page.waitForResponse(r=>r.url().endsWith('/approve'));await page.getByRole('button',{name:'Approve device',exact:true}).click();expect((await attempt).status()).toBe(409);await expect(page.getByRole('button',{name:'Approve device',exact:true})).toHaveCount(0);expect((await list()).items[0].state).toBe('rejected');await expect(page.getByRole('checkbox',{name:'I compared the full fingerprint and comparison value on the device.'})).toHaveCount(0);

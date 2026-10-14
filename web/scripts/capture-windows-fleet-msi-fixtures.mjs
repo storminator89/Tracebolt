@@ -494,13 +494,16 @@ export async function exerciseWindowsFleetMSI({ page, expect, fixture, locale, w
   // Four supplemental inventory views reuse this exact intercepted App. The
   // existing expanded MSI scenes and their original 16-image identity stay intact.
   const inventory = page.locator('.inventory-panel');
+  const workspace = page.locator('.devices-workspace');
+  const tools = workspace.locator('.devices-tools-section');
   await expect(inventory.locator('.device-table tbody tr')).toHaveCount(fixture.devices.length);
-  expect(await inventory.evaluate(element => {
+  // Inventory owns its rows; the six independent tools are its later sibling.
+  expect(await workspace.evaluate(element => {
     const selectors = ['.filter-toolbar', '.fleet-groups', '.inventory-meta', '.fleet-identity-notice', '.device-table', '.table-footer', '.windows-incident-inbox', '.windows-fleet-software', '.windows-fleet-update-worklist:not(.windows-fleet-managed-msi)', '.windows-fleet-managed-msi', '.windows-maintenance', '.windows-notifications'];
     const nodes = selectors.map(selector => element.querySelector(selector));
     return nodes.every((node, index) => node && (!index || Boolean(nodes[index - 1].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)));
   })).toBe(true);
-  const toggles = inventory.locator(':scope > section button[aria-expanded]');
+  const toggles = tools.locator(':scope > section button[aria-expanded]');
   await expect(toggles).toHaveCount(6);
   for (const toggle of await toggles.all()) await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(fixture.reads.artifact).toBe(0);

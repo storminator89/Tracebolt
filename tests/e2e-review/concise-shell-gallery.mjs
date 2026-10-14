@@ -1,5 +1,7 @@
+import { reviewDevicesWorkspace } from './devices-workspace-browser.mjs';
 /** Page-by-page rendered copy review. Overview rows are restricted to the
  * disposable manager's built-in synthetic fixtures before any public capture. */
+import { reviewOverviewWorkStart } from './overview-work-start-browser.mjs';
 import { assertDesktopNavigation, assertMobileDrawerClosed, shellDrawerKeyboardReview } from './shell-scenarios.mjs';
 
 // Closed source coordinates only. Invalid callers remain invalid; no payload,
@@ -173,6 +175,7 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
    shellGalleryCheckpoint('synthetic-guard', 'overview');
    await expect(page.locator('.fleet-panel .device-table .source.real')).toHaveCount(0);
    await capture('overview');
+   await reviewOverviewWorkStart({ page, expect, capture, locale, size, viewport, fixture });
    for (const route of ['devices', 'cases', 'settings']) {
     shellGalleryCheckpoint('original-scene', route);
     await page.goto(new URL(`#/${route}`, page.url()).href); await loaded(page);
@@ -185,6 +188,7 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
     await capture(route);
     if (route === 'devices') {
+     await reviewDevicesWorkspace({ page, expect, capture, locale, size, viewport });
      await inventoryKeyboardReview({ page, expect, capture, locale, size });
      await page.getByRole('button', { name: locale === 'de' ? 'Dunkles Design aktivieren' : 'Switch to dark theme', exact: true }).click();
      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
