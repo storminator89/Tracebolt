@@ -44,17 +44,104 @@ export async function measureContrast(locator, kind = 'focus') {
  for (const color of backgrounds) backing = composite(rgba(color), backing);
  return { ...paint, effectiveBackground: backing, ratio: contrast(rgba(paint.foreground), backing) };
 }
-export async function assertKeyboardContrast({ page, expect, selector }) {
+/** Geometry only: classify bounded edge clipping, not whole-page accessibility.
+ * Long table bottoms may extend past the viewport; their top and both sides may not.
+ */
+export function focusVisibility({ bounds, outlineWidth, outlineOffset, viewport, clips = [], headers = [], allowTallBottom = false }) {
+ const validRect = rect => rect && ['left', 'top', 'right', 'bottom'].every(key => Number.isFinite(rect[key])) && rect.right > rect.left && rect.bottom > rect.top;
+ if (!validRect(bounds) || !validRect(viewport) || !Number.isFinite(outlineWidth) || outlineWidth <= 0 || !Number.isFinite(outlineOffset) || outlineOffset < -outlineWidth || clips.length > 32 || headers.length > 2) throw new Error('Invalid focus geometry');
+ const clip = { ...viewport };
+ for (const layer of clips) {
+  if (!validRect(layer.bounds) || typeof layer.x !== 'boolean' || typeof layer.y !== 'boolean') throw new Error('Invalid clipping layer');
+  if (layer.x) { clip.left = Math.max(clip.left, layer.bounds.left); clip.right = Math.min(clip.right, layer.bounds.right); }
+  if (layer.y) { clip.top = Math.max(clip.top, layer.bounds.top); clip.bottom = Math.min(clip.bottom, layer.bounds.bottom); }
+ }
+ if (!validRect(clip)) throw new Error('No visible focus scrollport');
+ const extent = outlineWidth + outlineOffset;
+ const outline = { left: bounds.left - extent, top: bounds.top - extent, right: bounds.right + extent, bottom: bounds.bottom + extent };
+ if (!validRect(outline)) throw new Error('Invalid outline bounds');
+ const epsilon = 0.5;
+ const clipped = { left: outline.left < clip.left - epsilon, right: outline.right > clip.right + epsilon,
+  top: outline.top < clip.top - epsilon, bottom: outline.bottom > clip.bottom + epsilon };
+ const topBandVisible = outline.top + outlineWidth <= clip.bottom + epsilon;
+ const tallBottomCrop = allowTallBottom && bounds.bottom - bounds.top > clip.bottom - clip.top && clipped.bottom;
+ const headerOverlap = headers.some(header => {
+  if (!validRect(header)) throw new Error('Invalid protected header');
+  return Math.min(outline.right, header.right) - Math.max(outline.left, header.left) > epsilon && Math.min(outline.bottom, header.bottom) - Math.max(outline.top, header.top) > epsilon;
+ });
+ return { outlineBounds: outline, clipBounds: clip, clipped, topBandVisible, tallBottomCrop, headerOverlap,
+  accepted: !clipped.left && !clipped.right && !clipped.top && (!clipped.bottom || tallBottomCrop) && topBandVisible && !headerOverlap };
+}
+export async function measureFocusVisibility(control) {
+ const geometry = await control.evaluate(element => {
+  const rect = node => { const r = node.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
+  const style = getComputedStyle(element), clips = [];
+  for (let node = element.parentElement; node; node = node.parentElement) {
+   const s = getComputedStyle(node), x = /^(auto|scroll|hidden|clip)$/.test(s.overflowX), y = /^(auto|scroll|hidden|clip)$/.test(s.overflowY);
+   if (x || y) {
+    const r = node.getBoundingClientRect(), left = r.left + node.clientLeft, top = r.top + node.clientTop;
+    clips.push({ x, y, bounds: { left, top, right: left + node.clientWidth, bottom: top + node.clientHeight } });
+   }
+  }
+  const headers = [...document.querySelectorAll('.main-shell > .topbar, .main-shell > .transport-warning')].map(rect).filter(r => r.right > r.left && r.bottom > r.top);
+  return { bounds: rect(element), outlineWidth: parseFloat(style.outlineWidth), outlineOffset: parseFloat(style.outlineOffset),
+   viewport: { left: 0, top: 0, right: innerWidth, bottom: innerHeight }, clips, headers,
+   allowTallBottom: element.matches('.package-table-scroll[tabindex="0"]') };
+ });
+ const visibility = focusVisibility(geometry);
+ // Inset ring samples are inside the target border box, away from rounded
+ // corners. Hit testing rejects a covering fixed header/overlay without moving it.
+ const hitTests = await control.evaluate((element, v) => {
+  const ring = v.outlineBounds, width = parseFloat(getComputedStyle(element).outlineWidth);
+  const centerX = (ring.left + ring.right) / 2;
+  const middleY = (Math.max(ring.top, v.clipBounds.top) + Math.min(ring.bottom, v.clipBounds.bottom)) / 2;
+  const points = { top: [centerX, ring.top + width / 2], left: [ring.left + width / 2, middleY], right: [ring.right - width / 2, middleY] };
+  if (!v.tallBottomCrop) points.bottom = [centerX, ring.bottom - width / 2];
+  return Object.fromEntries(Object.entries(points).map(([edge, [x, y]]) => {
+   const hit = document.elementFromPoint(x, y);
+   return [edge, !!hit && (hit === element || element.contains(hit))];
+  }));
+ }, visibility);
+ return { ...visibility, hitTests, accepted: visibility.accepted && Object.values(hitTests).every(Boolean) };
+}
+/** Preposition only a real predecessor. The target and intermediate region are
+ * reached exclusively by forward Tab, with no target focus/scroll correction. */
+export async function enterFocusByTab({ page, expect, selector, keyboardEntry }) {
+ if (!keyboardEntry || typeof keyboardEntry.from !== 'string' || keyboardEntry.from === selector || !Array.isArray(keyboardEntry.path)
+  || keyboardEntry.path.length < 1 || keyboardEntry.path.length > 2 || keyboardEntry.path.at(-1) !== selector
+  || keyboardEntry.path.some(step => typeof step !== 'string' || !step)) throw new Error('Invalid bounded keyboard entry');
+ const predecessor = page.locator(keyboardEntry.from).first();
+ await predecessor.scrollIntoViewIfNeeded(); await predecessor.focus(); await expect(predecessor).toBeFocused();
+ for (const step of keyboardEntry.path) {
+  await page.keyboard.press('Tab'); await expect(page.locator(step).first()).toBeFocused();
+ }
+ return { method: 'forward-tab', from: keyboardEntry.from, path: keyboardEntry.path };
+}
+export async function assertKeyboardContrast({ page, expect, selector, keyboardEntry, stage = () => {} }) {
  const control = page.locator(selector).first();
- await control.scrollIntoViewIfNeeded(); await control.focus();
- // Finish with real keyboard traversal so :focus-visible is genuinely active.
- await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+ stage('keyboard entry');
+ let entry;
+ if (keyboardEntry) entry = await enterFocusByTab({ page, expect, selector, keyboardEntry });
+ else {
+  await control.scrollIntoViewIfNeeded(); await control.focus();
+  // Existing unaffected captures retain their keyboard-return evidence.
+  await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  entry = { method: 'target-return' };
+ }
  await expect(control).toBeFocused(); await expect(control).toBeInViewport();
+ stage('computed contrast');
  const measurement = await measureContrast(control);
  expect(measurement.focusVisible).toBe(true); expect(measurement.outlineStyle).toBe('solid');
  expect(parseFloat(measurement.outlineWidth)).toBeGreaterThanOrEqual(2);
  expect(measurement.ratio).toBeGreaterThanOrEqual(3);
- return measurement;
+ if (keyboardEntry) {
+  stage('outline exposure');
+  const visibility = await measureFocusVisibility(control);
+  expect(visibility.clipped.left).toBe(false); expect(visibility.clipped.right).toBe(false); expect(visibility.clipped.top).toBe(false);
+  expect(visibility.topBandVisible).toBe(true); expect(visibility.headerOverlap).toBe(false); expect(visibility.accepted).toBe(true);
+  return { ...measurement, entry, visibility };
+ }
+ return { ...measurement, entry };
 }
 export async function setContrastTheme(page, expect, theme) {
  if (await page.locator('html').getAttribute('data-theme') === theme) return;
@@ -62,13 +149,22 @@ export async function setContrastTheme(page, expect, theme) {
  await page.getByRole('button', { name, exact: true }).click();
  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 }
-export async function captureFocusMatrix({ page, expect, targets, capture }) {
+// Closed diagnostic vocabulary; never interpolate unknown page/caller values.
+export function focusContrastStage(name, size, locale, theme, phase) {
+ if (!['legacy-package-table', 'legacy-package-details', 'advisory-toggle', 'inventory-source-tab', 'complete-package-search', 'complete-package-table', 'complete-package-details'].includes(name)
+  || !['desktop', 'mobile'].includes(size) || !['en', 'de'].includes(locale) || !['light', 'dark'].includes(theme)
+  || !['keyboard entry', 'computed contrast', 'outline exposure', 'synthetic capture'].includes(phase)) return 'focus contrast unknown';
+ return `focus contrast ${name} ${size} ${locale} ${theme}: ${phase}`;
+}
+export async function captureFocusMatrix({ page, expect, targets, capture, mark = () => {} }) {
  const originalViewport = page.viewportSize(), originalTheme = await page.locator('html').getAttribute('data-theme'), originalLocale = await page.locator('html').getAttribute('lang');
  try {
   for (const locale of ['en', 'de']) for (const [size, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) for (const theme of ['light', 'dark']) {
    await page.setViewportSize(viewport); await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale); await setContrastTheme(page, expect, theme);
-   for (const { name, selector } of targets) {
-    const measurement = await assertKeyboardContrast({ page, expect, selector });
+   for (const { name, selector, keyboardEntry } of targets) {
+    const stage = phase => mark(focusContrastStage(name, size, locale, theme, phase));
+    const measurement = await assertKeyboardContrast({ page, expect, selector, keyboardEntry, stage });
+    stage('synthetic capture');
     await capture(`synthetic-focus-contrast-${name}-${size}-${locale}-${theme}`, measurement);
    }
   }

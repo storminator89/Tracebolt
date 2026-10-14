@@ -206,11 +206,11 @@ try{
    const page=await pageAt();await device(page);await expect(rows(page,'.complete-packages')).toHaveCount(100);
    const originalPackage=(await get(`/api/devices/${devices.alpha}/inventory/packages`)).complete;
    await checkInventoryReadFirst(page,{expect,selector:'.complete-packages',stem:'synthetic-complete-packages-read-first',shot,facts:[originalPackage.binding.generationId,originalPackage.binding.sequence,originalPackage.manifest.collectedAt,originalPackage.completedAt,originalPackage.retainedUntil]});
-   await captureFocusMatrix({page,expect,capture:async(name,contrast)=>{await shot(page,name);screenshots.at(-1).contrast=contrast;},targets:[
+   await captureFocusMatrix({page,expect,mark,capture:async(name,contrast)=>{await shot(page,name);screenshots.at(-1).contrast=contrast;},targets:[
     {name:'inventory-source-tab',selector:'.inventory-source-tabs button[aria-selected="true"]'},
     {name:'complete-package-search',selector:'.complete-package-search input'},
-    {name:'complete-package-table',selector:'.complete-packages .package-table-scroll'},
-    {name:'complete-package-details',selector:'.complete-packages .package-row-details summary'},
+    {name:'complete-package-table',selector:'.complete-packages .package-table-scroll',keyboardEntry:{from:'.complete-packages .inventory-capture-details > summary',path:['.complete-packages .package-table-scroll']}},
+    {name:'complete-package-details',selector:'.complete-packages .package-row-details summary',keyboardEntry:{from:'.complete-packages .inventory-capture-details > summary',path:['.complete-packages .package-table-scroll','.complete-packages .package-row-details summary']}},
    ]});
    await compactPanelShots(page,'.complete-packages .package-heading','synthetic-complete-packages-summary',{mobileSelector:'.complete-packages tbody tr:first-child'});
    for(const locale of ['en','de']){await page.getByLabel(/^(Language|Sprache)$/).selectOption(locale);await packageMappingDisclosure(page,'.complete-packages','qa-package-000000','qa-source-000000',locale);}

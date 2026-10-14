@@ -545,3 +545,9 @@ manifest entries include computed `contrast` measurements alongside revision
 and fixture provenance. The helper never launches a browser on import or grants
 any endpoint authority. Source arithmetic is not pixel/browser acceptance; review
 the exact hosted images before closing the visual gate.
+
+Package table/mapping captures additionally enter through real preceding
+controls with forward Tab, reject bounded top/side clipping and LAN-header
+occlusion, and record geometry/hit-test evidence. Only tall table bottoms may
+remain cropped. See the linked correction notes for the exact exposure contract
+and remaining marker/pixel review; no local browser result is implied.

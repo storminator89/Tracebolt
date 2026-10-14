@@ -1,8 +1,9 @@
 # Narrow shared focus and error contrast correction
 
 This source change addresses the demonstrated S03/S04 pairs from the shared
-system audit. It preserves layout, outline widths/offsets, component behavior,
-state copy, unchecked consent, original timestamps and all operation authority.
+system audit. It preserves layout, outline widths, component behavior, state
+copy, unchecked consent, original timestamps and all operation authority. The
+subsequent bounded clipping correction below moves two shared outlines inward.
 It does not establish whole-application WCAG conformance.
 
 ## Semantic colors
@@ -16,8 +17,9 @@ It does not establish whole-application WCAG conformance.
   unchanged.
 - Five demonstrated component focus rules use the opaque semantic focus token:
   advisory disclosure, package scroll region, package mapping summary, complete
-  package search, and inventory source tab. Their existing inset/outset geometry
-  remains unchanged. Global button/link/summary and form focus use the same token.
+  package search, and inventory source tab. Global button/link/summary and form
+  focus use the same token. The two shared package rules use inset geometry as
+  described below; the other outline offsets remain unchanged.
 
 ## Source-defined contrast
 
@@ -72,8 +74,10 @@ viewport and a `contrast` object with exact computed color/background layers,
 ratio, theme and focus geometry. Existing conditional/v3 case counts remain
 unchanged; the shell adds eight cases. No artifact-upload policy changes.
 
-Focus checks end with actual Tab/Shift+Tab traversal, require `:focus-visible`,
-solid outline of at least 2 px, viewport visibility, and the numeric threshold.
+Focus checks require actual keyboard traversal, `:focus-visible`, a solid
+outline of at least 2 px, viewport visibility, and the numeric threshold. The
+unaffected captures retain their Tab/Shift+Tab return sequence; package table
+and mapping-summary captures use the forward-entry contract below.
 Outset rings are evaluated against the ancestor-painted background; inset rings
 and text include the element fill. Unsupported images, filters, opacity layers,
 or a transparent root canvas fail instead of assuming a background.
@@ -84,3 +88,64 @@ focused pixels for clipping and visibility. A successful local source test or
 build does not mean those browser captures ran. Actual screen-reader output,
 forced colors, other engines, every width/state, real zoom and native endpoint
 acceptance remain separate gates.
+
+## Bounded package focus clipping correction
+
+The exact PR111 hosted image review found 64 of 80 captures clear and 16 with
+bounded clipping: four mobile legacy mapping summaries, four mobile complete
+mapping summaries, and all eight complete table top edges. This is observed
+pixel evidence from the previous source, not a finding inferred from a unit test.
+The cropped bottom of a table taller than the viewport is recorded separately;
+that crop alone does not establish an accessibility failure.
+
+### Product geometry and capture setup
+
+Both `.package-table-scroll:focus-visible` and
+`.package-row-details summary:focus-visible` retain the opaque 3 px ring and
+change only `outline-offset` from `3px` to `-3px`. The previous outline extended
+6 px outside the focused border box. The inset outline fits that border box,
+which is the area browser focus scrolling can expose. No padding, dimensions,
+scroll positions, handlers, disclosure semantics or colors change. The table
+class is shared by package, overview, updates and system-inventory surfaces;
+those consumers receive the same offset correction.
+
+The earlier capture helper scrolled and focused its target before leaving and
+returning with Tab/Shift+Tab. That setup could affect framing and did not prove
+that entering naturally exposed the outline. The corrected package captures
+preposition only a real predecessor, then press forward Tab exactly once for
+the table region or twice for its first mapping summary:
+
+- Legacy: the package heading refresh button, then the table, then its summary.
+- Complete: the existing Capture details summary, then the table, then its summary.
+
+Every intermediate focus target is checked. The helper never focuses or scrolls
+the target directly on these paths and does not adjust framing after entry. A
+changed tab order fails instead of skipping controls until a screenshot passes.
+The viewport/theme/locale matrix and 80 capture names remain unchanged.
+
+### Negative exposure assertions
+
+The helper intersects the viewport with ancestor client-area overflow clips. It
+requires the top, left and right outline edges inside that intersection, checks
+the complete top band, and rejects overlap with the real top bar or LAN warning.
+A mapping summary must expose its bottom too. Only a focusable table wrapper
+taller than its visible scrollport may record `tallBottomCrop: true`; that never
+waives a hidden top or side. Interior ring samples away from rounded corners
+use `elementFromPoint` to reject a covering element. These checks run before the
+existing screenshot call, without hiding chrome or changing application DOM.
+
+The screenshot manifest's `contrast.entry` records the bounded selector path;
+`contrast.visibility` records clipping, protected-header overlap, sample ownership
+and the tall-table exception. Failure stages use a closed vocabulary of fixed
+synthetic capture labels, viewport labels, locale/theme and the check phase;
+unknown values yield a fixed fallback without coercion. They do not
+include page text or endpoint data.
+
+`web/src/focus-clipping.test.ts` tests old-edge rejection, actual border-box
+clipping (including an inner ancestor), unsupported deep insets, LAN-header
+overlap, the limited tall-table exception, sampled ownership, forward Tab
+sequence failures and exact diagnostic producer coordinates. These source tests do not execute a browser. Corrected
+exact-head hosted images remain required, including inspection of the native
+disclosure marker/text against the inset ring and the shared table consumers.
+A passing geometry sample is not a substitute for that pixel review, nor proof
+of every pixel, engine, zoom level or screen-reader behavior.
