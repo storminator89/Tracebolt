@@ -69,10 +69,18 @@ func (nativeBackend) Inspect(ctx context.Context, r Request) ([]Check, error) {
 	source, err := openProtected(r.SourceArchive, false, uid, gid, false, MaxSourceBytes)
 	sourceOK := false
 	if err == nil {
-		sourceOK = hashArtifact(ctx, source.file, source.nodes[len(source.nodes)-1].stat.Size, r.SourceSHA256) == nil && source.stable()
+		install := dirs[0].nodes[len(dirs[0].nodes)-1].stat
+		ancestors := make([]fileIdentity, len(source.nodes))
+		for i, node := range source.nodes {
+			ancestors[i] = fileIdentity{device: uint64(node.stat.Dev), inode: node.stat.Ino}
+		}
+		outsideInstall := sourceOutsideInstall(fileIdentity{device: uint64(install.Dev), inode: install.Ino}, ancestors)
+		sourceOK = dirs[0].stable() && source.stable() && outsideInstall &&
+			hashArtifact(ctx, source.file, source.nodes[len(source.nodes)-1].stat.Size, r.SourceSHA256) == nil &&
+			source.stable() && dirs[0].stable()
 		source.closeArtifact()
 	}
-	if !check("source-artifact", "Require an independently selected SHA-256 for the bounded protected root-owned source archive; it is never extracted or executed and does not prove reproducible builds.", sourceOK) {
+	if !check("source-artifact", "Require an independently selected SHA-256 for the bounded protected root-owned source archive outside the fixed installation directory, including filesystem aliases; it is never extracted or executed and does not prove reproducible builds.", sourceOK) {
 		return fail()
 	}
 	if !check("activated-enrollment", "Require the explicitly selected existing activated basic or fresh inventory TLS handoff at the exact fixed paths, valid current certificate and original protected sender state. No enrollment, network, collection, key or ledger creation occurs.", validateEnrollment(ctx, selectedProfile(r)) == nil) {

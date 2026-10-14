@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "7cec1ca36066cf37c69fd2799d972479f4ec0a8dca14ec90dc5a74b5a6f8b2fa",
+  "goSourceSha256": "9d11082eeb6bcefa9408c8b682e97ff0b42dd5cc533e8bfe07ab2c350be86285",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -3612,6 +3612,7 @@
       "TestRenewableBasicTLSUsesExactManifestWithoutScopeExpansion",
       "TestRequestStrict",
       "TestSnapshotDetectsIdentityAndMetadataChanges",
+      "TestSourceArchiveRejectsHeldInstallationDirectoryAlias",
       "TestSourceHashIsBoundedExactAndCancelable",
       "TestUnavailableAndInvalidRequestsNeverInspect"
     ],
