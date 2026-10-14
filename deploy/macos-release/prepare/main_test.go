@@ -1,3 +1,5 @@
+//go:build (darwin && !ios) || (linux && !android)
+
 package main
 
 import (

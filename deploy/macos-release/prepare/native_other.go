@@ -1,6 +1,7 @@
-//go:build !darwin
+//go:build !darwin || ios
 
 package main
 
-// Verification is portable. Host preparation is intentionally macOS-only.
+// Host preparation is macOS-only. Linux retains read-only package verification;
+// other unsupported hosts reject selected package/bootstrap paths before open.
 func newNativeStage() hostStage { return nil }
