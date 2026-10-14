@@ -147,7 +147,33 @@ try{
  }else{
   const options={headless:true,args:['--no-sandbox'],env:{...process.env,HOME:temporary,XDG_CONFIG_HOME:temporary,XDG_CACHE_HOME:temporary}};if(process.env.CHROMIUM_PATH)options.executablePath=process.env.CHROMIUM_PATH;mark('launch hosted Chromium');browser=await chromium.launch(options);
   await check('Capability-gated desktop enrollment shows Linux scope, HTTP warning, keyboard dismissal and no mutation before consent',async()=>{
-   const page=await pageAt();mark('capability and default Linux selection');
+   const page=await pageAt();
+   // Four public-safe scenes inside this existing case retain the strict
+   // 13-case hosted contract. No invitation, native client or grant is created.
+   let entryMutations=0;const countEntryMutation=request=>{if(request.method()!=='GET')entryMutations++;};page.on('request',countEntryMutation);
+   for(const locale of ['en','de'])for(const mobile of [false,true]){
+    await page.setViewportSize(mobile?{width:390,height:844}:{width:1440,height:1000});
+    await page.locator('.language-control select').selectOption(locale);
+    await page.evaluate(()=>{window.location.hash='/overview';});
+    const entry=page.getByRole('button',{name:locale==='de'?'Geräteeinrichtung prüfen':'Review device setup',exact:true});
+    mark('loaded empty fleet and setup entry');
+    await expect(page.getByRole('heading',{name:locale==='de'?'Noch keine Geräte':'No devices yet',exact:true})).toBeVisible();
+    await expect(entry).toBeEnabled();await expect(page.locator('.summary-strip')).toHaveCount(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+    await shot(page,`synthetic-first-device-empty-${locale}-${mobile?'390':'1440'}`);
+    mark('keyboard setup entry without a dialog or write');
+    await entry.focus();await page.keyboard.press('Enter');
+    const panel=page.getByRole('region',{name:locale==='de'?'Geräte hinzufügen':'Add devices',exact:true});
+    await expect(panel).toBeFocused();await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.keyboard.press('Tab');await expect(panel.getByRole('combobox',{name:locale==='de'?'Betriebssystem':'Operating system',exact:true})).toBeFocused();
+    await expect(panel.getByRole('button',{name:locale==='de'?'Gerät hinzufügen':'Add device',exact:true})).toBeEnabled();
+    mark('Back and Forward do not reopen or refocus setup');
+    await page.goBack();await expect(entry).toBeVisible();await page.goForward();
+    await expect(panel).toBeVisible();await expect(panel).not.toBeFocused();await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect((await list()).items.length).toBe(0);expect(entryMutations).toBe(0);await checkClean(page);
+   }
+   page.off('request',countEntryMutation);await page.setViewportSize({width:1440,height:1000});await page.locator('.language-control select').selectOption('en');
+   mark('capability and default Linux selection');
    const capability=await list();expect(capability.enabled).toBe(true);expect(capability.platforms).toEqual(['linux']);expect(capability.collectionProfile??'basic-readonly-v1').toBe('basic-readonly-v1');expect(capability.items.length).toBe(0);
    await expect(page.getByRole('combobox',{name:'Operating system',exact:true})).toHaveValue('linux');
    let mutations=0;page.on('request',request=>{const url=new URL(request.url());if(request.method()==='POST'&&(url.pathname.startsWith('/api/enrollment/')||url.pathname.startsWith('/api/windows/enrollment/')))mutations++;});

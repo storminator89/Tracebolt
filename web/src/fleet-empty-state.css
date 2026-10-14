@@ -1,0 +1,5 @@
+/* One navigation-only entry into the existing, capability-checked setup. */
+.first-device-panel{margin-bottom:24px}
+.first-device-panel .empty-state{padding:28px 20px}
+.first-device-panel .empty-state p{max-width:580px;margin-left:auto;margin-right:auto}
+.enrollment-panel:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
