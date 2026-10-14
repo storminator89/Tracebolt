@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "48e8b15f3f44378aec16168138e9e61c47aa9e3b9f9a719ec528581d5b4ed374",
+  "goSourceSha256": "7cec1ca36066cf37c69fd2799d972479f4ec0a8dca14ec90dc5a74b5a6f8b2fa",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1601,6 +1601,8 @@
       "TestMacOSInventoryReopenedTrustAndExhaustedAuthority",
       "TestMacOSInventoryServicePreflightCurrentSuccessorKeepsOriginalState",
       "TestMacOSInventoryServicePreflightRechecksContextAndAuthority",
+      "TestMacOSInventoryServicePreflightRechecksSenderClock",
+      "TestMacOSInventoryServicePreflightRejectsFutureSenderClock",
       "TestMacOSInventoryServicePreflightRequiresLiveLocalAuthority",
       "TestMacOSInventoryServicePreflightStorageAndCloseFailures",
       "TestMacOSRouteSelectionUsesTrustedRuntimeOnly",
@@ -3553,6 +3555,7 @@
       "TestInactiveProductionDependenciesAndNoCollectors",
       "TestLostReservationConsumesFloorAndPacingAcrossReopen",
       "TestMissingUsedStateCannotBecomeFresh",
+      "TestReadOnlyCheckpointAdmissionUsesDurableClockFloor",
       "TestReceiptMustBindExactPendingBytesAndTime",
       "TestRecoveredAdapterPanicLeavesLiveOwnerPoisoned",
       "TestRetainedReportFailureOrderingAndPendingGate",
