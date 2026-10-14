@@ -37,6 +37,7 @@ jobs:
           python3 -B tests/security/test_go_aggregate_coverage.py
           python3 -I -B -m unittest discover -s tests/release -p 'test_macos_foreground_candidate.py' -v
           python3 -I -B -m unittest discover -s tests/release -p 'test_macos_service_test_package.py' -v
+          python3 -I -B -m unittest discover -s tests/macos_release -p 'test_publish_prerelease.py' -v
       - name: Prepare verified dependencies
         run: |
           go mod download
