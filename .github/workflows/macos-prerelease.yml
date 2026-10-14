@@ -1,0 +1,146 @@
+name: Manual unsigned macOS service-test prerelease
+
+# One owner-dispatched, exact-source build on standard Linux. No Darwin binary is
+# executed. Read-only verification cannot create a tag, release, or asset.
+on:
+  workflow_dispatch:
+    inputs:
+      source_ci_run_ids:
+        description: 'Seven exact successful source-push run IDs in the documented fixed workflow order, comma-separated'
+        required: true
+        type: string
+      expected_source_sha:
+        description: 'Exact reviewed service-package source commit, pinned again in the publisher'
+        required: true
+        type: string
+      expected_publisher_sha:
+        description: 'Exact reviewed publisher commit; must be the current main branch lease'
+        required: true
+        type: string
+      version:
+        description: 'Fresh vMAJOR.MINOR.PATCH-macos-preview.N tag and package version'
+        required: true
+        type: string
+      publish:
+        description: 'Explicitly create one fresh tag/draft, upload verified assets and publish an unsigned prerelease (not latest)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: macos-prerelease-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  TRACEBOLT_RELEASE_SOURCE: ${{ inputs.expected_source_sha }}
+  TRACEBOLT_SOURCE_CI_RUN_IDS: ${{ inputs.source_ci_run_ids }}
+  TRACEBOLT_RELEASE_VERSION: ${{ inputs.version }}
+  TRACEBOLT_PUBLISHER_SHA: ${{ inputs.expected_publisher_sha }}
+  TRACEBOLT_RELEASE_PUBLISH: ${{ inputs.publish }}
+  PYTHONDONTWRITEBYTECODE: '1'
+  GOTOOLCHAIN: local
+
+jobs:
+  verify:
+    name: Read-only exact-source build and verified release plan
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'storminator89/Tracebolt' && github.repository_id == '1403204207' && github.repository_owner == 'storminator89' && github.repository_owner_id == '30489872' && github.actor == 'storminator89' && github.actor_id == '30489872' && github.triggering_actor == 'storminator89' && github.run_attempt == 1 && github.ref == 'refs/heads/main' && github.sha == inputs.expected_publisher_sha && github.workflow_sha == github.sha }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan: ${{ steps.verify.outputs.plan }}
+      plan_sha256: ${{ steps.verify.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: publisher
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_source_sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: source/go.mod
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Inert publisher regression fixtures
+        run: python3 -I -B -m unittest discover -s publisher/tests/macos_release -v
+      - name: Warm and verify exact locked Go modules
+        working-directory: source
+        run: go mod download && go mod verify
+      - name: Build the exact unsigned package twice per role and archive, without Darwin execution
+        env:
+          SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 -I -B source/deploy/macos-release/build-service-test-package.py \
+            --source-commit "$SOURCE_SHA" --version "$VERSION" \
+            --output "$RUNNER_TEMP/macos-service-test-package"
+      - name: Check seven source-push CI runs and branch leases; freeze exact public bytes, read-only
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B publisher/deploy/macos-release/publish-prerelease.py --verify \
+            --source-root "$GITHUB_WORKSPACE/source" \
+            --output "$RUNNER_TEMP/macos-service-test-package"
+
+  publish:
+    name: Explicit fresh unsigned prerelease publication
+    needs: verify
+    if: ${{ inputs.publish == true && needs.verify.result == 'success' && github.run_attempt == 1 && github.ref == 'refs/heads/main' && github.sha == inputs.expected_publisher_sha && github.workflow_sha == github.sha }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    permissions:
+      contents: write
+      actions: read
+    env:
+      TRACEBOLT_VERIFIED_PLAN: ${{ needs.verify.outputs.plan }}
+      TRACEBOLT_VERIFIED_PLAN_SHA256: ${{ needs.verify.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: publisher
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.expected_source_sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: source/go.mod
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Warm and verify exact locked Go modules
+        working-directory: source
+        run: go mod download && go mod verify
+      - name: Rebuild the exact unsigned package without Darwin execution
+        env:
+          SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 -I -B source/deploy/macos-release/build-service-test-package.py \
+            --source-commit "$SOURCE_SHA" --version "$VERSION" \
+            --output "$RUNNER_TEMP/macos-service-test-package"
+      - name: Recheck seven source-push CI runs, source, frozen bytes and fresh version; publish once
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B publisher/deploy/macos-release/publish-prerelease.py --publish \
+            --source-root "$GITHUB_WORKSPACE/source" \
+            --output "$RUNNER_TEMP/macos-service-test-package"
