@@ -5,8 +5,9 @@ Darwin binaries and an exact Git source archive for offline review. It cannot
 publish a release, install a service, enroll a device, execute a Mac binary,
 create signing credentials or obtain native acceptance. The asset set contains
 only `enroll-agent` and `macos-agent` for amd64 and arm64;
-`macos-agent-service` is excluded because its native install/apply adapter is
-unavailable. This is not a verified download or end-user installation path.
+`macos-agent-service` is deliberately excluded from the foreground-only asset
+set. The separate service test package below has its own lifecycle source and
+native gates. This is not a verified download or end-user installation path.
 
 From a clean exact Git checkout, with the version from `go.mod` already on PATH
 and all locked modules already in its cache:
@@ -66,3 +67,45 @@ Inert tests (fake Git/compiler and synthetic Mach-O bytes, no target execution):
 python3 -I -B -m unittest discover -s tests/release \
   -p 'test_macos_foreground_candidate.py' -v
 ```
+
+## Separate service test-package source
+
+`build-service-test-package.py` prepares deterministic **publisher-unsigned**
+Apple Silicon and Intel test archives from a clean, exact reviewed Git commit.
+Each has native `enroll-agent`, `macos-agent`, `macos-agent-service` and a Go
+`macos-package-prepare` entry, plus the exact source tar and a test runbook.
+A matching standalone Go helper is emitted beside each archive so package
+verification does not require extracting an untrusted tarball first. This
+does not modify or relax the independently cleared foreground builder above.
+
+The service builder reuses the foreground builder's clean/index/path and
+Git-archive extraction defenses, Go 1.27.1 offline inputs, double-build byte
+comparison and thin Mach-O/Go role checks. It additionally compares two
+assembled archives byte-for-byte. The developer build needs Python; the Mac
+package entry is a cross-compiled Go binary and needs no Python, Homebrew or
+Xcode at runtime. No executable is run on the build host. Nothing is signed,
+notarized, enrolled, installed, dispatched or published by this builder.
+
+```sh
+python3 -I -B deploy/macos-release/build-service-test-package.py \
+  --version v0.0.0-macos-candidate.1 \
+  --source-commit FULL_40_CHARACTER_REVIEWED_COMMIT \
+  --output /absolute/new/directory/outside/the/checkout
+```
+
+Source/fixture validation, with no host, Directory Service, launchctl, network
+or provider action:
+
+```sh
+python3 -I -B -m unittest discover -s tests/release \
+  -p 'test_macos_service_test_package.py' -v
+go test ./deploy/macos-release/prepare
+```
+
+For exact target selection, public-bootstrap custody, root-only staging,
+hidden-terminal enrollment, service install/uninstall, owned rollback and the
+remaining native gates, read the packaged
+[macOS test runbook](../../docs/macos-test-package.md). The unsigned manifest
+is byte identity, not publisher trust or native acceptance. An ad-hoc arm64
+Go signature load command is not Developer ID signing. Never bypass Gatekeeper
+or treat a source fixture as a completed installation.

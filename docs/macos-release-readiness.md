@@ -1,10 +1,10 @@
-# macOS endpoint release readiness and source-only packaging proposal
+# macOS endpoint release readiness and source-built test packages
 
-Status: planning document for an **unreleased** macOS source candidate. It
+Status: source construction for **unreleased** macOS test candidates. It
 authorizes no native run, host change, signing, workflow dispatch or publication.
-The first useful distribution target is a deliberately foreground-only endpoint.
-An installed launchd service is a separate later target, not a packaging option
-that can be enabled by changing a release label.
+The foreground candidate remains deliberately foreground-only. A separate
+per-architecture service test package adds native installation source and an
+explicit preparation helper; neither artifact is a native-accepted release.
 
 ## What the current source actually provides
 
@@ -22,16 +22,18 @@ that can be enabled by changing a release label.
 - Explicit same-key **certificate** renewal has source paths. It is not binary
   update, profile expansion, a new endpoint identity or a release updater. A
   foreground process must remain running for its scheduler and retention work.
-- `macos-agent-service` can render a plist and perform existing-host read-only
-  preflight. Its `--action install` and `--apply` both return unavailable before
-  host inspection: there is no native `InstallBackend`. There is no native
-  install, restart, upgrade or uninstall adapter. Its fixed root-owned binary,
-  dedicated `_traceboltagent` account and protected paths are prerequisites to
-  inspect, not things the CLI provisions. See
-  [launchd source](macos-agent-service.md).
-- This slice prepares a source-review build manifest, but there is no
-  **published or native-accepted Mac release** manifest/asset set, verified Mac
-  download command, installer, `.pkg`/`.dmg`, publisher signing/notarization stage
+- The assembled service-test source adds a native, create-only launchd
+  install/uninstall adapter. `macos-agent-service --action install|uninstall`
+  reviews without host mutation; `--apply` is the distinct effectful boundary.
+  The separate Go package helper verifies the reviewed archive and can stage a
+  fresh dedicated `_traceboltagent` account, fixed root-owned binaries and
+  protected state/source paths before deliberate enrollment. Neither command
+  has been accepted on a Mac. See [service test runbook](macos-test-package.md)
+  and [launchd source](macos-agent-service.md).
+- The foreground builder emits a source-review manifest, and the service-test
+  builder prepares an exact-source private archive/manifest, but there is no
+  **published or native-accepted Mac release** asset set, verified public Mac
+  download command, signed `.pkg`/`.dmg`, publisher signing/notarization stage
   or Mac release publisher. Linux's attested release/bootstrap is Linux-specific;
   Windows' Setup and unsigned prerelease publisher are Windows-specific. A
   source archive or SHA-256 manifest copied from either cannot inherit its
@@ -52,8 +54,8 @@ each cell independently; one profile or architecture does not qualify another.
 | Native endpoint subset on disposable runner | Manual source gate prepared; no accepted result recorded | Manual source gate prepared; no accepted result recorded | The gate uses a simulated loopback peer and explicitly keeps Stage 1 blocked even if its subset passes. See [endpoint gate](../tests/macosendpointfixture/NATIVE_GATE.md). |
 | Fresh enrollment with a **real** manager, independent fingerprint approval and received report | Missing | Missing | Required for a foreground basic-TLS release; repeat separately for fresh inventory scope. A loopback peer cannot substitute. |
 | Exact pending retry, interrupted enrollment, lock exclusion, restart, same-key renewal, expiry and revocation against real manager | Missing | Missing | Required before claiming durable foreground operation or renewal. Preserve identity and original observations. |
-| Dedicated account, ACL/descriptor behavior, launchd job binding, real reboot, stop/restart and owned removal | Missing; native adapter itself absent | Missing; native adapter itself absent | Hard blocker for any **installed-service** release. Source preflight/plist rendering and fixtures are insufficient. |
-| Final distribution bytes, trust and installation/download UX | No Mac candidate or publisher | No Mac candidate or publisher | No public Mac download/install command or signed/notarized claim. |
+| Dedicated account, ACL/descriptor behavior, launchd job binding, real reboot, stop/restart and owned removal | Native gate missing; source adapter and package helper prepared | Native gate missing; source adapter and package helper prepared | Hard blocker for any **installed-service release**. Source fixtures/cross-builds cannot prove native behavior. |
+| Final distribution bytes, trust and installation/download UX | Private exact-source test candidate path; no publisher | Private exact-source test candidate path; no publisher | No public Mac download/install command or signed/notarized claim. Native acceptance is a release gate, not a prerequisite to building the test archive. |
 
 The first [manual native inventory/log run](macos-native-evidence-20261013.md)
 failed on both architectures while retaining bounded evidence. Its partial
@@ -64,16 +66,17 @@ rerun the failed gate or infer a parser fix from its metadata. Automated
 acceptance. `macos-endpoint-acceptance.yml` and `macos-native-acceptance.yml`
 default their manual selectors off.
 
-## Narrow next slice: prepare unsigned foreground candidate bytes
+## Deliberately foreground-only candidate bytes
 
 The separate `deploy/macos-release/build-foreground-candidate.py` and inert
-fixtures prepare a **source-only, non-publishing** candidate after the current
-macOS runtime fixes are assembled into a clean, reviewed commit. Its role set is
+fixtures prepare a **source-only, non-publishing** candidate from a clean,
+reviewed commit. Its role set is
 just
 `enroll-agent` and `macos-agent` for each of `darwin/arm64` and `darwin/amd64`.
-Exclude `macos-agent-service` from the foreground asset set so a binary with an
-unavailable install operation cannot be mistaken for an installer. Keep the
-existing `make macos-source` target's broader compilation checks unchanged.
+Exclude `macos-agent-service` from the **foreground** asset set so that artifact
+is never mistaken for an installer. The separate service-test package has its
+own four-role builder and runbook. Keep the existing `make macos-source`
+target's broader compilation checks unchanged.
 
 The precedent is `deploy/release/build-linux-release.py`: it requires a clean,
 exact Git checkout, the Go version in `go.mod`, a new output directory outside
@@ -84,7 +87,7 @@ bootstrap, platform admission, attestation or asset names. Windows'
 repeated-byte comparison precedent, but its PE/Setup/native-service checks do
 not apply to Mach-O.
 
-Proposed Mac builder contract:
+Implemented foreground builder contract:
 
 1. Accept an explicitly reviewed full source commit/version and a fresh output
    path; require HEAD equality, clean visible tracked/untracked tree, reject
@@ -135,8 +138,8 @@ terminal/foreground process stops. Select basic or fresh inventory scope
 deliberately; the current interface failure blocks an inventory-completeness
 claim. No service persistence, installer or auto-binary-update claim follows.
 
-**Installed-service release:** additionally implement and independently review
-the native create-only launchd adapter, collision/override inspection, protected
+**Installed-service release:** independently review and natively verify the
+source-built create-only launchd adapter, collision/override inspection, protected
 root-owned custody and exact job binding. Obtain separate host/account/service
 permission, then verify both architectures on disposable supported Mac versions:
 dedicated nonroot identity and no unexpected groups, granted profile, actual
@@ -149,3 +152,32 @@ renewal is not that design.
 Publication is a final, separate decision after all applicable gates and final
 artifact review. Keep the frozen Windows preview.3 bytes and unrelated release
 pins unchanged. Never infer native approval from a source-only workflow pass.
+
+## Follow-on unsigned service test package (source construction)
+
+The separate [service test package runbook](macos-test-package.md) describes a
+bounded source-built, per-architecture archive and a cross-compiled Go
+preparation helper. This is a **native test candidate**, not a public release
+or an assertion that the release gates above have passed. It retains the
+foreground builder and its four binary source-review outputs unchanged.
+The package adds the service CLI and an explicit Go entry to verify the closed
+archive, stage a fresh dedicated account/root-owned binaries/public TLS
+bootstrap and protected source/state paths, and perform a deliberately
+reviewed pre-enrollment rollback only when exact owned state is still unused.
+The existing `enroll-agent` hidden-terminal fingerprint/invitation flow is a
+separate user-authorized step. The native service CLI's `--action install`
+and `--action uninstall` likewise require explicit `--apply`; uninstallation
+retains the account, source, binaries, credentials, identity and sender state.
+No helper silently adopts a prior grant, changes TCC/security settings, creates
+an invitation or resets an uncertain ledger.
+
+The test archives carry a canonical exact-source SHA-256 manifest, repeatable
+local archive bytes and a verifier that checks one immutable byte snapshot,
+role metadata and closed members. This establishes local byte/source review
+properties only; it cannot prove Apple signing/notarization, publisher origin,
+Gatekeeper operation, native launchd semantics, reboot persistence or actual
+manager-received reporting. The current Mac native collector evidence remains
+partial. Do not expose an end-user install/download link or claim Mac release
+readiness until both architectures complete their separate fresh enrollment,
+collection, protected-state, launchd and owned-removal native gates and final
+distribution trust review.

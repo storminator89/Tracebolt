@@ -48,6 +48,37 @@ func (p *protectedPath) stable() bool {
 	return true
 }
 
+// After exact owned registration, the foreground sender may atomically replace
+// telemetry state and update a renewal manifest. Only private state-directory
+// metadata may advance; root-owned ancestors and every current FD/pathname
+// binding remain exact. Fstat rechecks the native ACL for each held descriptor.
+func (p *protectedPath) stableRegisteredDirectories() bool {
+	if p == nil || len(p.nodes) == 0 {
+		return false
+	}
+	current := ""
+	for i, n := range p.nodes {
+		if i == 0 {
+			current = "/"
+		} else {
+			current = path.Join(current, n.name)
+		}
+		var now, entry unix.Stat_t
+		if darwinprotect.Fstat(n.fd, &now) != nil {
+			return false
+		}
+		entry = now
+		if i > 0 && unix.Fstatat(p.nodes[i-1].fd, n.name, &entry, unix.AT_SYMLINK_NOFOLLOW) != nil {
+			return false
+		}
+		mutablePrivate := mutableSelectionDirectory(current, true)
+		if !samePhaseDirectoryNode(installNodeIdentity(n.stat), installNodeIdentity(now), installNodeIdentity(entry), mutablePrivate) {
+			return false
+		}
+	}
+	return true
+}
+
 // Every component is descriptor-anchored, symlink-free, local, ACL-checked and
 // root-owned except the exact fixed private state subtree. No chmod/chown, alias
 // resolution, directory creation or private-state initialization is available.

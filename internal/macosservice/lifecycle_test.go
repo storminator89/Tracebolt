@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -40,6 +41,7 @@ func (f *lifecycleFake) Inspect(context.Context) (InstallSnapshot, error) {
 	s := f.snapshot
 	s.Config = append([]byte{}, s.Config...)
 	s.Receipts = append([]Receipt{}, s.Receipts...)
+	s.RemovalReceipts = append([]RemovalReceipt{}, s.RemovalReceipts...)
 	if s.Owner != nil {
 		o := *s.Owner
 		s.Owner = &o
@@ -74,6 +76,16 @@ func (f *lifecycleFake) Close() error {
 		return errors.New("close failed")
 	}
 	return nil
+}
+
+func (f *lifecycleFake) AppendRemovalReceipt(_ context.Context, r RemovalReceipt) error {
+	return f.effect(fmt.Sprint("removal-receipt-", r.Sequence), func() { f.snapshot.RemovalReceipts = append(f.snapshot.RemovalReceipts, r) })
+}
+func (f *lifecycleFake) Bootout(_ context.Context, _ Ownership) error {
+	return f.effect("bootout", func() { f.snapshot.Job = Absent; f.snapshot.JobOwnershipSHA256 = "" })
+}
+func (f *lifecycleFake) RemoveOwnedPlist(_ context.Context, _ Ownership) error {
+	return f.effect("remove-plist", func() { f.snapshot.Plist = Absent; f.snapshot.PlistSHA256 = "" })
 }
 func installFixture(profile string, apply bool) InstallRequest {
 	r := fixtureRequest()
@@ -317,7 +329,234 @@ func TestCloseFailureAndCancellationRetainEvidence(t *testing.T) {
 }
 
 func TestNativeBackendDoesNotExposeLifecycleMutation(t *testing.T) {
-	if _, ok := NewNativeBackend().(InstallBackend); ok {
-		t.Fatal("native lifecycle adapter requires its own reviewed implementation")
+	_, ok := NewNativeBackend().(InstallBackend)
+	if ok != (runtime.GOOS == "darwin") {
+		t.Fatal("native lifecycle adapter platform mismatch")
+	}
+}
+
+func TestOwnedUninstallIsOneAttemptAndRetainsOwner(t *testing.T) {
+	f := newLifecycleFake(BasicProfile)
+	r := installFixture(BasicProfile, true)
+	if _, e := Install(context.Background(), r, f); e != nil {
+		t.Fatal(e)
+	}
+	before := *f.snapshot.Owner
+	f.events = nil
+	r.Apply = false
+	p, e := Uninstall(context.Background(), r, f)
+	if e != nil || p.Status != "owned-removal-ready" || len(f.events) != 0 {
+		t.Fatalf("review: %+v %v %v", p, e, f.events)
+	}
+	r.Apply = true
+	p, e = Uninstall(context.Background(), r, f)
+	want := []string{"removal-receipt-1", "bootout", "removal-receipt-2", "removal-receipt-3", "remove-plist", "removal-receipt-4"}
+	if e != nil || p.Status != "owned-removal-confirmed" || !p.MutationAttempted || !reflect.DeepEqual(f.events, want) || *f.snapshot.Owner != before || f.snapshot.Custody != Present || len(f.snapshot.Receipts) != 4 || len(f.snapshot.RemovalReceipts) != 4 {
+		t.Fatalf("apply: %+v %v %v", p, e, f.events)
+	}
+	f.events = nil
+	p, e = Uninstall(context.Background(), r, f)
+	if e != nil || !p.ReadOnly || p.MutationAttempted || p.Status != "owned-removal-confirmed" || len(f.events) != 0 {
+		t.Fatal("repeat removal mutated")
+	}
+	if _, e = Install(context.Background(), r, f); e == nil {
+		t.Fatal("reinstalled tombstoned identity")
+	}
+}
+
+func TestOwnedUninstallUncertaintyNeverRetries(t *testing.T) {
+	events := []string{"removal-receipt-1", "bootout", "removal-receipt-2", "removal-receipt-3", "remove-plist", "removal-receipt-4"}
+	for i, event := range events {
+		for _, after := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s-after-%v", event, after), func(t *testing.T) {
+				f := newLifecycleFake(BasicProfile)
+				r := installFixture(BasicProfile, true)
+				if _, e := Install(context.Background(), r, f); e != nil {
+					t.Fatal(e)
+				}
+				f.events = nil
+				if after {
+					f.failAfter = event
+				} else {
+					f.failBefore = event
+				}
+				p, e := Uninstall(context.Background(), r, f)
+				if e != ErrIndeterminate || p.Status != "indeterminate" || !p.MutationAttempted || !reflect.DeepEqual(f.events, events[:i+1]) {
+					t.Fatalf("uncertain: %+v %v %v", p, e, f.events)
+				}
+				if i == 0 && !after {
+					f.snapshot.RemovalReceipts = []RemovalReceipt{{Sequence: 1}}
+				}
+				f.failAfter = ""
+				f.failBefore = ""
+				f.events = nil
+				p, e = Uninstall(context.Background(), r, f)
+				if len(f.events) != 0 || p.MutationAttempted {
+					t.Fatal("uncertain removal retried")
+				}
+				if i == len(events)-1 && after {
+					if e != nil || p.Status != "owned-removal-confirmed" {
+						t.Fatal("lost final receipt not reconciled")
+					}
+				} else if e == nil {
+					t.Fatal("incomplete removal accepted")
+				}
+			})
+		}
+	}
+}
+
+func TestRegisteredHandoffRequiresExactOwnedBootstrapEvidence(t *testing.T) {
+	f := newLifecycleFake(BasicProfile)
+	r := installFixture(BasicProfile, true)
+	if _, e := Install(context.Background(), r, f); e != nil {
+		t.Fatal(e)
+	}
+	good := f.snapshot
+	good.Receipts = append([]Receipt{}, good.Receipts[:3]...)
+	if !allowRegisteredHandoff(r.Selection, good) {
+		t.Fatal("healthy registered branch blocked")
+	}
+	for name, change := range map[string]func(*InstallSnapshot){
+		"before-bootstrap": func(s *InstallSnapshot) { s.Receipts = s.Receipts[:2] },
+		"foreign-job":      func(s *InstallSnapshot) { s.JobOwnershipSHA256 = strings.Repeat("f", 64) },
+		"unknown-job":      func(s *InstallSnapshot) { s.Job = "" },
+		"no-job":           func(s *InstallSnapshot) { s.Job = Absent; s.JobOwnershipSHA256 = "" },
+		"plist-drift":      func(s *InstallSnapshot) { s.PlistSHA256 = strings.Repeat("f", 64) },
+		"owner-drift": func(s *InstallSnapshot) {
+			copy := *s.Owner
+			copy.AgentSHA256 = strings.Repeat("f", 64)
+			s.Owner = &copy
+		},
+		"receipt-drift":     func(s *InstallSnapshot) { s.Receipts[2].Status = "completed" },
+		"retained-override": func(s *InstallSnapshot) { s.Override = Present },
+		"partial-removal":   func(s *InstallSnapshot) { s.RemovalReceipts = expectedRemovalReceipts(*s.Owner)[:2] },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := good
+			s.Receipts = append([]Receipt{}, good.Receipts...)
+			change(&s)
+			if allowRegisteredHandoff(r.Selection, s) {
+				t.Fatal("unsafe no-lock branch admitted")
+			}
+		})
+	}
+	// Lock contention itself is deliberately absent from the selector. Without
+	// exact job/plist/owner/receipt evidence the full locked validator remains
+	// mandatory, so an arbitrary competing sender lock cannot create authority.
+}
+
+func TestHealthyStartedSenderLockUsesOnlyExactRegisteredBranch(t *testing.T) {
+	f := newLifecycleFake(BasicProfile)
+	r := installFixture(BasicProfile, true)
+	if _, e := Install(context.Background(), r, f); e != nil {
+		t.Fatal(e)
+	}
+	exact := f.snapshot
+	activeCalls, fullCalls := 0, 0
+	inspect := func(_ context.Context, _ Request, registered bool) (SelectionEvidence, error) {
+		if registered {
+			activeCalls++
+			return SelectionEvidence{Config: exact.Config, EnrollmentAnchorSHA256: exact.EnrollmentAnchorSHA256}, nil
+		}
+		fullCalls++
+		return SelectionEvidence{}, ErrPreflight // lifetime sender lock occupied
+	}
+	if _, e := inspectWithRegisteredHandoff(context.Background(), r.Selection, exact, inspect); e != nil || activeCalls != 1 || fullCalls != 0 {
+		t.Fatal("exact registered sender could not hand off lock")
+	}
+	for _, change := range []func(*InstallSnapshot){func(s *InstallSnapshot) { s.Receipts = s.Receipts[:2] }, func(s *InstallSnapshot) { s.JobOwnershipSHA256 = "" }, func(s *InstallSnapshot) { s.Owner = nil }, func(s *InstallSnapshot) { s.Plist = Absent; s.PlistSHA256 = "" }} {
+		s := exact
+		change(&s)
+		if _, e := inspectWithRegisteredHandoff(context.Background(), r.Selection, s, inspect); e == nil {
+			t.Fatal("foreign or pre-bootstrap lock bypassed full validation")
+		}
+	}
+	if activeCalls != 1 || fullCalls != 4 {
+		t.Fatalf("wrong handoff routing active=%d full=%d", activeCalls, fullCalls)
+	}
+}
+
+func TestNonrootSelectionRejectsNativeObservationDrift(t *testing.T) {
+	f := newLifecycleFake(BasicProfile)
+	r := installFixture(BasicProfile, true)
+	if _, err := Install(context.Background(), r, f); err != nil {
+		t.Fatal(err)
+	}
+	before := f.snapshot
+	child := func(_ context.Context, _ Request, registered bool) (SelectionEvidence, error) {
+		if !registered {
+			return SelectionEvidence{}, ErrPreflight
+		}
+		return SelectionEvidence{Config: before.Config, EnrollmentAnchorSHA256: before.EnrollmentAnchorSHA256}, nil
+	}
+	for name, change := range map[string]func(*InstallSnapshot){
+		"job-disappeared":   func(s *InstallSnapshot) { s.Job = Absent; s.JobOwnershipSHA256 = "" },
+		"foreign-job":       func(s *InstallSnapshot) { s.JobOwnershipSHA256 = strings.Repeat("f", 64) },
+		"override-appeared": func(s *InstallSnapshot) { s.Override = Present },
+		"plist-changed":     func(s *InstallSnapshot) { s.PlistSHA256 = strings.Repeat("f", 64) },
+		"custody-changed":   func(s *InstallSnapshot) { s.Custody = Absent; s.Owner = nil },
+		"owner-changed": func(s *InstallSnapshot) {
+			owner := *s.Owner
+			owner.AgentSHA256 = strings.Repeat("f", 64)
+			s.Owner = &owner
+		},
+		"receipt-changed": func(s *InstallSnapshot) {
+			s.Receipts = append([]Receipt{}, s.Receipts...)
+			s.Receipts[3].Status = "started"
+		},
+		"removal-started": func(s *InstallSnapshot) { s.RemovalReceipts = expectedRemovalReceipts(*s.Owner)[:1] },
+	} {
+		t.Run(name, func(t *testing.T) {
+			after := before
+			change(&after)
+			calls := 0
+			read := func(context.Context) (InstallSnapshot, error) {
+				calls++
+				if calls == 1 {
+					return before, nil
+				}
+				return after, nil
+			}
+			if _, err := inspectStableSelection(context.Background(), r.Selection, read, child); err != ErrPreflight || calls != 2 {
+				t.Fatalf("accepted drift or skipped re-read: err=%v calls=%d", err, calls)
+			}
+		})
+	}
+	reads := 0
+	read := func(context.Context) (InstallSnapshot, error) { reads++; return before, nil }
+	got, err := inspectStableSelection(context.Background(), r.Selection, read, child)
+	if err != nil || reads != 2 || !got.PrerequisitesVerified || got.Job != Present || got.JobOwnershipSHA256 == "" {
+		t.Fatalf("unchanged exact job failed: %+v %v reads=%d", got, err, reads)
+	}
+}
+
+func TestExpectedPresentPlistStillChecksFinalDirectories(t *testing.T) {
+	calls := 0
+	changedDirectory := func() bool { calls++; return false }
+	if finalSelectionPaths(true, false, false, changedDirectory) || calls != 1 {
+		t.Fatal("expected-present plist bypassed changed directory")
+	}
+	if finalSelectionPaths(true, false, true, func() bool { return true }) {
+		t.Fatal("fresh planning accepted present plist")
+	}
+	if finalSelectionPaths(false, false, false, func() bool { return true }) {
+		t.Fatal("unknown plist status accepted")
+	}
+	if !finalSelectionPaths(true, false, false, func() bool { return true }) || !finalSelectionPaths(true, true, true, func() bool { return true }) {
+		t.Fatal("known safe lifecycle or fresh path rejected")
+	}
+}
+
+func TestOnlyRegisteredPrivateDirectoriesMayAdvanceMetadata(t *testing.T) {
+	for _, name := range []string{StateDirectory, EnrollmentDirectory, EnrollmentDirectory + "/telemetry"} {
+		if !mutableSelectionDirectory(name, true) || mutableSelectionDirectory(name, false) {
+			t.Fatalf("wrong phase rule for %s", name)
+		}
+	}
+	for _, name := range []string{"/", "/Library", "/Library/Application Support", InstallDirectory, "/Library/LaunchDaemons", "/Library/Application Support/TraceboltAgentX/state"} {
+		if mutableSelectionDirectory(name, true) {
+			t.Fatalf("relaxed root-owned or unrelated directory %s", name)
+		}
 	}
 }
