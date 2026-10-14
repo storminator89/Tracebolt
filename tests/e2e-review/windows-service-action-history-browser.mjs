@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 /** Inert retained-history fixture. Importing never launches a server/browser. */
 import fs from 'node:fs';
 import {createWindowsServiceActionsFixture,windowsServiceActionsRoute,windowsServiceActionsDisclosure} from './windows-service-actions-browser.mjs';
@@ -27,7 +28,7 @@ export function windowsServiceActionHistoryRoute({base,fixture,state}){
 }
 export async function exerciseWindowsServiceActionHistory({page,expect,base,fixture,locale,width,shot}){
  const de=locale==='de',title=de?'Gespeicherte Aktionshistorie':'Saved action history',read=de?'Beleg lesen':'Read receipt';
- stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);
+ stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='document';
  await page.getByRole('tab',{name:de?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:de?'Dienste':'Services',exact:true}).click();
  const history=page.locator('.windows-service-action-history'),toggle=history.getByRole('button',{name:title,exact:true});
  await expect(toggle).toHaveAttribute('aria-expanded','false');expect(fixture.historyCounts).toEqual({list:0,detail:0});

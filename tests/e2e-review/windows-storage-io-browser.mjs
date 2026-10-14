@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 /** Inert invented transport and production-UI assertions. No browser or server
  * starts on import; the separate opt-in runner provides those. */
 import {createRequire} from 'node:module';
@@ -54,9 +55,9 @@ export async function windowsStorageIOBrowserCase({page,expect,base,shot}){
   return route.continue();
  });
  const panel=page.locator('.windows-storage-io'),current=panel.first(),details=()=>current.locator('.windows-storage-io-details');
- const mount=async locale=>{await page.goto(base+'/#/devices');await page.goto(base+'/#/devices/'+windowsDeviceId);await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();};
+ const mount=async locale=>{await page.goto(base+'/#/devices');await page.goto(base+'/#/devices/'+windowsDeviceId);stage='mount-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='mount';await page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}).click();await page.getByRole('tab',{name:locale==='de'?'Speicher':'Storage',exact:true}).click();};
  const refresh=async locale=>{await page.getByRole('button',{name:locale==='de'?'Windows-Inventar aktualisieren':'Refresh Windows inventory',exact:true}).click();};
- stage='mount';await page.goto(base+'/#/devices/'+windowsDeviceId);await expect(page.locator('.app-shell')).toBeVisible();
+ stage='mount';await page.goto(base+'/#/devices/'+windowsDeviceId);await expect(page.locator('.app-shell')).toBeVisible();stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:/^(Inventory|Inventar)$/,exact:true}));stage='mount';
  for(const locale of ['en','de'])for(const width of [1440,390]){
   const de=locale==='de';await page.setViewportSize({width,height:width===390?844:1000});await page.getByLabel(/Language|Sprache/).selectOption(locale);phase='observed';await mount(locale);
   stage='summary';await expect(current).toBeVisible();await expect(current).toContainText(de?'12.582.912 B/s':'12,582,912 B/s');await expect(current).toContainText(de?'1,25 ms':'1.25 ms');await expect(current).toContainText(de?'120,5 Vorgänge/s':'120.5 ops/s');await expect(current).toContainText(de?'Am Messende ausstehend':'Outstanding at sample end');await expect(current).toContainText(de?'Einschließlich Anfragen in Bearbeitung':'Includes requests in service');await expect(current.locator('time').first()).toHaveAttribute('datetime',stamp(capturedAt,250));await expect(current.locator('time').last()).toHaveAttribute('datetime',stamp(capturedAt,1250));await expect(details()).not.toHaveAttribute('open');

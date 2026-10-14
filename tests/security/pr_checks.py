@@ -80,6 +80,9 @@ FLOWS = {
 # compiler/router below is owned by these same flows. Unknown scripts, general
 # helpers, generators and independent test fixtures retain the broad fallback.
 DOMAIN_SCRIPTS = {
+    'tests/e2e-review/paused-windows-routes.test.mjs': {
+        'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions',
+    },
     'tests/e2e-review/fleet-groups-browser.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-evidence.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-fixtures.test.mjs': {'fleet-groups'},
@@ -442,6 +445,8 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if {'windows-managed-msi', 'windows-mutation-coexistence', 'windows-storage-io', 'windows-service-actions'} & set(plan.get('flows', [])):
+        run(['node', '--test', 'tests/e2e-review/paused-windows-routes.test.mjs'], stage='ui-paused-windows-routes-contract')
     if 'shell' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/route-loading-fixtures.test.mjs'], stage='ui-route-loading-contract')
         run(['node', '--test', 'tests/e2e-review/shell-browser-diagnostics.test.mjs'], stage='ui-shell-diagnostic-contract')
@@ -892,6 +897,106 @@ def cve_review_failure_location(sha):
 
 
 
+# Closed coordinates for the selected single-case Windows detail runners. The
+# report's prose, source hashes, browser version and fixture values never leave
+# this decoder. These diagnostics do not participate in acceptance validation.
+WINDOWS_DETAIL_FAILURE_CASES = {
+    'windows-managed-msi': 'Synthetic central MSI bounded upload, separate delivery, unchecked exact approval and durable outcome',
+    'windows-mutation-coexistence': 'Synthetic shared MSI and WUA blocking, exact recovery details and released status in both compiled views',
+    'windows-storage-io': 'Private Windows PerfDisk aggregate with invented transport',
+}
+WINDOWS_DETAIL_FAILURE_STAGES = {
+    'windows-managed-msi': (
+        'setup', 'document', 'detail-route-readiness', 'upload', 'deliver', 'imported',
+        'review', 'ready', 'approve', 'outcome', 'reload', 'reload-detail-route-readiness', 'complete',
+    ),
+    'windows-mutation-coexistence': (
+        'setup', 'document', 'detail-route-readiness', 'blocked', 'released', 'reload',
+        'reload-detail-route-readiness', 'complete',
+    ),
+    'windows-storage-io': (
+        'setup', 'mount', 'detail-route-readiness', 'mount-detail-route-readiness',
+        'summary', 'details', 'navigation', 'idle', 'partial', 'denied', 'unsupported',
+        'retained', 'legacy', 'expiry', 'focus', 'revoked', 'session', 'complete',
+    ),
+}
+
+
+def clear_windows_detail_failure_report(flow):
+    """Remove only this runner's old result through a no-follow directory FD."""
+    directory = None
+    try:
+        if type(flow) is not str or flow not in WINDOWS_DETAIL_FAILURE_CASES:
+            raise ValueError('invalid Windows detail diagnostic flow')
+        path = ROOT / 'artifacts/review' / BROWSER_REPORTS[flow]
+        directory = reporter.open_log(path.parent)
+        if not stat.S_ISDIR(os.fstat(directory).st_mode):
+            raise ValueError('invalid Windows detail diagnostic directory')
+        os.unlink(path.name, dir_fd=directory)
+    except FileNotFoundError:
+        pass  # A missing result or parent cannot contribute a stale coordinate.
+    except OSError:
+        raise ValueError('could not prepare fresh Windows detail diagnostics') from None
+    finally:
+        if directory is not None:
+            os.close(directory)
+
+
+def windows_detail_failure_location(flow, sha):
+    """Project only same-source, exact-case labels from bounded failed reports."""
+    try:
+        if (type(flow) is not str or flow not in WINDOWS_DETAIL_FAILURE_CASES
+                or type(sha) is not str or not HEX.fullmatch(sha)):
+            return None
+        path = ROOT / 'artifacts/review' / BROWSER_REPORTS[flow]
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        common = {'name', 'status', 'stage', 'sourceSha', 'createdAt', 'runtimeErrorCount',
+                  'browserAcceptance', 'nativeAcceptance'}
+        storage = flow == 'windows-storage-io'
+        extra = ({'sourceState', 'uiSourceSha256', 'compiledBundleSha256', 'browserVersion',
+                  'customPreinstalledBrowser', 'fixtureDisclosure', 'details',
+                  'liveAuthenticationAcceptance', 'liveStoreAcceptance'} if storage else
+                 {'scope', 'variants', 'requestsToRealAPI', 'durableStoreAcceptance',
+                  'secretsExported', 'realTelemetryExported'})
+        if (type(value) is not dict or set(value) != common | extra
+                or value['sourceSha'] != sha or value['name'] != WINDOWS_DETAIL_FAILURE_CASES[flow]
+                or value['status'] != 'FAIL' or value['browserAcceptance'] is not False
+                or value['nativeAcceptance'] is not False
+                or type(value['stage']) is not str or value['stage'] not in WINDOWS_DETAIL_FAILURE_STAGES[flow]
+                or type(value['createdAt']) is not str or not 1 <= len(value['createdAt']) <= 64
+                or type(value['runtimeErrorCount']) is not int or not 0 <= value['runtimeErrorCount'] <= 1000000):
+            return None
+        prose = 'fixtureDisclosure' if storage else 'scope'
+        if type(value[prose]) is not str or not 1 <= len(value[prose]) <= 4096:
+            return None
+        if storage:
+            if (value['sourceState'] != 'sourceSha identifies checkout HEAD; source and compiled bundle hashes identify the tested bytes'
+                    or any(type(value[key]) is not str or not re.fullmatch(r'[a-f0-9]{64}', value[key])
+                           for key in ['uiSourceSha256', 'compiledBundleSha256'])
+                    or (value['browserVersion'] is not None and
+                        (type(value['browserVersion']) is not str or not 1 <= len(value['browserVersion']) <= 128))
+                    or type(value['customPreinstalledBrowser']) is not bool or value['details'] is not None
+                    or value['liveAuthenticationAcceptance'] is not False or value['liveStoreAcceptance'] is not False):
+                return None
+        elif (type(value['variants']) is not list or value['variants'] != []
+              or type(value['requestsToRealAPI']) is not int or value['requestsToRealAPI'] != 0
+              or any(value[key] is not False for key in ['durableStoreAcceptance', 'secretsExported', 'realTelemetryExported'])):
+            return None
+        # Select emitted labels from source, never from report strings.
+        case = next(name for name in WINDOWS_DETAIL_FAILURE_CASES if name == flow)
+        stage = next(name for name in WINDOWS_DETAIL_FAILURE_STAGES[case] if name == value['stage'])
+        return 'case=%s stage=%s' % (case, stage)
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
 # This source vocabulary is shared with the Windows producer, never loaded from
 # the runtime report directory (including when ROOT points at captured artifacts).
 WINDOWS_ACTION_DIAGNOSTICS_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/windows-service-actions-diagnostics.json'
@@ -1159,6 +1264,10 @@ def browser_checks(plan):
         if flow == 'windows-service-actions':
             invocation = secrets.token_hex(16)
             env['TRACEBOLT_WINDOWS_DIAGNOSTICS_TOKEN'] = invocation
+        if flow in WINDOWS_DETAIL_FAILURE_CASES:
+            # Before the failure handler: a cleanup error must never decode the
+            # old file, and a failed launch without a new report stays generic.
+            clear_windows_detail_failure_report(flow)
         if flow == 'fleet-identity':
             # This legacy runner otherwise guesses /usr/bin/chromium. Bind only
             # this invocation to the locked Playwright browser installed by CI.
@@ -1190,6 +1299,10 @@ def browser_checks(plan):
                 location = windows_action_failure_location(plan['sha'], invocation)
                 if location is not None:
                     print('FAIL Windows action location: ' + location, flush=True)
+            if flow in WINDOWS_DETAIL_FAILURE_CASES:
+                location = windows_detail_failure_location(flow, plan['sha'])
+                if location is not None:
+                    print('FAIL Windows detail location: ' + location, flush=True)
             raise  # Diagnostics never turn a failed browser flow into success.
         if flow == 'windows-fleet-msi':
             # Three bounded changed flows accompany the existing MSI selection;

@@ -1,3 +1,4 @@
+import {settlePausedDetailRoute} from './paused-detail-route.mjs';
 /** Inert coordinated-status fixtures. Importing launches no browser or host work. */
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
@@ -10,7 +11,7 @@ export const windowsMutationCoexistenceCaseName='Synthetic shared MSI and WUA bl
 export const windowsMutationCoexistenceDisclosure='Entirely intercepted invented coordinated MSI/WUA status metadata. Both Software and Updates display the same saved shared owner, exact terminal-recovery details, then an externally supplied released snapshot while original domain results remain unchanged. The fresh background WUA fixture shows recent signed evidence followed by unknown availability, with manual approvals only. Only read-only status and bounded inventory queries are exercised. No real API, package upload, grant, key, native installer, WUA, host mutation, remote unlock, recovery action, installation or reboot. Browser evidence is not durable-store or native acceptance.';
 export const windowsMutationCoexistenceSurfaces=Object.freeze(['software','updates']);
 export const windowsMutationCoexistencePhases=Object.freeze(['blocked','released']);
-const stages=new Set(['setup','document','blocked','released','reload','complete']);let stage='setup';
+const stages=new Set(['detail-route-readiness','reload-detail-route-readiness','setup','document','blocked','released','reload','complete']);let stage='setup';
 export const windowsMutationCoexistenceFailureStage=()=>stages.has(stage)?stage:'setup';
 const fail=()=>{throw new Error('Synthetic coordinated mutation evidence missing, unsafe or mismatched');};
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
@@ -111,12 +112,12 @@ export async function exerciseWindowsMutationCoexistence({page,expect,base,fixtu
   await expect(summary).toBeInViewport({ratio:1});expect(await summary.evaluate(el=>el.getBoundingClientRect().height)).toBeLessThanOrEqual(96);
   if(capture)await shot(page,`synthetic-windows-mutation-coexistence-${surface}-${phase}-${width}-${locale}`,windowsMutationCoexistenceDisclosure);
  };
- stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);
+ stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='document';
  stage='blocked';for(const surface of windowsMutationCoexistenceSurfaces)await verify(surface,'blocked',true);
  // A new saved snapshot is supplied externally by this inert fixture. The UI
  // never sends an unlock, completion, recovery, approval or native request.
  fixture.coexistenceSetPhase('released');stage='released';for(const surface of windowsMutationCoexistenceSurfaces)await verify(surface,'released',true);
- stage='reload';await page.reload();for(const surface of windowsMutationCoexistenceSurfaces)await verify(surface,'released',false);
+ stage='reload';await page.reload();stage='reload-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='reload';for(const surface of windowsMutationCoexistenceSurfaces)await verify(surface,'released',false);
  expect(fixture.coexistenceCounts.mutationWrites).toBe(0);expect(fixture.coexistenceCounts.secondTargetWrites).toBe(0);
  expect(fixture.managedAttempts).toEqual({reserve:0,upload:0,complete:0,deliver:0,review:0,approve:0});expect(fixture.updateCounts.approve).toBe(0);expect(fixture.softwareCounts.approve).toBe(0);
  stage='complete';return {softwareMounted:true,updatesMounted:true,blockedSharedOwner:true,exactRecoveryReadback:true,compactSummary:true,releasedReadback:true,originalOutcomesRetained:true,reloadReadback:true,backgroundRecentEvidence:true,backgroundUnknownAvailability:true,manualOnly:true,readOnly:true,softwareReads:fixture.coexistenceCounts.softwareReads,updateReads:fixture.coexistenceCounts.updateReads,mutationWrites:0,secondTargetWrites:0,realAPIRequests:0,nativeAcceptance:false};

@@ -495,3 +495,33 @@ including command replay across all seven documents and unchanged deadline
 rejection. These are a reproduced scheduling mechanism and a bounded harness
 correction; only the normal hosted LAN run can establish browser acceptance.
 The three cases' diagnostics expose reviewed finite stage codes only.
+
+The same test-only readiness gate covers the paused Windows managed-MSI and
+mutation-coexistence direct documents/reloads, Storage IO's initial detail and
+warm list/detail mounts, and the service-actions runner's service, history,
+update, download, retirement, standalone/background schedule and prepared-MSI
+detail recipes. The eager fleet-schedule list and standalone complete-service
+health capture are excluded. No fixture, consent, request, privacy guard or
+acceptance assertion is changed. Each genuine cold detail document consumes at
+most 300 ms. Managed-MSI, coexistence, service, update, download, retirement,
+prepared MSI and each schedule profile therefore add at most 600 ms per isolated
+context; history adds at most 300 ms. Contexts do not share clock budgets.
+
+Storage IO advances only 300 ms for its first cold detail. Its four same-document
+list/detail mounts are warm and consume zero, leaving 200 ms before the existing
+retained sample's original initial+500 ms deadline. Its unchanged 1,000 ms expiry
+step crosses that deadline (1,300 ms total controlled progress). Capture and
+retained timestamps are unchanged. The previous immediate away/back mount could
+bypass the initial fallback, so no prior Storage IO browser failure is claimed.
+
+Run `node --test tests/e2e-review/paused-windows-routes.test.mjs` for the inert
+full-App reproduction and actual driver-prefix regression. It bundles production
+App/auth/details/React, holds only the emitted lazy import until the real route
+fallback commits, and injects the actual pinned Playwright clock before React
+loads into each fresh jsdom document. It checks the 299/300 ms boundary, both
+locales, real direct/reload readiness prefixes, zero-progress warm mounts and
+the unchanged Storage IO expiry transition. It does not run the drivers' later
+interactions, produce screenshots or establish hosted browser acceptance.
+The selected Windows failure diagnostics expose only finite source-defined
+case/stage coordinates; service-action diagnostics retain their exact
+source/invocation/locale/viewport binding and shared stage contract.
