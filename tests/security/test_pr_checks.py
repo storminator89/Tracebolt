@@ -1690,6 +1690,85 @@ class VitestFailureTests(unittest.TestCase):
         return {'testResults': [{'name': str(source), 'status': 'failed', 'message': marker,
                 'assertionResults': [{'status': 'passed'}, {'status': 'failed', 'fullName': marker, 'failureMessages': [marker]}]}]}
 
+    def route_fixture(self, root, phase='blocked-mount'):
+        source = root / 'web/src/route-details.test.tsx'; source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('source fixture')
+        assertions = [{'status': 'passed'} for _ in range(19)]
+        assertions[10] = {'status': 'failed', 'title': p.ROUTE_FIRST_COMMIT_TITLE,
+                          'ancestorTitles': [p.ROUTE_FIRST_COMMIT_SUITE],
+                          'fullName': p.ROUTE_FIRST_COMMIT_SUITE + ' ' + p.ROUTE_FIRST_COMMIT_TITLE,
+                          'failureMessages': ['PRIVATE_RAW_VALUE'],
+                          'meta': {'routeFirstCommitPhase': phase}}
+        return {'testResults': [{'name': str(source), 'status': 'failed', 'message': 'PRIVATE_RAW_VALUE',
+                                'assertionResults': assertions}]}
+
+    def test_route_phase_is_a_closed_enum_for_the_exact_source_known_case(self):
+        phases = {'bootstrap', 'suspend-import', 'blocked-mount', 'blocked-dom', 'resume-dom', 'resumed-mount'}
+        self.assertEqual(p.ROUTE_FIRST_COMMIT_PHASES, phases)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'
+            with patch.object(p, 'ROOT', root):
+                for phase in sorted(phases):
+                    report.write_text(json.dumps(self.route_fixture(root, phase)))
+                    self.assertEqual(p.vitest_failure_location(report),
+                                     'web/src/route-details.test.tsx assertions=11 route-first-commit=11:' + phase)
+
+    def test_route_phase_rejects_unknown_extra_and_malformed_metadata(self):
+        bad = [None, {}, [], 'PRIVATE_RAW_VALUE', {'other': 'blocked-mount'},
+               {'routeFirstCommitPhase': 'blocked-mount', 'extra': 'PRIVATE_RAW_VALUE'}]
+        bad += [{'routeFirstCommitPhase': value} for value in [
+            None, True, 11, [], {}, 'PRIVATE_RAW_VALUE', 'blocked-mount\nPRIVATE_RAW_VALUE',
+            'blocked-mount ', 'prefix-blocked-mount', 'x' * 10000,
+        ]]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'; value = self.route_fixture(root)
+            with patch.object(p, 'ROOT', root):
+                for meta in bad:
+                    value['testResults'][0]['assertionResults'][10]['meta'] = meta
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report), 'web/src/route-details.test.tsx assertions=11')
+                value['testResults'][0]['assertionResults'][10]['meta'] = {'routeFirstCommitPhase': 'blocked-mount'}
+                raw = json.dumps(value).replace('"routeFirstCommitPhase": "blocked-mount"',
+                    '"routeFirstCommitPhase": "blocked-mount", "routeFirstCommitPhase": "PRIVATE_RAW_VALUE"')
+                report.write_text(raw); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_route_phase_is_withheld_for_other_files_positions_cases_and_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); report = root / 'private.json'
+            with patch.object(p, 'ROOT', root):
+                for field, invalid in [('title', 'PRIVATE_RAW_VALUE'), ('fullName', 'PRIVATE_RAW_VALUE'),
+                                       ('ancestorTitles', ['PRIVATE_RAW_VALUE'])]:
+                    value = self.route_fixture(root); value['testResults'][0]['assertionResults'][10][field] = invalid
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report), 'web/src/route-details.test.tsx assertions=11')
+                value = self.route_fixture(root); row = value['testResults'][0]
+                other = root / 'web/src/other.test.tsx'; other.write_text('source fixture'); row['name'] = str(other)
+                report.write_text(json.dumps(value))
+                self.assertEqual(p.vitest_failure_location(report), 'web/src/other.test.tsx assertions=11')
+                for position in [0, 9, 11, 18]:
+                    value = self.route_fixture(root); assertions = value['testResults'][0]['assertionResults']
+                    assertions[position], assertions[10] = assertions[10], assertions[position]
+                    report.write_text(json.dumps(value))
+                    self.assertEqual(p.vitest_failure_location(report),
+                                     'web/src/route-details.test.tsx assertions=' + str(position + 1))
+                value = self.route_fixture(root); row = value['testResults'][0]
+                row['status'] = 'passed'; row['assertionResults'][10]['status'] = 'passed'
+                report.write_text(json.dumps(value)); self.assertIsNone(p.vitest_failure_location(report))
+
+    def test_route_phase_preserves_failed_process_and_private_report_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); value = self.route_fixture(root, 'resumed-mount'); reports = []; output = io.StringIO()
+            def failure(args, cwd, stage):
+                report = Path(next(a.split('=', 1)[1] for a in args if a.startswith('--outputFile=')))
+                self.assertNotIn('artifacts', report.parts); reports.append(report)
+                report.write_text(json.dumps(value)); raise ValueError('original failure')
+            with patch.object(p, 'ROOT', root), patch.object(p, 'run', side_effect=failure), redirect_stdout(output):
+                with self.assertRaisesRegex(ValueError, 'original failure'):
+                    p.run_vitest(['vitest', 'run', '--maxWorkers=1'], root / 'web', stage='ui-test')
+            self.assertEqual(output.getvalue(),
+                             'FAIL UI location: web/src/route-details.test.tsx assertions=11 route-first-commit=11:resumed-mount\n')
+            self.assertFalse(reports[0].exists())
+
     def test_only_source_file_and_numeric_coordinates_are_released(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); report = root / 'private.json'; value = self.fixture(root)
@@ -2143,7 +2222,7 @@ class ConditionalFailureTests(unittest.TestCase):
         # Execute only the inert stage producer, never import a browser runner.
         script = "import {focusContrastStage} from './tests/e2e-review/focus-contrast-browser.mjs'; const result=[]; for(const target of " + json.dumps(targets) + ") for(const size of ['desktop','mobile']) for(const locale of ['en','de']) for(const theme of ['light','dark']) for(const phase of " + json.dumps(p.FOCUS_PHASES) + ") result.push(focusContrastStage(target,size,locale,theme,phase)); process.stdout.write(JSON.stringify(result));"
         values = json.loads(p.subprocess.check_output(['node', '--input-type=module', '-e', script], cwd=ROOT))
-        self.assertEqual(values, list(p.CONDITIONAL_FOCUS_STAGES)); self.assertEqual(len(values), 96)
+        self.assertEqual(values, list(p.CONDITIONAL_FOCUS_STAGES)); self.assertEqual(len(values), 432)
 
     def test_all_focus_coordinates_and_earlier_unrelated_failure_project_only_fixed_labels(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
@@ -2255,6 +2334,72 @@ process.stdout.write(marker);process.stderr.write(marker);process.exitCode=1;
                 self.assertIn('FAIL Conditional location: case=' + case + ' stage=' + expected, text)
                 self.assertNotIn(self.marker, text); self.assertNotIn('PASS: authenticated', text)
                 self.assertNotIn('durationMs', text); self.assertNotIn('coverageRefresh', text)
+
+    def test_actual_exposure_helper_failures_reach_only_their_fixed_public_subphase(self):
+        # Real helper, geometry classifier, assertions, check() catch and report
+        # construction. Locator evaluations return synthetic fixtures; no DOM or
+        # browser runner is imported, and no target scroll/focus rescue is added.
+        phases = ['outline geometry read', 'outline geometry classify', 'outline hit-test read',
+                  'outline left edge', 'outline right edge', 'outline top edge', 'outline top band',
+                  'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left',
+                  'outline hit right', 'outline hit bottom']
+        original_run = p.subprocess.run
+        script = r"""
+import fs from 'node:fs'; import vm from 'node:vm'; import path from 'node:path';
+import assert from 'node:assert/strict'; import {pathToFileURL} from 'node:url';
+const [runner, output, sha, phase, coverage, lifecycle, marker] = JSON.parse(process.env.CONDITIONAL_SUBPHASE_TEST);
+const {assertKeyboardContrast,focusContrastStage}=await import(pathToFileURL(path.join(path.dirname(runner),'focus-contrast-browser.mjs')));
+const text=fs.readFileSync(runner,'utf8'), names=[...text.matchAll(/await check\('([^']+)'/g)].map(m=>m[1]);
+const check=text.slice(text.indexOf('async function check('),text.indexOf('\ntry{\n if(!Number.isInteger(lifecycleRepeats)'));
+const sourceReport=text.match(/const report=(\{sourceSha,applicationBaselineArchiveSha256,createdAt:.*?);await fs.writeFile/)[1];
+const box={results:[],sourceSha:sha,applicationBaselineArchiveSha256:'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b',apiSmoke:false,runtimeErrorCount:0,fatal:false,context:null,collectDiagnostics:null,stage:'setup',currentTest:'',console:{log(){}},start:async()=>{},stop:async()=>{}};
+box.mark=value=>{box.stage=value;};box.diagnosticDetails=async()=>box.currentTest===names[1]?{diagnostics:coverage}:box.currentTest===names[17]?{diagnostics:lifecycle}:{};
+vm.createContext(box);vm.runInContext(check,box);
+const geometry={bounds:{left:277,top:211,right:355,bottom:276},outlineWidth:3,outlineOffset:-3,viewport:{left:0,top:0,right:390,bottom:844},clips:[{x:true,y:true,bounds:{left:35,top:150,right:355,bottom:844}}],headers:[{left:0,top:55,right:390,bottom:150}],allowTallBottom:false};
+const hits={top:true,left:true,right:true,bottom:true};
+if(phase==='outline geometry classify')geometry.outlineWidth=NaN;
+if(phase==='outline left edge')geometry.bounds.left=34;
+if(phase==='outline right edge')geometry.bounds.right=356;
+if(phase==='outline top edge')geometry.bounds.top=149;
+if(phase==='outline top band'){geometry.bounds.top=843;geometry.bounds.bottom=900;}
+if(phase==='outline header'){geometry.clips=[];geometry.bounds.top=120;geometry.bounds.bottom=180;}
+if(phase==='outline bottom edge'){geometry.bounds.top=820;geometry.bounds.bottom=875;}
+for(const edge of Object.keys(hits))if(phase==='outline hit '+edge)hits[edge]=false;
+let focused='',tabs=0,evaluations=0;const actions=[];
+const locator=selector=>({selector,first(){return this;},async scrollIntoViewIfNeeded(){actions.push('scroll:'+selector);},async focus(){actions.push('focus:'+selector);focused=selector;},async evaluate(){
+ evaluations++;
+ if(evaluations===1)return {theme:'light',backgrounds:['rgb(246, 248, 249)'],foreground:'#05756a',focusVisible:true,outlineStyle:'solid',outlineWidth:'3px',outlineOffset:'-3px'};
+ if(evaluations===2){if(phase==='outline geometry read')throw new Error(marker);return geometry;}
+ if(evaluations===3){if(phase==='outline hit-test read')throw new Error(marker);return hits;}
+ throw new Error('unexpected fixture evaluation');
+}});
+const expect=value=>value?.selector?{async toBeFocused(){assert.equal(focused,value.selector);},async toBeInViewport(){}}:{toBe(want){assert.equal(value,want);},toBeGreaterThanOrEqual(want){assert.ok(value>=want);}};
+const page={locator,keyboard:{async press(key){assert.equal(key,'Tab');actions.push(key);focused=['region','target'][tabs++];}}};
+for(const [index,name] of names.entries())await box.check(name,async()=>{
+ if(index===2)await assertKeyboardContrast({page,expect,selector:'target',keyboardEntry:{from:'anchor',path:['region','target']},stage:step=>box.mark(focusContrastStage('legacy-package-details','mobile','en','light',step))});
+});
+assert.equal(box.results[2].status,'FAIL');assert.equal(box.stage,'fixture setup');
+assert.equal(box.results[2].stage,focusContrastStage('legacy-package-details','mobile','en','light',phase));
+assert.deepEqual(actions,['scroll:anchor','focus:anchor','Tab','Tab']);
+const report=vm.runInContext('('+sourceReport+')',box);fs.writeFileSync(output,JSON.stringify(report));
+process.stdout.write(marker);process.stderr.write(marker);process.exitCode=1;
+"""
+        for phase in phases:
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp, patch.object(p, 'ROOT', Path(tmp)):
+                path = Path(tmp) / 'artifacts/review/conditional-browser-results.json'; path.parent.mkdir(parents=True)
+                def process(args, **kwargs):
+                    if args[-1] == '--pr-smoke': return SimpleNamespace(returncode=0)
+                    self.assertEqual(args, ['node', p.FLOWS['conditional']]); self.assertFalse(path.exists())
+                    data = [str(ROOT / p.FLOWS['conditional']), str(path), SHA, phase, self.coverage(), self.lifecycle(), self.marker]
+                    return original_run(['node', '--input-type=module', '-e', script], **{**kwargs, 'env': {**kwargs['env'], 'CONDITIONAL_SUBPHASE_TEST': json.dumps(data)}})
+                output = io.StringIO()
+                with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output), self.assertRaises(ValueError):
+                    p.browser_checks({'flows': ['conditional'], 'sha': SHA})
+                text = output.getvalue()
+                self.assertIn('FAIL stage: browser-conditional', text)
+                self.assertIn('FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-' + phase.replace(' ', '-'), text)
+                for private in [self.marker, 'bounds', 'hitTests', 'outlineWidth', '277', '355', 'PASS: authenticated']:
+                    self.assertNotIn(private, text)
 
     def real_lifecycle_report(self, repeats, fulfill_failure):
         # Evaluate the actual lifecycle callback, check() and report object only.

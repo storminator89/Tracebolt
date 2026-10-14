@@ -133,7 +133,7 @@ describe('closed focus diagnostic coordinates', () => {
   expect(names).toEqual(['legacy-package-table', 'legacy-package-details', 'advisory-toggle', 'inventory-source-tab', 'complete-package-search', 'complete-package-table', 'complete-package-details']);
   const helper = readFileSync('../tests/e2e-review/focus-contrast-browser.mjs', 'utf8');
   const phases = [...helper.matchAll(/stage\('([^']+)'\)/g)].map(match => match[1]);
-  expect(phases).toEqual(['keyboard entry', 'computed contrast', 'outline exposure', 'synthetic capture']);
+  expect(phases).toEqual(['outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture']);
   for (const name of names) for (const size of ['desktop', 'mobile']) for (const locale of ['en', 'de']) for (const theme of ['light', 'dark']) for (const phase of phases)
    expect(focusContrastStage(name, size, locale, theme, phase)).toBe(`focus contrast ${name} ${size} ${locale} ${theme}: ${phase}`);
  });

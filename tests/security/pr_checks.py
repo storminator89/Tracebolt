@@ -360,8 +360,30 @@ def run(args, cwd=ROOT, stage='selected-check', env=None):
 
 
 
+ROUTE_FIRST_COMMIT_PHASES = frozenset({
+    'bootstrap', 'suspend-import', 'blocked-mount', 'blocked-dom', 'resume-dom', 'resumed-mount',
+})
+ROUTE_FIRST_COMMIT_TITLE = 'blocks first commit for same-task pagehide and import completion (event-first)'
+ROUTE_FIRST_COMMIT_SUITE = 'route-local deferred detail lifecycle'
+
+
+def route_first_commit_failure_phase(source, index, assertion):
+    """Accept one fixed test's closed phase only, never arbitrary reporter metadata."""
+    if (source != 'web/src/route-details.test.tsx' or index != 11
+            or assertion.get('status') != 'failed'
+            or assertion.get('title') != ROUTE_FIRST_COMMIT_TITLE
+            or assertion.get('ancestorTitles') != [ROUTE_FIRST_COMMIT_SUITE]
+            or assertion.get('fullName') != ROUTE_FIRST_COMMIT_SUITE + ' ' + ROUTE_FIRST_COMMIT_TITLE):
+        return None
+    meta = assertion.get('meta')
+    if type(meta) is not dict or set(meta) != {'routeFirstCommitPhase'}:
+        return None
+    phase = meta['routeFirstCommitPhase']
+    return phase if type(phase) is str and phase in ROUTE_FIRST_COMMIT_PHASES else None
+
+
 def vitest_failure_location(path):
-    """Only source-known file coordinates and numeric assertion positions leave CI."""
+    """Release source coordinates and one allowlisted route test's fixed phase."""
     try:
         allowed = {str(file.resolve()): file.relative_to(ROOT).as_posix()
                    for directory in ['web/src', 'web/scripts', 'tests/e2e-review']
@@ -386,15 +408,21 @@ def vitest_failure_location(path):
                     or len(row['assertionResults']) > 50000):
                 return None
             seen.add(row['name'])
-            indices = []
+            indices, route_phase = [], None
             for i, assertion in enumerate(row['assertionResults'], 1):
                 if type(assertion) is not dict or assertion.get('status') not in ['passed', 'failed', 'pending', 'todo', 'skipped', 'disabled']:
                     return None
                 if assertion['status'] == 'failed':
                     indices.append(i)
+                    phase = route_first_commit_failure_phase(allowed[row['name']], i, assertion)
+                    if phase is not None:
+                        route_phase = phase
             if row['status'] == 'failed':
                 coordinates = ','.join(map(str, indices[:10])) or 'runner-or-hook'
-                failed.append(allowed[row['name']] + ' assertions=' + coordinates)
+                location = allowed[row['name']] + ' assertions=' + coordinates
+                if route_phase is not None:
+                    location += ' route-first-commit=11:' + route_phase
+                failed.append(location)
             elif indices:
                 return None
         return '; '.join(sorted(failed)[:20]) or None
@@ -1152,7 +1180,7 @@ CONDITIONAL_LITERAL_STAGES = {
     'mobile package viewport': 'mobile-package-viewport',
 }
 CONDITIONAL_FOCUS_TARGETS = ('legacy-package-table', 'legacy-package-details', 'advisory-toggle')
-FOCUS_PHASES = ('keyboard entry', 'computed contrast', 'outline exposure', 'synthetic capture')
+FOCUS_PHASES = ('outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture')
 CONDITIONAL_FOCUS_STAGES = {
     f'focus contrast {target} {size} {locale} {theme}: {phase}':
     f'focus-{target}-{size}-{locale}-{theme}-{phase.replace(" ", "-")}'

@@ -72,7 +72,8 @@ export function focusVisibility({ bounds, outlineWidth, outlineOffset, viewport,
  return { outlineBounds: outline, clipBounds: clip, clipped, topBandVisible, tallBottomCrop, headerOverlap,
   accepted: !clipped.left && !clipped.right && !clipped.top && (!clipped.bottom || tallBottomCrop) && topBandVisible && !headerOverlap };
 }
-export async function measureFocusVisibility(control) {
+export async function measureFocusVisibility(control, stage = () => {}) {
+ stage('outline geometry read');
  const geometry = await control.evaluate(element => {
   const rect = node => { const r = node.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
   const style = getComputedStyle(element), clips = [];
@@ -88,9 +89,11 @@ export async function measureFocusVisibility(control) {
    viewport: { left: 0, top: 0, right: innerWidth, bottom: innerHeight }, clips, headers,
    allowTallBottom: element.matches('.package-table-scroll[tabindex="0"]') };
  });
+ stage('outline geometry classify');
  const visibility = focusVisibility(geometry);
  // Inset ring samples are inside the target border box, away from rounded
  // corners. Hit testing rejects a covering fixed header/overlay without moving it.
+ stage('outline hit-test read');
  const hitTests = await control.evaluate((element, v) => {
   const ring = v.outlineBounds, width = parseFloat(getComputedStyle(element).outlineWidth);
   const centerX = (ring.left + ring.right) / 2;
@@ -136,9 +139,21 @@ export async function assertKeyboardContrast({ page, expect, selector, keyboardE
  expect(measurement.ratio).toBeGreaterThanOrEqual(3);
  if (keyboardEntry) {
   stage('outline exposure');
-  const visibility = await measureFocusVisibility(control);
-  expect(visibility.clipped.left).toBe(false); expect(visibility.clipped.right).toBe(false); expect(visibility.clipped.top).toBe(false);
-  expect(visibility.topBandVisible).toBe(true); expect(visibility.headerOverlap).toBe(false); expect(visibility.accepted).toBe(true);
+  const visibility = await measureFocusVisibility(control, stage);
+  stage('outline left edge'); expect(visibility.clipped.left).toBe(false);
+  stage('outline right edge'); expect(visibility.clipped.right).toBe(false);
+  stage('outline top edge'); expect(visibility.clipped.top).toBe(false);
+  stage('outline top band'); expect(visibility.topBandVisible).toBe(true);
+  stage('outline header'); expect(visibility.headerOverlap).toBe(false);
+  // Explain the unchanged aggregate assertion using only fixed labels for its
+  // existing booleans. No coordinate, DOM content or measurement is released.
+  if (visibility.clipped.bottom && !visibility.tallBottomCrop) stage('outline bottom edge');
+  else if (visibility.hitTests.top === false) stage('outline hit top');
+  else if (visibility.hitTests.left === false) stage('outline hit left');
+  else if (visibility.hitTests.right === false) stage('outline hit right');
+  else if (visibility.hitTests.bottom === false) stage('outline hit bottom');
+  else stage('outline accepted');
+  expect(visibility.accepted).toBe(true);
   return { ...measurement, entry, visibility };
  }
  return { ...measurement, entry };
@@ -153,7 +168,7 @@ export async function setContrastTheme(page, expect, theme) {
 export function focusContrastStage(name, size, locale, theme, phase) {
  if (!['legacy-package-table', 'legacy-package-details', 'advisory-toggle', 'inventory-source-tab', 'complete-package-search', 'complete-package-table', 'complete-package-details'].includes(name)
   || !['desktop', 'mobile'].includes(size) || !['en', 'de'].includes(locale) || !['light', 'dark'].includes(theme)
-  || !['keyboard entry', 'computed contrast', 'outline exposure', 'synthetic capture'].includes(phase)) return 'focus contrast unknown';
+  || !['outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture'].includes(phase)) return 'focus contrast unknown';
  return `focus contrast ${name} ${size} ${locale} ${theme}: ${phase}`;
 }
 export async function captureFocusMatrix({ page, expect, targets, capture, mark = () => {} }) {
