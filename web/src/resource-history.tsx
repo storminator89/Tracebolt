@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { memo, useId, useMemo, useState } from 'react';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
@@ -11,7 +11,9 @@ const copy = {
     de: { title: 'Letzte 24 Stunden', memory: 'Arbeitsspeicher', disk: 'Root-Dateisystem', empty: 'Der Verlauf entsteht mit eingehenden Meldungen.', unknown: 'Keine gültigen Messungen in diesem Zeitraum', loading: 'Verlauf wird geladen …', unavailable: 'Verlauf nicht verfügbar.', invalid: 'Verlauf konnte nicht geprüft werden. Erneut versuchen.', session: 'Zum Anzeigen des Verlaufs erneut anmelden.', retry: 'Erneut versuchen', revoked: 'Gerät widerrufen', expired: 'Gerätezertifikat abgelaufen', not_configured: 'Verlauf für diese Registrierung nicht verfügbar.', detail: 'Hinweise zum Verlauf', note: 'Letzte akzeptierte Messung pro Minute; Lücken bedeuten fehlende Daten. Aufzeichnung ab den Meldungen nach diesem Update.', diskNote: 'Belegung des Root-Dateisystems, keine Datenträgeraktivität.', keyboard: 'Mit den Pfeiltasten links und rechts Messungen prüfen.', gap: 'Keine Messung', valid: 'Messungen', now: 'Jetzt' },
 };
 const W = 360, H = 154, LEFT = 29, RIGHT = 7, TOP = 12, BOTTOM = 25, width = W - LEFT - RIGHT, height = H - TOP - BOTTOM;
-function ResourceChart({ view, metric, label }: { view: ResourceHistory; metric: ResourceKey; label: string }) {
+// Metadata age ticks do not change the history snapshot. Reuse its SVG render;
+// new snapshots, locale subscriptions and local inspection still update it.
+const ResourceChart = memo(function ResourceChart({ view, metric, label }: { view: ResourceHistory; metric: ResourceKey; label: string }) {
     const [locale] = useLocale(), c = copy[locale], description = useId(), [selected, setSelected] = useState<ResourceMetric | null>(null);
     const segments = useMemo(() => resourceSegments(view, metric), [view, metric]), points = useMemo(() => segments.flat(), [segments]);
     const start = Date.parse(view.windowStart), end = Date.parse(view.serverNow), x = (at: string) => LEFT + (Date.parse(at) - start) / (end - start) * width, y = (value: number) => TOP + (100 - value) / 100 * height;
@@ -30,7 +32,7 @@ function ResourceChart({ view, metric, label }: { view: ResourceHistory; metric:
         {!points.length && <span className="resource-chart-empty">{c.unknown}</span>}
         <div id={description} className={`resource-chart-inspection ${sample ? 'visible' : ''}`} aria-live="polite">{sample ? <><strong>{new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(sample.value!)}%</strong><time dateTime={sample.collectedAt}>{fullDate(sample.collectedAt)}</time></> : <span>{c.keyboard}</span>}</div>
     </figure>;
-}
+});
 export function ResourceHistoryCharts({ deviceId, sessionKey, ready, platform }: { deviceId: string; sessionKey: string | null; ready: boolean; platform?: 'windows' }) {
     const operator = useOperator(), [locale] = useLocale(), c = copy[locale];
     const enabled = ready && operator?.mode === 'lan' && operator.authenticated;

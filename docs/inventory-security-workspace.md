@@ -37,6 +37,28 @@ selector's disclosure returns to the current CVE reader. No polling is added.
   legacy profile. They cannot replace complete counts or override current CVE and
   update views. Offline catalog gaps refer only to that older diagnostic source.
 
+## Bounded inventory read recovery
+
+The endpoint-identity, complete process/mount and software-summary readers allow
+one automatic retry of the exact metadata GET after `429 storage_busy`. The
+two-second delay retains the original abort controller, protected-request epoch,
+freshness anchor and total ten-second deadline. A second busy response stays
+visible until a deliberate refresh or a genuine suspension and return. Query
+POSTs and full package paging do not gain automatic replay.
+
+Blur, hidden visibility and pagehide cancel the pending read or retry delay and
+clear private values. A subsequent visible return admits one fresh read; later
+focus, visible-visibility and persisted-pageshow notifications for that same
+return do not replace it. Those notifications are also no-ops while an initial
+read or its busy delay is active. They cannot restart the two-second delay,
+extend the ten-second budget, renew source retention or bypass an auth lock.
+An actual later suspension still cancels immediately and requires another fresh
+authorized read. Source data that expires during a delay remains unavailable.
+
+Component and bounded-API fixtures exercise these sequences using synthetic
+events and data. They do not establish actual OS suspension or native BFCache
+acceptance.
+
 ## Remaining administration gap
 
 A one-time, explicitly reviewed full administration profile is not implemented by
