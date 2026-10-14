@@ -1,7 +1,7 @@
 /** Actual unchanged React/resource lifecycle with deferred synthetic DTOs.
  * No browser, server, collector, native fixture or external network. */
 import { useLayoutEffect } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '../../web/node_modules/@testing-library/react/dist/index.js';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../../web/node_modules/@testing-library/react/dist/index.js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { APIError, mutateRaw, request } from '../../web/src/api';
 import { CompleteOverviewPanel } from '../../web/src/complete-overview';
@@ -142,8 +142,30 @@ it.each(['overview', 'packages', 'system'] as const)('%s rejects a draft-cleared
 it('accepts a truthful retained overview page beside a failed collection attempt', async () => {
   const f = overviewGolden(); vi.mocked(request).mockResolvedValue(f.view); vi.mocked(mutateRaw).mockResolvedValue(f.processPage);
   render(<CompleteOverviewPanel deviceId={overviewDevice} section="processes"/>);
-  await screen.findByText('Latest collection attempt failed'); await waitFor(() => expect(ready('.complete-overview')).toBe(true));
+  await waitFor(() => expect(ready('.complete-overview')).toBe(true));
+  // The visible status and the hidden metadata heading intentionally share a label.
+  const warning = screen.getByRole('status'), summary = screen.getByText('Capture details', { selector: 'summary' }), details = summary.parentElement!;
+  expect(details).not.toHaveAttribute('open');
+  expect(within(warning).getByText('Latest collection attempt failed')).toBeVisible();
+  expect(within(warning).getByText('Collection timed out')).toBeVisible();
   expect(screen.queryByRole('alert')).toBeNull(); expect(screen.getByRole('table')).toBeVisible();
+  const age = screen.getByText('Original observation age (minutes)').nextElementSibling!;
+  expect(age).toBeVisible(); expect(age).toHaveTextContent(/^5$/);
+  const attemptedAt = within(details).getByText('Attempted at').nextElementSibling!;
+  expect(attemptedAt).toHaveTextContent(f.view.processes.failure!.attemptedAt); expect(attemptedAt).not.toBeVisible();
+  expect(within(details).getByRole('heading', { name: 'Latest collection attempt failed', level: 4 })).not.toBeVisible();
+  fireEvent.click(summary);
+  expect(details).toHaveAttribute('open');
+  expect(within(details).getByRole('heading', { name: 'Latest collection attempt failed', level: 4 })).toBeVisible();
+  expect(attemptedAt).toBeVisible();
+  expect(within(details).getByText('Attempt sequence').nextElementSibling).toHaveTextContent(f.view.processes.failure!.sequence);
+  expect(within(details).getByText('Attempt generation').nextElementSibling).toHaveTextContent(f.view.processes.failure!.generationId);
+  expect(within(details).getByText('Capture started').nextElementSibling).toHaveTextContent(f.view.processes.complete!.manifest.captureStartedAt);
+  expect(within(details).getByText('Original retention deadline').nextElementSibling).toHaveTextContent(f.view.processes.complete!.retainedUntil);
+  fireEvent.click(summary);
+  expect(details).not.toHaveAttribute('open'); expect(attemptedAt).not.toBeVisible();
+  expect(warning).toBeVisible(); expect(age).toHaveTextContent(/^5$/); expect(screen.getByRole('table')).toBeVisible();
+  expect(ready('.complete-overview')).toBe(true); expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
 });
 
 it('rejects duplicate panels and unsupported selectors', async () => {
