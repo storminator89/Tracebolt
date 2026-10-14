@@ -1,3 +1,4 @@
+import { reviewDevicesWorkspace } from './devices-workspace-browser.mjs';
 /** Page-by-page rendered copy review. Overview rows are restricted to the
  * disposable manager's built-in synthetic fixtures before any public capture. */
 import { reviewOverviewWorkStart } from './overview-work-start-browser.mjs';
@@ -81,6 +82,7 @@ export async function conciseShellGallery({ test, pageAt, loaded, shot, expect, 
     if (route === 'devices') await expect(page.locator('.device-table .source.real')).toHaveCount(0);
     await capture(route);
     if (route === 'devices') {
+     await reviewDevicesWorkspace({ page, expect, capture, locale, size, viewport });
      await inventoryKeyboardReview({ page, expect, capture, locale, size });
      await page.getByRole('button', { name: locale === 'de' ? 'Dunkles Design aktivieren' : 'Switch to dark theme', exact: true }).click();
      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

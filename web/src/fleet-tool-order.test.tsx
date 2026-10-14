@@ -21,7 +21,8 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const flush = () => act(async () => {});
 const toolClasses = ['windows-incident-inbox', 'windows-fleet-software', 'windows-fleet-update-worklist', 'windows-fleet-managed-msi', 'windows-maintenance', 'windows-notifications'];
 const panel = () => document.querySelector<HTMLElement>('.inventory-panel')!;
-const tools = () => toolClasses.map(name => panel().querySelector<HTMLElement>(`:scope > .${name}`)!);
+const toolsPanel = () => document.querySelector<HTMLElement>('.devices-tools-section')!;
+const tools = () => toolClasses.map(name => toolsPanel().querySelector<HTMLElement>(`:scope > .${name}`)!);
 const expectSameTools = (original: HTMLElement[]) => tools().forEach((tool, index) => expect(tool).toBe(original[index]));
 function server(named = false, fleet = devices) {
     const session = { mode: 'lan', transport: 'https', insecureTestMode: false, transportWarning: null, authenticationRequired: true, authenticated: true, csrfToken: 'fixture-csrf', serverNow: windowsNow, expiresAt: windowsCapacitySession, expiresInSeconds: 3590, loginMode: named ? 'named' : 'shared', actorId: named ? `operator_${'6'.repeat(32)}` : null, capabilities: named ? ['read', 'windows_update_install', 'windows_managed_msi_deliver', 'windows_managed_msi_install'] : ['read'] };
@@ -55,6 +56,16 @@ async function chooseGroup(id: string) {
     if (screen.queryByRole('button', { name: 'Fleet groups' })) { fireEvent.click(screen.getByRole('button', { name: 'Fleet groups' })); await flush(); }
     fireEvent.change(screen.getByRole('combobox', { name: 'Fleet groups' }), { target: { value: id } }); await flush();
 }
+function localJumps() {
+    const before = window.location.hash, length = window.history.length;
+    const index = document.querySelector<HTMLElement>('.devices-workspace-index')!;
+    for (const name of ['Setup', 'Inventory', 'Fleet tools']) {
+        const button = within(index).getByRole('button', { name });
+        fireEvent.click(button);
+        expect(document.getElementById(button.getAttribute('aria-controls')!)).toHaveFocus();
+    }
+    expect(window.location.hash).toBe(before); expect(window.history.length).toBe(length);
+}
 function changeFilters() {
     fireEvent.change(screen.getByRole('textbox', { name: 'Search devices' }), { target: { value: 'no-match' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Sort devices' }), { target: { value: 'name' } });
@@ -70,7 +81,7 @@ describe('device list before the existing fleet tools', () => {
         parts.forEach(node => expect(node).not.toBeNull());
         for (let i = 1; i < parts.length; i++) expect(parts[i - 1]!.compareDocumentPosition(parts[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(tools()).toHaveLength(6);
-        for (const tool of tools()) { expect(tool.parentElement).toBe(panel()); expect(tool.querySelector('button[aria-expanded]')).toHaveAttribute('aria-expanded', 'false'); }
+        for (const tool of tools()) { expect(tool.parentElement).toBe(toolsPanel()); expect(tool.querySelector('button[aria-expanded]')).toHaveAttribute('aria-expanded', 'false'); }
         expect(panel().querySelectorAll('.device-table tbody tr')).toHaveLength(3);
         expect(s.fetch.mock.calls.some(([url]) => /windows-incidents|windows-software|windows-update|windows-managed-msi|windows-maintenance|windows-notifications/.test(url))).toBe(false);
         expect(s.posts()).toHaveLength(0);
@@ -87,7 +98,7 @@ describe('device list before the existing fleet tools', () => {
         const [path, init] = s.posts()[0];
         expect(path).toBe('/api/fleet/windows-incidents/acknowledge'); expect(JSON.parse(init!.body as string)).toEqual({ key: windowsIncidentItem().key });
         const pending = within(inbox).getByRole('button', { name: /^Mark seen:/ }); expect(pending).toBeDisabled();
-        changeFilters(); await chooseGroup(other);
+        localJumps(); changeFilters(); await chooseGroup(other); localJumps();
         expect(screen.getByRole('heading', { name: 'No matching devices' })).toBeVisible();
         expectSameTools(original); expect(within(inbox).getByRole('button', { name: /^Mark seen:/ })).toBe(pending);
         expect(pending).toBeDisabled(); expect(init!.signal?.aborted).toBe(false);
@@ -115,7 +126,7 @@ describe('device list before the existing fleet tools', () => {
             expect(within(region).getByText('Office · Group revision 2')).toBeVisible();
         }
         const frozen = [updates, msi].map(region => within(region).getByRole('button', { name: 'Open device: Desk One' }));
-        changeFilters(); await chooseGroup(other);
+        localJumps(); changeFilters(); await chooseGroup(other); localJumps();
         expectSameTools(original); expect(screen.getByRole('heading', { name: 'No matching devices' })).toBeVisible();
         for (const [index, region] of [updates, msi].entries()) {
             expect(within(region).getByText('Office · Group revision 2')).toBeVisible();
@@ -128,6 +139,23 @@ describe('device list before the existing fleet tools', () => {
         expect(s.fetch.mock.calls.some(([url]) => url === `/api/devices/${windowsDeviceId}/windows-managed-msi`)).toBe(true);
         expect(s.fetch.mock.calls.some(([url]) => url.startsWith(`/api/devices/${second}/`) || url.startsWith(`/api/devices/${linux}/`))).toBe(false);
         expect(s.posts()).toHaveLength(0);
+    });
+
+    it('retains saved view, search, sort and group context across local jumps without reads', async () => {
+        const s = server(); render(<App/>); await flush(); await chooseGroup(office);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Search devices' }), { target: { value: 'Desk' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Sort devices' }), { target: { value: 'name' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save view' }));
+        const saved = localStorage.getItem('local-rmm-saved-view'), original = tools(), reads = s.fetch.mock.calls.length;
+        localJumps();
+        expect(s.fetch.mock.calls).toHaveLength(reads); expectSameTools(original);
+        expect(screen.getByRole('textbox', { name: 'Search devices' })).toHaveValue('Desk');
+        expect(screen.getByRole('combobox', { name: 'Sort devices' })).toHaveValue('name');
+        expect(screen.getByRole('combobox', { name: 'Fleet groups' })).toHaveValue(office);
+        expect(localStorage.getItem('local-rmm-saved-view')).toBe(saved);
+        fireEvent.change(screen.getByRole('textbox', { name: 'Search devices' }), { target: { value: 'no-match' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Saved view' }));
+        expect(screen.getByRole('textbox', { name: 'Search devices' })).toHaveValue('Desk'); expect(s.posts()).toHaveLength(0);
     });
 
     it('retains collapsed tools below a truly empty fleet', async () => {
