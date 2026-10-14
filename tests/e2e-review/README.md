@@ -534,3 +534,14 @@ same time. This keeps the exact EN/DE assertion valid across the second boundary
 sample timestamp, 24-hour retention deadline, initial+500 ms near-expiry sample
 and subsequent 1,000 ms expiry check remain unchanged. A finite `retained-age`
 diagnostic isolates this assertion without exposing sample or runtime values.
+
+### S03/S04 focus and error color evidence
+
+The existing shell/conditional/v3 runners also exercise the narrow shared
+contrast corrections. See [the scope, arithmetic, and capture recipe](../../docs/focus-contrast.md).
+The `synthetic-focus-contrast-*` images use real controls in existing invented
+fixtures, EN/DE, 1440×1000/390×844 and both themes. Their existing screenshot
+manifest entries include computed `contrast` measurements alongside revision
+and fixture provenance. The helper never launches a browser on import or grants
+any endpoint authority. Source arithmetic is not pixel/browser acceptance; review
+the exact hosted images before closing the visual gate.

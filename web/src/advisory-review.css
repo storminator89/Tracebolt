@@ -17,5 +17,5 @@
 .advisory-review-candidates { padding: 0; list-style: none; }
 .advisory-review-candidates li { border: 1px solid var(--line); border-radius: 7px; margin-top: 12px; padding: 12px; }
 .advisory-review-reasons { padding-left: 20px; }
-.advisory-review-toggle:focus-visible { outline: 3px solid #3aab9877; outline-offset: -3px; }
+.advisory-review-toggle:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
 @media (max-width: 540px) { .advisory-review-facts { grid-template-columns: 1fr; } .advisory-review-heading .button { width: 100%; justify-content: center; } }
