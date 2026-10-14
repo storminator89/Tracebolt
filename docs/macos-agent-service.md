@@ -59,7 +59,9 @@ The selected host must already have all of the following, separately approved:
   renewal adoption are rejected. A valid basic handoff cannot satisfy inventory
   selection, nor can inventory silently replace the default basic selection.
 - A separately reviewed root-owned source archive outside the fixed installation
-  directory, with protected root-owned parent directories.
+  directory, with protected root-owned parent directories. Preflight rejects
+  case-variant spellings and compares held ancestor directory identities, blocking
+  aliases that traverse the fixed installation directory.
 - A protected `/Library/LaunchDaemons` directory and no entry at
   `/Library/LaunchDaemons/com.tracebolt.agent.plist`. Any existing file, symlink,
   directory or uncertain read blocks this fresh candidate; no existing plist is

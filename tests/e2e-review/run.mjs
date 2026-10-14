@@ -67,11 +67,12 @@ async function pageAt(hash='/overview', viewport={width:1440,height:1000}, extra
 let currentTest='';
 async function test(name, run) { currentTest=name; const begun=Date.now(); try { await run(); results.push({name, status:'PASS', durationMs:Date.now()-begun}); console.log(`PASS ${name}`); } catch(error) { shellDiagnostic.failure(name,error); results.push({name,status:'FAIL',error:sanitize(name.startsWith('AI ') ? error.message.split('\n')[0] : error.message),durationMs:Date.now()-begun}); console.log(`FAIL ${name}: ${error.message.split('\n')[0]}`); } finally { for(const context of allPages) await context.close(); allPages.clear(); for(const diagnostics of transportDiagnostics.values()) diagnostics.dispose(); transportDiagnostics.clear(); } }
 async function loaded(page) { await expect(page.locator('.page-footer')).toBeVisible(); }
-async function shot(page,name,section=null,numericTypography=null) {
+async function shot(page,name,section=null,numericTypography=null,{preserveScroll=false}={}) {
  shellGalleryCheckpoint('capture-position');
  const fullPage=false,dialog=await page.getByRole('dialog').count()>0;
  let layout=null;
- if(!dialog) {
+ // Keyboard captures must show the landing already checked by the caller.
+ if(!dialog && !preserveScroll) {
   layout=await page.locator('.main-content').evaluate(el=>{
    el.scrollTo({top:0,left:0,behavior:'instant'});
    const rect=el.getBoundingClientRect();
