@@ -1,6 +1,6 @@
 // Package macosservice prepares an inert launchd candidate and performs explicit,
-// local read-only checks. Its create-only lifecycle coordinator has no native
-// mutation adapter; fake backends exercise ownership and phase ordering only.
+// local read-only checks. Its separate root-only lifecycle has a native adapter
+// with explicit apply; source tests do not establish native host acceptance.
 package macosservice
 
 import (
@@ -20,6 +20,8 @@ const (
 	Label               = "com.tracebolt.agent"
 	InstallDirectory    = "/Library/Application Support/TraceboltAgent"
 	AgentPath           = InstallDirectory + "/macos-agent"
+	InstallerPath       = InstallDirectory + "/macos-agent-service"
+	CustodyDirectory    = InstallDirectory + "/service-registration"
 	StateDirectory      = InstallDirectory + "/state"
 	EnrollmentDirectory = StateDirectory + "/enrollment"
 	ConfigPath          = EnrollmentDirectory + "/agent.json"
@@ -126,9 +128,9 @@ func Plan(r Request) (Result, error) {
 		AgentSHA256: r.AgentSHA256, SourceArchive: r.SourceArchive, SourceSHA256: r.SourceSHA256,
 		ConfigPath: ConfigPath, PlistPath: PlistPath, Plist: plist, PlistSHA256: hex.EncodeToString(sum[:]),
 		Checks: []Check{}, RemainingGates: []string{
-			"This candidate cannot install, bootstrap, enable, restart, upgrade or uninstall a service; no native state was changed.",
+			"This default planning operation did not change native state. Separate --action install requires protected root custody and explicit --apply.",
 			"An administrator must separately approve the exact existing dedicated account, reviewed artifacts, protected paths and launchd registration. This plan is not that approval.",
-			"Check the native launchd system domain for foreign or retained jobs before any future create-only registration; an absent plist does not prove an absent job.",
+			"The separate native create-only installer must establish positive absence of foreign or retained launchd jobs; an absent plist alone does not prove this.",
 			"Recheck account mapping, protected paths, exact artifacts and activated enrollment immediately before any separately implemented installation.",
 			"A separately approved disposable Mac gate must establish native credential isolation, stop behavior, manager reporting and operating-system reboot persistence. Source checks and plist generation establish none of these.",
 		},

@@ -74,6 +74,37 @@ type Receipt struct {
 	Status          string `json:"status"`
 }
 
+// RemovalReceipt is a separate one-attempt terminalization ledger. It never
+// resets installation receipts or grants permission to install again.
+type RemovalReceipt struct {
+	SchemaVersion   string `json:"schemaVersion"`
+	OwnershipSHA256 string `json:"ownershipSHA256"`
+	Sequence        int    `json:"sequence"`
+	Phase           string `json:"phase"`
+	Status          string `json:"status"`
+}
+
+func expectedRemovalReceipts(o Ownership) []RemovalReceipt {
+	return []RemovalReceipt{
+		{"tracebolt.macos-service-removal.v1", o.SHA256(), 1, "bootout", "started"},
+		{"tracebolt.macos-service-removal.v1", o.SHA256(), 2, "bootout", "completed"},
+		{"tracebolt.macos-service-removal.v1", o.SHA256(), 3, "remove-plist", "started"},
+		{"tracebolt.macos-service-removal.v1", o.SHA256(), 4, "remove-plist", "completed"},
+	}
+}
+
+func DecodeRemovalReceipt(raw []byte, owner Ownership) (RemovalReceipt, error) {
+	var r RemovalReceipt
+	if !owner.valid() || len(raw) == 0 || len(raw) > 1024 || json.Unmarshal(raw, &r) != nil || r.Sequence < 1 || r.Sequence > 4 || r != expectedRemovalReceipts(owner)[r.Sequence-1] {
+		return RemovalReceipt{}, ErrCollision
+	}
+	canonical, _ := json.Marshal(r)
+	if !bytes.Equal(raw, canonical) {
+		return RemovalReceipt{}, ErrCollision
+	}
+	return r, nil
+}
+
 func expectedReceipts(o Ownership) []Receipt {
 	return []Receipt{
 		{"tracebolt.macos-service-phase.v1", o.SHA256(), 1, "publish-plist", "started"},
@@ -96,13 +127,21 @@ func DecodeReceipt(raw []byte, owner Ownership) (Receipt, error) {
 
 // InstallSnapshot is trusted evidence from a protected, locked adapter, NOT
 // caller-supplied JSON or prior preflight output. Inspect rechecks exact selected
-// account/artifacts/paths, existing activated handoff/current leaf and used sender
-// state without initialization, collection, network, permission changes or repair.
-// Custody covers BOTH independent used fence and ownership record: partial,
+// account/artifacts/paths without initialization, collection, network, permission
+// changes or repair. Before bootstrap it validates the existing activated
+// handoff/current leaf and used sender state under the dedicated-user lock.
+// Once the exact owned job is positively registered after a durable bootstrap-
+// start receipt, that foreground process may hold the sender lock for life.
+// Inspection then rechecks immutable originals/current TLS material without
+// reacquiring mutable sender locks. This never proves lock ownership, mutable
+// sender correctness or reporting. Custody covers BOTH used fence and owner: partial,
 // missing-used, foreign, duplicate or uncertain storage must return an error.
 // A present JobOwnershipSHA256 may be asserted only after verifying the exact
-// system-domain job's complete execution/credential/plist binding, never merely
-// matching its label, PID, path or a successful bootstrap exit code.
+// system-domain job's registration path, type, program and arguments plus the
+// protected plist bytes. It does not prove launchd honored UserName/GroupName,
+// runtime identity, process health or reporting. The agent independently rejects
+// mismatched numeric identities before private reads. Native credential isolation
+// remains a separate acceptance gate.
 type InstallSnapshot struct {
 	PrerequisitesVerified  bool
 	Config                 []byte
@@ -110,6 +149,7 @@ type InstallSnapshot struct {
 	Custody                Presence
 	Owner                  *Ownership
 	Receipts               []Receipt
+	RemovalReceipts        []RemovalReceipt
 	Plist                  Presence
 	PlistSHA256            string
 	Job                    Presence
@@ -119,8 +159,9 @@ type InstallSnapshot struct {
 
 type InstallBackend interface {
 	// Open(false) must be read-only, including no lock-file or directory creation.
-	// Open(true) holds exclusive lifecycle AND enrollment/sender ownership across
-	// the operation. Starting the sender needs a separately reviewed lock handoff.
+	// Open(true) holds exclusive lifecycle custody across the operation. The
+	// dedicated-identity child acquires and releases enrollment/sender read locks
+	// on each inspection; operators must stop any other sender before install.
 	// Opening must not claim/adopt/create durable state. Close never rolls back.
 	Open(context.Context, Request, bool) (InstallSession, error)
 }
@@ -143,21 +184,31 @@ type InstallSession interface {
 	Close() error
 }
 
+// RemovalSession is optional for fake-backed tests and native ownership-only
+// removal. No method deletes credentials, account, agent, source or used fences.
+type RemovalSession interface {
+	InstallSession
+	AppendRemovalReceipt(context.Context, RemovalReceipt) error
+	Bootout(context.Context, Ownership) error
+	RemoveOwnedPlist(context.Context, Ownership) error
+}
+
 type InstallRequest struct {
 	Selection Request
 	Apply     bool
 }
 type InstallResult struct {
-	SchemaVersion            string   `json:"schemaVersion"`
-	ReadOnly                 bool     `json:"readOnly"`
-	AdapterAvailable         bool     `json:"adapterAvailable"`
-	Status                   string   `json:"status"`
-	OwnershipSHA256          string   `json:"ownershipSHA256,omitempty"`
-	LastReceipt              *Receipt `json:"lastReceipt,omitempty"`
-	ObservedPlist            Presence `json:"observedPlist"`
-	ObservedJob              Presence `json:"observedJob"`
-	MutationAttempted        bool     `json:"mutationAttempted"`
-	NativeAcceptanceVerified bool     `json:"nativeAcceptanceVerified"`
+	SchemaVersion            string          `json:"schemaVersion"`
+	ReadOnly                 bool            `json:"readOnly"`
+	AdapterAvailable         bool            `json:"adapterAvailable"`
+	Status                   string          `json:"status"`
+	OwnershipSHA256          string          `json:"ownershipSHA256,omitempty"`
+	LastReceipt              *Receipt        `json:"lastReceipt,omitempty"`
+	LastRemovalReceipt       *RemovalReceipt `json:"lastRemovalReceipt,omitempty"`
+	ObservedPlist            Presence        `json:"observedPlist"`
+	ObservedJob              Presence        `json:"observedJob"`
+	MutationAttempted        bool            `json:"mutationAttempted"`
+	NativeAcceptanceVerified bool            `json:"nativeAcceptanceVerified"`
 }
 
 func ownershipFor(r Request, p Result, s InstallSnapshot) (Ownership, error) {
@@ -191,11 +242,30 @@ func runtimeMatches(s InstallSnapshot, o Ownership, plist, job Presence) bool {
 	return true
 }
 
+// allowRegisteredHandoff is the sole admission to the nonroot no-sender-lock
+// check after launchd may start the foreground agent. It requires a completed
+// pre-bootstrap ownership/receipt prefix and positive exact registration; a
+// foreign or unknown lock, by itself, can never select this branch. It does
+// not authenticate who owns a lock or establish that the agent is running.
+func allowRegisteredHandoff(r Request, s InstallSnapshot) bool {
+	if s.Custody != Present || s.Owner == nil || !s.Owner.valid() || s.Owner.ServiceIdentity != r.ServiceIdentity || s.Owner.CollectionProfile != selectedProfile(r) || s.Owner.AgentSHA256 != r.AgentSHA256 || s.Owner.SourceArchive != r.SourceArchive || s.Owner.SourceSHA256 != r.SourceSHA256 {
+		return false
+	}
+	p, err := Plan(r)
+	if err != nil || s.Owner.PlistSHA256 != p.PlistSHA256 || len(s.Receipts) < 3 || len(s.Receipts) > 4 || !receiptPrefix(*s.Owner, s.Receipts) || len(s.RemovalReceipts) > 1 {
+		return false
+	}
+	if len(s.RemovalReceipts) == 1 && s.RemovalReceipts[0] != expectedRemovalReceipts(*s.Owner)[0] {
+		return false
+	}
+	return runtimeMatches(s, *s.Owner, Present, Present)
+}
+
 // Install is create-only. Default preflight and all repeat invocations are
 // read-only. An interrupted attempt is NEVER retried, completed, rolled back or
 // reset, even if current native state appears absent. Inspection can report the
 // original receipts and current state; it cannot prove an unrecorded outcome.
-// There is deliberately no production InstallBackend in this source slice.
+// The Darwin adapter is source-only pending native acceptance.
 func Install(ctx context.Context, r InstallRequest, backend InstallBackend) (result InstallResult, resultErr error) {
 	result = InstallResult{SchemaVersion: "tracebolt.macos-service-install.v1", ReadOnly: !r.Apply, Status: "blocked"}
 	p, err := Plan(r.Selection)
@@ -245,7 +315,7 @@ func Install(ctx context.Context, r InstallRequest, backend InstallBackend) (res
 	}
 	result.OwnershipSHA256 = owner.SHA256()
 	if snapshot.Custody == Present {
-		if snapshot.Owner == nil || *snapshot.Owner != owner || !receiptPrefix(owner, snapshot.Receipts) {
+		if snapshot.Owner == nil || *snapshot.Owner != owner || !receiptPrefix(owner, snapshot.Receipts) || len(snapshot.RemovalReceipts) != 0 {
 			return result, ErrCollision
 		}
 		if len(snapshot.Receipts) > 0 {

@@ -1,233 +1,56 @@
-# macOS launchd source candidate
+# macOS launchd service source candidate
 
-Status: explicit-profile plist/preflight plus a fake-backed create-only lifecycle
-source foundation. There is **no native mutation adapter**, usable installer,
-restart, upgrade or uninstall operation.
-Nothing here establishes a native installed service, reporting or boot persistence.
-Linux/systemd and Windows release behavior is unchanged.
+Status: a create-only native launchd registration and one-attempt exact-owned removal source path is implemented for packaged Apple Silicon and Intel binaries. It has passed source fixtures and Darwin cross-builds only. No actual Mac account, enrollment, service installation, reporting, removal or reboot has been exercised here. The [disposable native gate](macos-agent-service-native-gate.md) is mandatory before calling this a working Mac installation or release.
 
-## Exact boundary
+## Fixed scope and prerequisites
 
-`cmd/macos-agent-service` emits a JSON review result with a complete XML plist and
-its SHA-256. The default performs local read-only checks. `--render-only` emits
-an explicitly unchecked candidate without reading host accounts, files or state.
-`--profile basic-readonly-v1` retains the default basic scope. Only explicit
-`--profile macos-read-inventory-v1` selects the separate fresh inventory handoff;
-selection never grants, adopts or expands scope. Configuration overrides,
-invitations and shell commands are not accepted.
+The service supports only an already activated, explicitly selected TLS enrollment at `/Library/Application Support/TraceboltAgent/state/enrollment/agent.json`. The default `--profile basic-readonly-v1` cannot acquire inventory authority. Only explicit `--profile macos-read-inventory-v1` selects a fresh separately consented inventory identity. Neither mode enrolls, creates keys, renews, changes grants, repairs files, or contacts the manager during preflight. It does not grant log access, TCC/Full Disk Access, service control, updates, or other read scopes.
 
-`--action install` selects the lifecycle foundation described below. `--apply` is
-a separate explicit mutation boundary and is accepted only with that action,
-never with `--render-only`. The native lifecycle adapter is unavailable: both
-forms return an `unavailable` result **before host inspection or mutation**.
-The program never executes an artifact or `launchctl`. Native preflight only
-runs two fixed read-only `/usr/bin/dscl /Local/Default -read` queries to verify
-the dedicated local user/group IDs; no caller-selected node, record, arguments
-or shell is accepted.
+The separate package preparation path must first stage:
 
-Build the planning CLI and `cmd/macos-agent` from the same reviewed source.
-Use independently selected lowercase SHA-256 values for the native agent and a
-local source archive. Hash and Go/Mach-O checks identify selected bytes, role and
-architecture. They do not establish publisher authenticity, signing, notarization
-or a reproducible relationship between the archive and binary. Universal/fat
-binaries and other program roles are rejected by local preflight.
+- A dedicated local nonroot `_traceboltagent` user and group with the exact reviewed numeric UID:GID. Fixed read-only Directory Service queries check the mapping; no arbitrary record or shell input is accepted.
+- Root-owned protected `/Library/Application Support/TraceboltAgent` and its `macos-agent` and `macos-agent-service` executables. The exact binary hashes must be independently selected. The installer executable must be run from this fixed path; a copy in Downloads or a symlink is rejected. The agent is limited to a single-architecture Go/Mach-O executable for the selected Mac, max 128 MiB; fat binaries and other roles are rejected.
+- A separate root-owned protected source archive outside that installation directory, max 256 MiB. Its path and SHA-256 are reviewed independently; the archive is never extracted or run. Case variants and descriptor-identified aliases into the install tree are rejected. A hash does not prove publisher trust, signing or a reproducible binary.
+- UID:GID-owned mode-0700 `state`, `state/enrollment` and `state/enrollment/telemetry` directories containing the exact existing activated enrollment, protected key/certificate/CA, ready marker and original sender state. Enrollment and its hidden invitation/fingerprint approval are separate deliberate actions under the dedicated identity. There is no account or enrollment creation in `macos-agent-service`.
+- A root-owned protected `/Library/LaunchDaemons` parent. Fresh install requires no file at `/Library/LaunchDaemons/com.tracebolt.agent.plist`, no system-domain job with that label and no retained enabled/disabled override.
 
-The selected host must already have all of the following, separately approved:
+Every path component is descriptor-anchored and symlink-free; protected local filesystem ACL support is required. Expanding or uncertain ACLs, altered inode/mode/owner, missing or partial original sender state, unknown launchd output, unavailable account mapping and collisions fail closed. No chmod, chown, ACL/TCC/security adjustment, cleanup or adoption is attempted.
 
-- A dedicated nonroot `_traceboltagent` user and group with the exact reviewed
-  numeric UID:GID. This tool cannot create accounts, alter group membership or
-  adopt an ordinary user. The fixed local Directory Service lookup must confirm the mapping;
-  missing, malformed, multiple-valued, timed-out or unavailable results block
-  preflight. The read-only queries have two-second deadlines, bounded output
-  and a fixed locale, and work independently of Go cgo account lookup.
-- Root-owned, non-group/world-writable installation and ancestor directories;
-  root-owned bounded executable at
-  `/Library/Application Support/TraceboltAgent/macos-agent`.
-- Selected UID:GID-owned mode-0700 directories at
-  `/Library/Application Support/TraceboltAgent/state`, its `enrollment` child,
-  and the enrollment `telemetry` child.
-- An existing activated explicitly selected TLS enrollment at
-  `/Library/Application Support/TraceboltAgent/state/enrollment/agent.json`,
-  with `agent-key.pem`, `agent-cert.pem`, `server-ca.pem`, `ready.json` and its
-  original bound sender state in that enrollment directory. Basic accepts only
-  guided-v2 or explicitly renewable-v6 `basic-readonly-v1`. Fresh inventory accepts
-  only canonical `tracebolt.lan-agent.macos-inventory.v1` with the exact original
-  `macos-inventory-consent.json`, `macos-inventory-enable.json` and independent
-  inventory used/checkpoint/ready state. Enrollment must
-  have been performed as the same selected nonroot identity after its separate
-  key/trust approval. Pending, manual-v1, HTTP, mismatched/implicit inventory scope and implicit
-  renewal adoption are rejected. A valid basic handoff cannot satisfy inventory
-  selection, nor can inventory silently replace the default basic selection.
-- A separately reviewed root-owned source archive outside the fixed installation
-  directory, with protected root-owned parent directories. Preflight rejects
-  case-variant spellings and compares held ancestor directory identities, blocking
-  aliases that traverse the fixed installation directory.
-- A protected `/Library/LaunchDaemons` directory and no entry at
-  `/Library/LaunchDaemons/com.tracebolt.agent.plist`. Any existing file, symlink,
-  directory or uncertain read blocks this fresh candidate; no existing plist is
-  adopted or removed.
+## CLI contract
 
-All path components are descriptor-anchored, symlink-free and checked for local
-filesystem ACL support. Private files require protected owner-only access.
-Permissive or uncertain ACLs fail closed. Standard aliases such as `/var` are not
-silently resolved. This may reject a host layout that needs separate review; it
-never repairs modes/ACLs, creates directories or changes ownership.
+`macos-agent-service` without an action is a nonroot local read-only preflight. `--render-only` renders an unchecked deterministic plist/JSON candidate without host inspection, and cannot be combined with an action. Its legacy `installationAvailable: false` and `readyForInstallation: false` fields describe that *planning operation*, not the separate native action.
 
-## Read-only review
+`--action install` and `--action uninstall` require root invocation of the protected fixed installer binary. They are read-only reviews unless the administrator separately adds `--apply` after exact local approval. The root process launches only that same fixed binary under the dedicated UID:GID for repeated bounded read-only enrollment/artifact validation; it never validates private state as root. Before registration, the child locks and releases existing sender/enrollment state on each inspection. Once the exact owned job is registered after the durable bootstrap-start receipt, the foreground agent may hold its sender lock for its lifetime. Only then does the child use a narrower no-sender-lock check of the protected account/artifacts, immutable original handoff bytes and current TLS material. Lock contention alone never selects or proves this handoff, and mutable sender state cannot be independently inspected while the service owns it. Stop any sender using that identity by an already authorized procedure before reviewing or applying. No invitation or credential is passed in arguments, environment or output.
 
-Run local preflight as the exact dedicated service identity with no supplementary
-groups beyond the selected GID, never as root or as an ordinary desktop user.
-Arranging that identity and the protected prerequisites requires separate host
-administration approval. Stop any sender using this identity through an already
-authorized procedure before local validation; its existing ledger is checked
-under an exclusive lock without initialization or temporary-file cleanup.
-
-Inventory service preflight separately requires a currently live local leaf and
-valid existing renewal manifest/transaction when renewal was consented. An expired
-leaf, missing/corrupt renewal state or locally recorded revocation blocks it;
-a valid same-key successor can pass after the original leaf expires. The original
-config, identity, consent and sender checkpoint stay unchanged. Context, local
-authority and close failures are checked before success. This is read-only local
-validation, so current manager-side revocation is still checked when reporting.
-The agent's `--validate-guided` remains a retained-state validator.
-
-For illustration only, replace every placeholder with independently reviewed
-values. This command is not an invitation to provision the prerequisites:
+Illustrative review of an already prepared host, replacing placeholders with independently selected values:
 
 ```sh
-/absolute/reviewed/macos-agent-service \
+sudo '/Library/Application Support/TraceboltAgent/macos-agent-service' \
+  --action install --profile basic-readonly-v1 \
   --service-identity REVIEWED_UID:REVIEWED_GID \
   --agent-sha256 REVIEWED_AGENT_SHA256 \
-  --source-archive /absolute/protected/reviewed-source.tar \
+  --source-archive '/Library/Application Support/TraceboltAgentSource/source.tar' \
   --source-sha256 REVIEWED_SOURCE_SHA256
 ```
 
-Add `--render-only` to review the candidate on another platform without host
-inspection. The JSON always has `installationAvailable: false` and
-`readyForInstallation: false`. `localPreflightPassed: true` means only that the
-listed local checks passed at that moment. It is not a reusable authorization,
-installation receipt or promise that later state is unchanged.
+`--apply` appended to the exact reviewed command is a separate host mutation and starts a persistent background service via `launchctl bootstrap system /Library/LaunchDaemons/com.tracebolt.agent.plist`. It requires explicit account/credential/trust and installation approval; do not infer it from a package download, source build or preflight pass. On a Mac already installed by this exact coordinator, use `--action uninstall` with the same original selected profile/identity/artifact arguments for read-only removal review, and separately add `--apply` only after exact owned removal approval. Restart, upgrade, replace, resume, migration, account creation, permission repair, enrollment and reset commands do not exist.
 
-The plist fixes the label `com.tracebolt.agent`, the binary/config paths, a
-30-second basic or one-minute fresh inventory foreground interval, the `_traceboltagent` user/group, numeric runtime
-`--service-identity`, `InitGroups=false`, umask 0077 (decimal 63), a 30-second
-exit timeout and background process classification. Each argument is a separate
-XML array string, including paths containing spaces; no shell is involved.
+## Registration and custody
 
-`RunAtLoad` requests a start when the job is loaded. `KeepAlive.SuccessfulExit`
-false requests retry after unsuccessful exits, spaced by `ThrottleInterval=30`.
-This is not systemd's bounded restart budget and can retry permanent failures
-indefinitely until stopped. There is no claim of a Linux-equivalent filesystem
-sandbox or a TCC/Full Disk Access grant. The service process remains nonroot and
-must reject unexpected real/effective/saved IDs and supplementary groups before
-reading private state. No extra log files are created by the plist.
+The generated root-owned plist fixes `com.tracebolt.agent`, the binary/config paths, `_traceboltagent` user/group, numeric runtime `--service-identity`, `InitGroups=false`, umask 0077, 30-second exit timeout, and a 30-second basic or one-minute fresh inventory foreground interval. Arguments are separate XML strings, including paths with spaces; no shell is used. `RunAtLoad` requests immediate start. `KeepAlive.SuccessfulExit=false` with `ThrottleInterval=30` can retry nonzero exits indefinitely. There is no Linux-equivalent sandbox or TCC grant. The agent itself rejects unexpected real/effective/saved IDs and supplementary groups before private reads.
 
-## Create-only lifecycle foundation (fake backend only)
+The lifecycle holds an exclusive lock on the fixed protected installer file without creating a lock file. Root-owned mode-0700 `/Library/Application Support/TraceboltAgent/service-registration` is created only on fresh `--action install --apply`. Its independent no-replace `used.json` fence precedes the canonical immutable owner; partial creation blocks future calls. The owner binds the fixed label/paths, exact numeric identity and profile, selected binary/source hashes, exact original configuration and original handoff anchor, and generated plist hash. It does not overwrite current renewal leaves or mutable sender counters. Current TLS material is rechecked on every inspection; mutable sender state is checked only before registration and after owned bootout releases its lock.
 
-This source depends on the fresh inventory endpoint runtime composition, including
-`ParseMacOSInventoryConfig` and `ValidateMacOSInventoryServicePreflight`; the earlier
-manager-only slice does not supply them. It does not alter the released Windows
-`v0.1.0-windows-preview.3` artifacts or the Linux service implementation.
+Install appends durable no-replace `publish-plist/started`, publishes only the absent exact plist with full file/directory flush, appends `publish-plist/completed`, appends `bootstrap/started`, invokes only fixed `launchctl bootstrap`, re-inspects registration, then appends `bootstrap/completed`. Every pre-bootstrap transition rechecks the full selected activated handoff and mutable sender state under its lock, plus custody, receipts, plist, system-domain job and override absence. Post-bootstrap checks admit only exact owned registration and recheck protected immutable/current TLS evidence without reacquiring the foreground sender lock; they do not prove who holds that lock or whether reporting works. Every nonroot selection rechecks held protected directories even when the owned plist is already present. Only after exact registration may selected private state-directory timestamps, size and link count advance as the sender writes; inode, owner, group, mode, flags, native ACL safety and current descriptor/path binding remain mandatory. Root-owned ancestors and file evidence stay strict. Each nonroot selection is bracketed by exact protected custody/plist/job/override reads; drift during the child check blocks the result. The adapter uses bounded fixed `launchctl print-disabled system` and `print system/com.tracebolt.agent` calls. It only treats a known exact no-service response as positive job absence; output-format changes or permission errors block action. The parser confirms observed registration path, type, program and argument vector against exact protected plist bytes. It does **not** prove launchd honored UserName/GroupName or process credential isolation. Source fixtures cannot establish that native behavior.
 
-`Install` separates inert preflight from explicit apply. Its adapter interface is
-implemented only by in-memory tests. No concrete receipt files, service jobs or
-plist files are written by this candidate CLI. Native availability is not inferred
-from an OS build tag, the existing read-only `Backend`, or a successful preflight.
+After any first mutation attempt, a write, flush, close, cancellation, launchctl or validation failure is `indeterminate`. There is no automatic rollback, cleanup, retry, reset or re-enrollment. Preserve custody and host state for human investigation. An exact four-receipt completed registration can later be recognized read-only as `registration-confirmed`; that is registration evidence, not process health, manager delivery, credential isolation, reboot persistence or native acceptance. `nativeAcceptanceVerified` remains false.
 
-The coordinator requires verified protected account/artifact/path prerequisites,
-the existing activated current TLS handoff and positive absence of all three:
-fixed plist, system-domain label and retained enabled/disabled override. A failed
-command, inaccessible domain, unknown output or unsupported OS is not absence.
-Any pre-existing foreign, transient or retained job blocks a fresh operation.
+## Exact-owned one-attempt removal
 
-The immutable owner binds:
+Removal review requires matching immutable owner, all four completed install receipts, exact protected plist, exact registered job and no retained override. `--action uninstall --apply` appends a durable `bootout/started` receipt before fixed `launchctl bootout system/com.tracebolt.agent`, checks positive job absence and waits boundedly for the old sender lock to become available before revalidating mutable state, then appends `bootout/completed`. A non-draining or changed sender remains indeterminate; bootout is never replayed. It next appends `remove-plist/started`, unlinks only the descriptor-verified exact owned plist and syncs its directory, then appends `remove-plist/completed` after final inspection. Unknown/foreign jobs or any changed bytes block removal.
 
-- Fixed label, agent/config/plist paths and selected service UID:GID
-- Explicit basic or fresh inventory profile
-- Independently selected binary and source archive paths/hashes
-- Exact config and generated plist hashes
-- Original enrollment identity/issuer/key/ready/profile/consent anchor
+The used fence, owner, all install/removal receipts, both binaries, source archive, account, enrollment credentials and original sender counters remain. A partial removal is indeterminate and cannot be retried or treated as an empty fresh state. `owned-removal-confirmed` means the exact registration and plist are absent under the strict local checks. It does not prove the prior process exited or drained; verify that separately in the native gate. Complete removal is a tombstone, not permission to reinstall or reuse the identity. There is no broad cleanup or destructive rollback flag. Package staging cleanup must never remove the service's custody or private enrollment after service apply.
 
-The current same-key renewal leaf and mutable sender counters are not rewritten
-into ownership. The adapter must validate them and the original used sender state
-on every inspection. Ownership never authorizes initial enrollment, new keys,
-renewal, a larger profile, account creation or permission repair. The coordinator
-contains no certificate, key, grant or account mutation API.
+## Remaining native acceptance
 
-Apply proceeds under an exclusive protected session with these durable steps:
-
-1. Create an independent used fence and immutable owner, both no-replace.
-2. Append `publish-plist/started`, then publish only the exact absent fixed plist.
-3. Inspect exact protected bytes and collisions, then append
-   `publish-plist/completed`.
-4. Append `bootstrap/started`, then request only the exact owned system job.
-5. Independently inspect the job's full execution/credential binding and exact
-   plist, then append `bootstrap/completed` and re-inspect all final evidence.
-
-Each of the four phase receipts has a fixed sequence, schema and owner hash.
-Persisted decoders accept exact canonical bytes only, rejecting duplicates,
-unknown fields, reordered/gapped records and profile substitution. Before and
-between every effect, selected bytes, identity, active handoff, ownership,
-receipt prefix, plist/job binding and override absence are rechecked. Backend
-mutation methods must additionally close native races; the coordinator alone
-cannot make launchd operations transactional.
-
-Any write/durability/close error, cancellation or changed evidence after the first
-mutation attempt returns `indeterminate`. There is no rollback, deletion, retry,
-resume, replacement or inferred completion of a started phase. A repeated
-invocation can only inspect the original receipts and current state. Even an
-absent job after an uncertain bootstrap does not authorize replay. An already
-fully completed receipt sequence plus exact live binding returns
-`registration-confirmed` without changing anything. A success response lost after
-the final receipt may therefore be resolved read-only. This is evidence of that
-adapter's registration observation, never process health, manager reporting,
-reboot persistence or native acceptance. `nativeAcceptanceVerified` remains false.
-
-### Native adapter obligations and remaining gate
-
-A future adapter must establish independently reviewed current macOS semantics
-for system-domain collision/override detection, exact native job binding and a
-safe enrollment/sender-lock handoff. It must keep root-owned lifecycle custody
-outside service-writable state; preserve an independent used fence on partial
-creation; perform descriptor-anchored no-replace publication with full flush and
-directory durability; reject missing/partial/foreign custody; and never adopt,
-repair or delete used state. Read-only `Open(false)` must not create lock files or
-directories. Holding enrollment locks across bootstrap without a reviewed handoff
-would prevent the sender from starting and is not an implementation shortcut.
-
-Apple's archived launchctl source manual documents older `load`/`unload` behavior,
-not a verified contemporary `bootstrap`/`bootout` and machine-readable collision
-contract. This source deliberately provides no guessed native command parser,
-error-code-to-absence mapping, enable override or automatic cleanup. The current
-preflight's plist absence alone remains insufficient for installation.
-
-After exact host/account/artifact/path/service approval, a separate disposable
-Mac gate must verify native account mapping, ACL/descriptor behavior, launchd
-credential isolation and supplementary groups, rejected mismatched identity,
-foreground stop/SIGTERM drain, current TLS activation and fresh real manager
-reports. It must independently cover actual reboot persistence, failure behavior
-and owned removal retaining all identity/counter state. Source fixture tests and
-Darwin cross-compilation do not satisfy any of these runtime gates.
-
-Implementation references: Apple's
-[launchd property-list manual](https://github.com/apple-oss-distributions/launchd/blob/main/man/launchd.plist.5),
-[archived launchctl manual](https://github.com/apple-oss-distributions/launchd/blob/main/man/launchctl.1), [dscl read command](https://github.com/apple-oss-distributions/DSTools/blob/main/dscl/dscl.1)
-and [Creating Launch Daemons and Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
-These describe the plist contract; the selected macOS release still requires its
-own separately approved native acceptance.
-
-Explicit renewable basic TLS uses `tracebolt.lan-agent.v6`, collection profile
-`basic-readonly-v1` and the exact enrollment-directory `renewal-manifest.json`.
-The existing guided-handoff validator checks the original ready binding and the
-current same-key certificate manifest; this preflight never grants or starts
-renewal. A broader profile, alternate manifest path or HTTP mode is rejected.
-
-## Source verification
-
-Focused fake-backend tests cover both profiles, exact scope/path dispatch, inert
-defaults, every lifecycle effect and receipt interruption (including durable writes
-whose replies fail), missing/foreign/unknown collision evidence, immutable selection
-changes, malformed receipts, cancellation, postcondition drift and repeat read-only
-reconciliation. Darwin cross-compilation establishes only compilation. Tests do
-not invoke launchctl, dscl, collectors, network enrollment, native host preflight,
-accounts, keys, permissions or service installation.
+The [native gate](macos-agent-service-native-gate.md) must run on separately approved disposable ARM64 and Intel Macs. In particular, verify current launchctl output/exit behavior, ACL/descriptors and durability, exact launched UID/GID/groups, stop/SIGTERM drain, manager reports, real reboot persistence, failure retry behavior and exact owned removal while retaining identity/state. A Darwin cross-build and fake subprocess/fixture tests prove none of these native effects.

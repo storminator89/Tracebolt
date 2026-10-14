@@ -38,7 +38,7 @@ func TestRenderOnlyCLIAndHelpDoNotReadHost(t *testing.T) {
 	}
 }
 func TestCLIRefusesMutationAndSecretsBeforeInspection(t *testing.T) {
-	for _, bad := range []string{"--apply", "--action=uninstall", "--launchctl", "--insecure-http-test", "--invitation-secret=DO-NOT-PRINT", "--config=/Users/me/agent.json", "--agent-binary=/bin/sh"} {
+	for _, bad := range []string{"--apply", "--action=restart", "--launchctl", "--insecure-http-test", "--invitation-secret=DO-NOT-PRINT", "--config=/Users/me/agent.json", "--agent-binary=/bin/sh"} {
 		b := &fakeBackend{}
 		var out, errOut bytes.Buffer
 		if run(context.Background(), append(args(), bad), &out, &errOut, b) != 2 || b.calls != 0 || out.Len() != 0 || strings.Contains(errOut.String(), "DO-NOT-PRINT") {
@@ -71,6 +71,19 @@ func TestInstallNativeUnavailableWithoutAnyHostInspection(t *testing.T) {
 		var result macosservice.InstallResult
 		if json.Unmarshal(out.Bytes(), &result) != nil || result.Status != "unavailable" || result.AdapterAvailable || result.MutationAttempted || result.NativeAcceptanceVerified || !strings.Contains(errOut.String(), "unavailable") {
 			t.Fatal("misleading availability")
+		}
+	}
+}
+func TestUninstallUnavailableBackendNeverInspects(t *testing.T) {
+	for _, extra := range [][]string{{"--action", "uninstall"}, {"--action", "uninstall", "--apply"}} {
+		b := &fakeBackend{}
+		var out, errOut bytes.Buffer
+		if run(context.Background(), append(args(), extra...), &out, &errOut, b) != 1 || b.calls != 0 {
+			t.Fatal("unavailable removal inspected host")
+		}
+		var result macosservice.InstallResult
+		if json.Unmarshal(out.Bytes(), &result) != nil || result.Status != "unavailable" || result.AdapterAvailable || result.MutationAttempted || result.NativeAcceptanceVerified {
+			t.Fatal("misleading removal availability")
 		}
 	}
 }

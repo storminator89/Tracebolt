@@ -68,19 +68,34 @@ The enrollment CLI deliberately rejects Linux pending-service/claim-only flags
 on macOS. There is no published Mac installer or verified download command.
 A local build hash alone does not establish publisher trust or native acceptance.
 
-## launchd preparation
+## launchd source and test package
 
-`macos-agent-service` provides a read-only preflight and explicit host-free
-`--render-only` plist rendering. It verifies the fixed dedicated local identity,
-protected configuration, selected Mach-O binary/source hashes and activated
-existing handoff. It does not install, bootstrap, unload, restart or uninstall a
-service. Both `installationAvailable` and `readyForInstallation` stay false.
-A generated plist is preparation, not evidence that launchd accepts or runs it.
-Explicit profile selection also prepares the separate fresh inventory handoff. A
-fake-backed create-only lifecycle coordinator covers ownership, phase receipts
-and read-only reconciliation; its native mutation adapter is unavailable.
-`--action install`, including `--apply`, therefore stops before host inspection.
-See [macOS launchd source](macos-agent-service.md) for the exact source boundary.
+The source-built [macOS service test package](macos-test-package.md) contains
+Apple Silicon and Intel endpoint binaries, the service CLI, a standalone Go
+preparation helper, exact source and hash manifests. Building these review
+artifacts does not require native installation or acceptance. They remain
+publisher-unsigned, unreleased test candidates; the Mac runtime does not need
+Python, Homebrew or Xcode.
+
+The preparation helper verifies the selected package and public TLS bootstrap.
+Its separate `stage --apply` operation prepares a fresh dedicated account and
+fixed protected paths only after explicit local approval. Enrollment remains a
+separate hidden-terminal invitation and fingerprint-approval step. Existing
+identities, accounts and uncertain partial state are not adopted or reset.
+
+`macos-agent-service` retains its read-only nonroot preflight and host-free
+`--render-only` plist rendering. Separate root-only `--action install` and
+`--action uninstall` operations review exact existing handoff, artifact,
+identity, custody and launchd state. Only explicit `--apply` attempts the
+corresponding host mutation. Installation starts the background job; owned
+removal retains the account, binaries, credentials and sender state. The
+planning output's false installation fields describe planning only.
+
+Source fixtures and Darwin cross-builds do not establish launched credentials,
+manager reporting, process drain, reboot persistence or native uninstall.
+See [macOS launchd source](macos-agent-service.md) for phase-bound registration
+evidence, one-attempt uncertainty and exact native test boundaries. There is
+no restart, binary upgrade, automatic repair or published download command.
 
 ## Protected state and renewal
 
@@ -134,8 +149,10 @@ scope. It requires typed local acknowledgement before keys, state or network, a
 new identity and the independent protected inventory used/checkpoint/ready state.
 The original basic Mac, Linux and Windows grants are never adopted or expanded.
 Same-key renewal retains exact pending bytes, floors and original capture ages.
-Foreground reporting stops when its process stops; launchd installation remains
-unavailable. Public package sources may be reused; no private catalogue is added.
+Foreground reporting stops when its process stops. The separate service test
+package prepares explicitly selected inventory background execution; native
+installation and reporting are still unaccepted. Public package sources may be
+reused; no private catalogue is added.
 
 The [collector](macos-read-inventory-source.md),
 [wire](macos-read-inventory-wire.md), [sender state](macos-read-inventory-state.md)
