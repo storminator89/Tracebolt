@@ -96,3 +96,12 @@ body{overflow:hidden}
 .finding-label>h2{display:flex;align-items:center;gap:7px;margin:0}
 .finding-label{margin-bottom:12px}
 .shortcuts-modal dl{margin-top:16px}
+
+/* Keep changing numeric observations steady; labels and units keep normal shaping. */
+.metric-value,
+.summary-strip strong {
+  font-variant-numeric: tabular-nums;
+}
+.metric-value > span {
+  font-variant-numeric: normal;
+}

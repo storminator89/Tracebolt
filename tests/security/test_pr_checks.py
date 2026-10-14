@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import tempfile
 from types import SimpleNamespace
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -2112,6 +2113,46 @@ class ShellFailureDiagnosticTests(unittest.TestCase):
                         {'case': 35, 'category': 'other', 'stage': 1}]:
                 path.write_text(json.dumps(self.report(failures=[row])))
                 self.assertIsNone(p.shell_failure_location(path, SHA), row)
+
+    def test_gallery_source_domains_and_every_closed_coordinate(self):
+        source = (ROOT / 'tests/e2e-review/concise-shell-gallery.mjs').read_text()
+        for name, expected in [('shellGallerySurfaces', p.SHELL_GALLERY_SURFACES), ('shellGalleryPhases', p.SHELL_GALLERY_PHASES)]:
+            domain = re.search(name + r' = Object.freeze\(\[(.*?)\]\)', source, re.S)
+            self.assertEqual(tuple(re.findall(r"'([^']+)'", domain[1])), expected)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for case in (28, 29, 30, 31):
+                for surface, surface_name in enumerate(p.SHELL_GALLERY_SURFACES):
+                    for phase, phase_name in enumerate(p.SHELL_GALLERY_PHASES):
+                        row = {'case': case, 'category': 'assertion', 'surface': surface, 'phase': phase}
+                        path.write_text(json.dumps(self.report(failures=[row])))
+                        self.assertEqual(p.shell_failure_location(path, SHA), 'case=%d category=assertion surface=%s phase=%s' % (case, surface_name, phase_name))
+            valid = {'case': 28, 'category': 'assertion', 'surface': 0, 'phase': 0}
+            invalid = [{**valid, 'case': case} for case in (27, 32, 36)]
+            invalid += [{key: value for key, value in valid.items() if key != omitted} for omitted in ('surface', 'phase')]
+            invalid += [{**valid, key: value} for key, limit in [('surface', len(p.SHELL_GALLERY_SURFACES)), ('phase', len(p.SHELL_GALLERY_PHASES))] for value in (True, -1, limit, 'private-marker', [], {})]
+            invalid += [{**valid, 'actual': 'private-marker'}, {**valid, 'stage': 0}]
+            for row in invalid:
+                path.write_text(json.dumps(self.report(failures=[row])))
+                self.assertIsNone(p.shell_failure_location(path, SHA), row)
+
+    def test_actual_gallery_producer_decodes_only_fixed_failure_coordinates(self):
+        script = """
+import { createShellFailureDiagnostic } from './tests/e2e-review/shell-browser-diagnostics.mjs';
+import { shellGalleryCheckpoint } from './tests/e2e-review/concise-shell-gallery.mjs';
+import contract from './tests/e2e-review/shell-browser-cases.json' with { type: 'json' };
+const diagnostic = createShellFailureDiagnostic();
+shellGalleryCheckpoint('source-head', 'summary');
+diagnostic.failure(contract.cases[27], { matcherResult: { actual: 'private-marker' }, message: 'private-marker' });
+shellGalleryCheckpoint('font-count', 'compact');
+diagnostic.failure(contract.cases[30], { matcherResult: { actual: 'private-marker' } });
+console.log(JSON.stringify(diagnostic.report('%s')));
+""" % SHA
+        result = subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT, check=True, capture_output=True, text=True)
+        self.assertNotIn('private-marker', result.stdout)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'; path.write_text(result.stdout)
+            self.assertEqual(p.shell_failure_location(path, SHA), 'case=28 category=assertion surface=summary phase=source-head; case=31 category=assertion surface=compact phase=font-count')
 
     def test_unknown_names_categories_raw_fields_bad_types_stale_and_out_of_range_rejected(self):
         invalid = [{'sourceSha': 'b' * 40}, {'schema': True}, {'schema': 2}, {'unknownCase': 1}, {'error': 'private-marker'},

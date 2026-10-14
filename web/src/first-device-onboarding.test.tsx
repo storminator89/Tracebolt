@@ -106,6 +106,11 @@ describe('first device guidance', () => {
     it.each(['en', 'de'] as const)('distinguishes an empty source from no filter matches (%s)', async locale => {
         setLocale(locale, false); const c = labels[locale], s = server(); route('devices'); render(<App/>);
         expect(await screen.findByRole('heading', { name: c.empty })).toBeVisible();
+        const inventory = within(document.querySelector<HTMLElement>('.inventory-panel')!);
+        expect(inventory.getByText(locale === 'de'
+            ? 'Prüfe im Bereich „Einrichten“ verfügbare Optionen und bestehende Einladungen. Eine Freigabe allein bestätigt keinen Dateneingang.'
+            : 'Use the Setup section to review available options and existing invitations. Approval alone does not confirm that data is arriving.')).toBeVisible();
+        expect(screen.getByRole('heading', { name: locale === 'de' ? 'Einrichten' : 'Setup' })).toBeVisible();
         fireEvent.change(screen.getByRole('textbox', { name: c.search }), { target: { value: 'no-match' } });
         expect(screen.getByRole('heading', { name: c.empty })).toBeVisible();
         expect(screen.queryByRole('heading', { name: c.noMatches })).not.toBeInTheDocument();
