@@ -1494,5 +1494,85 @@ class JournalDiagnosticTests(unittest.TestCase):
         journal.assert_not_called()
 
 
+class ShellRouteLoadingDiagnosticTests(unittest.TestCase):
+    def report(self, **extra):
+        return {'schema': 1, 'sourceSha': SHA, 'status': 'FAIL', 'stage': 'cold-navigation', 'runtimeError': False, **extra}
+
+    def test_every_closed_stage_and_producer_contract_match(self):
+        source = (ROOT / 'tests/e2e-review/route-loading-browser.mjs').read_text()
+        stages = re.search(r'routeLoadingDevelopmentStages = Object.freeze\(\[(.*?)\]\)', source, re.S)
+        self.assertIsNotNone(stages)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", stages[1])), p.ROUTE_LOADING_STAGES)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for stage in p.ROUTE_LOADING_STAGES:
+                path.write_text(json.dumps(self.report(stage=stage)))
+                self.assertEqual(p.shell_route_loading_location(path, SHA), 'case=direct-case status=fail stage=' + stage)
+            for extra, expected in [({'status': 'PASS', 'stage': 'complete'}, 'status=pass stage=complete'),
+                                    ({'status': 'NOT_RUN', 'stage': 'fixture'}, 'status=not_run stage=fixture'),
+                                    ({'runtimeError': True}, 'status=fail stage=cold-navigation runtime-errors')]:
+                path.write_text(json.dumps(self.report(**extra)))
+                self.assertEqual(p.shell_route_loading_location(path, SHA), 'case=direct-case ' + expected)
+
+    def test_unknown_raw_stale_malformed_and_oversized_records_are_withheld(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'record.json'
+            for extra in [{'schema': True}, {'schema': 2}, {'sourceSha': 'b' * 40}, {'status': 'raw-private-marker'},
+                          {'stage': 'raw-private-marker'}, {'stage': []}, {'runtimeError': 1}, {'error': 'raw-private-marker'},
+                          {'status': 'PASS'}, {'status': 'NOT_RUN'}, {'status': 'NOT_RUN', 'stage': 'fixture', 'runtimeError': True}]:
+                path.write_text(json.dumps(self.report(**extra)))
+                self.assertIsNone(p.shell_route_loading_location(path, SHA), extra)
+            for raw in [b'{', b'\xff', b'x' * 2049,
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": 1, "schema": 1').encode(),
+                        json.dumps(self.report()).replace('"schema": 1', '"schema": NaN').encode()]:
+                path.write_bytes(raw)
+                self.assertIsNone(p.shell_route_loading_location(path, SHA))
+            path.write_text(json.dumps(self.report()))
+            self.assertIsNone(p.shell_route_loading_location(path, 'not-a-sha'))
+
+    def test_nonregular_and_symlink_files_are_rejected_without_blocking(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); path = root / 'record.json'; path.write_text(json.dumps(self.report()))
+            link = root / 'link'; link.symlink_to(path)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            alias = root / 'alias'; alias.symlink_to(root, target_is_directory=True)
+            for unsafe in [link, fifo, root, alias / 'record.json', root / 'missing']:
+                self.assertIsNone(p.shell_route_loading_location(unsafe, SHA))
+
+    def test_invocation_is_private_fresh_removed_and_never_releases_raw_output(self):
+        paths, output = [], io.StringIO()
+        def process(args, **kwargs):
+            self.assertEqual(args, ['node', p.FLOWS['shell']])
+            kwargs['stdout'].write(b'raw-private-marker')
+            path = Path(kwargs['env']['TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC'])
+            self.assertFalse(path.exists()); self.assertNotIn('artifacts', path.parts)
+            paths.append(path)
+            if len(paths) == 1:
+                path.write_text(json.dumps(self.report()))
+            return SimpleNamespace(returncode=1)
+        with patch.object(p.subprocess, 'run', side_effect=process), redirect_stdout(output):
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'raw fixture output withheld'):
+                    p.run_shell_browser({'TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC': '/not-used'}, SHA)
+        self.assertNotEqual(paths[0], paths[1]); self.assertTrue(all(not path.parent.exists() for path in paths))
+        self.assertEqual(output.getvalue().count('FAIL shell route-load location: case=direct-case status=fail stage=cold-navigation'), 1)
+        for forbidden in ['raw-private-marker', SHA, 'PASS:', *map(str, paths)]:
+            self.assertNotIn(forbidden, output.getvalue())
+
+    def test_original_failure_and_browser_acceptance_stay_unchanged(self):
+        original = ValueError('inert failure')
+        with patch.object(p, 'run', side_effect=original), patch.object(p, 'shell_route_loading_location', return_value=None):
+            with self.assertRaises(ValueError) as caught:
+                p.run_shell_browser({}, SHA)
+        self.assertIs(caught.exception, original)
+        with patch.object(p, 'run'), patch.object(p, 'shell_route_loading_location') as projection:
+            p.run_shell_browser({}, SHA)
+        projection.assert_not_called()
+        with patch.object(p, 'run'), patch.object(p, 'run_shell_browser', side_effect=original) as shell, patch.object(p, 'browser_report') as acceptance:
+            with self.assertRaises(ValueError) as caught:
+                p.browser_checks({'flows': ['shell'], 'sha': SHA})
+        self.assertIs(caught.exception, original); shell.assert_called_once(); acceptance.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()

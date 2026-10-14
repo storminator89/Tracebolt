@@ -1,4 +1,4 @@
-import {routeLoadingDevelopmentCase,routeLoadingDevelopmentCaseName} from './route-loading-browser.mjs';
+import {routeLoadingDevelopmentCase,routeLoadingDevelopmentCaseName,routeLoadingDevelopmentDiagnostic} from './route-loading-browser.mjs';
 /** Independent local-only acceptance checks.
  * Run from repository root: node tests/e2e-review/run.mjs
  * Uses the built web/dist, compiles a disposable manager, and creates a unique
@@ -240,6 +240,10 @@ try {
 } finally {
  await browser.close(); await stop(); await log.close();
  const report={createdAt:new Date().toISOString(),sourceSha,base,aiFixtureReview:process.env.TRACEBOLT_REVIEW_AI==='1',viewportDesktop:'1440×1000',viewportMobile:'390×844',browser:process.env.CHROMIUM_PATH ? `Chromium at ${process.env.CHROMIUM_PATH}` : 'Playwright Chromium headless shell',database:'disposable unique temporary database (never production)',results,runtimeErrors,summary:{passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status==='FAIL').length,runtimeErrorCount:runtimeErrors.length}};
+ if(process.env.TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC) {
+  const result=results.find(row=>row.name===routeLoadingDevelopmentCaseName);
+  await fs.writeFile(process.env.TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC,JSON.stringify(routeLoadingDevelopmentDiagnostic(sourceSha,result?.status??'NOT_RUN',runtimeErrors.some(row=>row.test===routeLoadingDevelopmentCaseName))));
+ }
  await fs.writeFile(path.join(out,'results.json'),JSON.stringify(report,null,2)); await fs.writeFile(path.join(out,'screenshot-manifest.json'),JSON.stringify({sourceSha,createdAt:report.createdAt,screenshots},null,2)); console.log(JSON.stringify(report.summary)); await fs.rm(temp,{recursive:true,force:true});
 }
 process.exitCode=results.some(r=>r.status==='FAIL') || runtimeErrors.length ? 1 : 0;

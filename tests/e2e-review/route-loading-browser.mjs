@@ -13,6 +13,27 @@ export const routeLoadingCaseNames = Object.freeze([
 ]);
 let failureStage = 'setup';
 export const routeLoadingFailureStage = () => failureStage;
+export const routeLoadingDevelopmentStages = Object.freeze([
+    'fixture', 'overview-navigation', 'initial-deferral', 'interception-setup',
+    'cold-navigation', 'module-interception', 'loading-fallback', 'module-transfer',
+    'module-evaluation', 'final-render', 'final-counts', 'complete',
+]);
+let developmentStage = 'fixture';
+export function routeLoadingDevelopmentDiagnostic(sourceSha, status, runtimeError) {
+    return { schema: 1, sourceSha, status, stage: developmentStage, runtimeError };
+}
+export async function reloadDevelopmentCaseRoute(page, id) {
+    // replaceState emits no hashchange: install the direct URL without starting
+    // the old document's lazy route, then load a fresh same-origin document.
+    const previous = await bounded(page.evaluate(id => {
+        window.history.replaceState({}, '', `#/cases/${encodeURIComponent(id)}`);
+        return { origin: location.origin, timeOrigin: performance.timeOrigin };
+    }, id), 'COLD_DOCUMENT_DEADLINE');
+    // Waiting for load could wait on the deliberately held dynamic script.
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 });
+    const current = await bounded(page.evaluate(() => ({ origin: location.origin, timeOrigin: performance.timeOrigin })), 'COLD_DOCUMENT_DEADLINE');
+    if (current.origin !== previous.origin || current.timeOrigin === previous.timeOrigin) throw new Error('COLD_DOCUMENT_REQUIRED');
+}
 export const routeLoadingDevelopmentCaseName = 'Direct synthetic case route loads the shared detail module only on demand';
 
 async function bounded(promise, code) {
@@ -42,12 +63,14 @@ async function delayModule(page, releases) {
     await page.route(detailScript, async route => { intercepted = true; await gate; await route.continue(); });
     return { intercepted: () => intercepted, release };
 }
-async function releaseModule(page, delayed) {
+async function releaseModule(page, delayed, onStage = () => {}) {
+    onStage('module-transfer');
     const responsePromise = page.waitForResponse(response => /^\/assets\/details-[\w-]+\.js$/.test(new URL(response.url()).pathname), { timeout: 10000 });
     delayed.release(); const response = await responsePromise;
     if (await bounded(response.finished(), 'DETAIL_TRANSFER_DEADLINE')) throw new Error('DETAIL_TRANSFER_FAILED');
     // Join the exact same already-requested module URL. This awaits evaluation,
     // rather than mistaking response headers/two frames for completed loading.
+    onStage('module-evaluation');
     await bounded(page.evaluate(async url => { await import(url); }, response.url()), 'DETAIL_EVALUATION_DEADLINE');
     await settle(page);
 }
@@ -119,7 +142,7 @@ export async function runRouteLoadingChecks({ check, pageAt, login, expect, base
         let release401; const gate401 = new Promise(resolve => { release401 = resolve; }); releases.add(release401);
         let overviewHeld = false;
         await page.route('**/api/overview', async route => { overviewHeld = true; await gate401; await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'authentication_required', message: 'Synthetic expired session' } }) }); });
-        failureStage = 'pending-auth-loss'; await page.reload();
+        failureStage = 'pending-auth-loss'; await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 });
         await expect.poll(nextDelayed.intercepted, { timeout: 10000 }).toBe(true);
         await expect.poll(() => overviewHeld, { timeout: 10000 }).toBe(true); expect(counts.deviceReads).toBe(priorReads);
         release401(); await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
@@ -146,17 +169,29 @@ export async function runRouteLoadingChecks({ check, pageAt, login, expect, base
     }, '10m');
 }
 export async function routeLoadingDevelopmentCase({ pageAt, expect, base, caseItem }) {
+    developmentStage = 'fixture';
     // Existing development manager supplies only the known synthetic case here.
     if (!caseItem.synthetic) throw new Error('Refusing a non-synthetic case');
+    developmentStage = 'overview-navigation';
     const page = await pageAt('/overview', { width: 1440, height: 1000 }, { reviewLocale: 'en' });
     await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+    developmentStage = 'initial-deferral';
     expect(await recordedDetails(page)).toBe(0);
+    developmentStage = 'interception-setup';
     const releases = new Set(), counts = monitor(page, base), delayed = await delayModule(page, releases);
     try {
-    await page.goto('about:blank');
-    await page.goto(`${base}/#/cases/${encodeURIComponent(caseItem.id)}`);
-    await expect.poll(() => counts.details).toBe(1); await expect.poll(delayed.intercepted, { timeout: 10000 }).toBe(true); await expect(page.getByText('Loading view …', { exact: true })).toBeVisible();
-    await releaseModule(page, delayed); await expect(page.getByRole('heading', { name: caseItem.title, exact: true })).toBeVisible();
-    expect(counts.details).toBe(1); expect(counts.mutations).toBe(0);
+        developmentStage = 'cold-navigation';
+        await reloadDevelopmentCaseRoute(page, caseItem.id);
+        developmentStage = 'module-interception';
+        await expect.poll(() => counts.details).toBe(1);
+        await expect.poll(delayed.intercepted, { timeout: 10000 }).toBe(true);
+        developmentStage = 'loading-fallback';
+        await expect(page.getByText('Loading view …', { exact: true })).toBeVisible();
+        await releaseModule(page, delayed, stage => { developmentStage = stage; });
+        developmentStage = 'final-render';
+        await expect(page.getByRole('heading', { name: caseItem.title, exact: true })).toBeVisible();
+        developmentStage = 'final-counts';
+        expect(counts.details).toBe(1); expect(counts.mutations).toBe(0);
+        developmentStage = 'complete';
     } finally { for (const release of releases) release(); }
 }

@@ -442,6 +442,8 @@ def web_checks(plan):
         # This Node fixture extracts LAN's real completion wrapper; Vitest's
         # related-test graph does not discover these inert .test.mjs contracts.
         run(['node', '--test', 'tests/e2e-review/windows-health-fixtures.test.mjs'], stage='ui-windows-health-contract')
+    if 'shell' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/route-loading-fixtures.test.mjs'], stage='ui-route-loading-contract')
     if 'fleet-groups' in plan.get('flows', []):
         run(['node', '--test', 'tests/e2e-review/fleet-groups-fixtures.test.mjs'], stage='ui-fleet-groups-contract')
     if 'windows-fleet-software' in plan.get('flows', []):
@@ -934,6 +936,56 @@ def journal_failure_location(path, sha):
         return None
 
 
+ROUTE_LOADING_STAGES = (
+    'fixture', 'overview-navigation', 'initial-deferral', 'interception-setup',
+    'cold-navigation', 'module-interception', 'loading-fallback', 'module-transfer',
+    'module-evaluation', 'final-render', 'final-counts', 'complete',
+)
+
+
+def shell_route_loading_location(path, sha):
+    """Read only a closed direct-case coordinate from this invocation's private file."""
+    try:
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 2048:
+                return None
+            raw = stream.read(2049)
+        if len(raw) > 2048:
+            return None
+        value = reporter.decode(raw)
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schema', 'sourceSha', 'status', 'stage', 'runtimeError'}
+                or type(value['schema']) is not int or value['schema'] != 1 or value['sourceSha'] != sha
+                or type(value['status']) is not str or value['status'] not in ('PASS', 'FAIL', 'NOT_RUN')
+                or type(value['stage']) is not str or value['stage'] not in ROUTE_LOADING_STAGES
+                or type(value['runtimeError']) is not bool
+                or (value['status'] == 'PASS' and value['stage'] != 'complete')
+                or (value['status'] == 'NOT_RUN' and (value['stage'] != 'fixture' or value['runtimeError']))):
+            return None
+        # Reconstruct from source literals, never echo an arbitrary report string.
+        status = next(name.lower() for name in ('PASS', 'FAIL', 'NOT_RUN') if name == value['status'])
+        stage = next(name for name in ROUTE_LOADING_STAGES if name == value['stage'])
+        return 'case=direct-case status=%s stage=%s%s' % (status, stage, ' runtime-errors' if value['runtimeError'] else '')
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_shell_browser(env, sha):
+    # A fresh private path prevents stale same-head results and is removed on
+    # every exit. No raw errors, fixture values or browser logs are released.
+    with tempfile.TemporaryDirectory(prefix='tracebolt-private-route-loading-') as private:
+        path = Path(private) / 'coordinates.json'
+        try:
+            run(['node', FLOWS['shell']], stage='browser-shell',
+                env={**env, 'TRACEBOLT_ROUTE_LOADING_DIAGNOSTIC': str(path)})
+        except ValueError:
+            location = shell_route_loading_location(path, sha)
+            if location is not None:
+                print('FAIL shell route-load location: ' + location, flush=True)
+            raise
+
+
 def run_journal_browser(env, sha):
     # Fresh exclusive path per invocation, never under artifacts and always
     # removed. A previous same-head run cannot supply this run's diagnostic.
@@ -969,7 +1021,9 @@ def browser_checks(plan):
                 raise ValueError('installed browser unavailable')
             env['CHROMIUM_PATH'] = executable
         try:
-            if flow == 'journal':
+            if flow == 'shell':
+                run_shell_browser(env, plan['sha'])
+            elif flow == 'journal':
                 run_journal_browser(env, plan['sha'])
             else:
                 run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
