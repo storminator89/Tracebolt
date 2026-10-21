@@ -14,3 +14,13 @@
 .package-update-ack input { flex-shrink: 0; margin-top: 4px; }
 .package-update-workflow section[aria-label] { margin-top: 16px; }
 .package-update-uncertain .button { margin: 4px 8px 4px 0; }
+
+/* Read inventory separates status/review from preparation without moving either
+   subtree when availability, selection or an operation changes. */
+.package-update-workspace { min-width: 0; }
+.package-update-workflow-idle { border: 0; border-radius: 0; padding: 0; margin-bottom: 12px; }
+.package-update-workflow-idle .package-heading h3 { margin: 0; font-size: 13px; }
+.package-update-workflow-idle > p { margin: 4px 0 0; }
+.package-update-selection-workspace { margin: 20px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.package-update-selection-workspace h4 { margin: 0 0 8px; }
+.package-update-selection-workspace ul { padding-left: 22px; }

@@ -92,3 +92,14 @@ test('one bounded cold-route tick retains exact simulation expiry and all admiss
   assert.equal(stopped.fixture.counts.prepare,0);
  }
 });
+
+
+test('read-first captures retain the same inventory DOM through selection, review and unknown outcomes',()=>{
+ const source=read('./package-updates-browser.mjs');
+ assert.match(source,/gallery\('unavailable-inventory',inventory\)/);
+ assert.match(source,/inventoryNode=await inventory\.elementHandle/);
+ assert.match(source,/tableNode=await inventory\.getByRole\('table'\)\.elementHandle/);
+ assert.match(source,/selected\.uncheck\(\);await expect\(status\)\.toHaveClass/);
+ assert.match(source,/mark\('guards'\);await unchangedInventory\(\)/);
+ assert.match(source,/compareDocumentPosition[\s\S]*package-update-selection/);
+});
