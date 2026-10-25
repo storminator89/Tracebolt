@@ -23,6 +23,14 @@ SQLite state defaults to `.local/state.db`. Real endpoints use the separate
 `lan-manager` with authenticated configuration and enrollment. No demo device is
 proof that an agent is installed or reporting.
 
+**Preparing a presentation on Windows.** Use the
+[synthetic-only demo launcher](local-demo.md). It builds the matching manager/UI,
+creates a new session database and disables all local collection with
+`--demo-only`. Existing sessions are retained. If another application owns the
+selected port, choose a different port; do not terminate that application.
+`--demo-only` and `--managed-preview` cannot be combined. Mixed non-synthetic
+state is rejected; choose a fresh database instead of deleting or relabeling it.
+
 See [frontend development](../web/README.md#run) for the build/watch workflow.
 
 ## Linux setup or reporting is incomplete

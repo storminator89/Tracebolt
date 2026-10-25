@@ -43,6 +43,22 @@ const readOnly = (fetch: ReturnType<typeof server>['fetch']) => expect(fetch.moc
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); setLocale('en', false); window.history.replaceState({}, '', '/#/overview'); vi.spyOn(document, 'hasFocus').mockReturnValue(true); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it.each(['en', 'de'] as const)('identifies a pure demonstration without claiming local collection (%s)', async locale => {
+    setLocale(locale, false); const s = server({ lan: false });
+    s.setOverview(async () => json({ ...overview([{ ...device, source: 'synthetic', synthetic: true }]), mode: 'local-development', demoOnly: true }));
+    render(<App/>);
+    await screen.findByText(locale === 'de' ? 'Nur synthetische Beispiele' : 'Synthetic examples only');
+    expect(document.querySelector('.demo-banner')).toHaveTextContent(locale === 'de' ? 'Nur Beispieldaten, keine lokale Erfassung.' : 'Example data only; no local collection.');
+    expect(document.querySelector('.overview-context')).not.toHaveTextContent(locale === 'de' ? 'Demo und lokale Quellen' : 'Demo and local sources');
+    expect(document.querySelectorAll('.fleet-panel tbody tr')).toHaveLength(1); readOnly(s.fetch);
+});
+
+it('keeps authenticated LAN provenance independent of a demo presentation flag', () => {
+    render(<OverviewContext generatedAt={now} lan demoOnly loading={false} failed={false}/>);
+    expect(screen.getByRole('region', { name: 'Data context' })).toHaveTextContent('LAN agent reports');
+    expect(screen.queryByText('Synthetic examples only')).toBeNull();
+});
+
 it.each(['en', 'de'] as const)('puts source context and actual open work before compact fleet numbers (%s)', async locale => {
     setLocale(locale, false); const { fetch } = server({ open: true }); render(<App/>);
     await screen.findByText(locale === 'de' ? 'fixture.service: Dienst inaktiv' : 'fixture.service: service inactive');

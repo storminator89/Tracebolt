@@ -25,33 +25,25 @@ func main() {
 	dbPath := flag.String("db", ".local/state.db", "Local development SQLite file")
 	web := flag.String("web", "web/dist", "Built UI directory")
 	managedPreview := flag.Bool("managed-preview", false, "Developer-only localhost telemetry ingestion; disable all manager-side sampling")
+	demoOnly := flag.Bool("demo-only", false, "Synthetic examples only; no local collector or developer telemetry ingestion")
 	flag.Parse()
 	if *port < 1 || *port > 65535 {
 		log.Fatal("port must be between 1 and 65535")
+	}
+	if *demoOnly && *managedPreview {
+		log.Fatal("--demo-only and --managed-preview are mutually exclusive")
 	}
 	db, e := store.Open(*dbPath)
 	if e != nil {
 		log.Fatal("open local state: ", e)
 	}
 	defer db.Close()
-	devices, cases := fixtures.Seed(time.Now())
-	if e = db.Seed(devices, cases); e != nil {
+	if e = seedDevelopmentFixtures(db, *demoOnly, time.Now()); e != nil {
 		log.Fatal("seed demo state: ", e)
 	}
-	var localSample model.Device
-	var transport *telemetry.State
-	if *managedPreview {
-		transport = telemetry.NewState()
-		localSample = transport.Device(time.Now().UTC())
-	} else {
-		localSample = collector.Snapshot()
-	}
-	handler, e := api.New(db, *port, *web, localSample)
+	handler, e := newDevelopmentHandler(db, *port, *web, *demoOnly, *managedPreview, collector.Snapshot)
 	if e != nil {
 		log.Fatal(e)
-	}
-	if transport != nil {
-		handler.EnableManagedPreview(transport)
 	}
 	listener, e := net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", *port))
 	if e != nil {
@@ -60,7 +52,7 @@ func main() {
 	server := newHTTPServer(handler)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if !*managedPreview {
+	if !*managedPreview && !*demoOnly {
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
@@ -87,8 +79,41 @@ func main() {
 	if *managedPreview {
 		scope = "7 synthetic devices + separate Linux developer-transport slot (no internal collector)"
 	}
+	if *demoOnly {
+		scope = "7 synthetic devices only; no local collection or telemetry ingestion"
+	}
 	log.Printf("Tracebolt development MVP: http://127.0.0.1:%d | %s | no remote enrollment or commands", *port, scope)
 	if e = server.Serve(listener); e != nil && e != http.ErrServerClosed {
 		log.Fatal(e)
 	}
+}
+
+func seedDevelopmentFixtures(db *store.Store, demoOnly bool, now time.Time) error {
+	if demoOnly {
+		if err := db.RequireSyntheticDemo(); err != nil {
+			return err
+		}
+	}
+	devices, cases := fixtures.Seed(now)
+	return db.Seed(devices, cases)
+}
+
+// Keep mode selection before the first collector call. Tests inject a collector
+// to prove that fixture-only and developer-transport modes never sample a host.
+func newDevelopmentHandler(db *store.Store, port int, web string, demoOnly, managedPreview bool, snapshot func() model.Device) (*api.Server, error) {
+	if demoOnly && managedPreview {
+		return nil, fmt.Errorf("--demo-only and --managed-preview are mutually exclusive")
+	}
+	if demoOnly {
+		return api.NewDemoOnly(db, port, web)
+	}
+	if managedPreview {
+		transport := telemetry.NewState()
+		handler, err := api.New(db, port, web, transport.Device(time.Now().UTC()))
+		if err == nil {
+			handler.EnableManagedPreview(transport)
+		}
+		return handler, err
+	}
+	return api.New(db, port, web, snapshot())
 }

@@ -65,6 +65,15 @@ Open **http://127.0.0.1:8787**. This loopback-only demo uses synthetic devices
 and a limited read-only sample of the local machine. State is saved in
 `.local/state.db`; Ctrl+C stops it. [Demo troubleshooting](docs/troubleshooting.md#local-demo).
 
+For a presentation with **only synthetic examples**, run `./bin/manager --demo-only`
+with a separate fresh `--db` path. This disables local collection and developer
+telemetry. On Windows, the [demo launcher](docs/local-demo.md) checks the pinned
+toolchain, builds the current source and opens a fresh loopback-only session:
+
+```powershell
+.\deploy\demo\Start-Demo.ps1
+```
+
 ### Connect real devices
 
 1. **Manager:** follow the [installation guide](docs/installation.md) for a

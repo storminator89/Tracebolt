@@ -18,6 +18,10 @@ func (s *Server) EnableManagedPreview(state *telemetry.State) {
 		return
 	}
 	s.mu.Lock()
+	if s.demoOnly {
+		s.mu.Unlock()
+		return
+	}
 	s.managedPreview = state
 	s.sample = model.Device{}
 	s.mu.Unlock()
@@ -76,6 +80,9 @@ func (s *Server) receiveTelemetry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) collectorDescription() string {
+	if s.demoOnlyEnabled() {
+		return "Disabled: synthetic demonstration only; no local collection or developer telemetry."
+	}
 	if state := s.previewState(); state != nil {
 		return "Linux developer transport: " + state.Status(time.Now().UTC()).State + "; no manager-side collector or fallback"
 	}

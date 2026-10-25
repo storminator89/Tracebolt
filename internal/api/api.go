@@ -43,6 +43,7 @@ type Server struct {
 	sample              model.Device
 	ai                  *aiState
 	managedPreview      *telemetry.State
+	demoOnly            bool
 	lanOnly             bool
 	guidedEnrollment    bool
 	insecureHTTPTest    bool
@@ -77,7 +78,7 @@ func New(s *store.Store, port int, web string, sample model.Device) (*Server, er
 }
 func (s *Server) SetSample(d model.Device) {
 	s.mu.Lock()
-	if s.managedPreview == nil {
+	if s.managedPreview == nil && !s.demoOnly {
 		s.sample = d
 	}
 	s.mu.Unlock()
@@ -173,6 +174,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) devices() ([]model.Device, error) {
 	s.mu.RLock()
 	provider := s.lanDevices
+	demoOnly := s.demoOnly
 	s.mu.RUnlock()
 	if provider != nil {
 		return provider()
@@ -180,6 +182,9 @@ func (s *Server) devices() ([]model.Device, error) {
 	ds, err := s.store.Devices()
 	if err != nil {
 		return nil, err
+	}
+	if demoOnly {
+		return ds, nil
 	}
 	return append(ds, s.sampleDevice()), nil
 }
@@ -227,7 +232,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		if s.lanCapabilities(w) {
 			return
 		}
-		write(w, 200, map[string]any{"mode": s.mode(), "version": model.Version, "syntheticFleet": true, "realCollector": s.collectorDescription(), "remoteEnrollment": false, "shellExecution": false, "aiConnected": false, "aiConfigured": s.aiConfigured(), "managedPreview": s.managedPreviewEnabled(), "persistence": "SQLite", "limitations": []string{"Loopback-only development app; no production authentication or fleet enrollment.", "Seven synthetic devices are examples, not enrolled customer endpoints.", "The live Linux sample has sandbox scope and incomplete host visibility.", "Windows and macOS have limited native adapters with fixture and cross-build checks only; target-machine acceptance remains unverified.", "No systemd, journal, service, software, update or vulnerability assessment is performed on the sandbox.", "Deterministic rules produce demo findings. Optional AI is configured separately and called only for an explicit case analysis; saved settings do not verify a connection.", "Runbooks are read-only guidance. No remote shell, jobs or remediation are available.", "SQLite state is local and not encrypted; protect your operating-system account and workspace.", "Metric quality healthy means observation validity; it does not mean the endpoint or metric is healthy."}})
+		write(w, 200, map[string]any{"mode": s.mode(), "version": model.Version, "syntheticFleet": true, "demoOnly": s.demoOnlyEnabled(), "realCollector": s.collectorDescription(), "remoteEnrollment": false, "shellExecution": false, "aiConnected": false, "aiConfigured": s.aiConfigured(), "managedPreview": s.managedPreviewEnabled(), "persistence": "SQLite", "limitations": s.developmentLimitations()})
 	case "/api/devices":
 		ds, e := s.devices()
 		if e != nil {
@@ -281,7 +286,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		if len(activity) > 12 {
 			activity = activity[:12]
 		}
-		write(w, 200, model.Overview{Product: "Tracebolt", Mode: s.mode(), GeneratedAt: time.Now().UTC(), Stats: stats, Devices: ds, Cases: cs, Activity: activity})
+		write(w, 200, model.Overview{Product: "Tracebolt", Mode: s.mode(), DemoOnly: s.demoOnlyEnabled(), GeneratedAt: time.Now().UTC(), Stats: stats, Devices: ds, Cases: cs, Activity: activity})
 	default:
 		if strings.HasPrefix(p, "/api/devices/") && strings.HasSuffix(p, "/security/review") {
 			s.securityReview(w, r)

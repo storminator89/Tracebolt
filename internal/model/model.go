@@ -124,6 +124,7 @@ type Stats struct {
 	CriticalCases    int `json:"criticalCases"`
 }
 type Overview struct {
+	DemoOnly    bool       `json:"demoOnly,omitempty"`
 	Product     string     `json:"product"`
 	Mode        string     `json:"mode"`
 	GeneratedAt time.Time  `json:"generatedAt"`

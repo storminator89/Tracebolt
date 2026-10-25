@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -45,7 +46,13 @@ func Open(path string) (*Store, error) {
 	if err = os.Chmod(absolute, 0600); err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "file", Path: absolute}
+	// SQLite expects URI path separators even on Windows. A drive-letter path
+	// also needs a leading slash so net/url cannot encode it as a URI authority.
+	uriPath := filepath.ToSlash(absolute)
+	if filepath.VolumeName(absolute) != "" && !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	u := url.URL{Scheme: "file", Path: uriPath}
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, err

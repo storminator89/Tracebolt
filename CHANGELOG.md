@@ -6,6 +6,18 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+The local development manager has an explicit `--demo-only` mode for
+presentations: seven labeled synthetic devices, no host sampling or developer
+telemetry, unchanged loopback/CSRF boundaries and rejection of mixed state.
+The Windows demo launcher checks the toolchain, builds matching source, starts
+a fresh isolated session and verifies readiness before opening the dashboard.
+SQLite URI paths now preserve Windows drive letters, separators and escaped
+filename characters, allowing the local demo to start on Windows. Mixed-state
+validation covers all rows and runs before inserting any synthetic fixtures.
+Stopping the launcher terminates only its own manager; existing agent services
+and previous sessions are preserved. This is a product demonstration, not a
+LAN deployment or native endpoint acceptance.
+
 Complete Linux process/mount views retain their search during explicit refresh,
 restart at the first page of the newly checked generation and keep original
 observation ages. A bilingual clear-and-refresh action permits recovery when
