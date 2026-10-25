@@ -11,7 +11,8 @@ restart at the first page of the newly checked generation and keep original
 observation ages. A bilingual clear-and-refresh action permits recovery when
 the retained search cannot be edited because the view is unavailable. Invalid
 searches remain local. The independent enrollment test helper now extracts the
-same production helper under both LF and Windows CRLF checkouts.
+same production helper under both LF and Windows CRLF checkouts. Scheduled MSI
+UI tests wait for the asynchronous mocked response before asserting its result.
 
 The [fleet-group inventory filter](docs/fleet-groups-health.md#inventory-filter-states)
 now distinguishes membership checks, unavailable membership and a missing selected
