@@ -15,6 +15,86 @@ beforeEach(() => { setLocale('en', false); operator.authenticated = true; view =
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('complete process and mount panels', () => {
+    it.each([['en', 'processes'], ['de', 'processes'], ['en', 'volumes'], ['de', 'volumes']] as const)('retains %s %s search while refresh replaces the generation and resets later-page progress', async (locale, section) => {
+        setLocale(locale, false); view = overviewView(220, 220);
+        vi.mocked(mutateRaw).mockImplementation(async (_path, raw) => overviewPage(view, processRows(220), volumeRows(220), raw));
+        open(section); await screen.findByRole('table');
+        const needle = section === 'processes' ? 'fixture-process-' : 'ext4';
+        const searchLabel = locale === 'de' ? 'Abschnitt durchsuchen' : 'Search this section';
+        fireEvent.change(screen.getByLabelText(searchLabel), { target: { value: needle } });
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Suchen' : 'Search' })); await screen.findByRole('table');
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Suche fortsetzen' : 'Continue search' })); await screen.findByRole('table');
+        expect(screen.getByText(locale === 'de' ? 'Bisher geprüfte Zeilen' : 'Rows scanned so far').nextElementSibling).toHaveTextContent('200 / 220');
+        const original = structuredClone(view[section].complete!);
+        view = structuredClone(view);
+        const next = view[section].complete!;
+        next.binding.generationId = next.manifest.generationId = `sample_${'e'.repeat(32)}`; next.binding.sequence = '5';
+        let finish!: (value: OverviewView) => void;
+        vi.mocked(request).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Abschnitt aktualisieren und neu beginnen' : 'Refresh section and restart' }));
+        expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.getByText(needle, { selector: 'code' })).toBeVisible();
+        await act(async () => finish(view)); await screen.findByRole('table');
+        expect(screen.getByLabelText(searchLabel)).toHaveValue(needle);
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toEqual({ section, generationId: next.binding.generationId, cursor: '', search: needle, limit: 100 });
+        expect(screen.getByText(locale === 'de' ? 'Bisher geprüfte Zeilen' : 'Rows scanned so far').nextElementSibling).toHaveTextContent('100 / 220');
+        expect(screen.getByText(locale === 'de' ? 'Bisher gefundene Treffer' : 'Matches found so far').nextElementSibling).toHaveTextContent('100');
+        expect(screen.getByText(locale === 'de' ? 'Ursprüngliche Aufbewahrungsfrist' : 'Original retention deadline').nextElementSibling).toHaveTextContent(original.retainedUntil);
+        expect(screen.getByText(locale === 'de' ? 'Erfassung begonnen' : 'Capture started').nextElementSibling).toHaveTextContent(original.manifest.captureStartedAt);
+        expect(request).toHaveBeenCalledTimes(2); expect(mutateRaw).toHaveBeenCalledTimes(4);
+    });
+    it.each(['processes', 'volumes'] as const)('explicitly applies a valid unsubmitted %s draft when refreshing', async section => {
+        open(section); await screen.findByRole('table');
+        const needle = section === 'processes' ? 'fixture-process-000219' : '/fixture-000084';
+        fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: needle } });
+        expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh section and restart' })); await screen.findByRole('table');
+        expect(screen.getByLabelText('Search this section')).toHaveValue(needle);
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ section, cursor: '', search: needle });
+        expect(within(screen.getByRole('table')).getByText(needle)).toBeVisible();
+    });
+    it.each(['en', 'de'] as const)('allows explicit recovery from an invalid search after focus loss (%s)', async locale => {
+        setLocale(locale, false); open(); await screen.findByRole('table');
+        const label = locale === 'de' ? 'Abschnitt durchsuchen' : 'Search this section';
+        fireEvent.change(screen.getByLabelText(label), { target: { value: 'ä' } });
+        act(() => window.dispatchEvent(new Event('blur'))); act(() => window.dispatchEvent(new Event('focus')));
+        expect(screen.queryByLabelText(label)).toBeNull();
+        expect(screen.getByRole('alert')).toHaveTextContent('128');
+        expect(screen.getByText('ä', { selector: 'code' })).toBeVisible();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Suche leeren und aktualisieren' : 'Clear search and refresh' }));
+        await screen.findByRole('table'); expect(screen.getByLabelText(label)).toHaveValue('');
+        expect(vi.mocked(mutateRaw).mock.calls.every(([, raw]) => JSON.parse(raw).search !== 'ä')).toBe(true);
+        expect(request).toHaveBeenCalledTimes(2);
+    });
+    it('keeps a valid query after a failed refresh and reuses it on explicit retry', async () => {
+        open(); await screen.findByRole('table');
+        fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'fixture-process-000219' } });
+        vi.mocked(request).mockRejectedValueOnce(new APIError('Synthetic read failed', 503));
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh section and restart' })); await screen.findByRole('alert');
+        expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText('fixture-process-000219', { selector: 'code' })).toBeVisible();
+        expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', { name: 'Retry request' })); await screen.findByRole('table');
+        expect(screen.getByLabelText('Search this section')).toHaveValue('fixture-process-000219');
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ cursor: '', search: 'fixture-process-000219' });
+        expect(request).toHaveBeenCalledTimes(3); expect(mutateRaw).toHaveBeenCalledTimes(2);
+    });
+    it.each(['section', 'device', 'session', 'auth'] as const)('does not retain a private query across %s changes', async boundary => {
+        const mounted = open(); await screen.findByRole('table');
+        fireEvent.change(screen.getByLabelText('Search this section'), { target: { value: 'private-query-fixture' } });
+        if (boundary === 'auth') {
+            act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+            expect(screen.queryByDisplayValue('private-query-fixture')).toBeNull();
+            expect(screen.queryByText('private-query-fixture', { selector: 'code' })).toBeNull();
+            expect(screen.queryByRole('button', { name: 'Clear search and refresh' })).toBeNull();
+        } else {
+            const id = boundary === 'device' ? `agent_${'b'.repeat(32)}` : overviewDevice;
+            view = structuredClone(view); view.deviceId = id;
+            mounted.rerender(<CompleteOverviewPanel deviceId={id} section={boundary === 'section' ? 'volumes' : 'processes'} sessionKey={boundary === 'session' ? 'second' : 'first'}/>);
+            await screen.findByRole('table'); expect(screen.getByLabelText('Search this section')).toHaveValue('');
+            expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1]).search).toBe('');
+        }
+    });
     it.each([['en', 'processes'], ['de', 'processes'], ['en', 'volumes'], ['de', 'volumes']] as const)('keeps %s %s coverage, age and search ahead of the capture disclosure, directly before rows', async (locale, section) => {
         setLocale(locale, false); open(section);
         const table = await screen.findByRole('table'), disclosure = document.querySelector('.overview-provenance')!, summary = disclosure.querySelector('summary')!;

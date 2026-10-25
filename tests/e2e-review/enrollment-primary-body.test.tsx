@@ -148,7 +148,11 @@ for(const [initial,action,label,rendered] of [['created','canceled','Cancel invi
  const page={getByRole(role:any,options:any){return locator(()=>screen.queryAllByRole(role,options));},evaluate(fn:any,arg:any){return Promise.resolve(fn(arg));},waitForResponse(predicate:any){return new Promise(resolve=>{responseWait=value=>{expect(predicate(value)).toBe(true);resolve(value);};});}};
  const checks:any=(value:any)=>({toBe(want:any){expect(value).toBe(want);},async toBeVisible(){await waitFor(()=>expect(value.get()).toHaveLength(1));},async toContainText(want:string){await waitFor(()=>{expect(value.get()).toHaveLength(1);expect(value.get()[0]).toHaveTextContent(want);});},async toHaveCount(want:number){await waitFor(()=>expect(value.get()).toHaveLength(want));}});
  checks.poll=(fn:any)=>({not:{async toMatch(pattern:RegExp){await waitFor(async()=>expect(await fn()).not.toMatch(pattern));}}});
- const source=enrollmentBrowserSource,start=source.indexOf('async function terminate('),end=source.indexOf('\n\ntry{',start);
+ // Git may check this source out as CRLF on Windows. Extract the same helper
+ // body on either platform; reject a missing delimiter instead of compiling
+ // the remainder of the browser module (which includes top-level await).
+ const source=enrollmentBrowserSource.replace(/\r\n/g,'\n'),start=source.indexOf('async function terminate('),end=source.indexOf('\n\ntry{',start);
+ expect(start).toBeGreaterThanOrEqual(0);expect(end).toBeGreaterThan(start);
  const helper=Function('expect','validSnapshot','base','mark','transportDiagnostics','let terminationPrimaryFailure=null,terminationTransportFailure=null;'+source.slice(start,end)+';return terminate;')(checks,validSnapshot,location.origin,()=>{},{capture:()=>({operation:'other',category:'other'})});
  const result=helper(page,label,item).then(()=>({error:null}),error=>({error}));const completed=await result;
  if(field==='valid')expect(completed.error).toBeNull();else expect(completed.error).not.toBeNull();

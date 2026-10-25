@@ -17,7 +17,14 @@ intact; see the [current Inventory/Security presentation](../inventory-security-
   A server search scans at most 2,048 rows per request. An empty non-exhausted
   page is a continuation, not proof of no matches. Whole-generation counts,
   cumulative scanned counts, matches found so far and current-page rows are
-  separate. Refresh explicitly restarts paging and clears the search.
+  separate. Refresh explicitly restarts paging with the current search, including
+  a valid unsubmitted draft. It reads current status and binds the first page to
+  that verified generation; old cursors and scan/match progress are discarded.
+  Original capture times and retention deadlines are not refreshed by the read.
+  When no usable view is available, the retained search and an explicit
+  **Clear search and refresh** action remain visible. Invalid search text is
+  never submitted; this action also permits recovery from an invalid draft after
+  focus loss or a failed read without silently broadening the query.
 - Pages pin the original section binding, manifest, capture interval, completion
   time, retention deadline and cursor deadline. A newer section generation does
   not silently replace the selected pages. Section captures can differ; mixed

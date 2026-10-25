@@ -6,6 +6,13 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+Complete Linux process/mount views retain their search during explicit refresh,
+restart at the first page of the newly checked generation and keep original
+observation ages. A bilingual clear-and-refresh action permits recovery when
+the retained search cannot be edited because the view is unavailable. Invalid
+searches remain local. The independent enrollment test helper now extracts the
+same production helper under both LF and Windows CRLF checkouts.
+
 The [fleet-group inventory filter](docs/fleet-groups-health.md#inventory-filter-states)
 now distinguishes membership checks, unavailable membership and a missing selected
 group from confirmed empty/search results. English/German recovery controls keep
