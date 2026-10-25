@@ -6,6 +6,13 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+The [fleet-group inventory filter](docs/fleet-groups-health.md#inventory-filter-states)
+now distinguishes membership checks, unavailable membership and a missing selected
+group from confirmed empty/search results. English/German recovery controls keep
+the selection visible and let operators clear only the group filter. Unknown
+membership shows an unknown count and admits no rows or CSV export. This is a
+dashboard source change; published endpoint packages are unchanged.
+
 Fresh [manual-download/scheduled-install coexistence](docs/windows-selected-update-downloads.md#fresh-manual-download-and-scheduled-install-coexistence)
 uses separately acknowledged WUA/MSI installation scheduling under the existing
 shared fence. Download remains manual; successful retirement precedes fresh WUA

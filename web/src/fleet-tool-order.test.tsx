@@ -109,7 +109,8 @@ describe('device list before the existing fleet tools', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Reset filters' })); await chooseGroup(other);
         s.loseGroups(); fireEvent.click(screen.getByRole('button', { name: 'Refresh groups' })); await flush();
         expect(screen.getByRole('combobox', { name: 'Fleet groups' })).toHaveValue(other);
-        expect(panel().querySelector('.device-table')).toBeNull(); expect(screen.getByRole('heading', { name: 'No matching devices' })).toBeVisible();
+        expect(panel().querySelector('.device-table')).toBeNull(); expect(screen.getByRole('heading', { name: 'Selected group unavailable' })).toBeVisible();
+        expect(screen.queryByRole('heading', { name: 'No matching devices' })).toBeNull();
         expectSameTools(original); expect(within(inbox).getByRole('button', { name: /^Mark seen:/ })).toBeDisabled();
         expect(s.posts()).toHaveLength(1);
     });

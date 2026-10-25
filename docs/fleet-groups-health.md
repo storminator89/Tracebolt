@@ -25,6 +25,39 @@ Named operators may inspect/filter groups but cannot mutate them. Reads never
 create, repair or prune a group. Corrupt storage fails closed. Group records are
 not migrated or inferred from historical labels.
 
+## Inventory filter states
+
+A selected group stays selected while its membership is refreshed, expires or
+becomes unavailable. Until a current valid roster confirms its members, the
+inventory shows **Checking group membership**, **Group membership unavailable**
+or **Selected group unavailable**, rather than a zero-device/search result.
+The count is unknown (`—`), no device rows are admitted through that filter,
+and CSV export remains disabled. The selected group ID stays visible; expired
+device or group names are not retained for this notice.
+
+Use **Refresh group membership** to read the existing private group projection
+again. If the overview itself failed, **Refresh overview** first restores that
+source and then rechecks membership. Neither operation writes or retries an
+action. **Clear group filter** removes only the group selection, preserving
+search, platform, status, source and sort choices. It deliberately returns to
+the devices allowed by those remaining filters.
+
+A valid group with no visible members has its own empty state. Retained
+unavailable members are counted separately and never described as absent
+devices. A verified group whose members do not match the other inventory
+filters still shows the ordinary **No matching devices** result. These states
+are available in English and German. Existing per-device reviews, permissions
+and job controls remain authoritative; a group is never an action grant.
+
+This is current-source dashboard behavior, not a change to any published
+endpoint package or proof of native collection. Frontend regressions exercise
+the real auth/request/group-resource path with invented responses:
+
+```sh
+cd web
+npx vitest run src/fleet-group-inventory.test.tsx src/fleet-groups.test.tsx --maxWorkers=1
+```
+
 ## Explicit policies, exact selected devices
 
 After opening Fleet groups, a shared administrator can use **Apply monitoring

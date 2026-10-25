@@ -55,6 +55,43 @@ describe('compact manual fleet groups', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Refresh groups' })); expect(screen.getByTestId('filter')).toBeEmptyDOMElement();
         await act(async () => finish({ ...groups, secret: 'reject' })); expect(screen.getByTestId('filter')).toBeEmptyDOMElement(); expect(screen.getByText(/Group membership is unavailable/)).toBeVisible();
     });
+    it('keeps the selected filter closed while unavailable and restores only freshly read membership', async () => {
+        const { rerender } = render(<Harness/>); await load(); select();
+        expect(screen.getByTestId('filter').textContent).toBe([windowsDeviceId, second, linux].join(','));
+        rerender(<Harness enabled={false}/>);
+        expect(screen.getByTestId('filter')).toBeEmptyDOMElement(); expect(screen.getByRole('combobox', { name: 'Fleet groups' })).toHaveValue(groupId);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh groups' })); await flush(); expect(request).toHaveBeenCalledTimes(1);
+        vi.mocked(request).mockRejectedValueOnce(new Error('Fixture membership read failed'));
+        rerender(<Harness/>); await flush();
+        expect(request).toHaveBeenCalledTimes(2); expect(screen.getByTestId('filter')).toBeEmptyDOMElement();
+        expect(screen.getByRole('combobox', { name: 'Fleet groups' })).toHaveValue(groupId); expect(screen.getByText(/Group membership is unavailable/)).toBeVisible();
+        groups.groups[0] = { ...groups.groups[0], revision: 3, memberIds: [second] };
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh groups' })); await flush();
+        expect(screen.getByTestId('filter').textContent).toBe(second); expect(screen.getByRole('option', { name: 'Office (1)' })).toHaveProperty('selected', true);
+        expect(request).toHaveBeenCalledTimes(3); expect(posts()).toHaveLength(0);
+    });
+    it('aborts a disabled membership reader and ignores its late response after fresh reactivation', async () => {
+        const { rerender } = render(<Harness/>); await load(); select();
+        const original = structuredClone(groups); let finish!: (value: unknown) => void;
+        vi.mocked(request).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh groups' }));
+        const signal = vi.mocked(request).mock.calls.at(-1)![1]!.signal!;
+        expect(signal.aborted).toBe(false); expect(screen.getByTestId('filter')).toBeEmptyDOMElement();
+        rerender(<Harness enabled={false}/>);
+        expect(signal.aborted).toBe(true); expect(screen.getByTestId('filter')).toBeEmptyDOMElement();
+        groups.groups[0] = { ...groups.groups[0], revision: 3, memberIds: [second] };
+        rerender(<Harness/>); await flush(); expect(screen.getByTestId('filter').textContent).toBe(second);
+        await act(async () => finish(original));
+        expect(screen.getByTestId('filter').textContent).toBe(second); expect(screen.getByRole('combobox', { name: 'Fleet groups' })).toHaveValue(groupId);
+        expect(screen.getByRole('option', { name: 'Office (1)' })).toHaveProperty('selected', true); expect(request).toHaveBeenCalledTimes(3); expect(posts()).toHaveLength(0);
+    });
+    it('keeps a selected group closed when the original operator lease expires', async () => {
+        const expiry = new Date(Date.parse(windowsNow) + 1000).toISOString();
+        render(<Harness sessionKey={expiry}/>); await load(); select(); expect(screen.getByTestId('filter')).toHaveTextContent(windowsDeviceId);
+        await advance(1000);
+        expect(screen.getByTestId('filter')).toBeEmptyDOMElement(); expect(screen.getByRole('combobox', { name: 'Fleet groups' })).toHaveValue(groupId);
+        expect(screen.getByText(/Group membership is unavailable/)).toBeVisible(); expect(request).toHaveBeenCalledTimes(1); expect(posts()).toHaveLength(0);
+    });
     it('named access reads membership but cannot edit groups or policy settings', async () => {
         render(<Harness admin={false}/>); await load(); select(); expect(screen.queryByRole('button', { name: 'Apply monitoring policies' })).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Manage groups' })); expect(screen.getByText(/Your access is read-only/)).toBeVisible(); expect(screen.queryByRole('button', { name: 'Create group' })).toBeNull();
