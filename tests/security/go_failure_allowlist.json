@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "643027316cd5b9ac579b5259ff6acd2f0da191ba7976cb2a4393b223884df180",
+  "goSourceSha256": "d487d01034a79013adf30ff6fbd94b14eb9fe96b125f51d0deabdaaf3434adcf",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -214,6 +214,8 @@
       "TestUninstallUnavailableBackendNeverInspects"
     ],
     "localrmm/cmd/manager": [
+      "TestDemoOnlyRejectsExistingStateBeforeSeeding",
+      "TestDevelopmentModeSelectsCollectionBeforeFirstSample",
       "TestHTTPWriteBudgetOutlastsAnalysis",
       "TestRealManagerReturnsDelayedFakeProviderResult"
     ],
@@ -984,6 +986,8 @@
       "TestConditionalReviewFixedErrorsAndOperatorRecheck",
       "TestConditionalReviewOperationalReadBusyHasFixedRetryContract",
       "TestConditionalReviewSuppressesNonfreshAndBusy",
+      "TestDemoOnlyDoesNotAdoptLocalOrDeveloperTelemetry",
+      "TestDemoOnlyRejectsMixedStateWithoutChangingIt",
       "TestEndpointIdentityFinalOutputRechecksIdentityAndSession",
       "TestEndpointIdentityOperatorGuardsAndBoundedUnknown",
       "TestEndpointIdentityRechecksSessionAfterRead",
@@ -4016,6 +4020,7 @@
       "TestCompleteServiceDurableSourceAndIsolation",
       "TestCompleteServiceEvaluatorSQLWaitAndFinalGuards",
       "TestCompleteServiceFinalSourceExpiryRollsBack",
+      "TestDatabaseURIUsesExactNativePath",
       "TestDurableMutationAndSeed",
       "TestFleetGroupMaintenanceEndExactWindowAndUnchangedHistory",
       "TestFleetGroupMaintenanceEndFinalGuardAndTimeRollback",
@@ -4060,6 +4065,7 @@
       "TestJournalAIStoreSharesHealthRateBudget",
       "TestNoteLimit",
       "TestPruneHealthAnalysesWorksWithoutProviderApproval",
+      "TestSyntheticDemoCheckIncludesRowsPastListLimit",
       "TestWindowsCapacityConcurrentPolicyRevisionAndIsolation",
       "TestWindowsCapacityFailedWritesAndCorruptionPreserveState",
       "TestWindowsCapacityNeverTouchesHealthAnalysisOrAlarms",
