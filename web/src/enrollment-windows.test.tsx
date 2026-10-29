@@ -27,7 +27,7 @@ function record(state: EnrollmentState = 'created', revision = 1): EnrollmentSna
  };
 }
 function listing(items: EnrollmentSnapshot[] = []): EnrollmentList {
- return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['windows'], recordLimit: 25, collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive', selfRegistrationEnabled:true, items };
+ return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['windows'], recordLimit: 25, collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive', selfRegistrationEnabled:false, items };
 }
 function linuxListing(): EnrollmentList {
  return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['linux'], recordLimit: 25, items: [] };
@@ -44,7 +44,7 @@ async function windows() {
  render(section());
  await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
  select('windows');
- await screen.findByText('Windows · Single invitation · Manual approval');
+ await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
 }
 async function add() {
  await windows();
@@ -58,7 +58,7 @@ async function create() {
  await within(dialog).findByLabelText('One-time invitation secret'); return dialog;
 }
 async function review(item: EnrollmentSnapshot) {
- current = listing([item]); await windows();
+ current = listing([item]); current.selfRegistrationEnabled=true; await windows();
  fireEvent.click(screen.getByRole('button', { name: /Invitations/ }));
  fireEvent.click(screen.getByRole('button', { name: `Review invitation ${invitation}` }));
  return screen.getByRole('dialog', { name: 'Review invitation' });
@@ -76,7 +76,7 @@ describe('Windows enrollment contract and creation consent', () => {
   render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
   expect(screen.getByRole('combobox', { name: 'Operating system' })).toHaveValue('linux');
   expect(request).toHaveBeenCalledExactlyOnceWith('/enrollment', { signal: expect.any(AbortSignal) });
-  select('windows'); await screen.findByText('Windows · Single invitation · Manual approval');
+  select('windows'); await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
   expect(request).toHaveBeenLastCalledWith('/windows/enrollment', { signal: expect.any(AbortSignal) });
  });
  it('rejects mismatched profiles, privacy, platform rows and bounds before opening a Windows dialog', async () => {
@@ -169,14 +169,14 @@ describe('Windows lifecycle and platform cancellation', () => {
   expect(signal).toBeDefined(); select('linux'); expect(signal!.aborted).toBe(true);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); await act(async () => finish(creation()));
   expect(screen.queryByDisplayValue(secret)).not.toBeInTheDocument(); expect(changed).not.toHaveBeenCalled();
-  select('windows'); await screen.findByText('Windows · Single invitation · Manual approval');
+  select('windows'); await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
   fireEvent.click(screen.getByRole('button', { name: 'Add device' })); expect(screen.getByRole('checkbox', { name: collectionConsent })).not.toBeChecked();
  });
  it('clears a revealed secret on switch and requires new consent after reopening', async () => {
   const dialog = await create(); fireEvent.click(within(dialog).getByRole('button', { name: 'Reveal invitation secret' }));
   const input = screen.getByLabelText('One-time invitation secret'); expect(input).toHaveAttribute('type', 'text');
   select('linux'); expect(input).toHaveValue(''); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(screen.queryByDisplayValue(secret)).not.toBeInTheDocument();
-  select('windows'); await screen.findByText('Windows · Single invitation · Manual approval');
+  select('windows'); await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
   fireEvent.click(screen.getByRole('button', { name: 'Add device' })); expect(screen.getByRole('checkbox', { name: collectionConsent })).not.toBeChecked();
  });
  it('removes a displayed secret when refreshed Windows consent metadata no longer matches', async () => {
@@ -244,5 +244,20 @@ describe('Windows tokenless Rust registration', () => {
   expect(within(dialog).getByRole('button',{name:'Approve device'})).toBeDisabled();
   expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
   expect(screen.getByText(/Invitation tokens remain optional/)).toBeVisible();
+ });
+});
+
+describe('automatic setup default', () => {
+ it('keeps token optional and requires scope acknowledgement before public bootstrap', async () => {
+  current.selfRegistrationEnabled=true;
+  vi.mocked(mutate).mockResolvedValue({...creation().bootstrap,schemaVersion:'tracebolt.enrollment-bootstrap.auto.v1'});
+  const dialog=await add();
+  const button=within(dialog).getByRole('button',{name:'Set up without token'});
+  expect(button).toBeDisabled();
+  expect(within(dialog).getByRole('checkbox',{name:'Optional: use an invitation token'})).not.toBeChecked();
+  acknowledge(dialog);fireEvent.click(button);
+  await within(dialog).findByRole('button',{name:'Download configuration'});
+  expect(mutate).toHaveBeenCalledWith('/windows/enrollment/automatic-bootstrap',expect.objectContaining({platform:'windows',collectionAcknowledged:true}),expect.any(AbortSignal));
+  expect(within(dialog).queryByLabelText('One-time invitation secret')).not.toBeInTheDocument();
  });
 });

@@ -4,12 +4,12 @@ import (
 	"context"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/enrollmentstore"
 )
 
-// SelfClaimAvailable is deliberately restricted to the existing Windows TLS
-// domain. It does not change Linux/macOS, HTTP, renewal or invitation behavior.
+// SelfClaimAvailable preserves the configured platform, profile and renewal fence.
 func (s *Service) SelfClaimAvailable() bool {
-	return s != nil && s.serviceState != nil && s.binding.Profile == "tls" && s.binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && !s.AutomaticRenewal()
+	return s != nil && s.serviceState != nil && enrollmentstore.SelfRegistrationPlatform(s.store.Config()) != ""
 }
 
 func (s *Service) SelfClaim(ctx context.Context, nonce string, raw []byte) (enrollmentstate.Snapshot, error) {
@@ -31,4 +31,12 @@ func (s *Service) SelfClaim(ctx context.Context, nonce string, raw []byte) (enro
 		return enrollmentstate.Snapshot{}, err
 	}
 	return s.store.SelfClaim(ctx, proof, now.Unix())
+}
+
+// SelfClaimPlatform returns the configured self-registration identity domain.
+func (s *Service) SelfClaimPlatform() string {
+	if s == nil || s.serviceState == nil {
+		return ""
+	}
+	return enrollmentstore.SelfRegistrationPlatform(s.store.Config())
 }

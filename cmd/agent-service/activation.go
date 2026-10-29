@@ -39,7 +39,7 @@ func prepareOnlineBootstrap(ctx context.Context, r agentinstall.Request, in boot
 		return r, noop, errOnlinePreparation
 	}
 	renewable := selected.SchemaVersion == enrollmentclient.RenewableBootstrapVersion && selected.RenewalPolicy == "same-key-v1" && selected.Profile == "tls"
-	legacy := selected.SchemaVersion == enrollmentclient.BootstrapVersion && selected.RenewalPolicy == ""
+	legacy := (selected.SchemaVersion == enrollmentclient.BootstrapVersion || selected.SchemaVersion == enrollmentclient.AutomaticBootstrapVersion && selected.Profile == "tls") && selected.RenewalPolicy == ""
 	if (!legacy && !renewable) || renewable != r.AutomaticRenewalAcknowledged {
 		return r, noop, errOnlinePreparation
 	}

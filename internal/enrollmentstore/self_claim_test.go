@@ -59,8 +59,8 @@ func TestSelfClaimFailureRollsBackCreation(t *testing.T) {
 
 func TestSelfClaimCannotAdoptInvitationOrOtherProfile(t *testing.T) {
 	f, s, _ := fixtureStore(t)
-	if _, err := s.SelfClaim(context.Background(), f.claim(t), testNow+1); err == nil {
-		t.Fatal("basic/Linux domain admitted self registration")
+	if _, err := s.SelfClaim(context.Background(), f.claim(t), testNow+1); err != nil {
+		t.Fatal("legacy Linux domain rejected self registration", err)
 	}
 	f.config.Binding.CollectionProfile = enrollmentcrypto.CollectionProfileWindowsInventory
 	f.challenge.CollectionProfile = enrollmentcrypto.CollectionProfileWindowsInventory
@@ -72,5 +72,25 @@ func TestSelfClaimCannotAdoptInvitationOrOtherProfile(t *testing.T) {
 	}
 	if _, err := s.SelfClaim(context.Background(), f.claim(t), testNow+1); !errors.Is(err, enrollmentstate.ErrConflict) {
 		t.Fatal("ordinary invitation adopted", err)
+	}
+}
+
+func TestSelfRegistrationPlatformFence(t *testing.T) {
+	for _, tc := range []struct {
+		platform, profile, transport, want string
+		renewal                            bool
+	}{
+		{"", enrollmentcrypto.CollectionProfile, "tls", "linux", false},
+		{"", enrollmentcrypto.CollectionProfileMacOSInventory, "tls", "", false},
+		{"darwin", enrollmentcrypto.CollectionProfileMacOSInventory, "tls", "darwin", false},
+		{"darwin", enrollmentcrypto.CollectionProfileOperational, "tls", "", false},
+		{"linux", enrollmentcrypto.CollectionProfileWindowsInventory, "tls", "", false},
+		{"linux", enrollmentcrypto.CollectionProfile, "http-test", "", false},
+		{"linux", enrollmentcrypto.CollectionProfile, "tls", "", true},
+	} {
+		c := enrollmentstate.Config{Platform: tc.platform, AutomaticRenewal: tc.renewal, Binding: enrollmentstate.Binding{Profile: tc.transport, CollectionProfile: tc.profile}}
+		if got := SelfRegistrationPlatform(c); got != tc.want {
+			t.Fatalf("%+v: got %q", tc, got)
+		}
 	}
 }

@@ -45,11 +45,19 @@ go build -buildvcs=false -o bin/enroll-agent ./cmd/enroll-agent
 go build -buildvcs=false -o bin/lan-agent ./cmd/lan-agent
 ```
 
-Prepare the public bootstrap through Add device. Do not put the invitation in an
-argument, environment variable, file, chat or log. The enrollment child displays
-the exact destination/trust and reads the invitation from a hidden controlling
-terminal after dropping UID/GID and supplementary groups. Compare its full local
-fingerprint and comparison value in the manager before approval.
+Prepare a fresh public bootstrap through Add device. For TLS domains without
+same-key renewal, automatic registration is the default: the updated enrollment
+child uses `tracebolt.enrollment-bootstrap.auto.v1` and never asks for a token.
+It still displays the destination/trust after dropping UID/GID and supplementary
+groups. Compare its full local fingerprint and comparison value in the manager
+before approval. The existing installation then continues into reporting.
+
+Select the optional invitation-token checkbox only when that workflow is needed.
+Its secret is entered at a hidden controlling terminal, never in an argument,
+environment variable, file, chat or log. HTTP test and renewable domains retain
+the explicit invitation workflow. Use a new bootstrap and private state directory;
+existing identities are not migrated. Both manager and agent must include this
+change; previously published agent binaries do not support the auto schema.
 
 First run the command below with real absolute paths and independently selected
 hashes substituted for every placeholder. It performs preflight only. After

@@ -2,7 +2,7 @@ export const enrollmentStates = ['created','claimed_pending','approved','issuanc
 export type EnrollmentState = typeof enrollmentStates[number];
 export interface EnrollmentSnapshot {
   version: 'tracebolt.enrollment-state.v2';
-  registrationMode?: 'rust-basic-self-registration';
+  registrationMode?: 'rust-basic-self-registration' | 'self-registration';
   binding: {instanceID:string;origin:string;profile:'tls'|'http-test';collectionProfile:string;issuerFingerprint:string};
   invitationID:string; createRequestID:string; platform:string; revision:number; state:EnrollmentState;
   createdAt:number; deadlineAt:number; updatedAt:number;
@@ -24,7 +24,7 @@ const time=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)
 export function terminal(state:EnrollmentState):boolean{return ['expired','canceled','rejected','revoked'].includes(state);}
 export function validSnapshot(value:unknown):value is EnrollmentSnapshot {
  if(!object(value)||value.version!=='tracebolt.enrollment-state.v2'||!text(value.invitationID)||!/^invite_[a-f0-9]{32}$/.test(value.invitationID)||!text(value.createRequestID)||!text(value.platform)||!Number.isSafeInteger(value.revision)||Number(value.revision)<1||!enrollmentStates.includes(value.state as EnrollmentState)||!time(value.createdAt)||!time(value.deadlineAt)||!time(value.updatedAt))return false;
- if(value.registrationMode!==undefined&&(value.registrationMode!=='rust-basic-self-registration'||value.platform!=='windows'))return false;
+ if(value.registrationMode!==undefined&&!(value.registrationMode==='rust-basic-self-registration'&&value.platform==='windows'||value.registrationMode==='self-registration'&&['linux','darwin'].includes(String(value.platform))))return false;
  const b=value.binding,c=value.claim,a=value.approval,i=value.intent;
  if(!object(b)||!text(b.instanceID)||!text(b.origin)||!['tls','http-test'].includes(String(b.profile))||!text(b.collectionProfile)||!text(b.issuerFingerprint)||!object(c)||!text(c.claimID)||!text(c.keyFingerprint)||!text(c.comparisonCode)||!object(a)||!text(a.deviceID)||!object(i)||!text(i.deviceID)||!time(i.notAfter)||!object(value.issuance)||!object(value.activation)||!object(value.termination))return false;
  return true;

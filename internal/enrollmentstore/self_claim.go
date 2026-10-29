@@ -10,21 +10,25 @@ import (
 	"localrmm/internal/enrollmentstate"
 )
 
-// SelfClaim creates a fresh Windows TLS pending claim atomically. It does not
+// SelfClaim creates a fresh TLS pending claim atomically. It does not
 // approve a device, issue a certificate or activate telemetry. The client creates
 // its own high-entropy proof material; no invitation needs manual transfer.
 // Existing invitation records can only be retried when this exact self-claim
 // created them. A conventional invitation can never be adopted through here.
 func (s *Store) SelfClaim(ctx context.Context, proof enrollmentcrypto.VerifiedClaim, now int64) (enrollmentstate.Snapshot, error) {
-	if s == nil || s.storeState == nil || s.config.Binding.Profile != "tls" || s.config.Binding.CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory || s.config.AutomaticRenewal || !proof.Valid() || proof.Profile() != "tls" || proof.CollectionProfile() != enrollmentcrypto.CollectionProfileWindowsInventory || proof.RenewalPolicy() != "" {
+	if s == nil || s.storeState == nil {
 		return enrollmentstate.Snapshot{}, enrollmentstate.ErrProof
 	}
-	createID := selfClaimCreationID(proof.InvitationID())
+	platform := SelfRegistrationPlatform(s.config)
+	if platform == "" || !proof.Valid() || proof.Profile() != "tls" || proof.CollectionProfile() != s.config.Binding.CollectionProfile || proof.RenewalPolicy() != "" {
+		return enrollmentstate.Snapshot{}, enrollmentstate.ErrProof
+	}
+	createID := selfClaimCreationIDForPlatform(platform, proof.InvitationID())
 	return s.command(ctx, func(t *transaction) (enrollmentstate.Snapshot, error) {
 		current, err := t.engine.Get(proof.InvitationID())
 		if errors.Is(err, enrollmentstate.ErrNotFound) {
 			hash := proof.InvitationHash()
-			current, err = t.engine.CreateInvitation(ctx, enrollmentstate.CreateCommand{InvitationID: proof.InvitationID(), RequestID: createID, InvitationHash: hex.EncodeToString(hash[:]), Platform: "windows", Now: now})
+			current, err = t.engine.CreateInvitation(ctx, enrollmentstate.CreateCommand{InvitationID: proof.InvitationID(), RequestID: createID, InvitationHash: hex.EncodeToString(hash[:]), Platform: platform, Now: now})
 		} else if err == nil && current.CreateRequestID != createID {
 			return enrollmentstate.Snapshot{}, enrollmentstate.ErrConflict
 		}
@@ -40,7 +44,35 @@ func selfClaimCreationID(invitationID string) string {
 	return "request_" + hex.EncodeToString(creation[:16])
 }
 
+// SelfRegistrationPlatform derives identity exclusively from the configured domain.
+// Legacy unfenced Linux stores remain Linux; macOS always requires its explicit fence.
+// Renewal domains retain their separate explicit local-consent workflow.
+func SelfRegistrationPlatform(config enrollmentstate.Config) string {
+	if config.Binding.Profile != "tls" || config.AutomaticRenewal {
+		return ""
+	}
+	platform := config.Platform
+	if platform == "" {
+		platform = "linux"
+		if config.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory {
+			platform = "windows"
+		}
+	}
+	if !enrollmentcrypto.ValidPlatformCollectionProfile(platform, config.Binding.Profile, config.Binding.CollectionProfile) {
+		return ""
+	}
+	return platform
+}
+
+func selfClaimCreationIDForPlatform(platform, invitationID string) string {
+	if platform == "windows" {
+		return selfClaimCreationID(invitationID)
+	}
+	creation := sha256.Sum256([]byte("Tracebolt " + platform + " self-registration creation v1\x00" + invitationID))
+	return "request_" + hex.EncodeToString(creation[:16])
+}
+
 // IsSelfRegistration is an operator display hint, never an authorization check.
 func IsSelfRegistration(snapshot enrollmentstate.Snapshot) bool {
-	return snapshot.Platform == "windows" && snapshot.Binding.Profile == "tls" && snapshot.Binding.CollectionProfile == enrollmentcrypto.CollectionProfileWindowsInventory && snapshot.CreateRequestID == selfClaimCreationID(snapshot.InvitationID)
+	return enrollmentcrypto.ValidPlatformCollectionProfile(snapshot.Platform, snapshot.Binding.Profile, snapshot.Binding.CollectionProfile) && snapshot.Binding.Profile == "tls" && snapshot.CreateRequestID == selfClaimCreationIDForPlatform(snapshot.Platform, snapshot.InvitationID)
 }

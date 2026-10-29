@@ -2,8 +2,10 @@ package api
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -60,10 +62,14 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 		views := make([]any, 0, len(items))
 		for _, item := range items {
 			if enrollmentstore.IsSelfRegistration(item) {
+				mode := "self-registration"
+				if item.Platform == "windows" {
+					mode = "rust-basic-self-registration"
+				}
 				views = append(views, struct {
 					enrollmentstate.Snapshot
 					RegistrationMode string `json:"registrationMode"`
-				}{item, "rust-basic-self-registration"})
+				}{item, mode})
 			} else {
 				views = append(views, item)
 			}
@@ -116,7 +122,7 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 	if !h.app.authorizeJSONMutation(w, r) {
 		return
 	}
-	if r.URL.Path == "/api/enrollment/invitations" {
+	if r.URL.Path == "/api/enrollment/invitations" || r.URL.Path == "/api/enrollment/automatic-bootstrap" {
 		input, ok := readInvitationInput(w, r, h.enrollment.Binding().CollectionProfile)
 		if !ok {
 			return
@@ -134,6 +140,26 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		defer release()
+		if r.URL.Path == "/api/enrollment/automatic-bootstrap" {
+			if !h.enrollment.SelfClaimAvailable() || h.insecureHTTPTest || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version < tls.VersionTLS13 {
+				fail(w, 404, "enrollment_unavailable", "TLS self-registration is not configured.")
+				return
+			}
+			if input.Platform != h.enrollment.SelfClaimPlatform() {
+				fail(w, 400, "enrollment_platform_mismatch", "Platform does not match the selected enrollment domain.")
+				return
+			}
+			var id [16]byte
+			if _, err := rand.Read(id[:]); err != nil {
+				fail(w, 503, "enrollment_unavailable", "Enrollment is unavailable.")
+				return
+			}
+			bootstrap := h.enrollmentBootstrap
+			bootstrap.SchemaVersion = "tracebolt.enrollment-bootstrap.auto.v1"
+			bootstrap.InvitationID = "invite_" + hex.EncodeToString(id[:])
+			write(w, 200, bootstrap)
+			return
+		}
 		created, e := h.enrollment.CreateInvitation(r.Context(), input.RequestID, input.Platform)
 		release()
 		if e != nil {
@@ -252,7 +278,7 @@ func (h *operatorHandler) enrollmentClient(w http.ResponseWriter, r *http.Reques
 	}
 	if r.URL.Path == "/v2/enrollment/self-claim" || r.URL.Path == "/v2/enrollment/self-bootstrap" {
 		if !h.enrollment.SelfClaimAvailable() || h.insecureHTTPTest || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version < tls.VersionTLS13 {
-			fail(w, 404, "enrollment_unavailable", "Windows TLS self-registration is not configured.")
+			fail(w, 404, "enrollment_unavailable", "TLS self-registration is not configured.")
 			return
 		}
 		if r.URL.Path == "/v2/enrollment/self-bootstrap" {

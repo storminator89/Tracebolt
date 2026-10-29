@@ -102,3 +102,28 @@ func TestWindowsBootstrapRouteBoundariesRemainClosed(t *testing.T) {
 		t.Fatal("ambient TLS trust accepted")
 	}
 }
+
+func TestAutomaticClaimTransportRequiresTLSAndExactDomain(t *testing.T) {
+	for _, prefix := range []string{"/v2/enrollment/", "/v2/windows/enrollment/", "/v2/macos/enrollment/", "/v2/macos-inventory/enrollment/"} {
+		for _, scheme := range []string{"http", "https"} {
+			origin := scheme + "://fixture.invalid"
+			calls := 0
+			tr := &bootstrapTransport{origin: origin, authority: "fixture.invalid", pathPrefix: prefix, next: bootstrapRouteSink(func(r *http.Request) (*http.Response, error) {
+				calls++
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+			})}
+			req, _ := http.NewRequest("POST", origin+prefix+"self-claim", bytes.NewReader([]byte(`{}`)))
+			res, err := tr.RoundTrip(req)
+			if scheme == "http" {
+				if !errors.Is(err, errDestination) || calls != 0 {
+					t.Fatal("cleartext automatic claim reached network")
+				}
+			} else {
+				if err != nil || calls != 1 {
+					t.Fatal("TLS automatic claim rejected", err)
+				}
+				res.Body.Close()
+			}
+		}
+	}
+}
