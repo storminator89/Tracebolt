@@ -338,6 +338,30 @@ func (s *Settings) Status() View {
 	return s.monitor.Status()
 }
 
+// ReviewStatus binds one inert status snapshot to its source generation. The
+// operation lock prevents publication during a settings transition. Callers
+// must not hold it during provider I/O and must recheck after that I/O.
+func (s *Settings) ReviewStatus() (View, string, bool) {
+	if s == nil {
+		return View{}, "", false
+	}
+	s.operation.Lock()
+	defer s.operation.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.blocked || s.monitor == nil {
+		return View{}, "", false
+	}
+	generation := s.saved.Generation
+	if s.mode == "external" {
+		generation = "external"
+	}
+	if generation == "" {
+		return View{}, "", false
+	}
+	return s.monitor.Status(), generation, true
+}
+
 func (s *Settings) Change(ctx context.Context, in SettingsChange, actor string) error {
 	if s == nil {
 		return ErrSettingsUnavailable

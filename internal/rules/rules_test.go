@@ -3,6 +3,7 @@ package rules
 import (
 	"localrmm/internal/model"
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -44,6 +45,17 @@ func TestRulesAndCounterexamples(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDNSCaseUsesEvidenceAwareReadOnlyRunbook(t *testing.T) {
+	cases := Evaluate(model.Device{ID: "fixture", Synthetic: true}, Signals{DNSFailures: 3, DNSQuality: "healthy", LinkUp: true, LinkQuality: "healthy"}, time.Now())
+	if len(cases) != 1 || cases[0].RunbookID != "network" || len(cases[0].Evidence) != 2 {
+		t.Fatal("DNS fixture did not retain its evidence")
+	}
+	steps := strings.Join(cases[0].NextSteps, " ")
+	if !strings.Contains(steps, "DNS-Fehler nur auswerten, wenn entsprechende Belege vorliegen") || !strings.Contains(steps, "keine Netzwerkprobe oder Änderung") {
+		t.Fatal("DNS guidance is not evidence-aware and read-only", steps)
 	}
 }
 

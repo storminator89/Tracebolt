@@ -293,11 +293,15 @@ func validReadSetupBinding(binding string) bool {
 // All five notices form one local choice; none implies manager approval or a
 // grant to an external AI provider. The separate Setup preview reuses this text.
 func writeReadSetupDisclosure(out io.Writer, c lanclient.WindowsCapabilityConsent) error {
+	return writeReadSetupDisclosureWithIntro(out, c, "Fresh Windows observation setup creates one persistent LocalService service and protected endpoint identity. One explicit choice covers every read scope below; public fingerprint/comparison approval in the manager remains mandatory.")
+}
+
+func writeReadSetupDisclosureWithIntro(out io.Writer, c lanclient.WindowsCapabilityConsent, intro string) error {
 	if out == nil || validateReadSetupConsent(c) != nil {
 		return errLifecycle
 	}
 	notices := []string{
-		"Fresh Windows observation setup creates one persistent LocalService service and protected endpoint identity. One explicit choice covers every read scope below; public fingerprint/comparison approval in the manager remains mandatory.",
+		intro,
 		enrollmentclient.WindowsInventoryPrivacy, windowseventhealth.Privacy, windowsvolumes.Privacy, windowsprocessmetrics.Privacy, windowsnetwork.Privacy,
 	}
 	if c.InsecureHTTPAcknowledged {

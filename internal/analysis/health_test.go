@@ -87,3 +87,20 @@ func TestHealthScopePreservesOldOfflineReportAndRejectsUnknown(t *testing.T) {
 		t.Fatal("unknown evidence accepted")
 	}
 }
+
+func TestOfflineHealthNetworkGuidanceRequiresEvidence(t *testing.T) {
+	x, c := healthFixture()
+	x.Kind, x.Key, x.Target = "offline", "offline:contact", "agent"
+	c.Kind, c.Key, c.Target, c.Value = x.Kind, x.Key, x.Target, nil
+	result, err := NewService(nil).AnalyzeHealth(context.Background(), x, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps := strings.Join(result.Baseline.NextSteps, " ")
+	if result.Baseline.NextCheck != CheckNetwork || result.RootCauseConfirmed || !strings.Contains(steps, "fehlender Kontakt belegt keinen DNS-Fehler") || !strings.Contains(steps, "nur auswerten, wenn entsprechende Belege vorliegen") || !strings.Contains(steps, "keine Netzwerkprobe oder Änderung") {
+		t.Fatal("network guidance overstates offline evidence", result.Baseline)
+	}
+	if len(result.Packet.Evidence) != 2 || result.Packet.DataScope != HealthDataScope {
+		t.Fatal("offline data scope changed")
+	}
+}

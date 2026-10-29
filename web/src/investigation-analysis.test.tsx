@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, request } from './api';
 import { setLocale } from './i18n';
@@ -8,6 +8,7 @@ import { INVESTIGATIONS_BYTES, validInvestigationsView } from './investigations-
 import type { InvestigationsView } from './investigations-types';
 import goFixture from './proactive-ai-go-fixture.json';
 import type { InvestigationAnalysis } from './investigation-analysis-types';
+import { InvestigationAnalysisView } from './investigation-analysis';
 
 const now = '2026-10-07T08:00:00Z', earlier = '2026-10-07T07:57:00Z', id = 'agent_00000000000000000000000000000001';
 function fixture(): InvestigationsView {
@@ -45,6 +46,28 @@ describe('optional bounded stored-analysis contract', () => {
     it('allows original stale offline evidence without changing its timestamp', () => { const value = fixture(), incident = value.items[0].incident; incident.kind = 'offline'; incident.key = 'offline:contact'; incident.target = 'agent'; value.devices[0].checks[0].state = 'open'; const packet = result(value).packet; Object.assign(packet.case, { category: 'offline', ruleId: 'health:offline' }); packet.evidence[1].collectedAt = '2026-10-07T07:00:00Z'; packet.evidence[1].quality = 'stale'; packet.observationWindow.from = packet.evidence[1].collectedAt; packet.observationWindow.to = earlier; expect(validInvestigationsView(value, 'open', 0)).toBe(true); });
 });
 describe('read-only durable analysis presentation', () => {
+    it('localizes the new evidence-aware network runbook without translating model text', () => {
+        const value = fixture(), stored = analysis(value), current = result(value);
+        current.ai.nextSteps = ['Zeitpunkt der letzten verfügbaren Meldung und vorhandene Netzwerkbelege prüfen; fehlender Kontakt belegt keinen DNS-Fehler.'];
+        current.baseline.provenance.runbookVersion = 'tracebolt.read-only-runbooks.v2';
+        current.ai.findings!.hypotheses[0].statement = 'Original model wording';
+        render(<InvestigationAnalysisView analysis={stored} concise={false}/>);
+        fireEvent.click(screen.getByText('AI analysis & sources'));
+        expect(screen.getByText(/lost contact does not prove a DNS failure/)).toBeVisible();
+        expect(screen.getByText('Original model wording')).toBeVisible();
+        act(() => setLocale('de', false));
+        expect(screen.getByText(/fehlender Kontakt belegt keinen DNS-Fehler/)).toBeVisible();
+        expect(screen.getByText('Original model wording')).toBeVisible();
+    });
+    it('labels older offline guidance without rewriting stored results', () => {
+        const value = fixture(), stored = analysis(value), current = result(value);
+        current.baseline.provenance.ruleId = 'health:offline';
+        current.ai.nextSteps = ['Zeitraum und Umfang der erfassten DNS-Fehler prüfen.'];
+        render(<InvestigationAnalysisView analysis={stored} concise={false}/>);
+        fireEvent.click(screen.getByText('AI analysis & sources'));
+        expect(screen.getByText(/Older network guidance may assume DNS failures/)).toBeVisible();
+        expect(current.ai.nextSteps[0]).toBe('Zeitraum und Umfang der erfassten DNS-Fehler prüfen.');
+    });
     it('shows only a concise hypothesis in overview cards', () => { render(<InvestigationList view={fixture()} devices={[]} concise onAll={() => {}}/>); expect(screen.getByText(/Unconfirmed hypothesis: Accumulated files/)).toBeVisible(); expect(screen.queryByText('AI analysis & sources')).not.toBeInTheDocument(); expect(screen.queryByText('Review mount usage read-only.')).not.toBeInTheDocument(); });
     it('reads stored results on remount without triggering a run, then shows evidence and read-only guidance', async () => { const fetch = vi.fn().mockImplementation(() => Promise.resolve(json(fixture()))); vi.stubGlobal('fetch', fetch); const mounted = render(<Harness/>); await screen.findByText('AI suggestions saved'); mounted.unmount(); render(<Harness/>); await screen.findByText('AI suggestions saved'); fireEvent.click(screen.getByText('AI analysis & sources')); expect(screen.getByText(/Unconfirmed hypotheses\./)).toBeVisible(); expect(screen.getByRole('heading',{name:'Hypotheses'})).toBeVisible(); expect(screen.getByText('Sources')).toBeVisible(); expect(screen.getByText('health-event', { selector: 'strong' })).toBeVisible(); expect(screen.getAllByText(/Source quality at analysis: Current/)).toHaveLength(2); expect(screen.queryByText('healthy', { exact: true })).not.toBeInTheDocument(); expect(document.querySelector(`time[datetime="${earlier}"]`)).toBeInTheDocument(); expect(screen.getByText('No historical samples.')).toBeVisible(); expect(screen.getByText('Review mount usage read-only.')).toBeVisible(); expect(screen.getByText(/No additional logs or historical samples were checked/)).toBeVisible(); expect(fetch).toHaveBeenCalledTimes(2); expect(fetch.mock.calls.every(([path, options]) => path === '/api/investigations?scope=open&offset=0' && !options.method && !options.body)).toBe(true); expect(screen.queryByRole('button', { name: /Analyze|Run|Restart|Retry analysis/ })).not.toBeInTheDocument(); });
     it('treats model text as inert content and never turns it into actions', () => { const value = fixture(), payload = '<img src=x onerror=alert(1)><script>steal()</script> https://unsafe.example'; result(value).ai.findings!.hypotheses[0].statement = payload; const { container } = render(<InvestigationList view={value} devices={[]}/>); fireEvent.click(screen.getByText('AI analysis & sources')); expect(screen.getByText(payload, { selector: 'li' })).toBeVisible(); expect(container.querySelector('img,script')).toBeNull(); expect(container.querySelector('a[href="https://unsafe.example"]')).toBeNull(); });

@@ -5,6 +5,8 @@
 The separately approved [proactive health workflow](proactive-ai-diagnostics.md)
 now reuses this adapter for typed stored health summaries. It is default-off,
 independent of manual case export, and does not search or transmit raw logs.
+The separate [one-time network observation review](application-network-checks.md#optional-one-time-ai-review)
+requires its own confirmation and does not extend that health scope.
 
 `internal/analysis` provides a replaceable model-provider interface, a pure evidence-packet composer, a deterministic case baseline and an optional OpenAI-compatible Chat Completions adapter. It does not install or download a model, discover services, collect logs, schedule recurring work, execute checks or remediate a device. Tests use in-process fake providers and loopback HTTP servers only. No real model quality, endpoint credentials or customer incidents have been evaluated.
 
@@ -14,6 +16,14 @@ The complete Linux LAN manager additionally supports explicit
 [protected restart-safe provider/scope settings](ai-settings-persistence.md).
 Session-only remains the default. Key storage requires a separate choice;
 no old configuration is silently migrated or contacted.
+
+Provider identity and generation calls are isolated from provider panics: the
+panic value is not exposed, and the attempt reports `unavailable` without a retry.
+An admitted background attempt still passes its existing final authority checks
+and attempts finalization under its existing scope. If the durable write fails,
+the existing running/interrupted handling remains in effect. A provider may
+already have received the data; this handling does not establish whether
+transmission took place.
 
 ## Data flow and composition
 
@@ -59,11 +69,65 @@ The constructor performs validation only, with no DNS lookup or connection. Conf
 - `AllowedHTTPSOrigins`: exact, trusted operator-approved origins. It cannot be populated from an analyze request or model response. Approval should name the destination and transmitted evidence categories.
 - `Timeout` and `UseLegacyMaxTokens`: bounded request controls; no per-analysis arbitrary options.
 
-Initial local mode accepts only literal `127.0.0.1` or `::1`. HTTP is permitted only there. Non-loopback destinations require HTTPS plus explicit exact-origin allowlisting. Private/LAN, link-local, multicast, unspecified, shared, transition and known metadata/platform addresses are rejected, including IPv4-mapped bypasses; LAN support needs a separately reviewed policy. DNS names are resolved at connection time, **all** returned IPs must pass the policy, and the dialer connects to one vetted literal IP. TLS retains standard hostname/certificate validation. The app does not bypass certificate warnings.
+The original local mode accepts only literal `127.0.0.1` or `::1`. HTTP is permitted only there. Public destinations require HTTPS plus explicit exact-origin allowlisting. DNS names are resolved at connection time, **all** returned IPs must pass the public-address policy, and the dialer connects to one vetted literal IP.
+
+An additional, explicitly confirmed LAN mode accepts only an exact RFC1918 IPv4
+literal with an explicit port and HTTPS. The manager must trust the server's
+certificate through its system trust store and the certificate must include that
+exact IP address as an IP subject alternative name. LAN mode does not resolve DNS,
+use environment proxies, follow redirects or fall back to another destination.
+It is held in manager process memory and is cleared on restart; it is not part of
+the protected persistent provider format. Selecting it requires a separate
+destination acknowledgement and evidence-sharing approval. Each manual analysis
+and the proactive health scope retain their own existing approvals. Configuration
+alone does not contact the provider. This source feature does not install a model
+server or change trust on a host.
+
+For a private CA, the authenticated HTTPS operator may instead choose the
+separate private-CA LAN option. Supply one public, currently valid, self-signed
+CA certificate and independently compare its SHA-256 DER fingerprint before
+entering and explicitly confirming that value. The manager checks the certificate
+and fingerprint itself and trusts only that CA for this provider. Standard TLS
+chain, expiry and exact IP-SAN checks still apply; system roots are not a
+fallback in this mode. No private key is needed or accepted. The public CA and
+provider configuration remain in process memory; the readback exposes only the
+fingerprint. To change a provider with a private CA, explicitly remove it first
+and then approve the new configuration. This also invalidates the old proactive
+scope. Neither importing the CA nor saving a provider contacts the destination.
+
+All modes keep normal TLS validation. Link-local, multicast, unspecified, shared,
+transition and known metadata/platform addresses remain blocked, including
+IPv4-mapped bypasses. A LAN endpoint, like loopback, does not establish local
+inference or prevent a server from forwarding data elsewhere.
 
 URLs containing credentials, query strings, fragments, escapes or traversal paths are rejected. Redirects of every status, proxy-from-environment, compression and connection reuse are disabled. Keys are sent only as an Authorization header to the configured origin. Raw error bodies are discarded. Straightforward and JSON-decoded key echoes are also discarded, but this is not general-purpose detection of arbitrary encodings or sensitive text.
 
 A loopback server may forward data to another system. A local URL does not establish local inference or cloud-free operation. Operators must review the server's own routing, model, egress and retention settings; the result labels it `loopback-server`, not `verified-local-model`. `store = false` is a request, not a retention guarantee for every compatible vendor. For an Ollama-compatible deployment, its documented cloud-disable setting is an additional operator-side control, not something this adapter changes or independently verifies.
+
+## Explicit provider test
+
+After saving a provider, an administrator can review the displayed destination
+and model and explicitly start one test. It sends a fixed synthetic case and
+observation through the same provider transport and structured-output validation
+as a manual analysis. It does not read or send stored cases, device telemetry or
+logs, and it neither enables proactive analysis nor runs a device action. An
+already configured key, if any, is sent only in the normal authorization header
+to that exact provider. The provider can still forward the request or apply its
+own resource charges and retention policy.
+
+The result reports only bounded status and is not saved. A pass means that the
+synthetic request returned a response accepted by the existing schema and citation
+validator; it does not establish model quality, future availability or local-only
+inference. Failure, cancellation and an uncertain response are not automatically
+retried. Canceling locally cannot recall bytes already sent to the provider. The
+test shares the existing global analysis slot and exact configuration revision;
+configuration changes or loss of the active operator session observed before
+response publication invalidate the result. The final check is a snapshot: a
+change immediately afterward can race response delivery, and a returned result
+does not prove that the provider remains available or the configuration remains
+current. The response includes the tested revision so clients can discard it
+when they observe a newer configuration.
+No real provider, credentials or customer data are used by the automated fixtures.
 
 Protocol references: [OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat) and [structured model outputs](https://developers.openai.com/api/docs/guides/structured-outputs). Ollama's [cloud-disable documentation](https://docs.ollama.com/faq#how-do-i-disable-ollama-cloud-features) explains its server-side local-only control. These informed the wire format and deployment cautions; no external service was invoked to validate interoperability.
 
@@ -134,4 +198,35 @@ go test -race ./internal/analysis
 go vet ./internal/analysis
 ```
 
-The suite exercises packet bounds/provenance/deduplication, schema/citation rejection, disabled mode, injection-string data separation, safe error states, timeout/cancellation/single-flight behavior, exact-origin key binding, secret-safe formatting, fake-server success/error/oversize paths, redirects, environment proxy suppression, fixed output-token settings, DNS/IP policy and mapped/metadata address rejection. Public network calls, real credentials, actual local inference, privacy completeness and diagnostic quality are untested by design.
+The suite exercises packet bounds/provenance/deduplication, schema/citation rejection, disabled mode, injection-string data separation, safe error states, timeout/cancellation/single-flight behavior, exact-origin key binding, secret-safe formatting, fake-server success/error/oversize paths, redirects, environment proxy suppression, fixed output-token settings, DNS/IP policy and mapped/metadata address rejection. It does not establish privacy completeness or diagnostic quality.
+
+### One local inference compatibility check
+
+On 2026-10-29, source revision `2f1ce63` was tested on Windows/amd64 using
+llama.cpp build `b11978` and Qwen2.5-1.5B-Instruct Q4_K_M. The release archive
+SHA-256 was `ad44d0b353d1f260263943b399d932b146e3ecf983218c7c5efd7d782b774c86`;
+the model file from revision `91cad51170dc346986eccefdc2dd33a9da36ead9` was
+`6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e`.
+Both were checked against their published values before use. A foreground CPU server was restricted
+to `127.0.0.1`, with web UI and agent mode disabled and no API key configured; it was
+stopped after the test. The production `analysis.Service.TestProvider` sent
+one synthetic request and returned `passed`, meaning the response passed the
+existing schema and citation validation. The server reported about 12.4 seconds
+for 733 input and 49 output tokens with two CPU threads; this is one observation,
+not a performance guarantee. No real device telemetry or model prose is recorded.
+
+A second, explicitly selected Vulkan run used the same model and synthetic test
+with the `b11978` Windows Vulkan archive (SHA-256
+`b26bdfe4fa99fc077241d431320035dbd5a1153bf23b9f5cd5119966681bb5d6`).
+The server listed an NVIDIA GeForce GTX 1060 6 GB as `Vulkan0`, was configured
+to offload layers to that device, and the synthetic test again returned `passed`.
+It reported about 4.5 seconds for 733 input and 125 output tokens. Observed GPU
+memory usage rose by roughly 1 GiB after loading; per-request GPU utilization was
+not measured. This is one synthetic result, not a throughput or quality benchmark.
+
+This check does not establish the quality of a diagnosis, cloud-free execution
+under every deployment, GPU utilization during inference, behavior for larger packets, integration
+with a running LAN manager, TLS/private-CA routing, autonomous repairs, or a
+published artifact. The server's reported time is close to the default 15-second
+provider timeout. Repeat acceptance with the actual chosen model, deployment,
+permissions and approved data before relying on it.

@@ -164,7 +164,50 @@ type ServiceState struct {
 	HTTPTest   bool
 }
 
-func withServiceSession(b Bootstrap, state string, insecure bool, fn func(*session) (ServiceState, error)) (ServiceState, error) {
+// ServiceRecoveryState exposes only an opaque original claim/key/bootstrap
+// binding and its immutable local pending deadline. It grants no continuation.
+// Unlike ordinary active-service inspection, recovery is deliberately bounded
+// by the original pending window even if activation already succeeded.
+type ServiceRecoveryState struct {
+	Binding    string
+	DeadlineAt int64
+	Ready      bool
+}
+
+func InspectServiceRecovery(b Bootstrap, state string) (ServiceRecoveryState, error) {
+	var result ServiceRecoveryState
+	if b.Profile != "tls" || b.RenewalPolicy != "" {
+		return result, ErrBootstrap
+	}
+	_, err := withServiceSession(b, state, false, func(s *session) (ServiceState, error) {
+		view, err := s.inspectService()
+		if err != nil {
+			return ServiceState{}, err
+		}
+		if s.service == nil {
+			return ServiceState{}, ErrServiceDeadline
+		}
+		result, err = serviceRecoveryView(*s.service, s.markerBinding(), view.Ready, time.Now())
+		return view, err
+	})
+	if err != nil {
+		return ServiceRecoveryState{}, err
+	}
+	return result, nil
+}
+
+func serviceRecoveryView(marker, binding serviceEnrollment, ready bool, now time.Time) (ServiceRecoveryState, error) {
+	if marker.DeadlineStopped || now.Unix() >= marker.DeadlineAt {
+		return ServiceRecoveryState{}, ErrServiceDeadline
+	}
+	raw, err := json.Marshal(binding)
+	if err != nil {
+		return ServiceRecoveryState{}, ErrState
+	}
+	return ServiceRecoveryState{Binding: fingerprint(raw), DeadlineAt: marker.DeadlineAt, Ready: ready}, nil
+}
+
+func withServiceSession(b Bootstrap, state string, insecure bool, fn func(*session) (ServiceState, error)) (out ServiceState, err error) {
 	if validatePlatformBootstrap(b, runtime.GOOS) != nil {
 		return ServiceState{}, ErrBootstrap
 	}
@@ -179,7 +222,11 @@ func withServiceSession(b Bootstrap, state string, insecure bool, fn func(*sessi
 	if err != nil {
 		return ServiceState{}, err
 	}
-	defer st.Close()
+	defer func() {
+		if closeErr := st.Close(); err == nil && closeErr != nil {
+			out, err = ServiceState{}, closeErr
+		}
+	}()
 	s := &session{&sessionData{store: st, opts: Options{StateDirectory: state, InsecureHTTPAcknowledged: insecure, ResumeOnly: true}, trust: trust}}
 	defer func() { clear(s.key) }()
 	if err = s.load(b); err != nil {

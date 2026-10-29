@@ -4,7 +4,7 @@ import "strings"
 
 // These are exact existing public GUI paragraphs, not error messages or native
 // result codes. Text is reduced to finite labels and is never retained.
-const uninstallInterrupted = "The operation did not complete. Durable changes may exist; files, identity and state are retained. Inspect the retained state before any further action. This wizard will not retry or reset it."
+const uninstallInterrupted = "The operation did not complete. Review the reported phase before any further action. Existing files, identity and state are retained. This wizard will not retry or reset it."
 const uninstallCompleted = "Service removal completed. Installed files, identity and state are retained. Manager identity has not been revoked."
 const uninstallStopping = "Stopping the exact receipt-owned service once. Files, identity and grants will remain."
 const uninstallRemoving = "Requesting removal of the owned, stopped service. Waiting for SCM to confirm absence."

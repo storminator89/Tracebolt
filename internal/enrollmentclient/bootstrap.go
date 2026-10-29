@@ -149,6 +149,13 @@ func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 	} else if b.RenewalPolicy != "" {
 		return fail()
 	}
+	return validateBootstrapTrust(b, now)
+}
+
+// validateBootstrapTrust checks the shared transport and issuer material. It
+// does not validate the identity or lifecycle of an invitation or profile.
+func validateBootstrapTrust(b Bootstrap, now time.Time) (TrustDisplay, error) {
+	fail := func() (TrustDisplay, error) { return TrustDisplay{}, ErrBootstrap }
 	// Both destinations use the shared exact-origin and explicit-trust policy.
 	for _, origin := range []string{b.EnrollmentOrigin, b.AgentOrigin} {
 		c, err := lanclient.NewBootstrapHTTPClient(origin, b.Profile, []byte(b.ServerCAPEM))

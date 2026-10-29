@@ -26,9 +26,29 @@ are not joined. Setup does not query providers or grant new native privileges.
 
 The three pages choose a public bootstrap, review trust and scope, and display
 operation status. The selected public file is bounded to 64 KiB; Windows permits
-only regular local-drive files and rejects reparse traversal. Its validated bytes
-are frozen in memory. Preview must reject private/unknown bootstrap fields. There
+only regular files on fixed or removable local drives and rejects CD/DVD,
+network paths and reparse traversal. Copy a public bootstrap from CD/DVD or a
+network share to an ordinary local folder such as Downloads before choosing it.
+Its validated bytes are frozen in memory. Preview must reject private/unknown
+bootstrap fields. There
 is no invitation control, file, command-line or environment entry route here.
+
+In the current source candidate, Setup checks its own local directory for one
+dashboard-named `tracebolt-bootstrap-invite_<32 lowercase hex>.json` file.
+It uses the same bounded protected file read and preview as manual selection,
+and the filename must match the validated invitation ID. The selected filename
+is displayed; all review and consent remains mandatory. Missing, inaccessible,
+invalid or multiple candidates leave manual selection available; no newest-file
+guess is made. Confirm the selected file belongs to the current invitation.
+The published preview.3 does not have this convenience and the new GUI has not
+yet passed packaged native acceptance.
+
+A setup builder may supply a validated public bootstrap embedded in the Setup
+image. It is previewed by the same hook and shown as embedded configuration;
+invalid present input fails closed, and all consent stays unchecked. An embedded
+configuration takes precedence over adjacent-file discovery; manual selection
+remains available. This is one invitation, not a reusable customer installer.
+No secret is embedded. Native packaged UI/enrollment acceptance remains separate.
 
 All four acknowledgements begin unchecked: exact full read scope, service and
 automatic-start authority, persistent device identity, and independent comparison
@@ -39,7 +59,7 @@ mandatory. No existing installation is adopted by this fresh-only wizard.
 HTTPS remains the default, with no downgrade or fallback. A validated bootstrap
 can explicitly select isolated HTTP-test. Both origins must then use HTTP; mixed
 transport is rejected. The complete separate HTTP disclosure is mandatory and
-an additional unchecked checkbox acknowledges plaintext invitation, nineteen-scope
+an additional unchecked checkbox acknowledges plaintext invitation, twenty-one-scope
 telemetry and forged manager-response risks. The install hook receives `true`
 only after this additional approval; TLS always receives `false`. Back and new
 input clear the HTTP acknowledgement too.

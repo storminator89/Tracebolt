@@ -120,6 +120,10 @@ class BuilderTests(unittest.TestCase):
         if argv[1] == "run":
             self.assertEqual(env["GOOS"], "linux")
             self.assertEqual(env["GOARCH"], "amd64")
+            if argv[-1] == "./deploy/windows-setup/verify-bootstrap":
+                if kwargs.get("input") != b"public fixture":
+                    raise subprocess.CalledProcessError(1, argv)
+                return subprocess.CompletedProcess(argv, 0)
             manifest, image = map(Path, argv[-2:])
             self.assertEqual(json.loads(manifest.read_bytes())["sha256"], builder.sha256(image.read_bytes()))
             return subprocess.CompletedProcess(argv, 0)
@@ -132,6 +136,8 @@ class BuilderTests(unittest.TestCase):
         syso = root / "cmd/windows-service" / f'resource_windows_{env["GOARCH"]}.syso'
         payload = root / "cmd/windows-service/setup_payload"
         suffix = (payload / "service.exe").read_bytes() + (payload / "manifest.json").read_bytes() if setup else b""
+        if setup and (payload / "public-bootstrap.txt").exists():
+            suffix += (payload / "public-bootstrap.txt").read_bytes()
         image = fixture_pe(syso.read_bytes(), setup, suffix)
         destination = Path(argv[argv.index("-o") + 1])
         destination.write_bytes(image)
@@ -197,6 +203,26 @@ class BuilderTests(unittest.TestCase):
         second = builder.package_manifest(VERSION, SOURCE, "amd64", raw + b"x")
         self.assertNotEqual(first["sha256"], second["sha256"])
         self.assertEqual(set(first), {"schemaVersion", "version", "sourceCommit", "architecture", "sha256"})
+
+    def test_public_bootstrap_is_validated_then_embedded_and_pinned(self):
+        result = self.invoke(public_bootstrap=b"public fixture")
+        self.assertEqual(result["publicBootstrapSHA256"], builder.sha256(b"public fixture"))
+        self.assertEqual(result["distributionStatus"], "personalized-source-candidate-not-released")
+        for arch in r.MACHINES:
+            image = (self.base / "output" / f"Tracebolt-{VERSION}-windows-{arch}-Setup.exe").read_bytes()
+            self.assertIn(b"public fixture", image)
+        self.assertFalse((self.base / "output" / "public-bootstrap.txt").exists())
+
+    def test_invalid_bootstrap_never_produces_output(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.invoke(public_bootstrap=b"unknown or secret fixture")
+        self.assertFalse((self.base / "output").exists())
+        self.assertFalse(list(self.base.glob("tracebolt-windows-build-*")))
+
+    def test_oversize_bootstrap_is_rejected_before_build(self):
+        with self.assertRaises(r.Rejected):
+            self.invoke(public_bootstrap=b"x" * ((64 << 10) + 1))
+        self.assertFalse((self.base / "output").exists())
 
     def test_repeat_mismatch_never_produces_output(self):
         normal = self.fake_run

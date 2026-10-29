@@ -62,6 +62,10 @@ refreshes. Keep missing permissions, empty captures, empty search results,
 expired snapshots and temporary failures visibly distinct. Source/time details
 should be available without filling the main screen with implementation history.
 
-Remote shell, integrated remote desktop, customer multi-tenancy and unattended
-remediation are outside this plan. Native acceptance and production hardening
-remain separate from implemented source and published prereleases.
+The desired local-assistant direction includes eventually delegated autonomous
+administration, including general commands. That capability is not implemented;
+its execution, device authority, audit and interruption boundaries must be
+designed and verified separately as described in the [product scope](product-plan.md).
+Integrated remote desktop and customer multi-tenancy remain outside this plan.
+Native acceptance and production hardening remain separate from implemented source
+and published prereleases.

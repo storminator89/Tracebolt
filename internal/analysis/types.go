@@ -10,7 +10,7 @@ import (
 const (
 	ResultVersion      = "tracebolt.analysis.v1"
 	PromptVersion      = "tracebolt.diagnostics-prompt.v1"
-	RunbookVersion     = "tracebolt.read-only-runbooks.v1"
+	RunbookVersion     = "tracebolt.read-only-runbooks.v2"
 	MaxResponseBytes   = 16 * 1024
 	MaxProviderBytes   = 64 * 1024
 	MaxRequestBytes    = 64 * 1024

@@ -22,9 +22,17 @@ func ApplyFreshReadSetup(ctx context.Context, p InstallPlan) (Receipt, error) {
 	return installMode(ctx, nativeBackend(), p, true)
 }
 func InspectFreshReadSetup(ctx context.Context, r Receipt) (Snapshot, error) {
-	s, snapshot, err := openOwnedMode(ctx, nativeBackend(), r, readAccess, true, true)
+	return inspectFreshReadSetup(ctx, nativeBackend(), r)
+}
+func inspectFreshReadSetup(ctx context.Context, b backend, r Receipt) (Snapshot, error) {
+	s, snapshot, err := openOwnedMode(ctx, b, r, readAccess, true, true)
 	if s != nil {
-		_ = s.Close()
+		if closeErr := s.Close(); err == nil && closeErr != nil {
+			return Snapshot{}, closeErr
+		}
+	}
+	if err != nil {
+		return Snapshot{}, err
 	}
 	return snapshot, err
 }

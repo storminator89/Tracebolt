@@ -46,6 +46,10 @@ The two evidence IDs are `health-event` and `health-snapshot`. Event confirmatio
 is **not** an archived series of raw readings. The snapshot is the observation
 available when the attempt is admitted, not necessarily the opening sample.
 Offline report timestamps stay old and are labeled stale.
+For missing agent contact, the read-only network runbook distinguishes an old
+or absent report from DNS evidence: it does not assume a DNS failure or execute
+network probes. An older saved v1 analysis retains its original advice and is
+labeled accordingly in the investigation view; it is not silently rewritten.
 
 No device name/ID/IP, free-form operator note, journal message, process command
 line, dump content, unrelated telemetry or user-controlled prompt is copied.

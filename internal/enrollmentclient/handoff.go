@@ -169,6 +169,9 @@ func (s *session) validateArtifacts() error {
 	return nil
 }
 func (s *session) publish() (Result, error) {
+	if e := s.guardRecoveryWrite(); e != nil {
+		return Result{}, e
+	}
 	if s.l.Bootstrap.CollectionProfile == enrollmentcrypto.CollectionProfileMacOSInventory {
 		return s.publishMacOSInventory()
 	}
@@ -205,6 +208,9 @@ func (s *session) publish() (Result, error) {
 		if e = s.store.EnsureTelemetry(); e != nil {
 			return Result{}, e
 		}
+		if e = s.guardRecoveryWrite(); e != nil {
+			return Result{}, e
+		}
 		if e = lanclient.InitializeGuidedState(c); e != nil {
 			return Result{}, ErrState
 		}
@@ -238,6 +244,9 @@ func (s *session) publish() (Result, error) {
 		}
 	}
 	if e = s.notify("ready"); e != nil {
+		return Result{}, e
+	}
+	if e = s.guardRecoveryWrite(); e != nil {
 		return Result{}, e
 	}
 	return Result{Config: c, ConfigPath: filepath.Join(s.opts.StateDirectory, "agent.json"), KeyFingerprint: s.trust.KeyFingerprint, ComparisonCode: s.trust.ComparisonCode, ServerAuthenticated: c.Profile == "tls"}, nil

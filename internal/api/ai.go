@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,8 @@ type publicAIConfig struct {
 	KeyConfigured        bool     `json:"keyConfigured"`
 	UseLegacyMaxTokens   bool     `json:"useLegacyMaxTokens"`
 	AllowRemoteEvidence  bool     `json:"allowRemoteEvidence"`
+	LANMode              bool     `json:"lanMode,omitempty"`
+	LANPrivateCASHA256   string   `json:"lanPrivateCaSha256,omitempty"`
 	Storage              string   `json:"storage"`
 	ResetsOnRestart      bool     `json:"resetsOnRestart"`
 	Busy                 bool     `json:"busy"`
@@ -42,6 +45,8 @@ type publicAIConfig struct {
 
 type aiState struct {
 	mu                   sync.Mutex
+	reviewKey            [32]byte
+	networkReviews       map[string]networkReviewPermit
 	proactive            proactiveAIApproval
 	persistence          *aiconfig.Settings
 	persistentKeyAllowed bool
@@ -64,7 +69,7 @@ func configRevision() (string, error) {
 func defaultAIConfig(revision string) publicAIConfig {
 	return publicAIConfig{Revision: revision, Provider: "openai-compatible", BaseURL: defaultAIBaseURL, EndpointOrigin: "http://127.0.0.1:11434", Storage: "memory-only", ResetsOnRestart: true, Limitations: []string{
 		"Saving settings does not contact or test the provider. Settings and API keys are held only in server memory and reset on restart.",
-		"Only literal loopback or an explicitly approved public HTTPS origin is supported. LAN/private destinations require a later reviewed policy.",
+		"Default provider settings support literal loopback or an explicitly approved public HTTPS origin. A separate process-memory-only option permits an explicitly approved private IPv4 LAN HTTPS destination.",
 		"Loopback transport does not prove local inference: that server may forward requests elsewhere. Model provenance is a configured label, not weight verification.",
 		"An explicit analysis sends the case title/summary and selected evidence title/source/detail/value/timestamps/quality. Operator notes, device names, IPs and unrelated telemetry are excluded.",
 		"Evidence text is not secret-redacted. Review the case and the exact destination before starting an analysis.",
@@ -76,7 +81,10 @@ func newAIState() (*aiState, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &aiState{config: defaultAIConfig(revision), service: analysis.NewService(nil), timeout: analysis.DefaultTimeout}
+	a := &aiState{config: defaultAIConfig(revision), service: analysis.NewService(nil), timeout: analysis.DefaultTimeout, networkReviews: make(map[string]networkReviewPermit)}
+	if _, err := rand.Read(a.reviewKey[:]); err != nil {
+		return nil, err
+	}
 	a.resetProactiveLocked(revision)
 	return a, nil
 }
@@ -104,14 +112,18 @@ func (s *Server) aiConfig(w http.ResponseWriter) {
 }
 
 type aiConfigRequest struct {
-	AcknowledgeKeyStorage bool   `json:"acknowledgeKeyStorage,omitempty"`
-	ExpectedRevision      string `json:"expectedRevision"`
-	BaseURL               string `json:"baseURL"`
-	Model                 string `json:"model"`
-	APIKey                string `json:"apiKey"`
-	ApprovedOrigin        string `json:"approvedOrigin"`
-	AllowRemoteEvidence   bool   `json:"allowRemoteEvidence"`
-	UseLegacyMaxTokens    bool   `json:"useLegacyMaxTokens"`
+	AcknowledgeKeyStorage     bool   `json:"acknowledgeKeyStorage,omitempty"`
+	AcknowledgeLANDestination bool   `json:"acknowledgeLanDestination,omitempty"`
+	AcknowledgeCAFingerprint  bool   `json:"acknowledgeCaFingerprint,omitempty"`
+	CAPEM                     string `json:"caPem,omitempty"`
+	ExpectedCASHA256          string `json:"expectedCaSha256,omitempty"`
+	ExpectedRevision          string `json:"expectedRevision"`
+	BaseURL                   string `json:"baseURL"`
+	Model                     string `json:"model"`
+	APIKey                    string `json:"apiKey"`
+	ApprovedOrigin            string `json:"approvedOrigin"`
+	AllowRemoteEvidence       bool   `json:"allowRemoteEvidence"`
+	UseLegacyMaxTokens        bool   `json:"useLegacyMaxTokens"`
 }
 
 func (aiConfigRequest) String() string   { return "api.aiConfigRequest{secrets:redacted}" }
@@ -202,11 +214,14 @@ func (s *Server) aiMutation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
-	case "/api/ai/config", "/api/ai/config/persistent":
+	case "/api/ai/config", "/api/ai/config/persistent", "/api/ai/config/lan", "/api/ai/config/lan-private-ca":
 		s.saveAIConfig(w, r)
 		return
 	case "/api/ai/config/clear":
 		s.clearAIConfig(w, r)
+		return
+	case "/api/ai/test":
+		s.testAIProvider(w, r)
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
@@ -219,15 +234,29 @@ func (s *Server) aiMutation(w http.ResponseWriter, r *http.Request) {
 func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 	var input aiConfigRequest
 	persistent := r.URL.Path == "/api/ai/config/persistent"
+	privateCA := r.URL.Path == "/api/ai/config/lan-private-ca"
+	lan := r.URL.Path == "/api/ai/config/lan" || privateCA
 	fields := []string{"expectedRevision", "baseURL", "model", "apiKey", "approvedOrigin", "allowRemoteEvidence", "useLegacyMaxTokens"}
 	if persistent {
 		fields = append(fields, "acknowledgeKeyStorage")
 	}
-	if !readObject(w, r, 8192, fields, &input) {
+	if lan {
+		fields = append(fields, "acknowledgeLanDestination")
+	}
+	limit := int64(8192)
+	if privateCA {
+		fields = append(fields, "caPem", "expectedCaSha256", "acknowledgeCaFingerprint")
+		limit = 16384
+	}
+	if !readObject(w, r, limit, fields, &input) {
 		return
 	}
 	defer func() { input.APIKey = "" }() // Removes this reference; this is not secure memory erasure.
 	invalid := func() {
+		if lan {
+			fail(w, 400, "invalid_ai_config", "Approve the exact private IPv4 HTTPS destination with an explicit port and separately approve evidence sharing. LAN settings are process-memory-only.")
+			return
+		}
 		fail(w, 400, "invalid_ai_config", "Invalid provider settings. Use an exact loopback endpoint or explicitly approved public HTTPS origin, a model, and a fresh key where required.")
 	}
 	if len(input.ExpectedRevision) > 64 || input.Model == "" || len(input.ApprovedOrigin) > 512 {
@@ -240,12 +269,27 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loopback := selected.Hostname() == "127.0.0.1" || selected.Hostname() == "::1"
-	if !loopback && (selected.Scheme != "https" || !input.AllowRemoteEvidence || input.APIKey == "") {
+	if lan && (!input.AcknowledgeLANDestination || !input.AllowRemoteEvidence) {
+		invalid()
+		return
+	}
+	if privateCA {
+		_, authenticated := operatorContext(r)
+		if !authenticated || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version < tls.VersionTLS13 || !strings.HasPrefix(s.requiredOrigin(r), "https://") || !input.AcknowledgeCAFingerprint || len(input.CAPEM) == 0 || len(input.CAPEM) > 4096 || len(input.ExpectedCASHA256) != 64 {
+			invalid()
+			return
+		}
+	}
+	if lan && input.APIKey != "" && !strings.HasPrefix(s.requiredOrigin(r), "https://") {
+		invalid()
+		return
+	}
+	if !loopback && !lan && (selected.Scheme != "https" || !input.AllowRemoteEvidence || input.APIKey == "") {
 		invalid()
 		return
 	}
 	// Protect public readbacks if a key was accidentally pasted into another field.
-	if input.APIKey != "" && (strings.Contains(input.BaseURL, input.APIKey) || strings.Contains(input.Model, input.APIKey) || strings.Contains(input.ApprovedOrigin, input.APIKey)) {
+	if input.APIKey != "" && (strings.Contains(input.BaseURL, input.APIKey) || strings.Contains(input.Model, input.APIKey) || strings.Contains(input.ApprovedOrigin, input.APIKey) || strings.Contains(input.ExpectedCASHA256, input.APIKey)) {
 		invalid()
 		return
 	}
@@ -260,11 +304,19 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, "config_revision_mismatch", "Provider settings changed. Refresh them before continuing.")
 		return
 	}
+	if s.ai.config.LANPrivateCASHA256 != "" {
+		fail(w, 409, "ai_private_ca_clear_required", "Clear the current private CA provider explicitly before changing provider settings.")
+		return
+	}
 	allowed := []string{}
-	if !loopback {
+	if !loopback && !lan {
 		allowed = append(allowed, input.ApprovedOrigin)
 	}
-	provider, err := analysis.NewOpenAIProvider(analysis.OpenAIConfig{BaseURL: input.BaseURL, Model: input.Model, APIKey: input.APIKey, APIKeyOrigin: input.ApprovedOrigin, AllowedHTTPSOrigins: allowed, Timeout: s.ai.timeout, UseLegacyMaxTokens: input.UseLegacyMaxTokens})
+	lanOrigin := ""
+	if lan {
+		lanOrigin = input.ApprovedOrigin
+	}
+	provider, err := analysis.NewOpenAIProvider(analysis.OpenAIConfig{BaseURL: input.BaseURL, Model: input.Model, APIKey: input.APIKey, APIKeyOrigin: input.ApprovedOrigin, AllowedHTTPSOrigins: allowed, LANOrigin: lanOrigin, LANPrivateCAPEM: input.CAPEM, LANPrivateCASHA256: input.ExpectedCASHA256, Timeout: s.ai.timeout, UseLegacyMaxTokens: input.UseLegacyMaxTokens})
 	if err != nil {
 		invalid()
 		return
@@ -309,6 +361,15 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 	view.KeyConfigured = input.APIKey != ""
 	view.UseLegacyMaxTokens = input.UseLegacyMaxTokens
 	view.AllowRemoteEvidence = input.AllowRemoteEvidence
+	view.LANMode = lan
+	view.LANPrivateCASHA256 = input.ExpectedCASHA256
+	if lan {
+		view.Limitations[1] = "This process-memory-only provider uses the explicitly approved private LAN HTTPS destination and normal TLS certificate verification."
+		view.Limitations[2] = "A LAN destination does not prove local inference: the server may forward requests elsewhere. Model provenance is a configured label, not weight verification."
+	}
+	if privateCA {
+		view.Limitations[1] = "This process-memory-only provider trusts only the explicitly approved private CA and verifies the exact IP address using standard TLS."
+	}
 	s.ai.resetProactiveLocked(revision)
 	s.ai.config = view
 	s.ai.service = analysis.NewService(provider)

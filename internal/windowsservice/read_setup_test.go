@@ -58,6 +58,27 @@ func stagedFixture(t *testing.T) (*stagedBackendFixture, Receipt) {
 	}
 	return b, r
 }
+func TestFreshReadSetupInspectionCloseFailureNeverReturnsUsableSnapshot(t *testing.T) {
+	b, r := stagedFixture(t)
+	snapshot, err := inspectFreshReadSetup(context.Background(), b, r)
+	if err != nil || !snapshot.Exists || snapshot.State != Stopped {
+		t.Fatal("owned staged inspection failed", err)
+	}
+	closeErr := errors.New("private close failure")
+	b.staged.closeErr = closeErr
+	snapshot, err = inspectFreshReadSetup(context.Background(), b, r)
+	if !errors.Is(err, closeErr) || !reflect.DeepEqual(snapshot, Snapshot{}) {
+		t.Fatal("failed inspection release returned usable evidence")
+	}
+	for _, a := range b.opened {
+		if a != readAccess {
+			t.Fatal("inspection requested mutation authority")
+		}
+	}
+	if b.staged.starts+b.staged.stops+b.staged.deletes+b.staged.transitions != 0 {
+		t.Fatal("inspection mutated staged service")
+	}
+}
 func TestFreshReadSetupStaysDisabledAndOrdinaryLifecycleRejectsReceipt(t *testing.T) {
 	b, r := stagedFixture(t)
 	for _, a := range []access{startAccess, stopAccess, deleteAccess} {

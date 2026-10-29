@@ -19,7 +19,7 @@
       "busy": false,
       "limitations": [
         "No provider has been contacted by reading or saving settings.",
-        "Literal loopback or explicitly approved public HTTPS only. LAN/private destinations require a later reviewed policy.",
+        "Literal loopback, explicitly approved public HTTPS, or separately confirmed exact private IPv4 LAN HTTPS is supported.",
         "Loopback transport does not prove inference stays local.",
         "Only bounded case-linked evidence is analyzed. Notes, device identifiers and unrelated telemetry are excluded.",
         "Evidence can still contain sensitive text; review the case and destination before starting."
@@ -46,6 +46,46 @@
         "expectedRevision": "from GET config"
       },
       "response": "default public config, new revision; in-flight old work canceled"
+    },
+    "POST /api/ai/config/lan": {
+      "body": {
+        "expectedRevision": "from GET config",
+        "baseURL": "HTTPS URL with a literal RFC1918 IPv4 address and explicit port",
+        "model": "1..128 printable ASCII bytes",
+        "apiKey": "optional fresh key, <=4096 printable ASCII bytes; nonempty requires HTTPS operator access",
+        "approvedOrigin": "exact HTTPS scheme://IPv4:port of baseURL, no path",
+        "allowRemoteEvidence": "must be true, confirming evidence sharing",
+        "useLegacyMaxTokens": "boolean; explicit compatibility choice, no automatic retries",
+        "acknowledgeLanDestination": "must be true, confirming the exact LAN destination"
+      },
+      "response": "public configuration includes lanMode:true; never API key or fragment",
+      "effects": "Memory-only provider replaces prior settings and invalidates the proactive scope; no network/DNS request on save. TLS uses normal system trust and an IP SAN."
+    },
+    "POST /api/ai/config/lan-private-ca": {
+      "body": {
+        "expectedRevision": "from GET config",
+        "baseURL": "HTTPS URL with a literal RFC1918 IPv4 address and explicit port",
+        "model": "1..128 printable ASCII bytes",
+        "apiKey": "optional fresh key",
+        "approvedOrigin": "exact HTTPS scheme://IPv4:port of baseURL, no path",
+        "allowRemoteEvidence": "must be true, confirming evidence sharing",
+        "useLegacyMaxTokens": "boolean; explicit compatibility choice",
+        "acknowledgeLanDestination": "must be true, confirming the exact LAN destination",
+        "caPem": "one public self-signed CA certificate, at most 4096 UTF-8 bytes",
+        "expectedCaSha256": "independently verified lowercase SHA-256 of the CA DER",
+        "acknowledgeCaFingerprint": "must be true after independent comparison"
+      },
+      "availability": "Authenticated shared administrator through HTTPS only",
+      "response": "public configuration adds lanPrivateCaSha256; no CA PEM or API key",
+      "effects": "Process-memory-only exclusive trust for that CA and exact LAN origin; no provider contact on save. Explicit clear is required before replacing this provider."
+    },
+    "POST /api/ai/test": {
+      "body": {
+        "configRevision": "exact provider revision displayed to operator",
+        "acknowledgeTest": "must be true for this single synthetic request"
+      },
+      "response": "schemaVersion tracebolt.ai-provider-test.v1, original configRevision, and status passed|unavailable|timeout|invalid_response|canceled|busy; no model text or upstream errors",
+      "effects": "One fixed synthetic request using the existing provider and global analysis slot. No stored case, device data or logs; no automatic retry, proactive approval or result persistence."
     },
     "POST /api/cases/{id}/analyze": {
       "body": {

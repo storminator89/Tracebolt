@@ -1,0 +1,11 @@
+.customer-devices-panel { padding: 1.25rem; }
+.customer-devices-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.customer-devices-heading h3 { margin: 0; }
+.customer-devices-panel p { line-height: 1.5; overflow-wrap: anywhere; }
+.customer-devices-list { list-style: none; padding: 0; margin: 1rem 0; }
+.customer-devices-list li { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .5rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.customer-devices-form { display: grid; gap: .75rem; }
+.customer-devices-form > label:not(.customer-devices-confirm) { display: grid; gap: .35rem; }
+.customer-devices-form code, .customer-devices-list code { overflow-wrap: anywhere; }
+.customer-devices-confirm { display: flex; align-items: flex-start; gap: .5rem; }
+.customer-devices-form button { justify-self: start; }

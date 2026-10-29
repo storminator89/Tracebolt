@@ -43,8 +43,8 @@ reset state. If approved TLS material is unavailable, explain the blocker; the
 isolated alternative, with plaintext credential/content risks.
 
 **Windows:** use unsigned x64
-[preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
-and its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
+[preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+and its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md).
 Prepare matching reviewed manager/frontend source separately. Native acceptance
 covers a bounded Server 2025 packaged-Setup subset; see [Windows status](windows-status.md).
 Do not use the Linux endpoint command on Windows.
@@ -67,7 +67,7 @@ separate from endpoint releases; no manager update silently replaces an agent.
 | --- | --- | --- |
 | Central manager | Separate `cmd/lan-manager`, Admin UI, authenticated operator API, approved agent ingress; Docker or native Linux execution | Production assurance, automatic provisioning, HA/shared SQLite writers |
 | Linux endpoint | Native `cmd/lan-agent --config …`, one-shot or bounded foreground reporting; optional `cmd/enroll-agent` with explicit guided-v2 configuration; `cmd/agent-service` with explicit fixed-path operations and fresh combined read-admin setup | Verified OS reboot persistence, automatic renewal or remote updater; native evidence is linked in the read-admin guide; other host/profile combinations remain separate |
-| Windows endpoint | [Unsigned x64 preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2), fresh twenty-one-scope Read admin setup; bounded hosted Server 2025 packaged-Setup acceptance in [Windows status](windows-status.md) | Windows 10/11, complete provider coverage, real Linux-manager/browser interoperability, native restart/reboot, interactive UAC, full removal or ARM64 runtime acceptance |
+| Windows endpoint | [Unsigned x64 preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3), fresh twenty-one-scope Read admin setup; bounded hosted Server 2025 packaged-Setup acceptance in [Windows status](windows-status.md) | Windows 10/11, complete provider coverage, real Linux-manager/browser interoperability, native restart/reboot, interactive UAC, full removal or ARM64 runtime acceptance |
 | macOS endpoint | Native `cmd/agent` bounded stdout-only collector; limited platform reads | Supported LAN sender, installed service or fleet deployment |
 | Docker architectures | Linux amd64 TLS and explicit HTTP-test lifecycle gates; Linux arm64 cross-build support | arm64 runtime acceptance from cross-building alone |
 
@@ -106,7 +106,7 @@ plan. Record these answers without secrets:
   foreground Linux sender meets the request. For a Linux installed service, read
   the [service contract](linux-agent-service.md) and exact manual-gate evidence.
   For Windows, read [preview status](windows-status.md) and the
-  [release installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md). There is no supported macOS LAN
+  [release installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md). There is no supported macOS LAN
   installation path. True reboot persistence remains unverified.
 
 Before changing the target, get approval for the concrete plan, destinations and
@@ -662,8 +662,8 @@ was wirklich getestet wurde und welche manuellen Schritte noch fehlen.“
 
 ## Windows installation paths
 
-Download unsigned x64 [Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
-and follow its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
+Download unsigned x64 [Windows preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+and follow its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md).
 Use the original `v0.0.0-setup-candidate` filenames and verify the exact files.
 Prepare the matching reviewed manager/frontend source separately; the Linux
 rc.3 endpoint release is not a manager compatibility guarantee.

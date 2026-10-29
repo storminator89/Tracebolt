@@ -1,0 +1,10 @@
+.customers-panel { padding: 1.25rem; }
+.customers-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.customers-heading h3 { margin: 0; }
+.customers-panel > p { line-height: 1.5; }
+.customers-list { list-style: none; padding: 0; margin: 1rem 0; }
+.customers-list li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.customers-form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+.customers-form label { display: grid; gap: .35rem; flex: 1 1 16rem; }
+.customers-form input { width: 100%; }
+.customers-form p { flex-basis: 100%; margin: 0; }

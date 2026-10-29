@@ -1,29 +1,35 @@
 # Windows preview.3: fresh Read admin installation
 
-**Preview.3 release preparation.** Verify release availability and the manifest
-before using this guide. The selected Windows source
+**Preview.3 was published on 13 October 2026.** Verify the
+[release](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+and manifest before use. The selected Windows source
 and matching Linux manager/frontend are commit
 `992b8d8c9d9693a97bd63301a3c147e1b2681357`, tree
 `7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c`.
 The exact source passed all three packaged GUI cases and aggregation in
 [first-attempt native run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
 Its accepted tree is pinned in the later publisher candidate.
-A successful [full Validate run for this source](https://github.com/storminator89/Tracebolt/actions/runs/38369024941)
-is required; its live conclusion is authoritative. Publication also requires
-publisher review/CI and explicit approval before the original tested bytes can
-be promoted. Native success alone does not authorize publication.
+The [full Validate run for this source](https://github.com/storminator89/Tracebolt/actions/runs/38369024941)
+passed; its live conclusion is authoritative. Any further publication still
+requires exact-source validation, publisher review/CI and explicit approval.
+Native success alone does not authorize publication.
 [Preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
 has its own attached guide for its older source; do not mix those instructions.
 
-The intended preview.3 scope is **unsigned Windows Server 2025 x64, fresh
+The published preview.3 scope is **unsigned Windows Server 2025 x64, fresh
 21-scope Read admin, three-case packaged GUI subset**. It does not establish
 Windows 11, complete provider coverage or real Linux-manager/dashboard acceptance.
 Publication never authorizes installation, enrollment or host changes.
 
+This working-tree guide includes later diagnostic notes. The attached release
+guide is immutable by publisher policy and remains bound by the release manifest;
+do not substitute this document's hash for that attachment. The newer dashboard
+[preparation and local file check](windows-installation-audit.md#shorter-fresh-install-workflow)
+are source changes, not additions to the published Setup executable.
+
 ## Verify the exact release before running anything
 
-After exact-source native acceptance, full Validate and separately approved
-publication, obtain `v0.1.0-windows-preview.3` from
+Obtain the published `v0.1.0-windows-preview.3` from
 [storminator89/Tracebolt](https://github.com/storminator89/Tracebolt/releases).
 Do not substitute a moving branch build or a new build of the same commit.
 The original six tested files must remain unchanged:
@@ -199,6 +205,62 @@ allow cooperative cancellation to finish. Partial files, keys, grants, disabled
 services or indeterminate startup state must be preserved for inspection. Do not
 force termination, delete state or rerun setup as a repair. There is no general
 reset, adoption, upgrade, resume or rollback flow.
+
+### Conflicting service inspection and security-software isolation
+
+If `tracebolt-windows-service.exe --inspect` reports `exists: false` while
+Windows reports the fixed service as present, do not interpret the inspector's
+result as permission to install again. On the same endpoint, use the existing
+administrator console for these read-only comparisons:
+
+```powershell
+hostname
+sc.exe query TraceboltWindowsAgent
+sc.exe qc TraceboltWindowsAgent
+Get-FileHash -Algorithm SHA256 -LiteralPath 'C:\Program Files\Tracebolt\tracebolt-windows-service.exe'
+```
+
+Compare the installed hash with the verified service payload from the selected
+release, not the Setup executable's hash. A matching hash establishes bytes,
+not execution outside a sandbox. The inspector reports the SCM view visible to
+its own process; a successful result is not an independent host-state check.
+
+Ask the local security administrator to inspect existing containment/HIPS events
+for the exact Setup and service executables at the failure and inspection times.
+An unknown file rating or enabled isolation rule alone does not prove that an
+execution was isolated. A recorded virtualized service invocation establishes
+isolation for that invocation, but does not by itself explain an earlier
+enrollment failure. An allowed Setup process also does not establish that its
+service payload or child processes were allowed. Keep these observations and
+their original times separate; share only the necessary application/action/time
+fields, not a complete security-log export.
+
+Do not disable protection, add trust/exclusion rules, reset containment or rerun
+Setup to resolve the discrepancy. Preserve the installer receipt and enrollment
+state; never print or export the enrollment ledger, which contains private key
+material. A retained `claim-started` phase records entry into enrollment, not
+successful invitation entry, remote claim, activation or complete scope grants.
+Missing ready state does not authorize creating a replacement identity.
+
+The internal receipt reconciliation is limited to a provably completed startup
+transition with the original identity and exact grants. It has no CLI dispatch
+and cannot resume `claim-started` or enable a disabled service. Generic enrollment,
+manual service start and uninstall/reinstall are not recovery substitutes. This
+preview has no supported continuation for that partial setup; a separately
+reviewed recovery implementation and native acceptance are required before
+changing the retained installation. Do not claim a working endpoint or a
+completed demo from source tests or the public compatibility response.
+
+The current source also provides a separate, provisional
+[`--read-admin-recovery-status` diagnostic](windows-read-admin-recovery-status.md).
+It reads bounded protected installer metadata and verifies the process-visible
+owned staged service, but cannot resume or authorize recovery. It is not in the
+published preview executable; do not replace installed artifacts to try it.
+The separate [one-attempt same-identity continuation source candidate](windows-read-admin-continuation.md)
+admits only a confirmed, unexpired original claim with pristine extension roots.
+It has not passed native recovery acceptance and is not a general preview repair.
+
+### Service removal
 
 Separately confirmed **Uninstall service** requires the complete protected receipt
 and exact owned service/image. It observes Stop, Delete, delete-pending and final

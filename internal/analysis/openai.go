@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,9 +29,16 @@ type OpenAIConfig struct {
 	APIKey string `json:"-"`
 	// A nonempty key must be explicitly bound to the exact configured origin.
 	// Changing a base URL must not silently reuse a saved key for another origin.
-	APIKeyOrigin        string        `json:"-"`
-	AllowedHTTPSOrigins []string      `json:"-"`
-	Timeout             time.Duration `json:"-"`
+	APIKeyOrigin        string   `json:"-"`
+	AllowedHTTPSOrigins []string `json:"-"`
+	// LANOrigin is an independently approved literal RFC1918 HTTPS origin.
+	// Supplying it never approves evidence, persists settings or proves local inference.
+	LANOrigin string `json:"-"`
+	// LANPrivateCAPEM and its exact DER fingerprint are process-memory-only.
+	// A private CA replaces, rather than augments, system roots for this provider.
+	LANPrivateCAPEM    string        `json:"-"`
+	LANPrivateCASHA256 string        `json:"-"`
+	Timeout            time.Duration `json:"-"`
 	// Compatibility is an explicit operator choice, never an automatic retry.
 	UseLegacyMaxTokens bool `json:"useLegacyMaxTokens"`
 }
@@ -69,12 +77,22 @@ func NewOpenAIProvider(cfg OpenAIConfig) (*OpenAIProvider, error) {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "http://127.0.0.1:11434/v1"
 	}
-	endpoint, err := parseEndpoint(cfg.BaseURL, cfg.AllowedHTTPSOrigins)
+	endpoint, err := parseEndpointWithLAN(cfg.BaseURL, cfg.AllowedHTTPSOrigins, cfg.LANOrigin)
 	if err != nil {
 		return nil, err
 	}
 	if cfg.APIKey != "" && cfg.APIKeyOrigin != endpoint.origin {
 		return nil, ErrInvalidConfig
+	}
+	var roots *x509.CertPool
+	if cfg.LANPrivateCAPEM != "" || cfg.LANPrivateCASHA256 != "" {
+		if !endpoint.lan {
+			return nil, ErrInvalidConfig
+		}
+		roots, err = privateLANRoots(cfg.LANPrivateCAPEM, cfg.LANPrivateCASHA256, time.Now())
+		if err != nil {
+			return nil, ErrInvalidConfig
+		}
 	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = DefaultTimeout
@@ -84,7 +102,7 @@ func NewOpenAIProvider(cfg OpenAIConfig) (*OpenAIProvider, error) {
 	transport := &http.Transport{
 		Proxy: nil, DisableCompression: true, DisableKeepAlives: true, MaxConnsPerHost: 1,
 		MaxResponseHeaderBytes: 8 * 1024, ResponseHeaderTimeout: cfg.Timeout, TLSHandshakeTimeout: 3 * time.Second,
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots},
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			if network != "tcp" || address != net.JoinHostPort(endpoint.host, endpoint.port) {
 				return nil, ErrUnavailable
@@ -116,6 +134,8 @@ func (p *OpenAIProvider) Identity() ProviderIdentity {
 	destination := "operator-allowlisted-https"
 	if p.endpoint.loopback {
 		destination = "loopback-server"
+	} else if p.endpoint.lan {
+		destination = "operator-approved-lan-https"
 	}
 	return ProviderIdentity{Name: "openai-compatible", Model: p.model, Destination: destination, EndpointOrigin: p.endpoint.origin}
 }

@@ -22,6 +22,7 @@ import (
 )
 
 type Options struct {
+	recovery *serviceRecoveryAuthority
 	// ApproveMacOSInventory receives the full disclosure before any private write.
 	// Returning true is the explicit local decision; no default is supplied.
 	ApproveMacOSInventory     func(string) (bool, error)
@@ -125,7 +126,10 @@ func Run(ctx context.Context, b Bootstrap, o Options) (Result, error) {
 	}
 	return runEnrollment(ctx, b, o)
 }
-func runEnrollment(ctx context.Context, b Bootstrap, o Options) (Result, error) {
+func runEnrollment(ctx context.Context, b Bootstrap, o Options) (result Result, err error) {
+	if o.recovery != nil && (!o.ResumeOnly || b.Profile != "tls" || b.RenewalPolicy != "") {
+		return Result{}, ErrBootstrap
+	}
 	if !o.ResumeOnly && (b.RenewalPolicy != "") != o.AutomaticRenewalAcknowledged {
 		return Result{}, ErrBootstrap
 	}
@@ -160,7 +164,11 @@ func runEnrollment(ctx context.Context, b Bootstrap, o Options) (Result, error) 
 	if err != nil {
 		return Result{}, err
 	}
-	defer st.Close()
+	defer func() {
+		if closeErr := st.Close(); o.recovery != nil && err == nil && closeErr != nil {
+			result, err = Result{}, closeErr
+		}
+	}()
 	s := &session{&sessionData{store: st, opts: o, trust: trust}}
 	defer func() { clear(s.key) }()
 	if err = s.load(b); err != nil {
@@ -173,6 +181,22 @@ func runEnrollment(ctx context.Context, b Bootstrap, o Options) (Result, error) 
 	}
 	if err = s.loadService(o.ResumeOnly); err != nil {
 		return Result{}, err
+	}
+	if o.recovery != nil {
+		if err = o.recovery.guard(); err != nil {
+			return Result{}, err
+		}
+		if s.service == nil {
+			return Result{}, ErrState
+		}
+		view, e := serviceRecoveryView(*s.service, s.markerBinding(), false, time.Now())
+		if e != nil {
+			return Result{}, e
+		}
+		if view.Binding != o.recovery.binding || view.DeadlineAt != o.recovery.deadline {
+			return Result{}, ErrState
+		}
+		s.store = recoveryEnrollmentStorage{st, o.recovery.guard}
 	}
 	if err = s.enforceServiceDeadline(time.Now()); err != nil {
 		return Result{}, err
@@ -189,6 +213,9 @@ func runEnrollment(ctx context.Context, b Bootstrap, o Options) (Result, error) 
 	s.wire = &wireClient{client: c, origin: b.EnrollmentOrigin, collectionProfile: b.CollectionProfile}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
+	if o.recovery != nil {
+		o.recovery.ctx = ctx
+	}
 	if s.service != nil && !s.l.Activated {
 		var stopDeadline context.CancelFunc
 		ctx, stopDeadline = context.WithDeadline(ctx, time.Unix(s.service.DeadlineAt, 0))

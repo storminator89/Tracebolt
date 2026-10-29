@@ -199,7 +199,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			s.receiveTelemetry(w, r)
 			return
 		}
-		if p == "/api/ai/config" || p == "/api/ai/config/clear" || p == "/api/ai/config/persistent" || (strings.HasPrefix(p, "/api/cases/") && strings.HasSuffix(p, "/analyze")) {
+		if p == "/api/ai/config" || p == "/api/ai/config/clear" || p == "/api/ai/config/persistent" || p == "/api/ai/config/lan" || p == "/api/ai/config/lan-private-ca" || p == "/api/ai/test" || (strings.HasPrefix(p, "/api/cases/") && strings.HasSuffix(p, "/analyze")) {
 			s.aiMutation(w, r)
 			return
 		}

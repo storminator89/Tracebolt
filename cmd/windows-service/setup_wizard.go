@@ -116,7 +116,7 @@ func setupWizardInstall(ctx context.Context, raw []byte, s setupWizardInstallSte
 	if err = s.preflight(ctx); err != nil {
 		return err
 	}
-	progress("Checking the selected manager's Windows Setup compatibility. An older manager must be updated before installation.")
+	progress("Checking the selected manager's Windows Setup compatibility.")
 	if err = s.compatibility(ctx, raw); err != nil {
 		return windowssetup.ErrCompatibility
 	}

@@ -1,19 +1,21 @@
 # Windows: current functionality and limits
 
-Unsigned [Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
+Unsigned [Windows preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
 is available for fresh x64 Read admin setup. Its native acceptance is limited to
 three hosted Server 2025 packaged-Setup cases; complete provider coverage and
 real Linux-manager/shared-dashboard interoperability remain unproved. The source
 also contains separate optional features with their own acceptance gates.
 
-**Preview.3 release preparation.** It pairs the selected Windows source with
-its matching Linux manager/frontend build. The three-case Server 2025 native
-Setup subset and aggregation passed in
+**Preview.3 was published on 13 October 2026**, from source
+`992b8d8c9d9693a97bd63301a3c147e1b2681357`. Build its matching Linux
+manager/frontend separately. The three-case Server 2025 native Setup subset and aggregation passed in
 [run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
-Publication requires successful exact-source full Validate and publisher
-review/CI. Verify the linked validation run’s current state in the release guide. Use the
-[candidate installation guide](windows-prerelease-install.md) only after its
-release is verified. Optional features remain separately configured and approved.
+The exact source also passed [full Validate 38369024941](https://github.com/storminator89/Tracebolt/actions/runs/38369024941).
+Use the [attached release guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
+and verify its manifest and exact bytes. This is not acceptance of newer main
+commits. The [installation audit](windows-installation-audit.md) distinguishes
+delivery blockers, later source diagnostics and the new dashboard preparation.
+Optional features remain separately configured and approved.
 
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
 
@@ -101,8 +103,8 @@ This does not establish native Windows collection or released-profile coverage.*
 
 ## Published preview
 
-Use [v0.1.0-windows-preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2)
-and its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+Use [v0.1.0-windows-preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+and its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
 for the exact binaries, checksums, matching manager/frontend source and approval
 requirements. Setup and service remain unsigned and retain their original
 `v0.0.0-setup-candidate` filenames and embedded version. Keep OS protections intact.
@@ -111,7 +113,7 @@ The Linux rc.3 endpoint download is separate and does not supply a matching mana
 For older five-scope preview.1 bytes, use the
 [historical installation guide](windows-prerelease-historical/windows-prerelease-install.md).
 
-## Published preview.2 hosted Setup acceptance
+## Historical preview.2 hosted Setup acceptance
 
 The [released source](https://github.com/storminator89/Tracebolt/tree/62435ef7e605df0b102e030bf1d68cb255829a90)
 passed [full Validate](https://github.com/storminator89/Tracebolt/actions/runs/38303779043)

@@ -8,10 +8,12 @@ import { OFFICIAL_LINUX_BOOTSTRAP_PIN, selectEnrollmentCommand, verifiedDownload
 import { publicBootstrap, validEnrollmentList } from './enrollment-types';
 import type { EnrollmentList, EnrollmentSnapshot, EnrollmentState, InvitationCreation } from './enrollment-types';
 import { setLocale } from './i18n';
+import { WINDOWS_SETUP_RELEASE } from './windows-setup-release';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
 const operator = vi.hoisted(() => ({ insecureTestMode: false }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: () => operator }));
+let fixtureManager = 0;
 const serverNow = '2026-10-07T15:00:00Z', seconds = Date.parse(serverNow) / 1000;
 const invitation = `invite_${'1'.repeat(32)}`, secret = 'W'.repeat(43), fingerprint = 'ab'.repeat(32);
 const certificate = '-----BEGIN CERTIFICATE-----\nQUJDRA==\n-----END CERTIFICATE-----';
@@ -19,7 +21,7 @@ const collectionConsent = 'I acknowledge this Windows inventory collection for t
 const httpConsent = 'I explicitly accept unencrypted HTTP-test enrollment and Windows inventory transmission.';
 function record(state: EnrollmentState = 'created', revision = 1): EnrollmentSnapshot {
  return {
-  version: 'tracebolt.enrollment-state.v2', binding: { instanceID: `manager_${'2'.repeat(32)}`, origin: window.location.origin, profile: operator.insecureTestMode ? 'http-test' : 'tls', collectionProfile: 'windows-inventory-v1', issuerFingerprint: 'a'.repeat(64) },
+  version: 'tracebolt.enrollment-state.v2', binding: { instanceID: `manager_${fixtureManager.toString(16).padStart(32, '0')}`, origin: window.location.origin, profile: operator.insecureTestMode ? 'http-test' : 'tls', collectionProfile: 'windows-inventory-v1', issuerFingerprint: 'a'.repeat(64) },
   invitationID: invitation, createRequestID: `request_${'3'.repeat(32)}`, platform: 'windows', revision, state, createdAt: seconds, deadlineAt: seconds + 600, updatedAt: seconds,
   claim: { claimID: `claim_${'4'.repeat(32)}`, requestID: '', keyFingerprint: fingerprint, csrHash: '', claimHash: '', comparisonCode: '12ab'.repeat(8), at: seconds },
   approval: { requestID: '', deviceID: ['created', 'claimed_pending'].includes(state) ? '' : `agent_${'6'.repeat(32)}`, keyFingerprint: fingerprint, at: seconds },
@@ -64,6 +66,7 @@ async function review(item: EnrollmentSnapshot) {
  return screen.getByRole('dialog', { name: 'Review invitation' });
 }
 beforeEach(() => {
+ fixtureManager++;
  jsdom.reconfigure({ url: 'https://localhost/' }); setLocale('en', false); operator.insecureTestMode = false;
  current = listing(); changed.mockReset(); localStorage.clear(); sessionStorage.clear();
  vi.mocked(request).mockReset().mockImplementation(async path => structuredClone(path === '/windows/enrollment' ? current : linuxListing()));
@@ -99,10 +102,10 @@ describe('Windows enrollment contract and creation consent', () => {
   expect(button).toBeDisabled(); fireEvent.click(button); expect(mutate).not.toHaveBeenCalled();
   acknowledge(dialog); fireEvent.click(button); await within(dialog).findByLabelText('One-time invitation secret');
   expect(mutate).toHaveBeenCalledExactlyOnceWith('/windows/enrollment/invitations', { requestId: expect.stringMatching(/^request_[a-f0-9]{32}$/), platform: 'windows', collectionAcknowledged: true, insecureHTTPAcknowledged: false }, expect.any(AbortSignal));
-  expect(within(dialog).getByText('Use the reviewed Windows Setup preview')).toBeVisible();
-  expect(within(dialog).getByText(/select that public JSON export in its wizard/)).toHaveTextContent('compatibility before making changes');
-  expect(within(dialog).getByText(/select that public JSON export in its wizard/)).toHaveTextContent('HTTP-test needs a separate plaintext-risk acknowledgement');
-  expect(within(dialog).getByText(/No released Windows installer or download command is available/)).toBeVisible();
+  expect(within(dialog).getByText('Install and verify Windows')).toBeVisible();
+  expect(within(dialog).getByText(/Review the 21 local Read admin scopes/)).toHaveTextContent('This dashboard invitation does not grant those scopes');
+  expect(within(dialog).getByText(/Review the 21 local Read admin scopes/)).toHaveTextContent('separate plaintext-risk acknowledgement');
+  expect(within(dialog).getByText(/After Setup requests service start/)).toHaveTextContent('fresh authenticated report');
   expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument();
   expect(dialog.textContent).not.toMatch(/rc\.3|Run as root|sha256sum|curl|agent-service/);
   expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(secret);
@@ -126,7 +129,7 @@ describe('Windows enrollment contract and creation consent', () => {
   vi.mocked(mutate).mockResolvedValue(response); const dialog = await add(); acknowledge(dialog);
   fireEvent.click(within(dialog).getByRole('button', { name: 'Create invitation' })); await within(dialog).findByRole('alert');
   expect(within(dialog).queryByLabelText('One-time invitation secret')).not.toBeInTheDocument();
-  expect(within(dialog).queryByText('Use the reviewed Windows Setup preview')).not.toBeInTheDocument();
+  expect(within(dialog).queryByText('Install and verify Windows')).not.toBeInTheDocument();
   expect(within(dialog).queryByRole('button', { name: 'Download bootstrap file' })).not.toBeInTheDocument();
   expect(document.body.textContent).not.toContain(secret);
  });
@@ -149,6 +152,48 @@ describe('Windows enrollment contract and creation consent', () => {
   expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2);
   for (const checkbox of within(dialog).getAllByRole('checkbox')) expect(checkbox).not.toBeChecked();
   expect(within(dialog).getByRole('button', { name: 'Einladung erstellen' })).toBeDisabled();
+ });
+});
+
+describe('Windows preparation before the invitation deadline', () => {
+ it('never treats a matching file as collection consent or an invitation request', async () => {
+  const digest = Uint8Array.from(WINDOWS_SETUP_RELEASE.sha256.match(/../g)!, byte => parseInt(byte, 16)).buffer;
+  vi.stubGlobal('crypto', { subtle: { digest: vi.fn().mockResolvedValue(digest) } });
+  const dialog = await add();
+  fireEvent.change(within(dialog).getByLabelText('Check downloaded Setup (optional)'), { target: { files: [{ name: WINDOWS_SETUP_RELEASE.name, size: WINDOWS_SETUP_RELEASE.size, arrayBuffer: async () => new ArrayBuffer(WINDOWS_SETUP_RELEASE.size) }] } });
+  expect(await within(dialog).findByRole('status')).toHaveTextContent('File matches');
+  expect(within(dialog).getByRole('checkbox', { name: collectionConsent })).not.toBeChecked();
+  expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
+  expect(mutate).not.toHaveBeenCalled();
+ });
+ it('offers a fixed public Setup download before creating any invitation, without granting consent', async () => {
+  const dialog = await add();
+  expect(within(dialog).getByRole('link', { name: 'Download Setup · preview.3' })).toHaveAttribute('href', 'https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/Tracebolt-v0.0.0-setup-candidate-windows-amd64-Setup.exe');
+  expect(within(dialog).getByText(/before creating the 10-minute invitation/)).toBeVisible();
+  expect(within(dialog).getByRole('link', { name: 'Matching manager source' })).toHaveAttribute('href', 'https://github.com/storminator89/Tracebolt/tree/992b8d8c9d9693a97bd63301a3c147e1b2681357');
+  expect(within(dialog).getByText(/Native evidence covers three Server 2025/)).toHaveTextContent('Windows 11');
+  expect(within(dialog).getByRole('checkbox', { name: collectionConsent })).not.toBeChecked();
+  expect(within(dialog).getByRole('button', { name: 'Create invitation' })).toBeDisabled();
+  expect(mutate).not.toHaveBeenCalled();
+ });
+ it('keeps the published TLS download out of the HTTP test path', async () => {
+  operator.insecureTestMode = true; jsdom.reconfigure({ url: 'http://localhost:8080/' });
+  const dialog = await add();
+  expect(within(dialog).getByText(/Published preview.3 is TLS-only/)).toBeVisible();
+  expect(within(dialog).queryByRole('link', { name: /Download Setup/ })).not.toBeInTheDocument();
+  expect(within(dialog).queryByLabelText(/Check downloaded Setup/)).not.toBeInTheDocument();
+  for (const checkbox of within(dialog).getAllByRole('checkbox')) expect(checkbox).not.toBeChecked();
+  expect(mutate).not.toHaveBeenCalled();
+ });
+ it('prepares Windows in German without stale five-scope or unavailable-release claims', async () => {
+  setLocale('de', false); render(section());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Gerät hinzufügen' })).toBeEnabled());
+  select('windows'); await screen.findByText('Windows · Einzelne Einladung · Manuelle Freigabe');
+  fireEvent.click(screen.getByRole('button', { name: 'Gerät hinzufügen' })); const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByRole('link', { name: 'Setup herunterladen · Preview.3' })).toBeVisible();
+  expect(within(dialog).getByLabelText('Heruntergeladenes Setup prüfen (optional)')).toBeVisible();
+  expect(dialog.textContent).not.toMatch(/fünf lokalen|Installer oder Download-Befehl ist nicht verfügbar/);
+  expect(within(dialog).getByRole('checkbox')).not.toBeChecked(); expect(mutate).not.toHaveBeenCalled();
  });
 });
 

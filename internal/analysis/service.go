@@ -69,21 +69,30 @@ func (s *Service) analyzePacket(ctx context.Context, c model.Case, p Packet) (Re
 			"Rules and AI do not confirm a root cause. Read-only runbooks are suggestions for an operator; no checks or remediation run automatically.",
 		},
 	}
+	identityUnavailable := false
 	if s != nil && s.provider != nil {
-		identity := s.provider.Identity()
-		if !nonemptyBounded(identity.Name, 128) || !nonemptyBounded(identity.Model, 128) || !bounded(identity.Destination, 128) || !bounded(identity.EndpointOrigin, 512) {
-			return Result{}, errors.New("invalid internal provider identity")
+		identity, ok := safeProviderIdentity(s.provider)
+		if !ok {
+			identityUnavailable = true
+		} else {
+			if !nonemptyBounded(identity.Name, 128) || !nonemptyBounded(identity.Model, 128) || !bounded(identity.Destination, 128) || !bounded(identity.EndpointOrigin, 512) {
+				return Result{}, errors.New("invalid internal provider identity")
+			}
+			result.AI.Provenance.Provider = identity.Name
+			result.AI.Provenance.Model = identity.Model
+			result.AI.Provenance.Destination = identity.Destination
+			result.AI.Provenance.EndpointOrigin = identity.EndpointOrigin
 		}
-		result.AI.Provenance.Provider = identity.Name
-		result.AI.Provenance.Model = identity.Model
-		result.AI.Provenance.Destination = identity.Destination
-		result.AI.Provenance.EndpointOrigin = identity.EndpointOrigin
 	}
 	// Fingerprints identify the same evidence/configuration versions, not the
 	// nondeterministic output or a verified incident. Each attempt also has an ID.
 	fingerprintBytes, _ := json.Marshal(result.AI.Provenance)
 	result.Fingerprint = packetHash(fingerprintBytes)
 	if s == nil || s.provider == nil {
+		return result, nil
+	}
+	if identityUnavailable {
+		setFailure(&result.AI, ErrUnavailable)
 		return result, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -99,7 +108,7 @@ func (s *Service) analyzePacket(ctx context.Context, c model.Case, p Packet) (Re
 	defer cancel()
 	schema := OutputSchema()
 	request := ProviderRequest{Messages: []Message{{Role: "system", Content: systemPrompt + "\nOutput JSON schema:\n" + string(schema)}, {Role: "user", Content: string(encoded)}}, Schema: schema}
-	raw, err := s.provider.Generate(ctx, request)
+	raw, err := safeProviderGenerate(ctx, s.provider, request)
 	if err == nil {
 		err = ctx.Err()
 	}
@@ -117,6 +126,31 @@ func (s *Service) analyzePacket(ctx context.Context, c model.Case, p Packet) (Re
 	result.AI.Findings = &f
 	result.AI.NextSteps = stepsFor(f.NextCheck)
 	return result, nil
+}
+
+// Provider code is an untrusted failure boundary: a panic may contain prompt,
+// journal, credential or upstream data. Never format, log or return its value.
+// A failed attempt is not retried; the caller's existing terminalization applies.
+func safeProviderIdentity(provider Provider) (identity ProviderIdentity, ok bool) {
+	defer func() {
+		if recover() != nil {
+			identity, ok = ProviderIdentity{}, false
+		}
+	}()
+	return provider.Identity(), true
+}
+
+func safeProviderGenerate(ctx context.Context, provider Provider, request ProviderRequest) (raw []byte, err error) {
+	completed := false
+	defer func() {
+		if !completed {
+			_ = recover() // A nil panic value is still a failed provider call.
+			raw, err = nil, ErrUnavailable
+		}
+	}()
+	raw, err = provider.Generate(ctx, request)
+	completed = true
+	return raw, err
 }
 
 func stepsFor(id RunbookID) []string {

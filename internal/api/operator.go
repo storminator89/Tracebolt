@@ -85,6 +85,7 @@ type operatorHandler struct {
 	alarmSettings             *alarmdelivery.Settings
 	applicationChecks         *applicationcheck.Monitor
 	applicationCheckSettings  *applicationcheck.Settings
+	networkReviewFixture      func() (applicationcheck.View, string, bool) // in-package synthetic test seam; never populated by configuration
 	actions                   serviceActionManager
 	app                       *Server
 	origin, authority         string
@@ -612,6 +613,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsIncidentsAPI(w, r)
 		return
 	}
+	if r.URL.Path == "/api/customer-windows-assignments" {
+		h.customerWindowsAssignmentsAPI(w, r)
+		return
+	}
+	if r.URL.Path == "/api/customers" || strings.HasPrefix(r.URL.Path, "/api/customers/") {
+		h.customersAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/fleet/groups/") && strings.Contains(r.URL.Path, "/service-checks") {
 		h.fleetGroupServiceAPI(w, r)
 		return
@@ -638,6 +647,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/application-checks/status" {
 		h.applicationCheckStatus(w, r)
+		return
+	}
+	if r.URL.Path == "/api/ai/network-review/preview" || r.URL.Path == "/api/ai/network-review/run" {
+		h.networkReview(w, r)
 		return
 	}
 	if r.URL.Path == "/api/alerts/status" {

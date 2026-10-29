@@ -10,6 +10,12 @@
 .application-checks-timing dd{margin:0;overflow-wrap:anywhere}
 .application-checks-help{padding:0 0 13px 17px;max-width:720px}
 .application-checks-help li+li{margin-top:7px}
+.application-network-history{border-top:1px solid var(--line);padding:16px 20px;font-size:12px;overflow-wrap:anywhere}
+.application-network-history h3{margin-bottom:8px;font-size:14px}
+.application-network-history p{margin:8px 0;color:var(--secondary)}
+.application-network-history dl{display:flex;flex-wrap:wrap;gap:8px 20px;margin:12px 0}
+.application-network-history dl div{min-width:0}.application-network-history dt{color:var(--secondary)}.application-network-history dd{margin:2px 0 0}
+.application-network-history ul,.application-network-history ol{padding-left:20px;margin:8px 0}
 .application-checks-details a{color:var(--accent);text-decoration:underline;overflow-wrap:anywhere}
 .application-checks-details a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .application-checks-notice[role=alert]{color:var(--warning)}

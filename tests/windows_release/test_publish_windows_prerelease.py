@@ -316,7 +316,8 @@ class FixtureCase(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / "docs" / publisher.GUIDE_SUBDIRECTORY).mkdir(parents=True)
         for name in publisher.GUIDES:
-            (self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name).write_text("Synthetic fixture guide only.\n", encoding="utf-8")
+            # Publisher inputs are canonical LF bytes, also on Windows hosts.
+            (self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name).write_bytes(b"Synthetic fixture guide only.\n")
 
     def prepare(self, api=None, frozen=None):
         with mock.patch.object(gate.resources, "verify_pe", side_effect=fixtures.fake_pe):
@@ -829,17 +830,26 @@ class EvidenceAndPlanTests(FixtureCase):
         env.update(TRACEBOLT_VERIFIED_PLAN=base64.b64encode(raw).decode(), TRACEBOLT_VERIFIED_PLAN_SHA256=publisher.digest(raw))
         self.reject(publisher.decode_plan, env, self.request)
 
-    def test_guides_reject_links_empty_crlf_and_nonregular_files(self):
+    def test_guides_reject_empty_crlf_and_nonregular_files(self):
         name = next(iter(publisher.GUIDES))
         path = self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name
         for raw in (b"", b"line\r\n"):
             path.write_bytes(raw)
             self.reject(publisher.read_guides, self.root)
         path.unlink()
-        path.symlink_to(self.root / "absent")
-        self.reject(publisher.read_guides, self.root)
-        path.unlink()
         path.mkdir()
+        self.reject(publisher.read_guides, self.root)
+
+    def test_guides_reject_symlinks(self):
+        name = next(iter(publisher.GUIDES))
+        path = self.root / "docs" / publisher.GUIDE_SUBDIRECTORY / name
+        path.unlink()
+        try:
+            path.symlink_to(self.root / "absent")
+        except OSError as error:
+            if sys.platform == "win32" and getattr(error, "winerror", None) == 1314:
+                self.skipTest("Windows symlink creation privilege is unavailable; no host permission was changed")
+            raise
         self.reject(publisher.read_guides, self.root)
 
 

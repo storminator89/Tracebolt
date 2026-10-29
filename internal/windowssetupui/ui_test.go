@@ -73,6 +73,46 @@ func TestInitialAndBackConsentAreOff(t *testing.T) {
 	}
 }
 
+func TestEmbeddedPublicBootstrapRequiresPreviewAndConsent(t *testing.T) {
+	c, h := readAdminUIFixture()
+	input := []byte(`{"public":"fixture"}`)
+	c.InitialPublicBootstrap = input
+	h.Preview = func(raw []byte) (TrustPreview, error) {
+		if !bytes.Equal(raw, input) {
+			t.Fatal("preview did not receive embedded bytes")
+		}
+		return fixtureTrust(), nil
+	}
+	f := freshFlow(c, h)
+	if err := selectInitialBootstrap(&f, c, h); err != nil {
+		t.Fatal(err)
+	}
+	input[0] = 'x'
+	if f.bootstrap[0] != '{' || !f.next() || f.canInstall() || f.scope || f.service || f.identity || f.compared {
+		t.Fatal("embedded input changed or bypassed review")
+	}
+}
+
+func TestEmbeddedPublicBootstrapRejectsInvalidAndOversized(t *testing.T) {
+	for _, input := range [][]byte{nil, {}, []byte("bad"), bytes.Repeat([]byte("x"), maxBootstrapBytes+1)} {
+		c, h := readAdminUIFixture()
+		c.InitialPublicBootstrap = input
+		h.Preview = func([]byte) (TrustPreview, error) { return TrustPreview{}, errors.New("invalid") }
+		f := freshFlow(c, h)
+		err := selectInitialBootstrap(&f, c, h)
+		if input == nil {
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else if err == nil {
+			t.Fatal("invalid embedded bootstrap accepted")
+		}
+		if len(f.bootstrap) != 0 || f.canInstall() {
+			t.Fatal("invalid input altered flow")
+		}
+	}
+}
+
 func TestCancelBeforeApplyIsInert(t *testing.T) {
 	for _, review := range []bool{false, true} {
 		f := selectedFlow(t)

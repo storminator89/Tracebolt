@@ -108,6 +108,60 @@ func TestPendingServiceClaimThenResumeWithoutInvitation(t *testing.T) {
 		})
 	}
 }
+func TestPendingServiceRecoveryInspectionIsOfflineReadOnlyAndDeadlineBound(t *testing.T) {
+	f := claimServiceFixture(t, "tls")
+	before, err := os.ReadFile(filepath.Join(f.state, "ledger.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.server.Close()
+	a, err := InspectServiceRecovery(f.bootstrap, f.state)
+	if err != nil || a.Ready || a.DeadlineAt <= time.Now().Unix() || len(a.Binding) != 64 {
+		t.Fatal("committed offline claim inspection", err)
+	}
+	b, err := InspectServiceRecovery(f.bootstrap, f.state)
+	after, _ := os.ReadFile(filepath.Join(f.state, "ledger.json"))
+	if err != nil || a != b || !bytes.Equal(before, after) {
+		t.Fatal("inspection changed identity or ledger")
+	}
+	changeServiceMarker(t, f, func(m *serviceEnrollment) { m.ClaimAt = time.Now().Unix() - 10; m.DeadlineAt = time.Now().Unix() - 1 })
+	if got, err := InspectServiceRecovery(f.bootstrap, f.state); err != ErrServiceDeadline || got != (ServiceRecoveryState{}) {
+		t.Fatal("expired claim admitted", err)
+	}
+}
+
+func TestPendingServiceRecoveryResumesSameClaimAndRejectsLateReadyResult(t *testing.T) {
+	f := claimServiceFixture(t, "tls")
+	expected, err := InspectServiceRecovery(f.bootstrap, f.state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureApproveService(t, f)
+	if _, err = ResumeServiceRecovery(context.Background(), f.bootstrap, f.state, expected); err != nil {
+		t.Fatal("same-claim recovery", err)
+	}
+	current, err := InspectServiceRecovery(f.bootstrap, f.state)
+	if err != nil || current.Binding != expected.Binding || current.DeadlineAt != expected.DeadlineAt || !current.Ready {
+		t.Fatal("recovery changed original binding/deadline", err)
+	}
+	// All artifacts already exist. Publication must still reject a late success
+	// even when no guarded storage Write needs to be invoked.
+	_, err = withServiceSession(f.bootstrap, f.state, false, func(s *session) (ServiceState, error) {
+		now := time.Now()
+		s.opts.recovery = &serviceRecoveryAuthority{binding: expected.Binding, deadline: expected.DeadlineAt, ctx: context.Background(), now: func() time.Time { return now }}
+		s.opts.Notify = func(p Progress) error {
+			if p.Phase == "ready" {
+				now = time.Unix(expected.DeadlineAt, 0)
+			}
+			return nil
+		}
+		_, e := s.publish()
+		return ServiceState{}, e
+	})
+	if err != ErrServiceDeadline {
+		t.Fatal("late no-write ready publication succeeded", err)
+	}
+}
 func TestPendingServiceLostClaimAcknowledgementDoesNotPublishMarker(t *testing.T) {
 	f := newClientFixture(t, "tls")
 	f.autoApprove = false

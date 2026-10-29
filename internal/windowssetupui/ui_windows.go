@@ -4,6 +4,8 @@ package windowssetupui
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -64,31 +66,33 @@ var (
 )
 
 const (
-	wmDestroy         = 0x0002
-	wmSize            = 0x0005
-	wmGetMinMaxInfo   = 0x0024
-	wmDPIChanged      = 0x02e0
-	wmDisplayChange   = 0x007e
-	wmSettingChange   = 0x001a
-	wmClose           = 0x0010
-	wmQueryEndSession = 0x0011
-	wmCommand         = 0x0111
-	wmTimer           = 0x0113
-	wmSetFont         = 0x0030
-	wmUpdate          = 0x8001
-	bmGetCheck        = 0x00f0
-	bmSetCheck        = 0x00f1
-	wsChild           = 0x40000000
-	wsVisible         = 0x10000000
-	wsTabStop         = 0x00010000
-	wsVScroll         = 0x00200000
-	wsBorder          = 0x00800000
-	esMultiline       = 0x0004
-	esAutoVScroll     = 0x0040
-	esReadOnly        = 0x0800
-	bsAutoCheckbox    = 0x0003
-	bsMultiline       = 0x2000
-	operationTimer    = 301
+	adjacentBootstrapPrefix = "tracebolt-bootstrap-invite_"
+	maxAdjacentEntries      = 4096
+	wmDestroy               = 0x0002
+	wmSize                  = 0x0005
+	wmGetMinMaxInfo         = 0x0024
+	wmDPIChanged            = 0x02e0
+	wmDisplayChange         = 0x007e
+	wmSettingChange         = 0x001a
+	wmClose                 = 0x0010
+	wmQueryEndSession       = 0x0011
+	wmCommand               = 0x0111
+	wmTimer                 = 0x0113
+	wmSetFont               = 0x0030
+	wmUpdate                = 0x8001
+	bmGetCheck              = 0x00f0
+	bmSetCheck              = 0x00f1
+	wsChild                 = 0x40000000
+	wsVisible               = 0x10000000
+	wsTabStop               = 0x00010000
+	wsVScroll               = 0x00200000
+	wsBorder                = 0x00800000
+	esMultiline             = 0x0004
+	esAutoVScroll           = 0x0040
+	esReadOnly              = 0x0800
+	bsAutoCheckbox          = 0x0003
+	bsMultiline             = 0x2000
+	operationTimer          = 301
 )
 
 type winClass struct {
@@ -161,6 +165,12 @@ func Run(c Config, h Hooks) error {
 		return ErrConfiguration
 	}
 	w := &wizard{config: c, hooks: h, flow: freshFlow(c, h), controls: make(map[int]uintptr)}
+	if err := selectInitialBootstrap(&w.flow, c, h); err != nil {
+		return ErrConfiguration
+	}
+	if len(w.flow.bootstrap) != 0 {
+		w.fileName = "Embedded public configuration (review required)"
+	}
 	if !activeWizard.CompareAndSwap(nil, w) {
 		return ErrUI
 	}
@@ -176,6 +186,9 @@ func Run(c Config, h Hooks) error {
 			return ErrUI
 		}
 	}
+	// This optional public sidecar is selected only through the same protected
+	// reader and preview as a manually chosen file. Review remains mandatory.
+	w.selectAdjacentBootstrap(os.Executable, adjacentBootstrapEntries, readPublicBootstrap)
 	previousDPI, _, _ := setThreadDpiAwareness.Call(^uintptr(3)) // PER_MONITOR_AWARE_V2 (-4)
 	if previousDPI == 0 {
 		return ErrUI
@@ -256,6 +269,78 @@ func Run(c Config, h Hooks) error {
 		w.flow.complete(<-w.done)
 	}
 	return w.flow.result
+}
+
+func adjacentBootstrapEntries(dir string) ([]string, error) {
+	f, err := openPublicDirectory(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	names, err := f.Readdirnames(maxAdjacentEntries + 1)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	if len(names) > maxAdjacentEntries {
+		return nil, ErrConfiguration
+	}
+	return names, nil
+}
+
+func adjacentBootstrapID(name string) string {
+	if !strings.HasPrefix(name, adjacentBootstrapPrefix) || !strings.HasSuffix(name, ".json") {
+		return ""
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(name, "tracebolt-bootstrap-"), ".json")
+	if len(id) != len("invite_")+32 {
+		return ""
+	}
+	for _, c := range id[len("invite_"):] {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return ""
+		}
+	}
+	return id
+}
+
+func (w *wizard) selectAdjacentBootstrap(executable func() (string, error), list func(string) ([]string, error), read func(string) ([]byte, error)) bool {
+	if w.flow.page != pageInput || w.flow.busy || w.flow.attempted || len(w.flow.bootstrap) != 0 {
+		return false
+	}
+	exe, err := executable()
+	if err != nil || !filepath.IsAbs(exe) {
+		return false
+	}
+	dir := filepath.Dir(exe)
+	names, err := list(dir)
+	if err != nil || len(names) > maxAdjacentEntries {
+		return false
+	}
+	name, id := "", ""
+	for _, candidate := range names {
+		if candidateID := adjacentBootstrapID(candidate); candidateID != "" {
+			if name != "" {
+				return false
+			}
+			name, id = candidate, candidateID
+		}
+	}
+	if name == "" {
+		return false
+	}
+	data, err := read(filepath.Join(dir, name))
+	if err != nil {
+		return false
+	}
+	preview, err := w.hooks.Preview(append([]byte(nil), data...))
+	var bootstrap struct {
+		InvitationID string `json:"invitationId"`
+	}
+	if err != nil || json.Unmarshal(data, &bootstrap) != nil || bootstrap.InvitationID != id || !previewAllowed(w.config, preview) || w.flow.selectBootstrap(data, preview) != nil {
+		return false
+	}
+	w.fileName = name + " (automatically selected; review required)"
+	return true
 }
 
 func utf16(s string) *uint16 {
@@ -366,9 +451,9 @@ func (w *wizard) render() bool {
 	case pageInput:
 		setText(w.heading, "Step 1 of 3: Choose the public bootstrap")
 		setText(w.controls[idNext], "&Next >")
-		intro := "Choose the public bootstrap JSON supplied by your manager operator. The file must be a regular local file, no larger than 64 KiB.\r\n\r\nThis is public manager identity and trust material only. Do not choose a file containing an invitation, password, private key or other secret. The invitation is entered later in a separate console with input hidden.\r\n\r\nThis setup is for a fresh endpoint only. Existing service, enrollment, grants or setup state are never adopted or reset. HTTPS is the default. Explicit isolated HTTP-test bootstraps require a separate plaintext-risk approval.\r\n\r\nAfter choosing a valid bootstrap, review the full data scope and compare all public trust values independently. Installation only begins after you explicitly approve the read scopes, service, persistent identity and trust comparison.\r\n\r\nNo browser is opened and nothing is downloaded by this wizard."
+		intro := "Choose the public bootstrap JSON supplied by your manager operator. If exactly one matching tracebolt-bootstrap-invite_*.json filename is next to Setup and its contents are valid, it is selected automatically. The file must be a regular file on a fixed or removable local drive, no larger than 64 KiB. Copy it from CD/DVD or a network share to a local folder such as Downloads first. Links and reparse points are not accepted.\r\n\r\nThis is public manager identity and trust material only. Do not choose a file containing an invitation, password, private key or other secret. The invitation is entered later in a separate console with input hidden.\r\n\r\nThis setup is for a fresh endpoint only. Existing service, enrollment, grants or setup state are never adopted or reset. HTTPS is the default. Explicit isolated HTTP-test bootstraps require a separate plaintext-risk approval.\r\n\r\nAfter choosing a valid bootstrap, review the full data scope and compare all public trust values independently. Installation only begins after you explicitly approve the read scopes, service, persistent identity and trust comparison.\r\n\r\nNo browser is opened and nothing is downloaded by this wizard."
 		if w.flow.readAdmin {
-			intro = "Read admin includes manufacturer/model, identifying physical chassis and BIOS serials, firmware vendor/version/date, power/battery, device and activity, services and software, network, updates and security, personal users/session metadata, local drive letters and volume GUIDs, and storage-provider device identifiers/friendly labels and health/status. Bounded Application/System event history and selected historical messages are included; messages may contain credentials, personal data and secrets. Service control is separate.\r\n\r\nChoose the manager's public bootstrap JSON, a regular local file up to 64 KiB. Never put an invitation, password or private key in this file. Enter the invitation later in the hidden-input console.\r\n\r\nNext, review the grouped data scope and public trust values. All consent boxes start unchecked. Nothing is installed until you explicitly approve and choose Install."
+			intro = "Read admin includes manufacturer/model, identifying physical chassis and BIOS serials, firmware vendor/version/date, power/battery, device and activity, services and software, network, updates and security, personal users/session metadata, local drive letters and volume GUIDs, and storage-provider device identifiers/friendly labels and health/status. Bounded Application/System event history and selected historical messages are included; messages may contain credentials, personal data and secrets. Service control is separate.\r\n\r\nIf exactly one matching tracebolt-bootstrap-invite_*.json filename is next to Setup and its contents are valid, it is selected automatically; otherwise choose the manager's public bootstrap JSON. It must be a regular file up to 64 KiB on a fixed or removable local drive. Copy it from CD/DVD or a network share to a local folder such as Downloads first; links and reparse points are not accepted. Never put an invitation, password or private key in this file. Enter the invitation later in the hidden-input console.\r\n\r\nNext, review the grouped data scope and public trust values. All consent boxes start unchecked. Nothing is installed until you explicitly approve and choose Install."
 		}
 		if w.control("EDIT", intro, esMultiline|esReadOnly|esAutoVScroll|wsVScroll|wsTabStop|wsBorder, idInputText, true) == 0 {
 			return false
@@ -475,7 +560,7 @@ func (w *wizard) command(id int) {
 		}
 		data, err := readPublicBootstrap(path)
 		if err != nil {
-			w.alert("Choose a regular local public bootstrap file between 1 byte and 64 KiB. Links, network paths, devices and directories are not accepted.")
+			w.alert("Choose a regular public bootstrap file between 1 byte and 64 KiB on a fixed or removable local drive. Copy it from CD/DVD or a network share to a local folder such as Downloads first. Links, reparse points, devices and directories are not accepted.")
 			return
 		}
 		preview, err := w.hooks.Preview(append([]byte(nil), data...))
@@ -715,6 +800,14 @@ func validPublicPath(path string) bool {
 }
 
 func openPublicFile(path string) (*os.File, error) {
+	return openPublicPath(path, false)
+}
+
+func openPublicDirectory(path string) (*os.File, error) {
+	return openPublicPath(path, true)
+}
+
+func openPublicPath(path string, directory bool) (*os.File, error) {
 	if !validPublicPath(path) {
 		return nil, ErrConfiguration
 	}
@@ -753,7 +846,8 @@ func openPublicFile(path string) (*os.File, error) {
 		}
 		if i == len(parts)-1 {
 			kind, e := windows.GetFileType(h)
-			if e != nil || kind != windows.FILE_TYPE_DISK || info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 {
+			isDirectory := info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0
+			if e != nil || kind != windows.FILE_TYPE_DISK || isDirectory != directory {
 				windows.CloseHandle(h)
 				return nil, ErrConfiguration
 			}

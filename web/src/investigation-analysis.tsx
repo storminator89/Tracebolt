@@ -1,4 +1,4 @@
-import { useLocale } from './i18n';
+import { ui, useLocale } from './i18n';
 import { fullDate, qualityLabels } from './utils';
 import type { InvestigationAnalysis } from './investigation-analysis-types';
 import './proactive-ai.css';
@@ -29,7 +29,7 @@ export function InvestigationAnalysisView({ analysis, concise }: { analysis: Inv
                 <h4>{de ? 'Quellen' : 'Sources'}</h4><ul>{result.packet.evidence.map(evidence => <li key={evidence.id}><strong>{evidence.id}</strong>{' · '}{evidence.title}<div className="analysis-source">{evidence.source}{' · '}<Time value={evidence.collectedAt}/>{' · '}{de ? 'Quellqualität bei Analyse: ' : 'Source quality at analysis: '}{qualityLabels[evidence.quality]}</div><div>{evidence.value}</div><div>{evidence.detail}</div></li>)}</ul>
                 {(!!findings?.missingData.length || result.packet.gaps.length > 0 || result.packet.missingEvidenceIDs.length > 0) && <><h4>{de ? 'Datenlücken' : 'Data gaps'}</h4><ul>{findings?.missingData.map((item, index) => <li key={`missing-${index}`}>{item}</li>)}{result.packet.gaps.map((gap, index) => <li key={`gap-${index}`}>{gap.detail}{gap.evidenceIDs.length > 0 && <span className="analysis-source"> ({gap.evidenceIDs.join(', ')})</span>}</li>)}{result.packet.missingEvidenceIDs.length > 0 && <li>{de ? 'Fehlende Quell-IDs: ' : 'Missing source IDs: '}{result.packet.missingEvidenceIDs.join(', ')}</li>}</ul></>}
                 <p>{de ? 'Keine zusätzlichen Logs oder historischen Messwerte geprüft.' : 'No additional logs or historical samples were checked.'}</p>
-                <h4>{de ? 'Nächste Prüfung · nur lesend' : 'Next checks · read-only'}</h4><ol>{(findings ? result.ai.nextSteps : result.baseline.nextSteps).map((step, index) => <li key={index}>{step}</li>)}</ol>
+                <h4>{de ? 'Nächste Prüfung · nur lesend' : 'Next checks · read-only'}</h4>{result.baseline.provenance.ruleId === 'health:offline' && result.baseline.provenance.runbookVersion === 'tracebolt.read-only-runbooks.v1' && <p>{de ? 'Ältere Netzwerkhinweise können DNS-Fehler voraussetzen. Fehlender Kontakt allein belegt keinen DNS-Fehler.' : 'Older network guidance may assume DNS failures. Lost contact alone does not prove a DNS failure.'}</p>}<ol>{(findings ? result.ai.nextSteps : result.baseline.nextSteps).map((step, index) => <li key={index}>{ui(step)}</li>)}</ol>
                 <p className="analysis-source">{de ? 'Anbieter / Modell: ' : 'Provider / model: '}{result.ai.provenance.provider} / {result.ai.provenance.model}{' · '}{de ? 'Ergebnis erstellt: ' : 'Result created: '}<Time value={result.generatedAt}/></p>
                 <ul>{result.limitations.map((item, index) => <li className="analysis-source" key={index}>{item}</li>)}</ul>
             </>}

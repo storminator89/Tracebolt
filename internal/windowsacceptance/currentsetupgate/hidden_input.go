@@ -92,7 +92,7 @@ var hiddenInputPackageCodes = []string{"absence-unverified", "ancestor-ace", "an
 
 const hiddenInputBeforeMutation = "Setup stopped before installation writes. No new service, identity or scope grants were created. Review the package, platform, public export and existing-installation boundary; existing state is never overwritten or repaired. Package diagnostic: "
 const hiddenInputStoppedSuffix = ". Retained state may be incomplete or startup indeterminate. Do not rerun installation or delete state. An administrator can use the installed tracebolt-windows-service.exe --inspect for read-only SCM status; retain the displayed public diagnostic for review."
-const hiddenInputInterrupted = "The operation did not complete. Durable changes may exist; files, identity and state are retained. Inspect the retained state before any further action. This wizard will not retry or reset it."
+const hiddenInputInterrupted = "The operation did not complete. Review the reported phase before any further action. Existing files, identity and state are retained. This wizard will not retry or reset it."
 
 // HiddenInputFailureReason validates finite values without using free-form text.
 func HiddenInputFailureReason(reason string) bool {

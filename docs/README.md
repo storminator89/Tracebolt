@@ -10,6 +10,7 @@ have their own installation guides and narrower feature sets.
 - [Linux/Docker manager installation](installation.md)
 - [Connect a Linux device](dashboard-verified-download.md) and [review its read-admin scope](read-admin-onboarding.md)
 - [Windows current functionality and limits](windows-status.md)
+- [Windows fresh-install audit, priorities and shorter preparation](windows-installation-audit.md)
 - [Install Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2) using its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
 - [Windows Read admin scope and setup](windows-read-admin-setup.md)
 - [Historical Windows preview.1 installation](windows-prerelease-historical/windows-prerelease-install.md)

@@ -5,8 +5,6 @@ package main
 import (
 	"context"
 	"embed"
-	"errors"
-	"fmt"
 	"golang.org/x/sys/windows"
 	"io"
 	"localrmm/internal/enrollmentclient"
@@ -36,13 +34,19 @@ func main() {
 	payload, e1 := setupPayload.ReadFile("setup_payload/service.exe")
 	raw, e2 := setupPayload.ReadFile("setup_payload/manifest.json")
 	manifest, e3 := windowspackage.ParseManifest(raw)
-	valid := e1 == nil && e2 == nil && e3 == nil && manifest.Validate(payload) == nil
+	publicBootstrap, e4 := setupPayload.ReadFile("setup_payload/public-bootstrap.txt")
+	if string(publicBootstrap) == "none" {
+		publicBootstrap = nil
+	} else if e4 == nil {
+		_, e4 = setupWizardBootstrap(publicBootstrap)
+	}
+	valid := e1 == nil && e2 == nil && e3 == nil && e4 == nil && manifest.Validate(payload) == nil
 	if !valid {
 		// A broken build is never an invitation to download or install another PE.
 		setupWizardAlert("This Setup package is incomplete or corrupt. Obtain the reviewed Setup.exe and verify its release provenance. Nothing was installed.")
 		os.Exit(2)
 	}
-	config := windowssetupui.Config{AutomaticRenewalDisclosure: enrollmentclient.AutomaticRenewalPrivacy, Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure(), ReadAdminDisclosure: setupWizardReadAdminDisclosure(false), ReadAdminHTTPDisclosure: setupWizardReadAdminDisclosure(true), ReadAdminSummary: setupWizardReadAdminSummary(), ReadAdminHTTPSummary: setupWizardReadAdminHTTPRiskSummary}
+	config := windowssetupui.Config{InitialPublicBootstrap: publicBootstrap, AutomaticRenewalDisclosure: enrollmentclient.AutomaticRenewalPrivacy, Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure(), ReadAdminDisclosure: setupWizardReadAdminDisclosure(false), ReadAdminHTTPDisclosure: setupWizardReadAdminDisclosure(true), ReadAdminSummary: setupWizardReadAdminSummary(), ReadAdminHTTPSummary: setupWizardReadAdminHTTPRiskSummary}
 	hooks := windowssetupui.Hooks{Preview: setupWizardPreview}
 	installProfile := func(ctx context.Context, raw []byte, insecureAcknowledged bool, readAdmin bool, renewalAcknowledged bool, progress func(string)) error {
 		acknowledgedBootstrap := setupWizardAcknowledgedBootstrap
@@ -139,23 +143,6 @@ func main() {
 	if windowssetupui.Run(config, hooks) != nil {
 		os.Exit(1)
 	}
-}
-
-func setupWizardFailure(err error, progress func(string)) {
-	if errors.Is(err, windowssetup.ErrCompatibility) {
-		progress("Manager compatibility check failed before installation: update the Linux/Docker manager to the same reviewed Setup revision, enable Windows enrollment, and download a new Windows bootstrap export. Check the exact selected origin and HTTPS CA when applicable; never bypass TLS or silently change transport.")
-		return
-	}
-	if outcome, ok := err.(*setupWizardOutcomeError); ok && outcome.beforeMutation {
-		progress("Setup stopped before installation writes. No new service, identity or scope grants were created. Review the package, platform, public export and existing-installation boundary; existing state is never overwritten or repaired. Package diagnostic: " + windowspackage.Code(outcome.cause))
-		return
-	}
-	if outcome, ok := err.(*setupWizardOutcomeError); ok {
-		err = outcome.cause
-	}
-	code := windowspackage.Code(err)
-	d := windowsservice.Diagnostic(err)
-	progress(fmt.Sprintf("Setup stopped. Package diagnostic: %s; service phase: %s; reason: %s. Retained state may be incomplete or startup indeterminate. Do not rerun installation or delete state. An administrator can use the installed tracebolt-windows-service.exe --inspect for read-only SCM status; retain the displayed public diagnostic for review.", code, d.Phase, d.Reason))
 }
 
 // A dedicated native console preserves the reviewed CONIN$ no-echo reader and

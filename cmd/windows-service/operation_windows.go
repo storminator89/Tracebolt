@@ -27,7 +27,7 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		}
 		phase := windowsservice.PhaseLifecycle
 		switch r.mode {
-		case "plan", "inspect":
+		case "plan", "inspect", "read-admin-recovery-status":
 			phase = windowsservice.PhaseRuntimeInstallation
 		case "install":
 			phase = windowsservice.PhaseSetup
@@ -43,6 +43,14 @@ func nativeOperation(ctx context.Context, r request, out, stderr io.Writer) (res
 		return windowsservice.Plan(ctx)
 	case "inspect":
 		return windowsservice.Inspect(ctx)
+	case "read-admin-recovery-status":
+		layout, err := windowsservice.ResolveLayout()
+		if err != nil {
+			return nil, err
+		}
+		return inspectReadAdminRecovery(ctx, layout, func(path string, max int64) ([]byte, error) {
+			return windowsstate.ReadProtectedInstaller(path, true, max)
+		}, windowsservice.InspectFreshReadSetup)
 	case "run-service":
 		return nil, windowsservice.Run(ctx, runService)
 	case "install":

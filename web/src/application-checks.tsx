@@ -7,6 +7,8 @@ import type { TranslationKey } from './translations';
 import { APPLICATION_CHECKS_BYTES, applicationObservationAge, isHTTPApplicationCheck, projectApplicationCheck, validApplicationChecksView } from './application-checks-types';
 import type { ApplicationCheckRow, ApplicationChecksStatus } from './application-checks-types';
 import { applicationCheckEntryCopy, applicationCheckSetupRoute } from './application-check-entry';
+import { ApplicationNetworkAI, NetworkReviewHistoryView } from './application-network-ai';
+import type { NetworkReviewHistory } from './application-network-ai';
 import './application-checks.css';
 
 const POLL_MS = 15000, TIMEOUT_MS = 10000;
@@ -119,7 +121,8 @@ function ageLabel(age: number | null): string {
     const seconds = Math.floor(age / 1000);
     return seconds < 60 ? t('vor {0} s', { 0: seconds }) : seconds < 3600 ? t('vor {0} min', { 0: Math.floor(seconds / 60) }) : seconds < 86400 ? t('vor {0} h', { 0: Math.floor(seconds / 3600) }) : t('vor {0} Tagen', { 0: Math.floor(seconds / 86400) });
 }
-function CheckRow({ row, view, elapsedMs }: { row: ApplicationCheckRow; view: ApplicationChecksStatus; elapsedMs: number }) {
+function CheckRow({ row, view, elapsedMs, canAnalyze, onAICompleted }: { row: ApplicationCheckRow; view: ApplicationChecksStatus; elapsedMs: number; canAnalyze: boolean; onAICompleted: (history: NetworkReviewHistory) => void }) {
+    const [interruptedAI, setInterruptedAI] = useState(false);
     const result = projectApplicationCheck(view, row, elapsedMs), tls = isHTTPApplicationCheck(result) ? result.tls : null;
     const rowHeaderId = `application-check-${row.id}`;
     const kindLabel = isHTTPApplicationCheck(row) ? row.targetScheme === 'http' ? t('HTTP · unverschlüsselt') : 'HTTPS' : row.kind.toUpperCase();
@@ -128,7 +131,7 @@ function CheckRow({ row, view, elapsedMs }: { row: ApplicationCheckRow; view: Ap
         <th id={rowHeaderId} scope="row" role="rowheader" headers="application-checks-application"><span className="application-id">{row.id}</span><small className={isHTTPApplicationCheck(row) && row.targetScheme === 'http' ? 'application-plaintext' : ''}>{kindLabel}</small></th>
         <td role="cell" headers={`${rowHeaderId} application-checks-result`}><span className="application-mobile-label" aria-hidden="true">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</span><span className="application-cell-value"><span className={`application-result application-${result.state === 'ok' ? 'ok' : result.state === 'unknown' ? 'unknown' : 'failed'}`}>{resultLabel(result)}</span></span></td>
         <td role="cell" headers={`${rowHeaderId} application-checks-certificate`}><span className="application-mobile-label" aria-hidden="true">{t('Blattzertifikat')}</span><span className="application-cell-value"><span className={`application-result application-tls-${tls?.state ?? 'not_applicable'}`} role={tls === null ? 'img' : undefined} aria-label={tls === null ? t('Zertifikat nicht Teil dieser Prüfung') : undefined}>{tls === null ? <><span className="application-certificate-mark">{certificate}</span><span className="application-mobile-certificate" aria-hidden="true">{t('Zertifikat nicht Teil dieser Prüfung')}</span></> : certificate}</span>{tls?.expiresAt && <time className="application-expiry" dateTime={tls.expiresAt} title={new Date(tls.expiresAt).toLocaleString(dateLocale())}>{new Date(tls.expiresAt).toLocaleDateString(dateLocale())}</time>}</span></td>
-        <td role="cell" headers={`${rowHeaderId} application-checks-observed`}><span className="application-mobile-label" aria-hidden="true">{t('Beobachtet')}</span><span className="application-cell-value">{row.observedAt ? <time dateTime={row.observedAt} title={new Date(row.observedAt).toLocaleString(dateLocale())}>{ageLabel(applicationObservationAge(view, row, elapsedMs))}</time> : <span>—</span>}</span></td>
+        <td role="cell" headers={`${rowHeaderId} application-checks-observed`}><span className="application-mobile-label" aria-hidden="true">{t('Beobachtet')}</span><span className="application-cell-value">{row.observedAt ? <time dateTime={row.observedAt} title={new Date(row.observedAt).toLocaleString(dateLocale())}>{ageLabel(applicationObservationAge(view, row, elapsedMs))}</time> : <span>—</span>}</span>{canAnalyze && !isHTTPApplicationCheck(result) && result.state !== 'unknown' && <ApplicationNetworkAI key={JSON.stringify(result)} row={result} onCompleted={onAICompleted} onInterrupted={() => setInterruptedAI(true)}/>} {interruptedAI && <p role="status">{t('Die Beobachtung änderte sich während der KI-Anfrage. Daten können bereits übertragen worden sein. Kein Ergebnis übernommen.')}</p>}</td>
     </tr>;
 }
 // Fixed, reviewed source documentation only. Never derive a link from a target or status.
@@ -151,9 +154,12 @@ const reasonHelp: Partial<Record<ApplicationCheckRow['reason'], TranslationKey>>
     redirect_blocked: 'Weiterleitungen werden nicht verfolgt. Eine freigegebene, direkte Ressource konfigurieren.',
     http_status: 'HTTP-Fehler: Die Ressource antwortete außerhalb von 2xx. Dies ist keine vollständige Anwendungsdiagnose.',
 };
-function ApplicationChecksContent({ canManage }: { canManage: boolean }) {
+function ApplicationChecksContent({ canManage, canAnalyze }: { canManage: boolean; canAnalyze: boolean }) {
     const [locale] = useLocale(), entry = applicationCheckEntryCopy[locale];
     const { snapshot, elapsed, refreshing, locked, notice, refresh } = useApplicationChecks();
+    // Only one completed review is retained, independently of current rows.
+    const [aiHistory, setAIHistory] = useState<NetworkReviewHistory | null>(null);
+    useEffect(() => { if (locked || hasLogoutIntent()) setAIHistory(null); }, [locked]);
     const view = snapshot?.view;
     const help = view?.enabled ? [...new Set(view.items.map(row => reasonHelp[projectApplicationCheck(view, row, elapsed).reason]).filter((key): key is TranslationKey => key !== undefined))] : [];
     return <section className="panel application-checks" aria-labelledby="application-checks-heading">
@@ -172,7 +178,7 @@ function ApplicationChecksContent({ canManage }: { canManage: boolean }) {
         </>}
         {view?.enabled && <>
             <dl className="application-checks-timing"><div><dt>{t('Prüfintervall')}</dt><dd>{t('{0} s nach jedem Durchlauf', { 0: view.intervalSeconds })}</dd></div><div><dt>{t('Aktualitätsgrenze')}</dt><dd>{t('{0} s', { 0: view.maxAgeSeconds })}</dd></div></dl>
-            <div className="application-checks-table"><table role="table"><thead role="rowgroup"><tr role="row"><th id="application-checks-application" scope="col" role="columnheader">{t('Anwendung')}</th><th id="application-checks-result" scope="col" role="columnheader">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</th><th id="application-checks-certificate" scope="col" role="columnheader">{t('Blattzertifikat')}</th><th id="application-checks-observed" scope="col" role="columnheader">{t('Beobachtet')}</th></tr></thead><tbody role="rowgroup">{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed}/>)}</tbody></table></div>
+            <div className="application-checks-table"><table role="table"><thead role="rowgroup"><tr role="row"><th id="application-checks-application" scope="col" role="columnheader">{t('Anwendung')}</th><th id="application-checks-result" scope="col" role="columnheader">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</th><th id="application-checks-certificate" scope="col" role="columnheader">{t('Blattzertifikat')}</th><th id="application-checks-observed" scope="col" role="columnheader">{t('Beobachtet')}</th></tr></thead><tbody role="rowgroup">{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed} canAnalyze={canAnalyze} onAICompleted={setAIHistory}/>)}</tbody></table></div>
             <details className="application-checks-details"><summary>{t('Beobachtungsumfang')}</summary>
                 <p>{t('2xx ist ein HTTP-Status, kein Gesundheitsnachweis. Zertifikatsdaten stammen aus derselben Prüfung. Neu laden startet keine Prüfung.')}</p>
                 <p>{t('Intervall ab Rundenende. Veraltete Ergebnisse bleiben unbekannt; Erfassungszeiten bleiben erhalten.')}</p>
@@ -181,6 +187,7 @@ function ApplicationChecksContent({ canManage }: { canManage: boolean }) {
                 <p>{t('Ergebnisse bleiben im Arbeitsspeicher und erzeugen keine Alarme.')} <ConfigurationGuide/></p>
             </details>
         </>}
+        {canAnalyze && snapshot && !locked && !hasLogoutIntent() && aiHistory && <NetworkReviewHistoryView history={aiHistory} onDismiss={() => setAIHistory(null)}/>}
     </section>;
 }
 /** Development and signed-out pages must never issue this LAN-only read. */
@@ -190,5 +197,5 @@ export function ApplicationChecksPanel() {
     if (operator?.mode !== 'lan' || !operator.authenticated) return null;
     const scope = JSON.stringify([operator.expiresAt, operator.loginMode, operator.actorId, operator.capabilities]);
     const canManage = (operator.loginMode ?? 'shared') === 'shared' || operator.capabilities?.includes('manage_application_checks') === true;
-    return <ApplicationChecksContent key={scope} canManage={canManage}/>;
+    return <ApplicationChecksContent key={scope} canManage={canManage} canAnalyze={(operator.loginMode ?? 'shared') === 'shared'}/>;
 }

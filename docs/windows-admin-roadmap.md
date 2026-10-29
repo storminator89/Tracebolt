@@ -3,7 +3,7 @@
 The immediate goal is useful daily administration: finish the current inventory
 and fleet workflows, then expand job results, monitoring and controlled
 software/update management. Close remaining Admin data gaps alongside that work.
-Unsigned [Windows preview.2](windows-status.md#published-preview) is available
+Unsigned [Windows preview.3](windows-status.md#published-preview) is available
 for fresh x64 Read admin setup, with narrow hosted acceptance. Current source
 features and their separate release limits are described in
 [Windows status](windows-status.md).
@@ -94,10 +94,10 @@ The remaining data areas below can progress independently.
 
 ## Native acceptance and release
 
-Preview.2 passed three TLS-loopback Server 2025 x64 packaged-GUI cases:
+Preview.3 passed three TLS-loopback Server 2025 x64 packaged-GUI cases:
 install/service removal, hidden-input cancellation and pending-transport
 interruption. Service removal retains files, keys and state. Use its
-[attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+[attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
 for the exact artifacts and matching manager/frontend source.
 
 Next, validate the matching Setup, service, real Linux manager and shared

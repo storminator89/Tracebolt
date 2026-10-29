@@ -14,13 +14,14 @@ vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(
 const operator=vi.hoisted(()=>({insecureTestMode:false}));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator:()=>operator }));
 let current:EnrollmentList;
-const changed=vi.fn(),origin=()=>window.location.origin,creation=()=>macOSFixtureCreation(origin()),record=(...args:Parameters<typeof macOSFixtureRecord> extends [string,...infer R]?R:never)=>macOSFixtureRecord(origin(),...args);
+let fixtureManager=0;
+const changed=vi.fn(),origin=()=>window.location.origin,managerID=()=>`manager_${fixtureManager.toString(16).padStart(32,'0')}`,creation=()=>{const result=macOSFixtureCreation(origin());result.snapshot.binding.instanceID=managerID();result.bootstrap.managerInstanceId=managerID();return result;},record=(...args:Parameters<typeof macOSFixtureRecord> extends [string,...infer R]?R:never)=>{const result=macOSFixtureRecord(origin(),...args);result.binding.instanceID=managerID();return result;};
 function select(platform:'linux'|'windows'|'darwin'){fireEvent.change(screen.getByRole('combobox',{name:/Operating system|Betriebssystem/}),{target:{value:platform}});}
 async function macOS(){render(<EnrollmentSection onChanged={changed} onDevice={()=>{}} deviceIds={[]}/>);await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh enrollment status'})).toBeEnabled());select('darwin');await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh enrollment status'})).toBeEnabled());}
 async function add(){await macOS();fireEvent.click(screen.getByRole('button',{name:'Add device'}));return screen.getByRole('dialog',{name:'Add device'});}
 async function create(){vi.mocked(mutate).mockResolvedValue(creation());const dialog=await add();fireEvent.click(within(dialog).getByRole('button',{name:'Create invitation'}));await within(dialog).findByLabelText('One-time invitation secret');return dialog;}
 async function review(item:EnrollmentSnapshot){current=macOSFixtureList([item]);await macOS();fireEvent.click(screen.getByRole('button',{name:/Invitations/}));fireEvent.click(screen.getByRole('button',{name:`Review invitation ${invitation}`}));return screen.getByRole('dialog',{name:'Review invitation'});}
-beforeEach(()=>{jsdom.reconfigure({url:'https://localhost/'});setLocale('en',false);operator.insecureTestMode=false;current=macOSFixtureList();changed.mockReset();localStorage.clear();sessionStorage.clear();vi.mocked(request).mockReset().mockImplementation(async path=>structuredClone(path==='/macos/enrollment'?current:{...macOSFixtureList(),platforms:['linux']}));vi.mocked(mutate).mockReset();});
+beforeEach(()=>{fixtureManager++;jsdom.reconfigure({url:'https://localhost/'});setLocale('en',false);operator.insecureTestMode=false;current=macOSFixtureList();changed.mockReset();localStorage.clear();sessionStorage.clear();vi.mocked(request).mockReset().mockImplementation(async path=>structuredClone(path==='/macos/enrollment'?current:{...macOSFixtureList(),platforms:['linux']}));vi.mocked(mutate).mockReset();});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();jsdom.reconfigure({url:'https://localhost/'});});
 
 describe('macOS isolated TLS/basic contract',()=>{

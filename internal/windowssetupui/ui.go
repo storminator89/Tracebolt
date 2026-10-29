@@ -31,11 +31,14 @@ var (
 // when a validated public bootstrap explicitly selects isolated HTTP-test.
 type Config struct {
 	Version, SourceCommit, PayloadSHA256, Architecture, Disclosure string
-	HTTPDisclosure                                                 string
-	AutomaticRenewalDisclosure                                     string
-	ReadAdminDisclosure, ReadAdminHTTPDisclosure                   string
-	ReadAdminSummary, ReadAdminHTTPSummary                         string
-	concise                                                        bool
+	// InitialPublicBootstrap is optional public-only enrollment configuration.
+	// It is previewed exactly like a selected file and grants no consent.
+	InitialPublicBootstrap                       []byte
+	HTTPDisclosure                               string
+	AutomaticRenewalDisclosure                   string
+	ReadAdminDisclosure, ReadAdminHTTPDisclosure string
+	ReadAdminSummary, ReadAdminHTTPSummary       string
+	concise                                      bool
 }
 
 // TrustPreview contains only validated public bootstrap identity and trust.
@@ -160,6 +163,23 @@ func (f *flow) httpApproved() bool {
 
 func previewAllowed(c Config, t TrustPreview) bool {
 	return validTrust(t) && (!t.HTTPTest || validDisclosure(c.HTTPDisclosure)) && (!t.AutomaticRenewal || validDisclosure(c.AutomaticRenewalDisclosure))
+}
+
+// selectInitialBootstrap applies the same public preview and review boundary as
+// manual selection. A present but invalid embedded bootstrap fails closed.
+func selectInitialBootstrap(f *flow, c Config, h Hooks) error {
+	if c.InitialPublicBootstrap == nil {
+		return nil
+	}
+	if len(c.InitialPublicBootstrap) == 0 || len(c.InitialPublicBootstrap) > maxBootstrapBytes || h.Preview == nil {
+		return ErrConfiguration
+	}
+	data := append([]byte(nil), c.InitialPublicBootstrap...)
+	preview, err := h.Preview(append([]byte(nil), data...))
+	if err != nil || !previewAllowed(c, preview) {
+		return ErrConfiguration
+	}
+	return f.selectBootstrap(data, preview)
 }
 
 func (f *flow) begin(kind operation, uninstallConfirmed bool) bool {
@@ -323,7 +343,7 @@ func reviewText(c Config, t TrustPreview) string {
 
 const installCompleted = "Service start requested. First report and startup after reboot remain unverified."
 const uninstallCompleted = "Service removal completed. Installed files, identity and state are retained. Manager identity has not been revoked."
-const interruptedMessage = "The operation did not complete. Durable changes may exist; files, identity and state are retained. Inspect the retained state before any further action. This wizard will not retry or reset it."
+const interruptedMessage = "The operation did not complete. Review the reported phase before any further action. Existing files, identity and state are retained. This wizard will not retry or reset it."
 
 func readAdminAvailable(c Config, h Hooks) bool {
 	return validDisclosure(c.ReadAdminDisclosure) && validDisclosure(c.ReadAdminHTTPDisclosure) && validDisclosure(c.ReadAdminSummary) && validDisclosure(c.ReadAdminHTTPSummary) && h.InstallReadAdmin != nil

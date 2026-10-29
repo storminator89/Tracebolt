@@ -49,7 +49,8 @@ class CurrentPublisherTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / "docs").mkdir()
         for name in p.GUIDES:
-            (self.root / "docs" / name).write_text("Inert current fixture guide.\n")
+            # Do not let Windows text-mode newline translation invalidate fixtures.
+            (self.root / "docs" / name).write_bytes(b"Inert current fixture guide.\n")
         self.request = f.request_fixture()
         pin = mock.patch.object(p, "ACCEPTED_SOURCE_TREE", TREE)
         pin.start()

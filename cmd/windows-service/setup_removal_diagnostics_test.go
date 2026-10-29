@@ -87,7 +87,7 @@ func TestRemovalFailureEveryStepPreservesCauseAndMutationCounts(t *testing.T) {
 			if strings.HasPrefix(failure, "stop") && deleteCalls != 0 {
 				t.Fatal("delete crossed rejected stop")
 			}
-			text := setupRemovalFailureText(err) + "\r\n\r\n" + "The operation did not complete. Durable changes may exist; files, identity and state are retained. Inspect the retained state before any further action. This wizard will not retry or reset it."
+			text := setupRemovalFailureText(err) + "\r\n\r\n" + "The operation did not complete. Review the reported phase before any further action. Existing files, identity and state are retained. This wizard will not retry or reset it."
 			stage, reason, valid := setupgate.ParseRemovalFailure(text)
 			if !valid || stage != "uninstall-failure-"+failure || reason != "failed" || strings.Contains(text, "private") {
 				t.Fatal("finite failure lost or leaked")

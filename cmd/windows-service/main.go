@@ -54,6 +54,9 @@ type request struct {
 type operation func(context.Context, request, io.Writer, io.Writer) (any, error)
 
 func run(ctx context.Context, args []string, out, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "--read-admin-recover" {
+		return runReadAdminContinuation(ctx, args[1:], out, stderr, nativeReadAdminContinuation)
+	}
 	if len(args) > 0 && args[0] == "--background-updates-activate" {
 		return runBackgroundUpdateActivate(ctx, args[1:], out, stderr)
 	}
@@ -195,7 +198,7 @@ func run(ctx context.Context, args []string, out, stderr io.Writer) int {
 func runWith(ctx context.Context, args []string, out, stderr io.Writer, perform operation) int {
 	flags := flag.NewFlagSet("windows-service", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	names := []string{"user-software-preview", "user-software-enable", "user-software-disable", "software-history-preview", "software-history-enable", "software-history-disable", "network-context-preview", "network-context-enable", "network-context-disable", "full-processes-preview", "full-processes-enable", "full-processes-disable", "read-admin-preview", "read-admin-enable", "session-context-preview", "session-context-enable", "session-context-disable", "security-posture-preview", "security-posture-enable", "security-posture-disable", "patch-context-preview", "patch-context-enable", "patch-context-disable", "adapter-context-preview", "adapter-context-enable", "adapter-context-disable", "full-software-preview", "full-software-enable", "full-software-disable", "full-services-preview", "full-services-enable", "full-services-disable", "plan", "inspect", "install", "enroll", "start", "stop", "restart", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable", "process-metrics-preview", "process-metrics-enable", "process-metrics-disable", "network-preview", "network-enable", "network-disable", "service-startup-preview", "service-startup-enable", "service-startup-disable", "updates-preview", "updates-enable", "updates-disable", "event-content-preview", "event-content-enable", "event-content-disable", "event-history-preview", "event-history-enable", "event-history-disable"}
+	names := []string{"read-admin-recovery-status", "user-software-preview", "user-software-enable", "user-software-disable", "software-history-preview", "software-history-enable", "software-history-disable", "network-context-preview", "network-context-enable", "network-context-disable", "full-processes-preview", "full-processes-enable", "full-processes-disable", "read-admin-preview", "read-admin-enable", "session-context-preview", "session-context-enable", "session-context-disable", "security-posture-preview", "security-posture-enable", "security-posture-disable", "patch-context-preview", "patch-context-enable", "patch-context-disable", "adapter-context-preview", "adapter-context-enable", "adapter-context-disable", "full-software-preview", "full-software-enable", "full-software-disable", "full-services-preview", "full-services-enable", "full-services-disable", "plan", "inspect", "install", "enroll", "start", "stop", "restart", "uninstall", "run-service", "events-preview", "events-enable", "events-disable", "volumes-preview", "volumes-enable", "volumes-disable", "process-metrics-preview", "process-metrics-enable", "process-metrics-disable", "network-preview", "network-enable", "network-disable", "service-startup-preview", "service-startup-enable", "service-startup-disable", "updates-preview", "updates-enable", "updates-disable", "event-content-preview", "event-content-enable", "event-content-disable", "event-history-preview", "event-history-enable", "event-history-disable"}
 	modes := map[string]*bool{}
 	for _, n := range names {
 		modes[n] = flags.Bool(n, false, "")
@@ -557,6 +560,8 @@ func writeLifecycleResult(out io.Writer, result any) error {
 }
 
 func usage(out io.Writer) {
+	fmt.Fprintln(out, "Source-only same-identity Read admin recovery: --read-admin-recover plans only; apply additionally requires --apply --approve sha256:<exact plan digest> --acknowledge-read-admin-recovery. TLS, original deadline, committed claim, pristine extension roots and exact disabled owned service are mandatory. One attempt, no reset or invitation; packaged native acceptance remains separate.")
+	fmt.Fprintln(out, "Read-only interrupted current Read admin diagnostic: --read-admin-recovery-status. Provisional protected-file snapshot only; no resume, enrollment, grants or service changes. Run outside security-software isolation; no recovery authority follows.")
 	fmt.Fprintln(out, "Separate selected service control provisioning: --service-actions-provision --policy-file <reviewed policy> --broker-file <matching broker.exe> --artifact-manifest <public manifest>. Read-only plan first; --apply --approve <exact plan digest> --acknowledge-service-control is separate local consent. Broker remains disabled and observer stopped. No target action.")
 	fmt.Fprintln(out, "Fresh HTTPS renewable bootstrap only: add --automatic-certificate-renewal. "+enrollmentclient.AutomaticRenewalPrivacy)
 	fmt.Fprintln(out, "One-time existing-agent read-admin consent: --read-admin-preview; --read-admin-enable --apply --twelve-read-admin-scopes. Compatible receipt-owned installed binary and stopped activated inventory service required. HTTP-test also requires --insecure-http-test. No binary upgrade, repair, service start, service control, event-message content or cached WUA inspection is included.")

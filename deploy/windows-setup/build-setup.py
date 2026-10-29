@@ -104,7 +104,7 @@ def package_manifest(version: str, source: str, arch: str, service: bytes) -> di
 
 
 def build(root: Path, output: Path, version: str, source: str, arches: list[str], go: str,
-          snapshot: bool = False, rebuild: bool = True) -> dict:
+          snapshot: bool = False, rebuild: bool = True, public_bootstrap: bytes | None = None) -> dict:
     resources.version_parts(version)
     root = root.resolve()
     output = output.absolute()
@@ -112,6 +112,8 @@ def build(root: Path, output: Path, version: str, source: str, arches: list[str]
             "Output must be a new, canonical directory outside the checkout.")
     require(output.parent.is_dir(), "Output parent directory does not exist.")
     require(arches and len(set(arches)) == len(arches) and all(a in resources.MACHINES for a in arches), "Architecture selection rejected.")
+    require(public_bootstrap is None or 0 < len(public_bootstrap) <= 64 << 10,
+            "Public bootstrap is empty or exceeds 64 KiB.")
     source_kind = git_source(root, source, snapshot)
     inputs, contents = source_inputs(root)
     input_document = {"schemaVersion": "tracebolt.windows-setup-source-inputs.v1", "files": inputs}
@@ -135,6 +137,15 @@ def build(root: Path, output: Path, version: str, source: str, arches: list[str]
             destination = work / rel
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(raw)
+        if public_bootstrap is not None:
+            # The same Go public-only parser used by the client rejects unknown
+            # fields, secret material and invalid trust before embedding bytes.
+            run([go, "run", "-trimpath", "-buildvcs=false", "-mod=readonly",
+                 "./deploy/windows-setup/verify-bootstrap"], work, env=host_env,
+                input=public_bootstrap, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            bootstrap_path = work / "cmd/windows-service/setup_payload/public-bootstrap.txt"
+            bootstrap_path.parent.mkdir(parents=True, exist_ok=True)
+            bootstrap_path.write_bytes(public_bootstrap)
         assets, checks = {}, {}
         for arch in arches:
             env = isolated_environment(arch)
@@ -179,6 +190,8 @@ def build(root: Path, output: Path, version: str, source: str, arches: list[str]
                     # strict manifest, size, PE-machine and digest verification.
                     require((payload / "service.exe").read_bytes() in raw and (payload / "manifest.json").read_bytes() in raw,
                             "Setup does not embed the exact reviewed service/manifest payload.")
+                    if public_bootstrap is not None:
+                        require(public_bootstrap in raw, "Setup does not embed the validated public bootstrap bytes.")
                 checks[names[role]]["repeatBuildIdentical"] = rebuild
             syso.unlink()
         # A changing checkout must never be described as the captured revision.
@@ -195,6 +208,9 @@ def build(root: Path, output: Path, version: str, source: str, arches: list[str]
                     "goVersion": actual_go, "architectures": arches, "authenticode": "unsigned",
                     "distributionStatus": "source-candidate-not-released", "nativeExecution": False,
                     "repeatBuildIdentical": rebuild, "assets": assets, "peChecks": checks}
+        if public_bootstrap is not None:
+            metadata["distributionStatus"] = "personalized-source-candidate-not-released"
+            metadata["publicBootstrapSHA256"] = sha256(public_bootstrap)
         (deliver / "build-manifest.json").write_bytes(canonical_json(metadata))
         sums = "".join(f"{sha256(p.read_bytes())}  {p.name}\n" for p in sorted(deliver.iterdir(), key=lambda p: p.name))
         (deliver / "SHA256SUMS").write_text(sums, encoding="ascii", newline="\n")
@@ -213,11 +229,20 @@ def main() -> None:
     parser.add_argument("--arch", action="append", choices=sorted(resources.MACHINES), help="Default: build amd64 and arm64.")
     parser.add_argument("--go", default="go", help="Exact pinned Go toolchain executable.")
     parser.add_argument("--source-snapshot", action="store_true", help="Local candidate only: supplied commit is the base, not a claim that changed source is committed.")
+    parser.add_argument("--public-bootstrap", type=Path, help="Optional public-only invitation configuration. Never provide an invitation secret.")
     # Deliberately no signing, publication, install, launch, or skip-verification
     # switch. The two repeated builds are part of each normal candidate build.
     args = parser.parse_args()
+    bootstrap = None
+    if args.public_bootstrap is not None:
+        info = args.public_bootstrap.lstat()
+        require(stat.S_ISREG(info.st_mode) and not args.public_bootstrap.is_symlink() and 0 < info.st_size <= 64 << 10,
+                "Public bootstrap must be a bounded regular file.")
+        with args.public_bootstrap.open("rb") as stream:
+            bootstrap = stream.read((64 << 10) + 1)
+        require(len(bootstrap) == info.st_size, "Public bootstrap changed or exceeds 64 KiB.")
     result = build(HERE.parent.parent, args.output, args.version, args.source_commit,
-                   args.arch or ["amd64", "arm64"], args.go, snapshot=args.source_snapshot)
+                   args.arch or ["amd64", "arm64"], args.go, snapshot=args.source_snapshot, public_bootstrap=bootstrap)
     print("Unsigned Setup candidates built and repeated bytes verified; no Setup/service image was run or release published.")
     print("Source kind: " + result["sourceKind"] + "; source input SHA-256: " + result["sourceInputsSHA256"])
 

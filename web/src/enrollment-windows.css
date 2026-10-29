@@ -1,4 +1,22 @@
 .enrollment-platform-picker { display: flex; align-items: center; gap: 10px; padding: 16px 20px 0; color: var(--secondary); font-size: 11px; }
 .enrollment-platform-picker select { color: var(--text); background: var(--panel-soft); border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 10px; font: inherit; }
 .enrollment-windows-install p, .enrollment-windows-http p { line-height: 1.55; }
+.enrollment-windows-prepare { margin: 16px 0; padding: 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel-soft); }
+.enrollment-windows-prepare p, .enrollment-windows-install li { line-height: 1.55; }
+.enrollment-windows-prepare h3 { margin-top: 0; }
+.enrollment-windows-downloads { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.enrollment-windows-file { display: grid; gap: 6px; margin: 12px 0 6px; }
+.enrollment-windows-file input { font: inherit; max-width: 100%; }
+.enrollment-windows-prepare small { color: var(--secondary); }
+.enrollment-windows-prepare code { overflow-wrap: anywhere; }
+.enrollment-windows-digest { display: block; user-select: all; }
+.enrollment-windows-install ol { padding-left: 22px; }
+.enrollment-windows-install li + li { margin-top: 8px; }
+.enrollment-approvals { border-top: 1px solid var(--line); }
+.enrollment-approvals-heading { display: flex; align-items: baseline; gap: 10px; padding: 15px 20px 0; }
+.enrollment-approvals-heading h3 { margin: 0; font-size: 13px; }
+.enrollment-approvals-heading span, .enrollment-approvals-note { color: var(--secondary); font-size: 11px; }
+.enrollment-approvals-note { margin: 0; padding: 10px 20px 14px; line-height: 1.55; }
+.enrollment-approval-times { display: flex; flex-wrap: wrap; gap: 3px 14px; color: var(--secondary); font-size: 11px; line-height: 1.5; }
+@media (max-width: 760px) { .enrollment-approvals-heading { padding: 15px 17px 0; } .enrollment-approvals-note { padding: 10px 17px 14px; font-size: 12px; } }
 @media (max-width: 760px) { .enrollment-platform-picker { padding: 16px 17px 0; } }

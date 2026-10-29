@@ -18,9 +18,16 @@ type endpointPolicy struct {
 	host     string
 	port     string
 	loopback bool
+	lan      bool
 }
 
 func parseEndpoint(base string, allowed []string) (endpointPolicy, error) {
+	return parseEndpointWithLAN(base, allowed, "")
+}
+
+// lanOrigin is a separately approved exact literal RFC1918 IPv4 HTTPS origin.
+// It never widens the public allowlist or makes DNS/private hostnames valid.
+func parseEndpointWithLAN(base string, allowed []string, lanOrigin string) (endpointPolicy, error) {
 	bad := func() (endpointPolicy, error) { return endpointPolicy{}, ErrInvalidConfig }
 	if base == "" || len(base) > 512 || strings.TrimSpace(base) != base || strings.ContainsAny(base, "\\%\r\n\t") || len(allowed) > 16 {
 		return bad()
@@ -53,7 +60,15 @@ func parseEndpoint(base string, allowed []string) (endpointPolicy, error) {
 	}
 	origin := u.Scheme + "://" + u.Host
 	local := u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
-	if !local {
+	lan := false
+	if lanOrigin != "" {
+		ip, err := netip.ParseAddr(u.Hostname())
+		if err != nil || !ip.Is4() || !ip.IsPrivate() || ip.String() != u.Hostname() || u.Scheme != "https" || u.Port() == "" || origin != lanOrigin || local || len(allowed) != 0 {
+			return bad()
+		}
+		lan = true
+	}
+	if !local && !lan {
 		if u.Scheme != "https" {
 			return bad()
 		}
@@ -93,7 +108,7 @@ func parseEndpoint(base string, allowed []string) (endpointPolicy, error) {
 		}
 	}
 	u.Path = path + "/chat/completions"
-	return endpointPolicy{url: u.String(), origin: origin, host: u.Hostname(), port: port, loopback: local}, nil
+	return endpointPolicy{url: u.String(), origin: origin, host: u.Hostname(), port: port, loopback: local, lan: lan}, nil
 }
 
 func validHost(host string) bool {
@@ -153,6 +168,9 @@ type lookupIPs func(context.Context, string, string) ([]netip.Addr, error)
 // consulted again by the dialer, preventing resolve/check/dial rebinding gaps.
 func (p endpointPolicy) resolveTarget(ctx context.Context, lookup lookupIPs) (string, error) {
 	if p.loopback {
+		return net.JoinHostPort(p.host, p.port), nil
+	}
+	if p.lan {
 		return net.JoinHostPort(p.host, p.port), nil
 	}
 	var ips []netip.Addr

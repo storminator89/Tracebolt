@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, hasPendingAPIRequests, request } from './api';
+import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, hasPendingAPIRequests, mutate, request } from './api';
 import { LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { ApplicationChecksPanel } from './application-checks';
 import { applicationNow, applicationView } from './application-checks-fixtures';
@@ -9,24 +9,91 @@ import { APPLICATION_CHECKS_BYTES } from './application-checks-types';
 import type { ApplicationChecksViewV2 } from './application-checks-types';
 import { setLocale } from './i18n';
 
-vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), hasPendingAPIRequests: vi.fn(), request: vi.fn() }));
+vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), hasPendingAPIRequests: vi.fn(), request: vi.fn(), mutate: vi.fn() }));
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 const operator = { mode: 'lan' as const, authenticated: true, expiresAt: '2026-10-06T14:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
 const flush = () => act(async () => {}), advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const refresh = () => screen.getByRole('button', { name: 'Reload application status' });
 const panel = () => screen.getByRole('region', { name: 'Application checks' });
 const successful = () => document.querySelectorAll('.application-ok, .application-tls-valid, .application-tls-expiring, .application-tls-expired');
-const row = (id: string) => screen.getByText(id).closest('tr')!;
+const row = (id: string) => within(screen.getByRole('table')).getByText(id).closest('tr')!;
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { resolve, promise }; }
 async function start() { const mounted = render(<ApplicationChecksPanel/>); await flush(); return mounted; }
 beforeEach(() => {
     vi.useFakeTimers(); vi.setSystemTime(applicationNow); localStorage.clear(); sessionStorage.clear(); setLocale('en', false);
     vi.spyOn(document, 'hasFocus').mockReturnValue(true); vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
-    vi.mocked(useOperator).mockReturnValue(operator); vi.mocked(hasPendingAPIRequests).mockReset().mockReturnValue(false); vi.mocked(request).mockReset().mockResolvedValue(applicationViewV2());
+    vi.mocked(useOperator).mockReturnValue(operator); vi.mocked(hasPendingAPIRequests).mockReset().mockReturnValue(false); vi.mocked(request).mockReset().mockResolvedValue(applicationViewV2()); vi.mocked(mutate).mockReset();
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('compact mixed-kind retained observations', () => {
+    async function completedReview() {
+        const original = applicationDNSRow();
+        const p = { schemaVersion: 'tracebolt.ai-network-review-preview.v1', checkId: original.id, kind: original.kind, state: original.state, reason: original.reason, observedAt: original.observedAt, validUntil: '2026-10-06T12:01:00Z', snapshotToken: 'opaque', configRevision: 'rev', baseURL: 'https://10.6.1.75:8443/v1', model: 'fixture-model' };
+        const result = { schemaVersion: 'tracebolt.ai-network-review-result.v1', checkId: original.id, snapshotToken: 'opaque', configRevision: 'rev', result: { schemaVersion: 'tracebolt.analysis.v1', rootCauseConfirmed: false, ai: { status: 'completed', findings: { hypotheses: [{ statement: 'Earlier hypothesis' }], counterevidence: [], missingData: [] }, nextSteps: [] } } };
+        vi.mocked(mutate).mockResolvedValueOnce(p).mockResolvedValueOnce(result); const mounted = await start();
+        fireEvent.click(within(row(original.id)).getByRole('button', { name: 'Review AI analysis' })); await flush();
+        fireEvent.click(screen.getByRole('checkbox', { name: /I approve sending this observation/ })); fireEvent.click(screen.getByRole('button', { name: 'Analyze now' })); await flush();
+        return { original, mounted };
+    }
+    it('keeps the completed review separate as a historical snapshot after a changed observation and reused label', async () => {
+        const { original } = await completedReview();
+        let history = screen.getByRole('region', { name: 'Earlier AI analysis in this session' });
+        expect(history).toHaveTextContent('not a statement about the current check'); expect(history).toHaveTextContent('Earlier hypothesis');
+        expect(history).toHaveTextContent('dns_resolved'); expect(history).toHaveTextContent(original.observedAt); expect(history).toHaveTextContent('fixture-model');
+        expect(row(original.id)).not.toHaveTextContent('Earlier hypothesis');
+        // A TCP check may use the same display ID after configuration changes.
+        vi.mocked(request).mockResolvedValue(applicationViewV2([{ ...applicationTCPRow(), id: original.id }])); fireEvent.click(refresh()); await flush();
+        history = screen.getByRole('region', { name: 'Earlier AI analysis in this session' });
+        expect(row(original.id)).toHaveTextContent('TCP'); expect(row(original.id)).not.toHaveTextContent('Earlier hypothesis');
+        expect(history).toHaveTextContent('Earlier hypothesis'); expect(history).toHaveTextContent('DNS'); expect(history).toHaveTextContent('dns_resolved');
+        expect(history).toHaveTextContent('may now refer to a different configuration'); expect(mutate).toHaveBeenCalledTimes(2);
+        act(() => setLocale('de', false)); expect(screen.getByRole('region', { name: 'Frühere KI-Analyse dieser Sitzung' })).toHaveTextContent('keine Aussage über die aktuelle Prüfung');
+        fireEvent.click(screen.getByRole('button', { name: 'Frühere Analyse schließen' })); expect(screen.queryByText('Earlier hypothesis')).toBeNull();
+    });
+    it('retains an explicitly historical result while the current observation becomes stale and clears it on logout', async () => {
+        await completedReview(); vi.mocked(hasPendingAPIRequests).mockReturnValue(true); await advance(81000);
+        expect(panel()).toHaveTextContent('Unknown · stale'); expect(screen.getByRole('region', { name: 'Earlier AI analysis in this session' })).toHaveTextContent('Earlier hypothesis');
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); await flush(); expect(screen.queryByText('Earlier hypothesis')).toBeNull();
+        expect(screen.queryByRole('region', { name: 'Earlier AI analysis in this session' })).toBeNull();
+    });
+    it('keeps only the latest completed result and drops it when the panel is recreated', async () => {
+        await completedReview(); const tcp = applicationTCPRow();
+        const p = { schemaVersion: 'tracebolt.ai-network-review-preview.v1', checkId: tcp.id, kind: tcp.kind, state: tcp.state, reason: tcp.reason, observedAt: tcp.observedAt, validUntil: '2026-10-06T12:01:00Z', snapshotToken: 'second', configRevision: 'rev', baseURL: 'https://10.6.1.75:8443/v1', model: 'second-model' };
+        const result = { schemaVersion: 'tracebolt.ai-network-review-result.v1', checkId: tcp.id, snapshotToken: 'second', configRevision: 'rev', result: { schemaVersion: 'tracebolt.analysis.v1', rootCauseConfirmed: false, ai: { status: 'completed', findings: { hypotheses: [{ statement: 'Second hypothesis' }], counterevidence: [], missingData: [] }, nextSteps: [] } } };
+        vi.mocked(mutate).mockResolvedValueOnce(p).mockResolvedValueOnce(result);
+        fireEvent.click(within(row(tcp.id)).getByRole('button', { name: 'Review AI analysis' })); await flush();
+        fireEvent.click(screen.getByRole('checkbox', { name: /I approve sending this observation/ })); fireEvent.click(screen.getByRole('button', { name: 'Analyze now' })); await flush();
+        expect(screen.queryByText('Earlier hypothesis')).toBeNull(); expect(screen.getByRole('region', { name: 'Earlier AI analysis in this session' })).toHaveTextContent('Second hypothesis');
+        cleanup(); await start(); expect(screen.queryByText('Second hypothesis')).toBeNull(); expect(mutate).toHaveBeenCalledTimes(4);
+    });
+    it('clears historical results when the operator session changes', async () => {
+        const { mounted } = await completedReview(); expect(screen.getByText('Earlier hypothesis')).toBeInTheDocument();
+        vi.mocked(useOperator).mockReturnValue({ ...operator, actorId: 'new-operator', expiresAt: '2026-10-06T15:00:00Z' });
+        mounted.rerender(<ApplicationChecksPanel/>); await flush(); expect(screen.queryByText('Earlier hypothesis')).toBeNull();
+    });
+    it('discards and aborts an in-flight review when the original row changes', async () => {
+        const original = applicationDNSRow(), held = deferred<unknown>();
+        vi.mocked(mutate).mockReturnValue(held.promise); await start();
+        fireEvent.click(within(row(original.id)).getByRole('button', { name: 'Review AI analysis' }));
+        const signal = vi.mocked(mutate).mock.calls[0][2]!;
+        vi.mocked(request).mockResolvedValue(applicationViewV2([{ ...original, state: 'network_error', reason: 'dns_failed' }, applicationTCPRow()]));
+        fireEvent.click(refresh()); await flush(); expect(signal.aborted).toBe(true);
+        await act(async () => held.resolve({ schemaVersion: 'tracebolt.ai-network-review-preview.v1', checkId: original.id, kind: original.kind, state: original.state, reason: original.reason, observedAt: original.observedAt, validUntil: '2026-10-06T12:01:00Z', snapshotToken: 'opaque', configRevision: 'rev', baseURL: 'https://10.6.1.75:8443/v1', model: 'fixture' }));
+        expect(screen.queryByRole('dialog')).toBeNull(); expect(row(original.id)).toHaveTextContent('DNS failed'); expect(mutate).toHaveBeenCalledTimes(1);
+    });
+    it('aborts an in-flight provider request when the source row changes', async () => {
+        const original = applicationDNSRow(), held = deferred<unknown>();
+        const p = { schemaVersion: 'tracebolt.ai-network-review-preview.v1', checkId: original.id, kind: original.kind, state: original.state, reason: original.reason, observedAt: original.observedAt, validUntil: '2026-10-06T12:01:00Z', snapshotToken: 'opaque', configRevision: 'rev', baseURL: 'https://10.6.1.75:8443/v1', model: 'fixture' };
+        vi.mocked(mutate).mockResolvedValueOnce(p).mockReturnValueOnce(held.promise); await start();
+        fireEvent.click(within(row(original.id)).getByRole('button', { name: 'Review AI analysis' })); await flush();
+        fireEvent.click(screen.getByRole('checkbox', { name: /I approve sending this observation/ })); fireEvent.click(screen.getByRole('button', { name: 'Analyze now' }));
+        const signal = vi.mocked(mutate).mock.calls[1][2]!;
+        vi.mocked(request).mockResolvedValue(applicationViewV2([{ ...original, state: 'network_error', reason: 'dns_failed' }, applicationTCPRow()]));
+        fireEvent.click(refresh()); await flush(); expect(signal.aborted).toBe(true);
+        await act(async () => held.resolve({ schemaVersion: 'tracebolt.ai-network-review-result.v1', checkId: original.id, snapshotToken: 'opaque', configRevision: 'rev', result: { schemaVersion: 'tracebolt.analysis.v1', rootCauseConfirmed: false, ai: { status: 'completed', findings: { hypotheses: [{ statement: 'Old fixture finding' }], counterevidence: [], missingData: [] }, nextSteps: [] } } }));
+        expect(screen.queryByText('Old fixture finding')).toBeNull(); expect(screen.queryByRole('dialog')).toBeNull(); expect(row(original.id)).toHaveTextContent('Data may already have been sent. No result was retained.'); expect(mutate).toHaveBeenCalledTimes(2);
+    });
     it('separates HTTP/HTTPS, DNS resolution and TCP connection with neutral certificate cells', async () => {
         vi.mocked(request).mockResolvedValue(applicationViewV2([...applicationViewV2().items, applicationHTTPRow({ id: 'fixture-plain', targetScheme: 'http', tls: { state: 'not_applicable', expiresAt: null } })]));
         await start(); const content = panel();
@@ -45,7 +112,7 @@ describe('compact mixed-kind retained observations', () => {
         expect(content).toHaveTextContent('system resolution'); expect(content).toHaveTextContent('hosts, cache or search domains');
         expect(content).toHaveTextContent('Every returned address needs approval'); expect(content).toHaveTextContent('not a complete, authoritative DNS record');
         expect(content).toHaveTextContent('TCP connects to the IP, then closes.'); expect(content).toHaveTextContent('No data, TLS or proof of application health');
-        expect(content.querySelector('input,select')).toBeNull(); expect(within(content).getAllByRole('button')).toHaveLength(1);
+        expect(content.querySelector('input,select')).toBeNull(); expect(within(content).getAllByRole('button')).toHaveLength(3);
         expect(vi.mocked(request).mock.calls[0]).toEqual(['/application-checks/status', { signal: expect.any(AbortSignal), cache: 'no-store' }, APPLICATION_CHECKS_BYTES]);
     });
 
@@ -76,6 +143,7 @@ describe('compact mixed-kind retained observations', () => {
         vi.mocked(request).mockResolvedValue({ ...applicationViewV2(), items, maxAgeSeconds: 75 });
         await start(); expect(successful()).toHaveLength(0); expect(panel().querySelector('.application-expiry')).toBeNull();
         expect(panel()).not.toHaveTextContent('Resolved'); expect(panel()).not.toHaveTextContent('Connected'); expect(panel()).not.toHaveTextContent('No TLS');
+        expect(within(panel()).queryByRole('button', { name: 'Review AI analysis' })).toBeNull();
         expect(within(panel()).getAllByLabelText('Certificate is not part of this check')).toHaveLength(2);
         await advance(5000); expect(successful()).toHaveLength(0);
     });

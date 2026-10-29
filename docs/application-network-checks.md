@@ -105,6 +105,38 @@ The existing compact Overview panel supports both versions, shows DNS/TCP labels
 The dash means a certificate is outside this check; it does not imply TLS is
 absent on the target. Refresh remains an authenticated read of retained results.
 
+## Optional one-time AI review
+
+An authenticated shared administrator can review one fresh DNS or TCP result in
+Overview, inspect the configured provider and model, and explicitly approve a
+single transmission. Opening the review reads only the retained observation; it
+does not run another network check or contact the model. A separate unchecked
+confirmation is required for each model request. Existing health-summary or
+service-log AI approvals do not authorize this export.
+
+The model receives only the fixed check kind, bounded state and reason, original
+observation time, and fixed manager-side context. It receives no check ID,
+hostname, address, port, target URL, logs, device identity or free-form operator
+input. These fields still describe network behavior, and the selected provider
+can forward or retain data; locality must be verified independently. Results are
+unverified hypotheses, not confirmed causes or proof of device, application,
+DNS-authority or TLS health. No check or remedial action follows from them.
+
+The preview is tied to the current session, provider revision and exact source
+generation and observation. Its short-lived token is consumed for one attempt;
+there is no automatic retry. Expired, unavailable, unknown, replaced or changed
+observations cannot be submitted as current. A source, provider or session
+change during inference discards the response. Source and provider checks occur
+before the call without holding source locks during inference: a concurrent change
+after the final check can race with transmission, and bytes already sent cannot
+be recalled. The preview and result are held in memory; they do not create
+an incident or persistent AI scope. The dashboard can keep one completed review
+in memory while the authenticated page remains open. It is a historical snapshot
+with its original observation and provider, not an assessment of a later check.
+A reused check label does not establish that the target is the same. Signing out,
+changing sessions or reloading removes that browser-only result. An interrupted
+request has an uncertain outcome and requires a new review and explicit confirmation.
+
 ## Verification boundary
 
 Injected resolver/connection fixtures verify policy, zero DNS-target connections,

@@ -5,13 +5,19 @@ user installations; a published preview is not evidence of deployments. No
 migration or existing-binary upgrade plan is required for this increment.
 
 The fresh twenty-one-scope profile is available in unsigned x64
-[preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2).
-Follow its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+[preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3).
+Follow its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
 with matching reviewed manager/frontend source. Native acceptance covers only the
 Server 2025 packaged-Setup install/remove, hidden-input cancellation and interrupted
 transport subset. Complete provider access, real Linux-manager/shared-dashboard
 interoperability and native restart/reboot remain unproved; see [Windows status](windows-status.md).
 Publication does not authorize running an installer on any host.
+
+The current dashboard offers the pinned Setup download and an optional local
+file SHA-256 check **before** creating the ten-minute invitation. This checks
+public executable bytes only; it uploads nothing, grants no scopes and does not
+prove publisher trust or manager compatibility. Local collection approvals stay
+unchecked in Setup. See the [installation audit and shorter workflow](windows-installation-audit.md).
 
 ## Fresh Read admin, seven readable groups
 
@@ -78,7 +84,41 @@ allowlist, account change or AI/provider access is configured by this profile.
 
 Setup requires the existing supported platform/package and fixed protected-path
 preflight, a fresh inventory bootstrap, matching transport and a compatible
-manager. Its new bodyless public compatibility route is
+manager. Choose the public bootstrap from a regular file on a fixed or removable
+local drive, up to 64 KiB. CD/DVD, network paths and reparse traversal are rejected;
+copy the public file to an ordinary local folder such as Downloads first. This
+does not import global certificate trust or carry the invitation secret.
+
+The current **source candidate** can automatically select one public dashboard
+bootstrap next to the Setup executable on a fixed or removable local drive. Save
+the Setup and its downloaded `tracebolt-bootstrap-invite_<id>.json` together
+before launching Setup. Only one correctly named candidate is considered; its
+invitation ID must match the validated file. If multiple candidates exist, the
+file is missing, invalid or inaccessible, choose the intended file manually.
+Compare the selected invitation and trust values with the current manager
+invitation; a selected file does not prove that it is current or unexpired.
+All local approvals remain unchecked, and the hidden invitation prompt and manager
+device approval remain separate. This convenience is not in published preview.3;
+native packaged GUI acceptance is still required.
+
+The current dashboard source also exposes existing pending Windows invitation
+claims directly for review and provides separate organizational customer records.
+The [customer and approval scope](customer-records.md) explains why these records
+do not yet assign a customer to an enrollment or create a reusable installer.
+
+The separate source-only package builder can also embed one validated public
+invitation bootstrap into a newly built Setup using `--public-bootstrap <path>`.
+The resulting executable selects that configuration for review without a
+separate file on the endpoint. It is bound to the original single invitation:
+building does not extend its deadline, create a customer or permit reuse. The
+file must contain public configuration only; the secret still belongs solely in
+the hidden prompt. All local consent and manager fingerprint approval remain
+necessary. The build manifest records the public bootstrap digest and labels this
+an unsigned, unpublished personalized source candidate. Build and fixture checks
+are not packaged native installation acceptance. The published preview.3 and
+current dashboard do not provide this personalized installer.
+
+Its new bodyless public compatibility route is
 `/v1/windows/read-admin-setup-capabilities-v10`, with exact contract
 `fresh-twenty-one-read-admin-scopes-v1`. Historical v9/twenty-scope, v8/nineteen-scope and v7/eighteen-scope, v6/seventeen-scope, v5/sixteen-scope, v4/fifteen-scope,
 v3/fourteen-scope and v2/thirteen-scope advertisements remain exact. The
@@ -97,6 +137,25 @@ access during installation could not establish LocalService readability anyway.
 Providers may be absent, disabled or denied. Such sources stay unavailable or
 unknown; no provider is installed or enabled, and no ACL, privilege, token,
 account, firewall, network or Windows setting is changed to make a read succeed.
+
+### Compatibility failures before installation
+
+The current source checks manager compatibility before allocating the hidden
+invitation console or creating application files, a service, keys or scope grants.
+A failed check can mean a connection timeout, a TLS verification failure or an
+unexpected response/contract. It does not by itself prove that the manager needs
+an upgrade. Check connectivity **from the endpoint**, the selected origin and
+approved CA, then compare the manager and Setup contracts. Reachability from the
+operator's computer is not an endpoint connectivity test. Never bypass TLS or
+change transport to get past this check.
+
+The current source reports the proven pre-installation boundary explicitly and
+keeps the general completion message phase-neutral. Failures after provisioning,
+or without a proven phase, still require inspection of retained state; even a
+compatibility error at that point cannot establish that nothing changed. The
+wizard never retries or resets. These diagnostic changes are source-only and do
+not alter previously published Setup executables. Source tests and a successful
+public compatibility response do not establish native installation acceptance.
 
 The main service keeps LocalService and its existing SID/privilege contract.
 Defender passive/absent/denied and Firewall local configuration are not overall
