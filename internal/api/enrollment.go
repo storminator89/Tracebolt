@@ -56,6 +56,20 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 			}
 		}
 		response := map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": enrollmentservice.MaxRecords, "items": items, "serverNow": serverNow}
+		// Keep durable snapshots unchanged; this is an operator-only display hint.
+		views := make([]any, 0, len(items))
+		for _, item := range items {
+			if enrollmentstore.IsSelfRegistration(item) {
+				views = append(views, struct {
+					enrollmentstate.Snapshot
+					RegistrationMode string `json:"registrationMode"`
+				}{item, "rust-basic-self-registration"})
+			} else {
+				views = append(views, item)
+			}
+		}
+		response["items"] = views
+		response["selfRegistrationEnabled"] = h.enrollment != nil && h.enrollment.SelfClaimAvailable()
 		if h.enrollment != nil && enrollmentcrypto.ManagedCollectionProfile(h.enrollment.Binding().CollectionProfile) {
 			response["collectionProfile"] = h.enrollment.Binding().CollectionProfile
 			response["collectionPrivacy"] = "metadata_labels_may_be_sensitive"
@@ -236,6 +250,32 @@ func (h *operatorHandler) enrollmentClient(w http.ResponseWriter, r *http.Reques
 		fail(w, 400, "invalid_client_framing", "A bounded JSON request is required.")
 		return
 	}
+	if r.URL.Path == "/v2/enrollment/self-claim" || r.URL.Path == "/v2/enrollment/self-bootstrap" {
+		if !h.enrollment.SelfClaimAvailable() || h.insecureHTTPTest || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version < tls.VersionTLS13 {
+			fail(w, 404, "enrollment_unavailable", "Windows TLS self-registration is not configured.")
+			return
+		}
+		if r.URL.Path == "/v2/enrollment/self-bootstrap" {
+			var input struct {
+				InvitationID string `json:"invitationId"`
+			}
+			if !readObject(w, r, 1024, []string{"invitationId"}, &input) {
+				return
+			}
+			if !enrollmentcrypto.ValidID(input.InvitationID, "invite_") {
+				fail(w, 400, "invalid_enrollment_request", "Invitation identity is invalid.")
+				return
+			}
+			if !h.bootstrapAdmission.allow(r.RemoteAddr, h.enrollment.Now()) {
+				fail(w, 429, "enrollment_busy", "Enrollment is temporarily busy.")
+				return
+			}
+			bootstrap := h.enrollmentBootstrap
+			bootstrap.InvitationID = input.InvitationID
+			write(w, 200, bootstrap)
+			return
+		}
+	}
 	if strings.HasPrefix(r.URL.Path, "/v2/enrollment/renewal/") {
 		if h.insecureHTTPTest || r.TLS == nil || !r.TLS.HandshakeComplete || r.TLS.Version < tls.VersionTLS13 || h.enrollment.Binding().Profile != "tls" {
 			fail(w, 400, "renewal_tls_required", "Automatic renewal requires the fresh TLS identity profile.")
@@ -267,7 +307,7 @@ func (h *operatorHandler) enrollmentClient(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	switch r.URL.Path {
-	case "/v2/enrollment/claim", "/v2/enrollment/status", "/v2/enrollment/credential", "/v2/enrollment/activate":
+	case "/v2/enrollment/claim", "/v2/enrollment/self-claim", "/v2/enrollment/status", "/v2/enrollment/credential", "/v2/enrollment/activate":
 	default:
 		fail(w, 404, "not_found", "Enrollment route is unavailable.")
 		return
@@ -291,6 +331,8 @@ func (h *operatorHandler) enrollmentClient(w http.ResponseWriter, r *http.Reques
 	switch r.URL.Path {
 	case "/v2/enrollment/claim":
 		result, e = h.enrollment.Claim(r.Context(), envelope.Challenge, raw)
+	case "/v2/enrollment/self-claim":
+		result, e = h.enrollment.SelfClaim(r.Context(), envelope.Challenge, raw)
 	case "/v2/enrollment/status":
 		result, e = h.enrollment.Status(r.Context(), envelope.Challenge, raw)
 	case "/v2/enrollment/credential":

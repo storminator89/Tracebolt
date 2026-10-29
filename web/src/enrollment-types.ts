@@ -2,6 +2,7 @@ export const enrollmentStates = ['created','claimed_pending','approved','issuanc
 export type EnrollmentState = typeof enrollmentStates[number];
 export interface EnrollmentSnapshot {
   version: 'tracebolt.enrollment-state.v2';
+  registrationMode?: 'rust-basic-self-registration';
   binding: {instanceID:string;origin:string;profile:'tls'|'http-test';collectionProfile:string;issuerFingerprint:string};
   invitationID:string; createRequestID:string; platform:string; revision:number; state:EnrollmentState;
   createdAt:number; deadlineAt:number; updatedAt:number;
@@ -12,7 +13,7 @@ export interface EnrollmentSnapshot {
 }
 export type EnrollmentPlatform = 'linux' | 'windows' | 'darwin';
 export type EnrollmentCollectionProfile = 'basic-readonly-v1' | 'managed-operations-v1' | 'managed-operations-v2' | 'managed-operations-v3' | 'windows-inventory-v1' | 'macos-read-inventory-v1';
-export interface EnrollmentList {collectionProfile?:EnrollmentCollectionProfile;collectionPrivacy?:'metadata_labels_may_be_sensitive'|'package_source_metadata_may_be_sensitive'|'complete_system_inventory_metadata_may_be_sensitive'|'windows_inventory_metadata_may_be_sensitive'|'macos_inventory_metadata_may_be_sensitive';serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
+export interface EnrollmentList {selfRegistrationEnabled?:boolean;collectionProfile?:EnrollmentCollectionProfile;collectionPrivacy?:'metadata_labels_may_be_sensitive'|'package_source_metadata_may_be_sensitive'|'complete_system_inventory_metadata_may_be_sensitive'|'windows_inventory_metadata_may_be_sensitive'|'macos_inventory_metadata_may_be_sensitive';serverNow:string;schemaVersion:'tracebolt.enrollment-operator.v2';enabled:boolean;platforms:string[];recordLimit:number;items:EnrollmentSnapshot[]}
 export interface EnrollmentBootstrap {
  schemaVersion:'tracebolt.enrollment-bootstrap.v2'|'tracebolt.enrollment-bootstrap.renewable.v1';renewalPolicy?:'same-key-v1';managerInstanceId:string;profile:'tls'|'http-test';enrollmentOrigin:string;agentOrigin:string;collectionProfile:string;invitationId:string;serverCaPem:string;issuerRootPem:string;issuerPem:string;
 }
@@ -23,6 +24,7 @@ const time=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)
 export function terminal(state:EnrollmentState):boolean{return ['expired','canceled','rejected','revoked'].includes(state);}
 export function validSnapshot(value:unknown):value is EnrollmentSnapshot {
  if(!object(value)||value.version!=='tracebolt.enrollment-state.v2'||!text(value.invitationID)||!/^invite_[a-f0-9]{32}$/.test(value.invitationID)||!text(value.createRequestID)||!text(value.platform)||!Number.isSafeInteger(value.revision)||Number(value.revision)<1||!enrollmentStates.includes(value.state as EnrollmentState)||!time(value.createdAt)||!time(value.deadlineAt)||!time(value.updatedAt))return false;
+ if(value.registrationMode!==undefined&&(value.registrationMode!=='rust-basic-self-registration'||value.platform!=='windows'))return false;
  const b=value.binding,c=value.claim,a=value.approval,i=value.intent;
  if(!object(b)||!text(b.instanceID)||!text(b.origin)||!['tls','http-test'].includes(String(b.profile))||!text(b.collectionProfile)||!text(b.issuerFingerprint)||!object(c)||!text(c.claimID)||!text(c.keyFingerprint)||!text(c.comparisonCode)||!object(a)||!text(a.deviceID)||!object(i)||!text(i.deviceID)||!time(i.notAfter)||!object(value.issuance)||!object(value.activation)||!object(value.termination))return false;
  return true;

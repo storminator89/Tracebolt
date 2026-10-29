@@ -27,7 +27,7 @@ function record(state: EnrollmentState = 'created', revision = 1): EnrollmentSna
  };
 }
 function listing(items: EnrollmentSnapshot[] = []): EnrollmentList {
- return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['windows'], recordLimit: 25, collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive', items };
+ return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['windows'], recordLimit: 25, collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive', selfRegistrationEnabled:true, items };
 }
 function linuxListing(): EnrollmentList {
  return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['linux'], recordLimit: 25, items: [] };
@@ -232,5 +232,17 @@ describe('Linux installation command boundary', () => {
   expect(preparedEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)).toBeNull();
   expect(verifiedDownloadCommand(OFFICIAL_LINUX_BOOTSTRAP_PIN, response.bootstrap, response.snapshot, response.bootstrapSHA256)).toBeNull();
   expect(selectEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)).toBeNull();
+ });
+});
+
+
+describe('Windows tokenless Rust registration', () => {
+ it('labels pending automatic registration and retains unchecked fingerprint approval', async () => {
+  const item = {...record('claimed_pending',2), registrationMode:'rust-basic-self-registration' as const};
+  const dialog=await review(item);
+  expect(within(dialog).getByText(/automatic registration without an invitation token/)).toBeVisible();
+  expect(within(dialog).getByRole('button',{name:'Approve device'})).toBeDisabled();
+  expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
+  expect(screen.getByText(/Invitation tokens remain optional/)).toBeVisible();
  });
 });

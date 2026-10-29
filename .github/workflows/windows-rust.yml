@@ -1,0 +1,83 @@
+name: Rust Windows basic agent
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/windows-rust-basic']
+  pull_request:
+    paths:
+      - 'rust/windows-agent/**'
+      - 'deploy/windows-rust/**'
+      - 'tests/rustagent/**'
+      - '.github/workflows/windows-rust.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - working-directory: rust/windows-agent
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+          cargo run --locked --example wire_fixture > ../../tests/rustagent/fixture.json
+          cargo run --locked --example enrollment_fixture > ../../tests/rustagent/enrollment-fixture.json
+      - run: go test ./tests/rustagent ./internal/enrollmentstore ./internal/enrollmentservice ./internal/api
+        timeout-minutes: 12
+  windows-package:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Test and build unsigned package (no installation or native collection)
+        shell: pwsh
+        run: ./deploy/windows-rust/Build-Package.ps1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - name: Disposable Windows service acceptance
+        shell: pwsh
+        run: ./tests/rustagent/Run-NativeAcceptance.ps1 -Executable ./artifacts/windows-rust/tracebolt-windows-agent.exe
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tracebolt-rust-windows-x64-unsigned
+          path: artifacts/windows-rust.zip
+          if-no-files-found: error
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/windows-rust-basic'
+    needs: [contracts, windows-package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: tracebolt-rust-windows-x64-unsigned
+          path: release
+      - name: Publish tested unsigned Windows prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          unzip -q release/windows-rust.zip -d release/package
+          (cd release/package && sha256sum -c SHA256SUMS.txt)
+          gh release create v0.1.0-windows-rust-preview.1 \
+            release/windows-rust.zip \
+            release/package/tracebolt-windows-agent.exe \
+            release/package/SHA256SUMS.txt \
+            --target "$RELEASE_SHA" --prerelease \
+            --title 'Windows Rust basic agent — preview 1' \
+            --notes-file deploy/windows-rust/RELEASE-NOTES.md

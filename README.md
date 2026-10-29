@@ -23,6 +23,12 @@ source features and tested release coverage are listed separately below.
 
 ### In the current source
 
+- **Rust Windows basic agent:** a separate source candidate for CPU/RAM/system-drive
+  telemetry, mutual TLS reporting and a simple Windows service package. See the
+  [Rust agent guide](rust/windows-agent/README.md) for build/install steps,
+  fresh-identity prerequisites and pending native acceptance. It does not replace
+  the Go Read admin agent's full inventory or administration features.
+
 - **Redesigned workspace:** an operations overview for open cases, device
   observations and recent changes; **Devices → Inventory / Setup / Fleet tools**
   separates daily browsing from enrollment and fleet workflows. Search, filters,
