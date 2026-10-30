@@ -90,9 +90,13 @@ describe('Interrupted enrollment review mutations',()=>{
   current=listing([{...record(),revision:3,state:'approved'}]);
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Check status'})).toBeEnabled());
   fireEvent.click(within(dialog).getByRole('button',{name:'Check status'}));
-  await waitFor(()=>expect(within(dialog).queryByText(/last action is unconfirmed/)).not.toBeInTheDocument());
-  expect(screen.queryByText('Action not confirmed. Refresh status before making another decision.')).not.toBeInTheDocument();
-  expect(within(dialog).queryByRole('button',{name:'Approve device'})).not.toBeInTheDocument();
+  // Parent reconciliation and the dialog's revision effect settle separately.
+  // Require every original postcondition in the same eventual observation.
+  await waitFor(()=>{
+   expect(within(dialog).queryByText(/last action is unconfirmed/)).not.toBeInTheDocument();
+   expect(screen.queryByText('Action not confirmed. Refresh status before making another decision.')).not.toBeInTheDocument();
+   expect(within(dialog).queryByRole('button',{name:'Approve device'})).not.toBeInTheDocument();
+  });
   expect(mutate).toHaveBeenCalledTimes(1);
  });
  it('does not resolve uncertainty using a different key or an advanced pending revision',async()=>{
