@@ -83,6 +83,14 @@ export async function exerciseFleetGroupsMaintenanceEnd({page,expect,width,local
  for(const member of fixture.members)for(const target of member.targets){const current=state().view.members.flatMap(row=>row.targets).find(row=>row.key===target.key);if(target.key===selected[0].target.key){expect(current.revision).toBe(target.revision+1);expect(current.windows[0].endedAt===null).toBe(false);expect({...current.windows[0],endedAt:null}).toEqual(target.windows[0]);expect(current.windows.slice(1)).toEqual(target.windows.slice(1));}else expect(current).toEqual(target);}
  await expect(apply).toHaveCount(0);await verifyLayout();await capture('maintenance-end-results');await dialog.getByRole('button',{name:de?'Wartung schließen':'Close maintenance',exact:true}).click();
 }
+/** Mounted organizational panels may read their empty synthetic catalogues.
+ * This grants neither customer writes nor assignment/enrollment operations. */
+export function fleetGroupsOrganizationalRead(method,pathname,search,body,serverNow){
+ if(method!=='GET'||search!==''||body!==null)return null;
+ if(pathname==='/api/customers')return{schemaVersion:'tracebolt.customers.v1',customers:[]};
+ if(pathname==='/api/customer-windows-assignments')return{schemaVersion:'tracebolt.customer-windows-assignments.v1',serverNow,validUntil:new Date(Date.parse(serverNow)+30000).toISOString(),customers:[],devices:[],unavailableAssignments:0};
+ return null;
+}
 export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
  stage='login';failures=0;pending=0;await login(page);
  let groupRows=[],policies=new Map(),policyPosts=0,groupPosts=0,monitoring=null,monitoringPosts=0,maintenance=null,maintenancePosts=0,maintenanceBodies=[],maintenanceEndPosts=0,maintenanceEndBodies=[],maintenanceEndExpected=[],mode='normal',release=null,held=false;
@@ -91,6 +99,11 @@ export async function fleetGroupsBrowserCase({page,expect,base,login,shot}){
  const fulfill=(route,value,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(value)});
  const handle=async route=>{
   const req=route.request(),url=new URL(req.url());if(url.origin!==base){external.push('external');return route.abort('blockedbyclient');}
+  if(['/api/customers','/api/customer-windows-assignments'].includes(url.pathname)){
+   const session=await getSession(),view=fleetGroupsOrganizationalRead(req.method(),url.pathname,url.search,req.postData(),session.serverNow);
+   if(view)return fulfill(route,view);
+   unexpected.push('unexpected-organizational-route');return route.abort('blockedbyclient');
+  }
   if(url.pathname==='/api/overview'){
    assert.equal(req.method(),'GET');assert.equal(url.search,'');const response=await route.fetch({maxRedirects:0,timeout:5000});let value;try{assert.equal(response.status(),200);value=await response.json();}finally{await response.dispose();}
    const session=await getSession(),fixture=fleetGroupsBrowserFixture(session.serverNow,session.expiresAt);return fulfill(route,{...value,devices:fixture.metadata,stats:{...value.stats,totalDevices:3,healthyDevices:0,attentionDevices:0},generatedAt:session.serverNow});
@@ -280,7 +293,7 @@ export function fleetGroupsServiceChecksRoute({base,fixture,external,unexpected}
   if(url.pathname==='/api/auth/session')return reply(fixture.session);
   if(url.pathname==='/api/session')return reply({csrfToken:fixture.session.csrfToken});
   if(url.pathname==='/api/overview')return reply(fixture.overview);
-  if(url.pathname==='/api/customer-windows-assignments')return reply({schemaVersion:'tracebolt.customer-windows-assignments.v1',serverNow:fixture.session.serverNow,validUntil:new Date(Date.parse(fixture.session.serverNow)+30000).toISOString(),customers:[],devices:[],unavailableAssignments:0});
+  const organizational=fleetGroupsOrganizationalRead(method,url.pathname,url.search,raw,fixture.session.serverNow);if(organizational)return reply(organizational);
   if(url.pathname==='/api/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:fixture.session.serverNow,enabled:false,platforms:[],recordLimit:25,items:[]});
   if(url.pathname==='/api/fleet/identities')return reply({schemaVersion:'tracebolt.fleet-identities.v2',serverNow:fixture.session.serverNow,items:[]});
   if(url.pathname==='/api/fleet/groups'||url.pathname===`/api/fleet/groups/${fixture.view.groupId}`)return reply(fixture.groups);

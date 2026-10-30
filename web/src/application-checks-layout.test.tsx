@@ -51,7 +51,10 @@ describe('single responsive application table semantics', () => {
                 expect(cell.querySelectorAll('.application-cell-value')).toHaveLength(1);
             });
             expect(cells[2].querySelector('time')).toHaveAttribute('datetime', applicationNow);
-            expect(cells[2]).toHaveAccessibleName(locale === 'en' ? '0s ago' : 'vor 0 s');
+            expect(cells[2].querySelector('time')).toHaveTextContent(locale === 'en' ? /^0s ago$/ : /^vor 0 s$/);
+            const reviewName = locale === 'en' ? 'Review AI analysis' : 'KI-Analyse prüfen';
+            if (id === longId) expect(within(cells[2]).queryByRole('button', { name: reviewName })).toBeNull();
+            else expect(within(cells[2]).getByRole('button', { name: reviewName })).toBeEnabled();
         }
         expect(rowFor(longId).querySelectorAll('.application-id')).toHaveLength(1);
         expect(rowFor(longId).querySelectorAll('.application-expiry')).toHaveLength(1);

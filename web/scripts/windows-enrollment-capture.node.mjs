@@ -8,9 +8,9 @@ import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { assertPublicSafe, capturePublicPNG, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
+import { assertPublicSafe, capturePublicPNG, capture, captureMatrix, compile, prepareSyntheticCaptureClock, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
 import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG, visibilityControlCases, visibilityControlPhases, visibilityControlStage } from './windows-enrollment-contract.mjs';
-import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
+import { approvedBody, creation, csrf, invitation, now, secret } from './windows-enrollment-fixtures.mjs';
 import { controlHTML, controlRoute, controlURL, runVisibilityControls, measureVisibilityControl, controlRangeExpectations, hiddenControlCases, acceptedControlCases, controlFailure } from './windows-enrollment-visibility-controls.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
 import { collectVisibilityDiagnostic, geometryDiagnosticBudgetMs, measureControlGeometry, registerVisibilityDiagnosticSignal, runVisibilityControls as diagnosticControls, validateVisibilityDiagnostic, visibilityDiagnosticFor } from './windows-enrollment-visibility-diagnostics.mjs';
@@ -756,4 +756,19 @@ test('positive identifier controls prime synthetic layout before Range; the empt
   assert.equal(actual.native, false);
   assert.deepEqual(calls, prime ? ['box', 'range', 'box', 'native'] : ['range', 'box', 'native']);
  }
+});
+
+test('static invented capture clock is installed and paused at fixture+100ms before navigation', async () => {
+ const calls = [];
+ await prepareSyntheticCaptureClock({ clock: {
+  install: async ({time}) => calls.push(['install', time.getTime()]),
+  pauseAt: async time => calls.push(['pause', time.getTime()]),
+ } });
+ assert.deepEqual(calls, [['install', Date.parse(now)], ['pause', Date.parse(now) + 100]]);
+ const source = await readFile(new URL('./capture-windows-enrollment.mjs', import.meta.url), 'utf8');
+ const body = source.slice(source.indexOf('export async function capture({'));
+ assert(body.indexOf('await prepareSyntheticCaptureClock(page)') < body.indexOf('await page.goto(origin'));
+ assert.match(disclosure, /clock is fixed.*static screenshots only/);
+ assert.match(disclosure, /not runtime expiry or timer acceptance/);
+ assert.match(disclosure, /optional invitation-token path, not Rust automatic-registration/);
 });

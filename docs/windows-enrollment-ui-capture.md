@@ -252,3 +252,20 @@ These contracts do not replace hosted workflow execution.
 
 References: [GitHub status-check functions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions)
 and [step outcome semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#steps-context).
+
+### Current production states and fixed synthetic time
+
+The instruction scene captures the real four-step installation checklist after
+one invented invitation and lifecycle-driven secret clearing. The release scene
+closes that dialog and reopens the real preparation view, without a second POST.
+Both EN/DE desktop/mobile scenes retain the production UI and explicit local
+scope/trust approval; Running or activation is never presented as fresh data.
+
+For these eight static invented screenshots only, Playwright installs the clock
+at the fixture time and pauses it at +100 ms before navigation. This avoids React
+clock-driven controlled-input attribute rewrites during the mutation-protected
+PNG interval. It does not change production code or disable the privacy,
+mutation, animation, font or pre/post guards. These captures exercise the optional
+invitation-token path, not the Rust automatic-registration installer. They prove
+neither runtime expiry/timer behavior nor native installation. Advancing-clock
+expiry and recovery tests elsewhere remain separate gates.

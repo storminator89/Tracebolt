@@ -1,4 +1,4 @@
-/** Hosted-only Windows created-stage captures. --check never launches a browser. */
+/** Hosted-only Windows instruction/preparation captures. --check never launches a browser. */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -157,6 +157,52 @@ export async function capturePublicPNG(page, dialog, expect, mark = () => {}) {
   try { await guard.evaluate(value => value.dispose()); } finally { await guard.dispose(); }
  }
 }
+// Static invented screenshots only. Runtime expiry/reconnect tests keep their
+// own advancing clocks; no production module or real manager clock is changed.
+export async function prepareSyntheticCaptureClock(page) {
+ await page.clock.install({ time: new Date(now) });
+ await page.clock.pauseAt(new Date(Date.parse(now) + 100));
+}
+// These checks follow the retained production components: preparation precedes
+// invitation creation; install instructions follow it. Neither implies fresh data.
+export async function assertWindowsInstructions(dialog, expect, de) {
+ const instructions = dialog.locator('.enrollment-windows-install');
+ await expect(instructions).toBeVisible();
+ await expect(instructions.locator('ol > li')).toHaveCount(4);
+ await expect(instructions.locator('p')).toHaveCount(1);
+ for (const text of de ? [
+  'vollständige Vertrauens-Fingerabdrücke unabhängig vergleichen.',
+  'Die 21 lokalen Read-admin-Bereiche', 'Diese Dashboard-Einladung gewährt diese Bereiche nicht.',
+  'separaten verdeckten Setup-Konsole', 'vollständigen Geräte-Fingerabdruck und Vergleichswert vergleichen.',
+  'einen frischen authentifizierten Bericht samt tatsächlicher Quellenabdeckung prüfen.',
+  'Eine aktivierte Identität oder ein laufender Dienst allein belegen keine Berichterfassung.',
+  'Frisches Setup überschreibt oder setzt ihn nicht zurück',
+ ] : [
+  'full trust fingerprints independently.', 'Review the 21 local Read admin scopes',
+  'This dashboard invitation does not grant those scopes.', 'separate hidden-input console',
+  'full device fingerprint and comparison value here before approving',
+  'a fresh authenticated report and actual source coverage.',
+  'An activated identity or a running service alone does not prove reporting.',
+  'Fresh Setup cannot overwrite or reset it',
+ ]) await expect(instructions).toContainText(text);
+ await expect(instructions).not.toContainText(de ? 'fünf lokalen Lesebereichen' : 'five local read scopes');
+ await expect(dialog.locator('.enrollment-public-command')).toHaveCount(0);
+ await expect(dialog.getByRole('link')).toHaveCount(0);
+ return instructions.getByRole('heading');
+}
+export async function assertWindowsReleasePreparation(dialog, expect, de) {
+ const preparation = dialog.locator('.enrollment-windows-prepare');
+ await expect(preparation).toBeVisible();
+ const limits = preparation.locator(':scope > p').nth(1);
+ await expect(limits).toContainText(de ? 'Unsignierter x64-Preview.' : 'Unsigned x64 preview.');
+ await expect(limits).toContainText(de ? 'drei Server-2025-Setup-Fälle' : 'three Server 2025 Setup cases');
+ await expect(limits).toContainText(de ? 'bleiben ungeprüft' : 'remain unverified');
+ await expect(preparation).toContainText(de ? 'Setup prüft sie vor Installationsschreibzugriffen.' : 'Setup checks it before installation writes.');
+ await expect(preparation).toContainText(de ? 'Ein manipuliertes Dashboard kann beides ersetzen.' : 'A modified dashboard can replace both.');
+ await expect(preparation.locator('a')).toHaveCount(5);
+ await expect(dialog.locator('.enrollment-secret')).toHaveCount(0);
+ return limits;
+}
 export async function capture({ browser, expect, output, onStage = () => {} }) {
  requireHosted(); const mark = (stage, index = null) => onStage(diagnostic(stage, index));
  mark('compile'); const compiled = await compile(), captures = [];
@@ -167,12 +213,12 @@ export async function capture({ browser, expect, output, onStage = () => {} }) {
   mark('new-context', index); const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', locale: de ? 'de-DE' : 'en-US', serviceWorkers: 'block' });
   try {
    mark('route', index); await context.route('**/*', routeFixture(compiled, state)); await context.addInitScript(locale => { window.__WINDOWS_LOCALE__ = locale; }, locale);
-   mark('new-page', index); const page = await context.newPage(); page.on('pageerror', () => { runtimeErrors++; });
+   mark('new-page', index); const page = await context.newPage(); await prepareSyntheticCaptureClock(page); page.on('pageerror', () => { runtimeErrors++; });
    mark('navigate', index); await page.goto(origin + '/');
    mark('initial-status', index); const refresh = page.getByRole('button', { name: de ? 'Enrollment-Status aktualisieren' : 'Refresh enrollment status', exact: true }); await expect(refresh).toBeEnabled();
    mark('select-windows', index); await page.getByRole('combobox').selectOption('windows');
    const add = page.getByRole('button', { name: de ? 'Gerät hinzufügen' : 'Add device', exact: true }); await expect(add).toBeEnabled();
-   mark('open-create', index); await add.click(); const dialog = page.getByRole('dialog', { name: de ? 'Gerät hinzufügen' : 'Add device', exact: true });
+   mark('open-create', index); await add.click(); let dialog = page.getByRole('dialog', { name: de ? 'Gerät hinzufügen' : 'Add device', exact: true });
    mark('consent', index); const consent = dialog.getByRole('checkbox', { name: de ? 'Ich bestätige diese Windows-Inventarerfassung für das neue Gerät.' : 'I acknowledge this Windows inventory collection for the new device.', exact: true });
    const create = dialog.getByRole('button', { name: de ? 'Einladung erstellen' : 'Create invitation', exact: true });
    await expect(dialog.getByRole('checkbox')).toHaveCount(1); await expect(consent).not.toBeChecked(); await expect(create).toBeDisabled(); assert.equal(state.syntheticCreates, 0);
@@ -181,14 +227,7 @@ export async function capture({ browser, expect, output, onStage = () => {} }) {
    mark('secret-masked', index); await expect(input).toHaveAttribute('type', 'password'); assert.equal(state.syntheticCreates, 1);
    mark('interrupt-clear', index); await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); window.dispatchEvent(new Event('pageshow')); }); await expect(input).toHaveCount(0);
    mark('refresh-restored', index); await expect(refresh).toBeEnabled(); await expect(dialog).toContainText('windows-inventory-v1');
-   mark('instructions', index); const instructions = dialog.locator('.enrollment-windows-install'), heading = instructions.getByRole('heading'), paragraphs = instructions.locator('p'), release = paragraphs.last();
-   await expect(instructions).toBeVisible(); await expect(paragraphs).toHaveCount(2);
-   await expect(instructions).toContainText(de ? 'die zu diesem Manager und dem gewählten Profil passt' : 'matches this manager and the selected profile');
-   await expect(instructions).toContainText(de ? 'Diese Dashboard-Bestätigung ersetzt nicht die lokale Bereichsfreigabe in Setup.' : 'This dashboard acknowledgement does not replace Setup’s local scope approval.');
-   await expect(release).toContainText(de ? 'Die unsignierte Windows-preview.3' : 'Unsigned Windows preview.3 is published');
-   await expect(release).toContainText(de ? 'Diese Seite bietet keinen verifizierten Installer-Download oder Download-Befehl.' : 'This page does not provide a verified installer download or command.');
-   await expect(instructions).not.toContainText(de ? 'fünf lokalen Lesebereichen' : 'five local read scopes');
-   await expect(dialog.locator('.enrollment-public-command')).toHaveCount(0); await expect(dialog.getByRole('link')).toHaveCount(0);
+   mark('instructions', index); const heading = await assertWindowsInstructions(dialog, expect, de);
    mark('fonts', index);
    const loadedFonts = await page.evaluate(async weights => {
     await Promise.all(weights.map(weight => document.fonts.load(`${weight} 12px Inter`, 'Windows Geräte'))); await document.fonts.ready;
@@ -196,7 +235,18 @@ export async function capture({ browser, expect, output, onStage = () => {} }) {
     return sample && getComputedStyle(sample).fontFamily.split(',')[0].trim().replace(/["']/g, '') === 'Inter' && weights.every(weight => document.fonts.check(`${weight} 12px Inter`, 'Windows Geräte') && [...document.fonts].some(face => face.family.replace(/["']/g, '') === 'Inter' && face.weight === String(weight) && face.status === 'loaded'));
    }, fontWeights); assert(loadedFonts, 'Production Inter faces were not loaded');
    for (const [sceneIndex, scene] of scenes.entries()) {
-    const matrixIndex = index + sceneIndex, row = captureMatrix[matrixIndex], target = scene === 'instructions' ? heading : release;
+    const matrixIndex = index + sceneIndex, row = captureMatrix[matrixIndex];
+    let target = heading;
+    if (scene === 'release') {
+     // Release preparation is a separate real UI state, not a paragraph in the
+     // created-invitation instructions. Reopening is read-only; never create twice.
+     await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
+     await add.click(); dialog = page.getByRole('dialog', { name: de ? 'Gerät hinzufügen' : 'Add device', exact: true });
+     target = await assertWindowsReleasePreparation(dialog, expect, de);
+     // Observe completion of the real dialog entrance animation; never disable it.
+     await expect.poll(() => dialog.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+     assert.equal(state.syntheticCreates, 1); assert.equal(state.csrfReads, 1);
+    }
     mark('scroll', matrixIndex);
     // Scroll only the production dialog, not the document or a replacement UI.
     await target.evaluate(element => { const dialog = element.closest('[role="dialog"]'); if (!dialog) throw new Error('Missing dialog'); const top = element.getBoundingClientRect().top - dialog.getBoundingClientRect().top + dialog.scrollTop; dialog.scrollTo({ top: Math.max(0, top - 24), behavior: 'instant' }); });

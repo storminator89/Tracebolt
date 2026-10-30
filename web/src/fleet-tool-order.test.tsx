@@ -6,6 +6,7 @@ import { setLocale } from './i18n';
 import { windowsCapacityDevice, windowsCapacitySession } from './windows-capacity-fixture';
 import { windowsDeviceId, windowsNow } from './windows-inventory-fixture';
 import { windowsIncidentItem, windowsIncidentView } from './windows-incident-inbox-fixture';
+import { validWindowsCompleteIncidentInboxView } from './windows-complete-incident-inbox-types';
 import type { FleetGroupsView } from './fleet-groups-types';
 import type { Device } from './types';
 
@@ -31,20 +32,24 @@ function server(named = false, fleet = devices) {
         { id: other, name: 'Other', revision: 7, memberIds: [second], unavailableMembers: 0 },
     ], devices: fleet.map(({ id, name, platform }) => ({ id, name, platform: platform as 'linux' | 'windows' })) };
     let rows = [windowsIncidentItem()];
-    let acknowledge = async () => { rows = rows.map(row => ({ ...row, acknowledgedAt: windowsNow })); return json({ schemaVersion: 'tracebolt.windows-incident-ack.v1', serverNow: windowsNow, key: rows[0].key, acknowledgedAt: windowsNow }); };
+    let acknowledge = async () => { rows = rows.map(row => ({ ...row, acknowledgedAt: windowsNow })); return json({ schemaVersion: 'tracebolt.windows-incident-ack.v2', serverNow: windowsNow, key: rows[0].key, acknowledgedAt: windowsNow }); };
     const digest = (letter: string) => `sha256:${letter.repeat(64)}`;
     const selection = { sha256: digest('a'), size: 1024, productCode: '{11111111-2222-3333-4444-555555555555}', packageCode: '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}', version: '1.2.3', architecture: 'amd64', name: 'Inert fixture', termsReviewDigest: digest('b'), reviewReference: 'Synthetic package review' };
     const artifact = { version: 'tracebolt.windows-managed-msi-artifact.v2', serverNow: Date.parse(windowsNow) / 1000, state: 'uploaded', artifactId: digest('c'), package: selection, nativeAcceptanceDigest: digest('d'), uploadOffset: 1024, uploadPendingDigest: '', targets: [{ deviceId: windowsDeviceId, bindingDigest: digest('1') }, { deviceId: second, bindingDigest: digest('2') }] };
     const fetch = vi.fn(async (url: string, init?: RequestInit) => {
         if (init?.method === 'POST') {
-            if (url === '/api/fleet/windows-incidents/acknowledge') return acknowledge();
+            if (url === '/api/fleet/windows-incidents/complete/acknowledge') return acknowledge();
             throw new Error('Unexpected synthetic POST');
         }
         if (url === '/api/auth/session') return json(session);
         if (url === '/api/overview') return json({ generatedAt: windowsNow, stats: { totalDevices: fleet.length, healthyDevices: 0, attentionDevices: 0, unknownDevices: fleet.length, openCases: 0, criticalCases: 0 }, devices: fleet, cases: [], activity: [] });
         if (url === '/api/fleet/identities') return json({ schemaVersion: 'tracebolt.fleet-identities.v2', serverNow: windowsNow, items: [] });
         if (url === '/api/fleet/groups') return json(groups);
-        if (url.startsWith('/api/fleet/windows-incidents?')) return json(windowsIncidentView(rows));
+        if (url.startsWith('/api/fleet/windows-incidents/complete?')) {
+            const view = { ...windowsIncidentView(rows), schemaVersion: 'tracebolt.windows-incident-inbox.v2', items: rows.map(row => ({ ...row, sourceKind: 'assessment_v1', openingSource: null, lastBadSource: null, recoverySource: null, currentSource: null })) };
+            if (!validWindowsCompleteIncidentInboxView(view, 'active', 'all', 0)) throw new Error('Invalid combined incident fixture');
+            return json(view);
+        }
         if (url === '/api/windows-managed-msi/catalogue') return json({ version: 'tracebolt.windows-managed-msi-catalogue.v1', enabled: false, serverNow: artifact.serverNow, revision: '0', maxEntries: 4, maxRetainedPayloadBytes: 134217728, reservedBytes: 0, entries: [] });
         if (url === '/api/windows-managed-msi/artifact') return json(artifact);
         return json({}, 503);
@@ -96,7 +101,7 @@ describe('device list before the existing fleet tools', () => {
         fireEvent.click(within(inbox).getByRole('button', { name: /^Mark seen:/ })); await flush();
         expect(s.posts()).toHaveLength(1);
         const [path, init] = s.posts()[0];
-        expect(path).toBe('/api/fleet/windows-incidents/acknowledge'); expect(JSON.parse(init!.body as string)).toEqual({ key: windowsIncidentItem().key });
+        expect(path).toBe('/api/fleet/windows-incidents/complete/acknowledge'); expect(JSON.parse(init!.body as string)).toEqual({ key: windowsIncidentItem().key });
         const pending = within(inbox).getByRole('button', { name: /^Mark seen:/ }); expect(pending).toBeDisabled();
         localJumps(); changeFilters(); await chooseGroup(other); localJumps();
         expect(screen.getByRole('heading', { name: 'No matching devices' })).toBeVisible();
