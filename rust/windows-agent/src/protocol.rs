@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 pub const MAX_SEQUENCE: u64 = (1 << 53) - 1;
@@ -67,6 +67,15 @@ pub fn collected_at(body: &[u8]) -> Result<DateTime<Utc>> {
     )?)
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AcceptedReceipt {
+    pub sequence: u64,
+    pub collected_at: DateTime<Utc>,
+    pub received_at: DateTime<Utc>,
+    pub duplicate: bool,
+}
+
 pub fn validate_receipt(
     raw: &[u8],
     agent: &str,
@@ -74,6 +83,17 @@ pub fn validate_receipt(
     collected: DateTime<Utc>,
     now: DateTime<Utc>,
 ) -> Result<bool> {
+    Ok(validate_receipt_metadata(raw, agent, sequence, collected, now)?.duplicate)
+}
+
+/// Public metadata only, returned after the unchanged strict receipt contract.
+pub fn validate_receipt_metadata(
+    raw: &[u8],
+    agent: &str,
+    sequence: u64,
+    collected: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Result<AcceptedReceipt> {
     let receipt: Receipt = serde_json::from_slice(raw)?;
     ensure!(
         receipt.schema_version == "tracebolt.agent-receipt.v1"
@@ -84,5 +104,10 @@ pub fn validate_receipt(
             && receipt.received_at >= collected - chrono::Duration::seconds(30),
         "receipt identity/time mismatch"
     );
-    Ok(receipt.duplicate)
+    Ok(AcceptedReceipt {
+        sequence: receipt.sequence,
+        collected_at: receipt.collected_at,
+        received_at: receipt.received_at,
+        duplicate: receipt.duplicate,
+    })
 }

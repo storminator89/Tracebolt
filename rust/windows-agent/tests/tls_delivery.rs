@@ -16,7 +16,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tracebolt_windows_agent::{protocol::Sample, sender::Sender};
+use tracebolt_windows_agent::{health, protocol::Sample, runtime::Runtime, sender::Sender};
 
 // Real local mutual TLS, using disposable test-only identities and invented data.
 #[test]
@@ -125,20 +125,60 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
             uptime: "fixture".into(),
         })
     };
-    let mut sender = Sender::open(dir.path(), true).unwrap();
-    assert!(sender.report(sample).is_err());
+    drop(Sender::open(dir.path(), true).unwrap());
+    let disabled = Runtime::open_without_health(dir.path()).unwrap();
+    assert!(!disabled.health_requested());
+    assert!(!disabled.health_available());
+    drop(disabled);
+    assert!(!dir.path().join("state/health-v1.json").exists());
+    let mut sender = Runtime::open(dir.path()).unwrap();
+    assert!(sender.cycle(sample).is_err());
+    let first = health::status(dir.path(), Utc::now());
+    assert!(first.last_accepted_receipt.is_none());
+    assert_eq!(first.state, health::Code::ManagerRejected);
     drop(sender);
-    let mut sender = Sender::open(dir.path(), false).unwrap();
-    assert!(
-        sender
-            .report(|| panic!("retry must not recollect"))
-            .is_err()
+    let mut sender = Runtime::open(dir.path()).unwrap();
+    assert!(sender.cycle(|| panic!("retry must not recollect")).is_err());
+    let invalid = health::status(dir.path(), Utc::now());
+    assert_eq!(invalid.state, health::Code::ReceiptInvalid);
+    assert!(invalid.last_accepted_receipt.is_none());
+    drop(sender);
+    let mut sender = Runtime::open(dir.path()).unwrap();
+    assert!(sender.cycle(|| panic!("retry must not recollect")).unwrap());
+    let accepted = health::status(dir.path(), Utc::now());
+    assert_eq!(accepted.state, health::Code::Accepted);
+    assert_eq!(accepted.last_accepted_receipt.as_ref().unwrap().sequence, 1);
+    assert!(accepted.last_accepted_receipt.as_ref().unwrap().duplicate);
+    let original_received = accepted.last_accepted_receipt.unwrap().received_at;
+    drop(sender);
+    assert_eq!(
+        health::status(dir.path(), Utc::now())
+            .last_accepted_receipt
+            .unwrap()
+            .received_at,
+        original_received
     );
-    drop(sender);
-    let mut sender = Sender::open(dir.path(), false).unwrap();
-    sender
-        .report(|| panic!("retry must not recollect"))
-        .unwrap();
-    sender.report(sample).unwrap();
+    let path = dir.path().join("state/health-v1.json");
+    let mut malformed: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    malformed["lastAcceptedReceipt"]["collectedAt"] = json!("-262143-01-01T00:00:00Z");
+    let corrupt = serde_json::to_vec(&malformed).unwrap();
+    fs::write(&path, &corrupt).unwrap();
+    let mut sender = Runtime::open(dir.path()).unwrap();
+    assert!(!sender.health_available());
+    assert!(sender.cycle(sample).unwrap());
+    assert_eq!(
+        fs::read(dir.path().join("state/health-v1.json")).unwrap(),
+        corrupt
+    );
+    let bundle =
+        String::from_utf8(health::support_bundle(dir.path(), Utc::now()).unwrap()).unwrap();
+    for private in [
+        "private-health-corruption-sentinel",
+        "PRIVATE KEY",
+        "localhost",
+        "fixture",
+    ] {
+        assert!(!bundle.contains(private));
+    }
     server.join().unwrap();
 }

@@ -38,6 +38,18 @@ enum Command {
         #[arg(long)]
         directory: PathBuf,
     },
+    /// Read bounded local health without opening enrollment or sender state.
+    Status {
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print only allowlisted public support metadata; no raw files or archive.
+    SupportBundle {
+        #[arg(long)]
+        directory: PathBuf,
+    },
     /// Create a new ledger for a fresh, approved, never-used endpoint identity.
     Init {
         #[arg(long)]
@@ -59,11 +71,15 @@ enum Command {
     Once {
         #[arg(long)]
         directory: PathBuf,
+        #[arg(long)]
+        no_health_diagnostics: bool,
     },
     /// Windows Service Control Manager entry point.
     Service {
         #[arg(long)]
         directory: PathBuf,
+        #[arg(long)]
+        no_health_diagnostics: bool,
     },
 }
 
@@ -171,10 +187,30 @@ fn run() -> anyhow::Result<()> {
             tracebolt_windows_agent::runtime::Runtime::open(&directory)?;
             println!("Local configuration and sender state valid; server connectivity not tested.");
         }
-        Command::Once { directory } => {
+        Command::Status { directory, json } => {
+            let status = tracebolt_windows_agent::health::status(&directory, chrono::Utc::now());
+            if json {
+                println!("{}", serde_json::to_string(&status)?);
+            } else {
+                println!("{}: {}", status.state, status.next_action);
+            }
+        }
+        Command::SupportBundle { directory } => {
+            let bytes =
+                tracebolt_windows_agent::health::support_bundle(&directory, chrono::Utc::now())?;
+            println!("{}", std::str::from_utf8(&bytes)?);
+        }
+        Command::Once {
+            directory,
+            no_health_diagnostics,
+        } => {
             #[cfg(windows)]
             {
-                let mut runtime = tracebolt_windows_agent::runtime::Runtime::open(&directory)?;
+                let mut runtime = if no_health_diagnostics {
+                    tracebolt_windows_agent::runtime::Runtime::open_without_health(&directory)?
+                } else {
+                    tracebolt_windows_agent::runtime::Runtime::open(&directory)?
+                };
                 if runtime.cycle(tracebolt_windows_agent::native::collect)? {
                     println!("Server acknowledged the report.");
                 } else {
@@ -183,16 +219,23 @@ fn run() -> anyhow::Result<()> {
             }
             #[cfg(not(windows))]
             {
-                let _ = directory;
+                let _ = (directory, no_health_diagnostics);
                 anyhow::bail!("Windows is required for collection");
             }
         }
-        Command::Service { directory } => {
+        Command::Service {
+            directory,
+            no_health_diagnostics,
+        } => {
             #[cfg(windows)]
-            tracebolt_windows_agent::service::dispatch(directory)?;
+            if no_health_diagnostics {
+                tracebolt_windows_agent::service::dispatch_without_health(directory)?;
+            } else {
+                tracebolt_windows_agent::service::dispatch(directory)?;
+            }
             #[cfg(not(windows))]
             {
-                let _ = directory;
+                let _ = (directory, no_health_diagnostics);
                 anyhow::bail!("Windows SCM required");
             }
         }
