@@ -280,6 +280,7 @@ export function fleetGroupsServiceChecksRoute({base,fixture,external,unexpected}
   if(url.pathname==='/api/auth/session')return reply(fixture.session);
   if(url.pathname==='/api/session')return reply({csrfToken:fixture.session.csrfToken});
   if(url.pathname==='/api/overview')return reply(fixture.overview);
+  if(url.pathname==='/api/customer-windows-assignments')return reply({schemaVersion:'tracebolt.customer-windows-assignments.v1',serverNow:fixture.session.serverNow,validUntil:new Date(Date.parse(fixture.session.serverNow)+30000).toISOString(),customers:[],devices:[],unavailableAssignments:0});
   if(url.pathname==='/api/enrollment')return reply({schemaVersion:'tracebolt.enrollment-operator.v2',serverNow:fixture.session.serverNow,enabled:false,platforms:[],recordLimit:25,items:[]});
   if(url.pathname==='/api/fleet/identities')return reply({schemaVersion:'tracebolt.fleet-identities.v2',serverNow:fixture.session.serverNow,items:[]});
   if(url.pathname==='/api/fleet/groups'||url.pathname===`/api/fleet/groups/${fixture.view.groupId}`)return reply(fixture.groups);
