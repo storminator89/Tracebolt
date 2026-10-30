@@ -36,6 +36,12 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(LOGOUT_INTENT_KEY); sessionStorage.removeItem(LOGOUT_INTENT_KEY); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('complete service incident inbox adapter', () => {
+    it.each(['en', 'de'] as const)('keeps the resized refresh control read-only with the same label in %s', async locale => {
+        const de = locale === 'de'; setLocale(locale, false); render(<Harness/>); await open(de);
+        const refresh = screen.getByRole('button', { name: de ? 'Vorfälle aktualisieren' : 'Refresh incidents' });
+        expect(refresh.closest('.windows-incident-toolbar')).not.toBeNull();expect(refresh).toHaveClass('text-button');expect(refresh).toBeEnabled();
+        fireEvent.click(refresh);await flush();expect(reads()).toHaveLength(2);expect(posts()).toHaveLength(0);
+    });
     it.each(['en', 'de'] as const)('renders compact source and expandable native provenance in %s with deliberate review', async locale => {
         const de = locale === 'de'; setLocale(locale, false); render(<Harness/>); expect(request).not.toHaveBeenCalled(); await open(de);
         expect(reads()).toHaveLength(1); expect(reads()[0][2]).toBe(256 * 1024); expect(screen.getByText(view.items[0].serviceName)).toBeVisible();

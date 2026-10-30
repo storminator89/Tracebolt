@@ -209,7 +209,7 @@ async function run(){
  await validateCompleteServiceManifest(out,sourceSha,completeServiceHealthManifest);
  await fs.writeFile(path.join(out,'windows-complete-service-health-manifest.json'),JSON.stringify(completeServiceHealthManifest,null,2)+'\n');
  diagnostic.begin('runner',null,null,'complete-incident-inbox');
- completeIncidentInboxManifest=await captureCompleteIncidentInbox({browser,expect,output:out,sourceSha});
+ completeIncidentInboxManifest=await captureCompleteIncidentInbox({browser,expect,output:out,sourceSha,checkpoint:location=>location?diagnostic.begin('complete-incident-inbox',location.locale,location.width,location.step):diagnostic.begin('runner',null,null,'complete-incident-inbox')});
  await fs.writeFile(path.join(out,'windows-complete-incident-inbox-manifest.json'),JSON.stringify(completeIncidentInboxManifest,null,2)+'\n');
  diagnostic.begin('runner',null,null,'complete-notifications');
  completeNotificationsManifest=await captureCompleteNotifications({browser,expect,output:out,sourceSha});

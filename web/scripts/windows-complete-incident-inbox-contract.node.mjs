@@ -6,7 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { capture, check, compile, fixture } from './capture-windows-complete-incident-inbox.mjs';
-import { root, captureMatrix, contract, disclosure, sceneManifestSHA256, sha256, evidenceSummary, validateEvidence, assertHostedSource } from './windows-complete-incident-inbox-contract.mjs';
+import { root, captureMatrix, capturePhases, captureCoordinate, contract, disclosure, sceneManifestSHA256, sha256, evidenceSummary, validateEvidence, assertHostedSource } from './windows-complete-incident-inbox-contract.mjs';
+import { createWindowsActionDiagnostic } from '../../tests/e2e-review/windows-service-actions-diagnostics.mjs';
 function png(width, height) {
     const chunk = (name, bytes) => { const body = Buffer.concat([Buffer.from(name), bytes]); let crc = -1; for (const byte of body) { crc ^= byte; for (let n = 0; n < 8; n++) crc = crc >>> 1 ^ (crc & 1 ? 0xedb88320 : 0); } const result = Buffer.alloc(body.length + 8); result.writeUInt32BE(bytes.length); body.copy(result, 4); result.writeUInt32BE((crc ^ -1) >>> 0, body.length + 4); return result; };
     const header = Buffer.alloc(13); header.writeUInt32BE(width); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
@@ -58,15 +59,15 @@ test('hosted-only admission rejects before any browser or source subprocess is t
 test('existing hosted runner invokes additive capture inside its unchanged timeout and failure boundary', async () => {
     const read = file => readFile(path.join(root, file), 'utf8'), runner = await read('tests/e2e-review/windows-service-actions-runner.mjs'), source = await read('web/scripts/capture-windows-complete-incident-inbox.mjs');
     assert(runner.indexOf('await assertHostedSource(sourceSha)') < runner.indexOf('server=createServer'));
-    assert.match(runner, /captureCompleteIncidentInbox\(\{browser,expect,output:out,sourceSha\}\)/);
+    assert.match(runner, /captureCompleteIncidentInbox\(\{browser,expect,output:out,sourceSha,checkpoint:/);
     assert.match(source, /await validateManifest\(output, sourceSha, sourceTree, manifest\)/);
     assert.match(runner, /completeIncidentInbox:passed\?completeIncidentEvidenceSummary\(\):null/);
     assert.equal((runner.match(/120000/g) ?? []).length, 1);
     for (const name of ['ServiceActions', 'ServiceActionHistory', 'UpdateJobs', 'UpdateDownload', 'UpdateRetirement', 'UpdateSchedule', 'BackgroundUpdateSchedule', 'FleetUpdateSchedule', 'SoftwareJobs']) assert(runner.includes(`requireWindows${name}Evidence(`));
     assert.match(runner, /catch\{await writeFailure\(\);/); assert.match(runner, /process.exitCode=passed\?0:1/);
     assert.match(source, /for \(const \{ locale, width, height, scene, file \} of captureMatrix\)/);
-    assert.match(source, /assert.deepEqual\(errors, \[\]\); assert.equal\(state.external \+ state.writes \+ state.unexpected, 0\); assert.equal\(state.reads, 1\)/);
-    assert.match(source, /finally \{ await context.close\(\); \}/);
+    for (const guard of ['assert.deepEqual(errors, []);', 'assert.equal(state.external + state.writes + state.unexpected, 0);', 'assert.equal(state.reads, 1);']) assert(source.includes(guard));
+    assert.match(source, /finally \{ if \(scenePassed\) mark\('close'\); await context.close\(\); \}/);
     assert.doesNotMatch(source, /route\.continue|route\.fetch|ignoreHTTPSErrors|grantPermissions|createServer|fullPage: true/);
     assert.match(source, /rect\.bottom <= innerHeight \+ 1/);
     assert.match(source, /parseFloat\(style\.fontSize\) >= 11/);
@@ -80,6 +81,39 @@ test('existing hosted runner invokes additive capture inside its unchanged timeo
         assert.deepEqual(images, captureMatrix.map(row => `artifacts/review/${row.file}`));
         assert(!workflow.includes('artifacts/review/complete-incident-inbox-*.png'));
     }
+});
+
+test('complete-inbox diagnostics admit only finite scene/viewport/phase coordinates', async () => {
+    const diagnosticSource = JSON.parse(await readFile(path.join(root, 'tests/e2e-review/windows-service-actions-diagnostics.json'), 'utf8'));
+    assert.deepEqual(diagnosticSource.cases['complete-incident-inbox'], contract.scenes.flatMap(scene => capturePhases.map(phase => `${scene}-${phase}`)));
+    const source = await readFile(path.join(root, 'web/scripts/capture-windows-complete-incident-inbox.mjs'), 'utf8');
+    assert.deepEqual([...new Set([...source.matchAll(/mark\('([^']+)'\)/g)].map(match => match[1]))].sort(), [...capturePhases].sort());
+    for (const {scene, locale, width} of captureMatrix) for (const phase of capturePhases) {
+        const point = captureCoordinate(scene, locale, width, phase), diagnostic = createWindowsActionDiagnostic('a'.repeat(40), 'b'.repeat(32));
+        assert.deepEqual(point, {locale, width, step: `${scene}-${phase}`});
+        diagnostic.begin('complete-incident-inbox', point.locale, point.width, point.step);
+        const report = diagnostic.report(); assert.equal(report.case, 'complete-incident-inbox');assert.equal(report.step, point.step);
+        assert.deepEqual(Object.keys(report).sort(), ['schemaVersion','sourceSha','invocation','status','browserAcceptance','nativeAcceptance','case','locale','width','step'].sort());
+    }
+    for (const point of [
+        ['PRIVATE_RAW_VALUE','en',1440,'fixture'], ['active','PRIVATE_RAW_VALUE',1440,'fixture'],
+        ['active','en',999,'fixture'], ['active','en',true,'fixture'],
+        ['active','en',1440,'PRIVATE_RAW_VALUE'], ['active','en',1440,'::error::injected'],
+        [null,'en',1440,'fixture'], ['active',null,1440,'fixture'], ['active','en',1440,null],
+    ]) assert.equal(captureCoordinate(...point), null);
+    // Markers are passive and cleanup cannot overwrite an earlier assertion phase.
+    assert.match(source, /catch \{ \/\* Diagnostics cannot change acceptance\./);
+    assert.match(source, /if \(scenePassed\) mark\('close'\)/);
+});
+
+test('production refresh controls retain readable bounded sizing above the unchanged capture thresholds', async () => {
+    const css = await readFile(path.join(root, 'web/src/windows-incident-inbox.css'), 'utf8');
+    assert.match(css, /\.windows-incident-toolbar \.text-button\{min-height:36px;font-size:12px\}/);
+    assert.match(css, /@media\(max-width:600px\)\{[^\n]*\.windows-incident-toolbar \.text-button\{min-height:44px\}/);
+    const compiled = await compile(), bundled = compiled.assets.get('/app.css').body.toString();
+    assert.match(bundled, /\.windows-incident-toolbar \.text-button\{min-height:36px;font-size:12px\}/);
+    const source = await readFile(path.join(root, 'web/scripts/capture-windows-complete-incident-inbox.mjs'), 'utf8');
+    assert.match(source, /rect\.height >= 24/);assert.match(source, /parseFloat\(style.fontSize\) >= 11/);
 });
 
 test('scene names bind active/unseen and unknown/seen complete-source Go rows', async () => {

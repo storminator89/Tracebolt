@@ -1715,7 +1715,7 @@ class WindowsActionFailureTests(unittest.TestCase):
         self.assertEqual({case for case, steps in cases.items() if 'detail-route-readiness' in steps}, detail)
         self.assertEqual({case for case, steps in cases.items() if 'reload-detail-route-readiness' in steps},
                          detail - {'action-history'})
-        self.assertEqual(set(cases), detail | {'runner', 'fleet-schedule'})
+        self.assertEqual(set(cases), detail | {'runner', 'fleet-schedule', 'complete-incident-inbox'})
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); target = self.target(root)
             with patch.object(p, 'ROOT', root):
@@ -1749,7 +1749,7 @@ class WindowsActionFailureTests(unittest.TestCase):
             'fleet-schedule': ('windows-update-schedule-browser.mjs', 'exerciseWindowsFleetUpdateSchedule', 'windowsFleetUpdateScheduleFailureStep', 'fleetStep'),
             'software-jobs': ('windows-software-jobs-browser.mjs', 'exerciseWindowsSoftwareJobs', 'windowsSoftwareJobsFailureStage', 'stage'),
         }
-        self.assertEqual(set(cases), {'runner'} | set(fixtures))
+        self.assertEqual(set(cases), {'runner', 'complete-incident-inbox'} | set(fixtures))
         wrappers = {'fixture', 'context', 'guards', 'close', 'screenshot'}
         for case, (filename, function, getter, variable) in fixtures.items():
             with self.subTest(case=case):

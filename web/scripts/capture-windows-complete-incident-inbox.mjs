@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { contract, captureMatrix, disclosure, sceneManifestSHA256, assertHostedSource, validateManifest } from './windows-complete-incident-inbox-contract.mjs';
+import { contract, captureMatrix, captureCoordinate, disclosure, sceneManifestSHA256, assertHostedSource, validateManifest } from './windows-complete-incident-inbox-contract.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(new URL('../package.json', import.meta.url));
 export const origin = 'https://complete-incident-inbox.invalid';
@@ -58,52 +58,86 @@ export function routeFixture(data, compiled, state) { return async route => {
     if (url.pathname === '/api/auth/session') return respond(data.session);
     const asset = compiled.assets.get(url.pathname); return asset ? route.fulfill({ status: 200, ...asset }) : blocked('unexpected');
 }; }
-export async function capture({ browser, expect, output, sourceSha }) {
+export async function capture({ browser, expect, output, sourceSha, checkpoint }) {
     hosted(); const sourceTree = await assertHostedSource(sourceSha); const compiled = await compile(), captures = []; await mkdir(output, { recursive: true });
     await assertHostedSource(sourceSha, compiled.sourceInputs);
     for (const { locale, width, height, scene, file } of captureMatrix) {
+        const mark = phase => { try { const value = captureCoordinate(scene, locale, width, phase); if (value) checkpoint?.(value); } catch { /* Diagnostics cannot change acceptance. */ } };
+        mark('fixture');
         const data = await fixture(scene), de = locale === 'de', state = { external: 0, writes: 0, unexpected: 0, reads: 0 }, errors = [];
+        mark('context');
         const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', locale: de ? 'de-DE' : 'en-US', serviceWorkers: 'block' });
+        let scenePassed = false;
         try {
+            mark('route');
             await context.route('**/*', routeFixture(data, compiled, state));
+            mark('init');
             await context.addInitScript(({ locale, bootstrap }) => { localStorage.setItem('tracebolt.locale', locale); window.__COMPLETE_INCIDENT_FIXTURE__ = bootstrap; }, { locale, bootstrap: data.bootstrap });
-            const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(origin + '/');
+            mark('page');const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+            mark('document');await page.goto(origin + '/');
+            mark('open');
             await page.getByRole('button', { name: de ? 'Windows-Vorfälle' : 'Windows incidents', exact: true }).click();
+            mark('service-row');
             await expect(page.locator('.windows-incident-service')).toHaveText(data.view.items[0].serviceName);
+            mark('source-label');
             await expect(page.getByText(de ? 'Quelle: Vollständiges Dienstinventar' : 'Source: Complete service inventory', { exact: true })).toBeVisible();
+            mark('review-controls');
             await expect(page.getByRole('button', { name: /Review service|Dienst prüfen/ })).toHaveCount(1);
             await expect(page.getByRole('button', { name: /Review service|Dienst prüfen/ })).toBeEnabled();
             // Keep the review closed: the route rejects any service-review or action read.
+            mark('review-closed');
             await expect(page.locator('.windows-complete-service-incident-review')).toHaveCount(0);
             if (scene === 'unknown') {
+                mark('source-status');
                 await expect(page.getByText(de ? 'Quellstatus: Unbekannt' : 'Source status: Unknown', { exact: true })).toBeVisible();
+                mark('evidence-open');
                 await page.getByText(de ? 'Zeiten und Evidenz' : 'Times and evidence', { exact: true }).click();
+                mark('source-unknown');
                 await expect(page.getByText(de ? 'Keine qualifizierte aktuelle Quelle. Gespeicherte Historie bleibt sichtbar.' : 'No qualified current source. Retained history stays visible.', { exact: true })).toBeVisible();
+                mark('provenance-open');
                 await page.getByText(de ? 'Quelle bei Eröffnung' : 'Opening source', { exact: true }).click();
+                mark('provenance-value');
                 await expect(page.locator('.windows-incident-provenance[open]')).toContainText(data.view.items[0].openingSource.generationId);
                 // Verify expandable original provenance, then capture readable status at normal scale.
+                mark('evidence-close');
                 await page.getByText(de ? 'Zeiten und Evidenz' : 'Times and evidence', { exact: true }).click();
+                mark('badges');
                 await expect(page.locator('.windows-incident-badges')).toHaveText(de ? 'AktivGesehen' : 'ActiveSeen');
+                mark('ack-control');
                 await expect(page.getByRole('button', { name: de ? /^Als gesehen markieren:/ : /^Mark seen:/ })).toHaveCount(0);
             } else {
+                mark('source-status');
                 await expect(page.getByText(de ? 'Quellstatus: Prüfen' : 'Source status: Needs attention', { exact: true })).toBeVisible();
+                mark('ack-control');
                 await expect(page.getByRole('button', { name: de ? /^Als gesehen markieren:/ : /^Mark seen:/ })).toBeEnabled();
+                mark('badges');
                 await expect(page.locator('.windows-incident-badges')).toHaveText(de ? 'AktivUngesehen' : 'ActiveNot seen');
             }
-            await page.evaluate(() => document.fonts.ready); assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+            mark('fonts');await page.evaluate(() => document.fonts.ready);
+            mark('page-width');assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
             // The real controls and status must fit at their native text sizes. Never shrink a full page.
             const controls = page.locator('.windows-incident-toolbar');
+            mark('toolbar-visible');
             await controls.scrollIntoViewIfNeeded();
+            mark('toolbar-geometry');
             assert(await controls.evaluate(element => [...element.querySelectorAll('select,button')].every(control => { const rect = control.getBoundingClientRect(), style = getComputedStyle(control); return rect.width >= 60 && rect.height >= 24 && rect.left >= 0 && rect.right <= innerWidth + 1 && parseFloat(style.fontSize) >= 11 && control.scrollWidth <= control.clientWidth + 1; })));
             const row = page.locator('.windows-incident-row');
+            mark('row-visible');
             await row.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }));
+            mark('row-geometry');
             assert(await row.evaluate(element => [...element.querySelectorAll('.windows-incident-main, .windows-incident-meta > span, .windows-incident-meta > details > summary, .windows-incident-action button')].every(item => { const rect = item.getBoundingClientRect(), style = getComputedStyle(item); return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight + 1 && rect.left >= 0 && rect.right <= innerWidth + 1 && parseFloat(style.fontSize) >= 10 && item.scrollWidth <= item.clientWidth + 1; })));
+            mark('text-size');
             assert(await page.locator('.windows-incident-main p').evaluateAll(items => items.every(item => parseFloat(getComputedStyle(item).fontSize) >= 11)));
+            mark('screenshot');
             await page.screenshot({ path: path.join(output, file), animations: 'disabled', fullPage: false });
-            assert.deepEqual(errors, []); assert.equal(state.external + state.writes + state.unexpected, 0); assert.equal(state.reads, 1);
+            mark('runtime-guards');assert.deepEqual(errors, []);
+            mark('route-guards');assert.equal(state.external + state.writes + state.unexpected, 0);
+            mark('read-count');assert.equal(state.reads, 1);
             captures.push({ file, scene, locale, width, height, sourceSha, sourceTree, publicSafe: true, fullPage: false, synthetic: true, sha256: hash(await readFile(path.join(output, file))), sourceDigest: compiled.sourceDigest });
-        } finally { await context.close(); }
+            scenePassed = true;
+        } finally { if (scenePassed) mark('close'); await context.close(); }
     }
+    try { checkpoint?.(null); } catch { /* Restore coarse setup/manifest coordinates only. */ }
     const manifest = { sourceSha, sourceTree, sceneManifestSHA256, appMounted: false, captures, sourceInputs: compiled.sourceInputs, sourceDigest: compiled.sourceDigest, disclosure, browserExecuted: true, nativeAcceptance: false, actualMutationRequests: 0 };
     assert.equal(await assertHostedSource(sourceSha, compiled.sourceInputs), sourceTree);
     await validateManifest(output, sourceSha, sourceTree, manifest); return manifest;
