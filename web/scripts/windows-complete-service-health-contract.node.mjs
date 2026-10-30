@@ -7,6 +7,7 @@ import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { capture, check, compile } from './capture-windows-complete-service-health.mjs';
 import { root, captureMatrix, contract, disclosure, sceneManifestSHA256, sha256, evidenceSummary, validateEvidence, assertHostedSource } from './windows-complete-service-health-contract.mjs';
+import { captureMatrix as reviewCaptureMatrix } from './windows-complete-service-review-contract.mjs';
 function png(width, height) {
     const chunk = (name, bytes) => { const body = Buffer.concat([Buffer.from(name), bytes]); let crc = -1; for (const byte of body) { crc ^= byte; for (let n = 0; n < 8; n++) crc = crc >>> 1 ^ (crc & 1 ? 0xedb88320 : 0); } const result = Buffer.alloc(body.length + 8); result.writeUInt32BE(bytes.length); body.copy(result, 4); result.writeUInt32BE((crc ^ -1) >>> 0, body.length + 4); return result; };
     const header = Buffer.alloc(13); header.writeUInt32BE(width); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
@@ -72,7 +73,8 @@ test('existing hosted runner invokes additive capture inside its unchanged timeo
     for (const name of ['pr-checks.yml', 'validate.yml']) {
         const workflow = await read(`.github/workflows/${name}`);
         const images = workflow.split('\n').map(line => line.trim()).filter(line => line.startsWith('artifacts/review/complete-service-') && line.endsWith('.png'));
-        assert.deepEqual(images, captureMatrix.map(row => `artifacts/review/${row.file}`));
+        // The integrated review scenes share this prefix; admit only both exact canonical matrices.
+        assert.deepEqual(images, [...reviewCaptureMatrix, ...captureMatrix].map(row => `artifacts/review/${row.file}`));
         assert(!workflow.includes('artifacts/review/complete-service-*.png'));
     }
 });
