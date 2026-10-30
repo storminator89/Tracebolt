@@ -17,6 +17,9 @@ struct Cli {
 enum Command {
     /// Validate public installer inputs without creating files, keys or enrollment state.
     ValidateConfig {
+        /// Also require a matching manager over the selected TLS trust.
+        #[arg(long)]
+        check_manager: bool,
         #[arg(long)]
         manager_origin: String,
         #[arg(long, default_value = "")]
@@ -65,10 +68,16 @@ enum Command {
 }
 
 fn main() {
-    if run().is_err() {
-        eprintln!(
-            "Tracebolt operation failed. Check protected configuration, certificate approval, state and server availability. State was not reset."
-        );
+    if let Err(error) = run() {
+        if let Some(error) =
+            error.downcast_ref::<tracebolt_windows_agent::compatibility::PreflightError>()
+        {
+            eprintln!("{error}");
+        } else {
+            eprintln!(
+                "Tracebolt operation failed. Check protected configuration, certificate approval, state and server availability. State was not reset."
+            );
+        }
         std::process::exit(1);
     }
 }
@@ -76,6 +85,7 @@ fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::ValidateConfig {
+            check_manager,
             manager_origin,
             agent_origin,
             agent_id,
@@ -85,7 +95,7 @@ fn run() -> anyhow::Result<()> {
         } => {
             let enrollment_mode: EnrollmentMode =
                 serde_json::from_value(serde_json::Value::String(mode))?;
-            Config {
+            let config = Config {
                 schema_version: "tracebolt.rust-windows-basic.v1".into(),
                 manager_origin,
                 agent_origin,
@@ -93,22 +103,39 @@ fn run() -> anyhow::Result<()> {
                 enrollment_mode,
                 interval_seconds,
                 basic_metrics_acknowledged: true,
-            }
-            .validate()?;
+            };
+            config.validate()?;
             let ca = server_ca_file
                 .map(|p| read_bounded(&p, 32768))
                 .transpose()?
                 .unwrap_or_default();
             tls_builder(&ca)?.build()?;
-            println!(
-                "Public configuration and CA valid; no files or identity created. Manager connectivity and approval not tested."
-            );
+            if check_manager {
+                tracebolt_windows_agent::compatibility::check(&config, &ca)?;
+                println!(
+                    "Manager protocol compatible at this check; no files or identity created. Enrollment, approval and accepted telemetry not tested."
+                );
+            } else {
+                println!(
+                    "Public configuration and CA valid; no files or identity created. Manager connectivity and approval not tested."
+                );
+            }
         }
         Command::Init {
             directory,
             bootstrap,
         } => {
-            if Config::load(&directory)?.enrollment_mode == EnrollmentMode::Preprovided {
+            let config = Config::load(&directory)?;
+            // Recheck fresh enrollment before any ledger, not just in the
+            // installer. Advanced preprovided mode keeps its distinct legacy
+            // telemetry-origin behavior and is outside this capability contract.
+            if config.enrollment_mode != EnrollmentMode::Preprovided {
+                tracebolt_windows_agent::compatibility::check(
+                    &config,
+                    &tracebolt_windows_agent::config::read_ca(&directory)?,
+                )?;
+            }
+            if config.enrollment_mode == EnrollmentMode::Preprovided {
                 anyhow::ensure!(
                     bootstrap.is_none(),
                     "bootstrap not supported in preprovided mode"

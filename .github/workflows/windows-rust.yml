@@ -39,6 +39,7 @@ jobs:
           cargo run --locked --example enrollment_fixture > ../../tests/rustagent/enrollment-fixture.json
       - run: go test ./tests/rustagent ./internal/enrollmentstore ./internal/enrollmentservice ./internal/api
         timeout-minutes: 12
+      - run: python3 -B tests/rustagent/test_release_manifest.py
   manager-package:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

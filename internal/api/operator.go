@@ -452,6 +452,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.URL.Path == "/v1/windows/rust-basic-capabilities" {
+		h.rustBasicCapabilities(w, r)
+		return
+	}
 	if r.URL.Path == "/v1/windows/setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v2" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v3" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v4" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v5" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v6" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v7" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v8" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v9" || r.URL.Path == "/v1/windows/read-admin-setup-capabilities-v10" {
 		h.windowsSetupCapabilities(w, r)
 		return

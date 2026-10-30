@@ -42,11 +42,12 @@ if (![Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -ne '
     throw 'This package supports native Windows x64 only.'
 }
 $validationArguments = @('validate-config','--manager-origin',$ManagerOrigin,'--mode',$mode,'--interval-seconds',"$IntervalSeconds")
+if ($mode -ne 'preprovided') { $validationArguments += '--check-manager' }
 if ($AgentOrigin) { $validationArguments += '--agent-origin',$AgentOrigin }
 if ($AgentId) { $validationArguments += '--agent-id',$AgentId }
 if ($ServerCAFile) { $validationArguments += '--server-ca-file',$ServerCAFile }
 & $Executable @validationArguments
-if ($LASTEXITCODE -ne 0) { throw 'Preflight rejected configuration or CA. No service, directory or identity was created.' }
+if ($LASTEXITCODE -ne 0) { throw 'Preflight rejected configuration, CA or manager compatibility. No service, directory or identity was created. Follow the safe diagnostic code above; use matching manager/frontend and Rust basic packages.' }
 function Invoke-SC([string[]]$Arguments) {
     & "$env:SystemRoot\System32\sc.exe" @Arguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Windows service configuration failed; staging is retained for inspection.' }
