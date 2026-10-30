@@ -1102,12 +1102,14 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(sum(map(len, p.CRITICAL.values())), 10)
         self.assertEqual(len(p.CRITICAL), 6)
 
-    def test_full_suite_unchanged_and_not_run_on_pr_or_main_push(self):
+    def test_full_suite_runs_on_main_manual_and_schedule_but_not_pull_requests(self):
         full = (ROOT / '.github/workflows/validate.yml').read_text()
         events = full.split('permissions:', 1)[0]
         self.assertIn('  workflow_dispatch:', events)
         self.assertIn('  schedule:', events)
-        for event in ['pull_request:', 'pull_request_target:', 'push:', 'workflow_call:', 'workflow_run:']:
+        self.assertIn("  push:\n    branches: ['main']\n", events)
+        self.assertEqual(events.count('  push:'), 1)
+        for event in ['pull_request:', 'pull_request_target:', 'workflow_call:', 'workflow_run:']:
             self.assertNotIn(event, events)
         fast = (ROOT / '.github/workflows/pr-checks.yml').read_text()
         self.assertIn('  pull_request:', fast)
