@@ -8,7 +8,7 @@ import { WindowsInventoryWorkspace } from './windows-inventory';
 import { useWindowsInventory, type WindowsInventoryResource } from './windows-inventory-resource';
 import { windowsDevice, windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
 import { windowsUpdates, windowsUpdatesView } from './windows-updates-fixture';
-import { capturedWindowsUpdateRows } from './windows-updates';
+import { capturedWindowsUpdateRows, WindowsUpdatesPanel } from './windows-updates';
 import { WINDOWS_INVENTORY_VIEW_BYTES, type WindowsInventoryView } from './windows-inventory-types';
 import { historyFixture } from './resource-history-fixture';
 
@@ -34,6 +34,56 @@ beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset().mockRe
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('read-only cached Windows Updates panel', () => {
+    it.each(['en', 'de'] as const)('keeps source, method and original inspection age visible without refreshing evidence in %s', locale => {
+        setLocale(locale, false); const de = locale === 'de', v = windowsUpdatesView();
+        v.serverNow = '2026-10-07T12:10:00Z'; v.receivedAt = '2026-10-07T12:09:59Z'; v.status = 'stale';
+        // Browser wall time is not the manager's evidence clock.
+        vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2040-01-01T00:00:00Z'));
+        const before = JSON.stringify(v), ui = render(<WindowsUpdatesPanel resource={{ ...resource(v), elapsedMS: 60000 }}/>);
+        const evidence = () => screen.getByLabelText(de ? 'Update-Nachweis' : 'Update evidence');
+        const fact = (label: string) => within(evidence()).getByText(label).closest('div')!.querySelector('dd')!;
+        expect(evidence()).toBeVisible();
+        expect(fact(de ? 'Quelle' : 'Source')).toHaveTextContent('wua-cache');
+        expect(fact(de ? 'Quelle' : 'Source')).toHaveTextContent(de ? 'Cache-Aktualität: unbekannt' : 'cache freshness: unknown');
+        expect(fact(de ? 'Prüfmethode' : 'Inspection method')).toHaveTextContent(de ? 'Nur Offline-Prüfung des WUA-Caches; keine Online-Suche.' : 'Offline WUA cache inspection only; no online scan.');
+        expect(fact(de ? 'Alter der Prüfung' : 'Inspection age')).toHaveTextContent(de ? 'vor 11 Min.' : '11 min ago');
+        expect(evidence().querySelector('time')).toHaveAttribute('datetime', '2026-10-07T12:00:00Z');
+        expect(screen.getByText(de ? /Veraltete Prüfung/ : /Stale inspection/)).toBeVisible();
+        expect(screen.getByText(de ? /keine aktuelle Patch-Bewertung/ : /not a current patch assessment/)).toBeVisible();
+        expect(JSON.stringify(v)).toBe(before);
+        const reread = { ...v, serverNow: '2026-10-07T12:20:00Z', receivedAt: '2026-10-07T12:19:59Z' };
+        ui.rerender(<WindowsUpdatesPanel resource={resource(reread)}/>);
+        expect(fact(de ? 'Alter der Prüfung' : 'Inspection age')).toHaveTextContent(de ? 'vor 20 Min.' : '20 min ago');
+        expect(evidence().querySelector('time')).toHaveAttribute('datetime', v.updates.collectedAt);
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('does not label unavailable, denied or offline-unverified attempts as successful inspection in %s', locale => {
+        setLocale(locale, false); const de = locale === 'de', v = windowsUpdatesView(0);
+        const ui = render(<WindowsUpdatesPanel resource={resource(v)}/>);
+        for (const [quality, reason] of [
+            ['denied', 'windows_updates_access_denied'], ['unavailable', 'windows_updates_unsupported_platform'],
+            ['unavailable', 'windows_updates_budget_exhausted'], ['partial', 'windows_updates_offline_not_verified'],
+        ] as const) {
+            Object.assign(v.updates, { quality, reason, countExact: false });
+            ui.rerender(<WindowsUpdatesPanel resource={resource(v)}/>);
+            expect(screen.getByText(de ? 'Keine erfolgreiche Offline-Prüfung des Caches bestätigt.' : 'No successful offline cache inspection verified.')).toBeVisible();
+            expect(screen.queryByText(de ? 'Nur Offline-Prüfung des WUA-Caches; keine Online-Suche.' : 'Offline WUA cache inspection only; no online scan.')).toBeNull();
+            expect(screen.queryByRole('table')).toBeNull();
+        }
+        Object.assign(v.updates, { quality: 'partial', reason: 'windows_updates_partial_result' });
+        ui.rerender(<WindowsUpdatesPanel resource={resource(v)}/>);
+        expect(screen.getByText(de ? 'Teilweises Cache-Ergebnis' : 'Partial cached result')).toBeVisible();
+        expect(screen.getByText(de ? 'Nur Offline-Prüfung des WUA-Caches; keine Online-Suche.' : 'Offline WUA cache inspection only; no online scan.')).toBeVisible();
+    });
+    it('keeps invalid inspection age unknown and omits evidence when the resource supplies no eligible update report', () => {
+        const r = resource(), ui = render(<WindowsUpdatesPanel resource={{ ...r, elapsedMS: Infinity }}/>);
+        expect(within(screen.getByLabelText('Update evidence')).getByText('Unknown')).toBeVisible();
+        for (const flags of [{}, { updatesExpired: true }, { updatesAhead: true }]) {
+            ui.rerender(<WindowsUpdatesPanel resource={{ ...r, ...flags, updates: null }}/>);
+            expect(screen.queryByLabelText('Update evidence')).toBeNull();
+            expect(screen.queryByText('Offline WUA cache inspection only; no online scan.')).toBeNull();
+        }
+    });
     it.each(['en', 'de'] as const)('shows original capture, cache caveats and bounded controls with %s column/mobile labels', locale => {
         setLocale(locale, false); const de = locale === 'de'; render(<WindowsInventoryWorkspace resource={resource()}/>); select();
         expect(screen.getByRole('heading', { name: de ? 'Windows-Updates aus dem Cache' : 'Cached Windows Updates' })).toBeVisible();
@@ -159,19 +209,28 @@ describe('Updates share the existing private resource and expiry', () => {
     });
     it('expires the original capture at 24h without minting age from receipt, hiding all private sibling rows', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); const v = windowsUpdatesView(); v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-06T12:00:11Z'; v.status = 'stale'; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); expect(screen.getByText('Synthetic cached update 001')).toBeVisible(); expect(screen.getByText(/Stale inspection/)).toBeVisible();
+        expect(screen.getByLabelText('Update evidence')).toBeVisible();
         await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.getByText(/Rows are hidden 24 hours/)).toBeVisible(); fireEvent.click(screen.getByRole('tab', { name: 'Processes' })); expect(screen.queryByText('fixture.exe')).toBeNull();
+        select(); expect(screen.queryByLabelText('Update evidence')).toBeNull();
+        expect(screen.queryByText('Offline WUA cache inspection only; no online scan.')).toBeNull();
     });
     it('changes recent to stale at two minutes while preserving unknown cache freshness', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); const v = windowsUpdatesView(); v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-07T11:58:10Z'; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); expect(screen.queryByText(/Stale inspection/)).toBeNull(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.getByText(/Stale inspection/)).toBeVisible(); expect(screen.getByText(/Cache freshness is unknown/)).toBeVisible();
     });
     it('preserves the base view under allowed future skew while withholding update rows, then ages them without a scan', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); const v = windowsUpdatesView(); v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-07T12:00:11Z'; v.status = 'stale'; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready();
+        expect(screen.queryByLabelText('Update evidence')).toBeNull();
+        expect(screen.queryByText('Offline WUA cache inspection only; no online scan.')).toBeNull();
         expect(screen.queryByRole('alert')).toBeNull(); expect(screen.getByText(/capture time is ahead/)).toBeVisible(); expect(screen.queryByRole('table')).toBeNull(); fireEvent.click(screen.getByRole('tab', { name: 'Processes' })); expect(screen.getByText('fixture.exe')).toBeVisible(); select(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.getByText('Synthetic cached update 001')).toBeVisible(); expect(screen.getByText(/Stale inspection/)).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
+        expect(screen.getByLabelText('Update evidence')).toBeVisible();
+        expect(screen.getByLabelText('Update evidence').querySelector('time')).toHaveAttribute('datetime', v.updates.collectedAt);
     });
     it('does not use request latency to reveal a still-future capture early', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); let resolve!: (v: WindowsInventoryView) => void; vi.mocked(request).mockReturnValue(new Promise(done => { resolve = done; })); render(<Harness/>); await ready(); await act(async () => vi.advanceTimersByTimeAsync(2000));
         const v = windowsUpdatesView(); v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-07T12:00:11Z'; v.status = 'stale'; await act(async () => resolve(v)); expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(/capture time is ahead/)).toBeVisible();
-        await act(async () => vi.advanceTimersByTimeAsync(999)); expect(screen.queryByRole('table')).toBeNull(); await act(async () => vi.advanceTimersByTimeAsync(1)); expect(screen.getByText('Synthetic cached update 001')).toBeVisible();
+        expect(screen.queryByLabelText('Update evidence')).toBeNull();
+        await act(async () => vi.advanceTimersByTimeAsync(999)); expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByLabelText('Update evidence')).toBeNull(); await act(async () => vi.advanceTimersByTimeAsync(1)); expect(screen.getByText('Synthetic cached update 001')).toBeVisible();
+        expect(screen.getByLabelText('Update evidence')).toBeVisible();
     });
     it('withholds future rows when a two-stage clock shift invalidates only the response-acceptance anchor', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); const origin = Date.parse(windowsNow); let resolve!: (v: WindowsInventoryView) => void; vi.mocked(request).mockReturnValue(new Promise(done => { resolve = done; })); render(<Harness/>); await ready();
