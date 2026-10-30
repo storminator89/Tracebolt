@@ -43,7 +43,7 @@ describe('package and update source isolation', () => {
     });
     it('keeps production installation unavailable while reading independent saved status in each inventory source', async () => {
         await updates();
-        const notice = screen.getByRole('region', { name: 'Selected package updates', exact: true });
+        const notice = screen.getByRole('region', { name: /^Selected package updates$/ });
         expect(notice).toBeVisible();
         expect(within(notice).getByText('Native package updates are not ready on this device.')).toBeVisible();
         expect(within(notice).getByRole('button', { name: 'Refresh saved update status' })).toBeEnabled();
@@ -51,7 +51,7 @@ describe('package and update source isolation', () => {
         expect(screen.getAllByRole('checkbox').every(input => (input as HTMLInputElement).disabled)).toBe(true);
         fireEvent.change(screen.getByLabelText('Update view'), { target: { value: 'preview' } });
         await screen.findByText('No accepted cached-update report');
-        expect(within(screen.getByRole('region', { name: 'Selected package updates', exact: true })).getByText('Native package updates are not ready on this device.')).toBeVisible();
+        expect(within(screen.getByRole('region', { name: /^Selected package updates$/ })).getByText('Native package updates are not ready on this device.')).toBeVisible();
         expect(screen.getByRole('button', { name: 'Prepare selected updates (simulation)' })).toBeDisabled();
         expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([
             `/devices/${completeDevice}/inventory/packages`, `/devices/${completeDevice}/inventory/complete-updates`, `/devices/${completeDevice}/package-updates`, `/devices/${completeDevice}/inventory/cached-updates`, `/devices/${completeDevice}/package-updates`,
