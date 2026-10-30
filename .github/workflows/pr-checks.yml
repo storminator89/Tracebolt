@@ -138,6 +138,7 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - name: Build whole UI and prepare existing browser runtime
+        id: browser_runtime
         working-directory: web
         run: |
           npm ci
@@ -145,6 +146,12 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Authenticated smoke and affected existing browser flows
         run: python3 -I -B tests/security/pr_checks.py browser
+      - name: Verify synthetic Windows created-stage instructions
+        if: ${{ !cancelled() && steps.browser_runtime.outcome == 'success' }}
+        run: |
+          node web/scripts/capture-windows-enrollment.mjs --check
+          node --test web/scripts/windows-enrollment-capture.node.mjs
+          node web/scripts/run-windows-enrollment-ci.mjs
       - name: Keep successful focused public-safe screenshots only
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -156,6 +163,16 @@ jobs:
             artifacts/review/first-report-manifest.json
             artifacts/review/pr-browser-smoke-results.json
             artifacts/review/pr-browser-smoke-manifest.json
+            artifacts/review/windows-enrollment-results.json
+            artifacts/review/windows-enrollment-manifest.json
+            artifacts/review/windows-enrollment-instructions-en-1440.png
+            artifacts/review/windows-enrollment-release-en-1440.png
+            artifacts/review/windows-enrollment-instructions-en-390.png
+            artifacts/review/windows-enrollment-release-en-390.png
+            artifacts/review/windows-enrollment-instructions-de-1440.png
+            artifacts/review/windows-enrollment-release-de-1440.png
+            artifacts/review/windows-enrollment-instructions-de-390.png
+            artifacts/review/windows-enrollment-release-de-390.png
             artifacts/review/results.json
             artifacts/review/screenshot-manifest.json
             artifacts/review/managed-preview-result.json
@@ -165,6 +182,41 @@ jobs:
             artifacts/review/windows-full-services-manifest.json
             artifacts/review/windows-service-actions-results.json
             artifacts/review/windows-service-actions-manifest.json
+            artifacts/review/windows-complete-service-review-manifest.json
+            artifacts/review/complete-service-review-matched-preview-unchecked-en-1440.png
+            artifacts/review/complete-service-review-matched-read-en-390.png
+            artifacts/review/complete-service-review-matched-selected-blank-en-390.png
+            artifacts/review/complete-service-review-unsupported-en-390.png
+            artifacts/review/complete-service-review-matched-selected-blank-de-1440.png
+            artifacts/review/complete-service-review-unknown-de-1440.png
+            artifacts/review/complete-service-review-matched-preview-unchecked-de-390.png
+            artifacts/review/complete-service-review-unknown-de-390.png
+            artifacts/review/windows-complete-notifications-manifest.json
+            artifacts/review/complete-notifications-review-en-1440.png
+            artifacts/review/complete-notifications-unknown-en-1440.png
+            artifacts/review/complete-notifications-named-en-1440.png
+            artifacts/review/complete-notifications-uncertain-en-1440.png
+            artifacts/review/complete-notifications-review-en-390.png
+            artifacts/review/complete-notifications-unknown-en-390.png
+            artifacts/review/complete-notifications-named-en-390.png
+            artifacts/review/complete-notifications-uncertain-en-390.png
+            artifacts/review/complete-notifications-review-de-1440.png
+            artifacts/review/complete-notifications-unknown-de-1440.png
+            artifacts/review/complete-notifications-named-de-1440.png
+            artifacts/review/complete-notifications-uncertain-de-1440.png
+            artifacts/review/complete-notifications-review-de-390.png
+            artifacts/review/complete-notifications-unknown-de-390.png
+            artifacts/review/complete-notifications-named-de-390.png
+            artifacts/review/complete-notifications-uncertain-de-390.png
+            artifacts/review/windows-complete-incident-inbox-manifest.json
+            artifacts/review/complete-incident-inbox-active-en-1440.png
+            artifacts/review/complete-incident-inbox-unknown-en-1440.png
+            artifacts/review/complete-incident-inbox-active-en-390.png
+            artifacts/review/complete-incident-inbox-unknown-en-390.png
+            artifacts/review/complete-incident-inbox-active-de-1440.png
+            artifacts/review/complete-incident-inbox-unknown-de-1440.png
+            artifacts/review/complete-incident-inbox-active-de-390.png
+            artifacts/review/complete-incident-inbox-unknown-de-390.png
             artifacts/review/windows-complete-service-health-manifest.json
             artifacts/review/complete-service-single-beyond-preview-en-1440.png
             artifacts/review/complete-service-group-exact-review-en-1440.png

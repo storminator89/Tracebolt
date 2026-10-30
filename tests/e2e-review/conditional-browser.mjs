@@ -2,6 +2,7 @@
  * No native collection, APT, model calls, external catalog or TLS bypass.
  */
 import {createRequire} from 'node:module';
+import {captureFocusMatrix} from './focus-contrast-browser.mjs';
 import {spawn,execFileSync} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {randomBytes,createHash} from 'node:crypto';
@@ -138,6 +139,14 @@ try{
    const packageDetails=page.locator('.package-observations .package-row-details').first();await packageDetails.locator('summary').focus();await page.keyboard.press('Enter');await expect(packageDetails).toHaveAttribute('open','');
    await capturePanelMatrix(page,'.package-observations tbody tr:first-child .package-row-details','synthetic-legacy-package-mapping');
    await packageDetails.locator('summary').focus();await page.keyboard.press('Space');await expect(packageDetails).not.toHaveAttribute('open');
+
+   const capture=async(name,contrast)=>{await shot(page,name);screenshots.at(-1).contrast=contrast;};
+   await captureFocusMatrix({page,expect,mark,capture,targets:[
+    {name:'legacy-package-table',selector:'.package-observations .package-table-scroll',keyboardEntry:{from:'.package-observations > .package-heading button',path:['.package-observations .package-table-scroll']}},
+    {name:'legacy-package-details',selector:'.package-observations .package-row-details summary',keyboardEntry:{from:'.package-observations > .package-heading button',path:['.package-observations .package-table-scroll','.package-observations .package-row-details summary']}},
+   ]});
+   await review(page);
+   await captureFocusMatrix({page,expect,mark,capture,targets:[{name:'advisory-toggle',selector:'.advisory-review-toggle'}]});
 
    await importCatalog();await page.goto(base+'/#/settings');await expect(page.locator('.security-catalog')).toHaveAttribute('aria-busy','false');await expect(page.locator('.security-catalog')).toContainText('Unverified origin');
    await capturePanelMatrix(page,'.security-catalog > .security-heading','synthetic-legacy-catalog-summary',{device:false});

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "scenes": [
+    "review",
+    "unknown",
+    "named",
+    "uncertain"
+  ],
+  "viewports": [
+    {
+      "locale": "en",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "locale": "de",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "locale": "de",
+      "width": 390,
+      "height": 844
+    }
+  ]
+}

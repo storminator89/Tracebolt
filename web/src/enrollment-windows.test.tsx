@@ -29,7 +29,7 @@ function record(state: EnrollmentState = 'created', revision = 1): EnrollmentSna
  };
 }
 function listing(items: EnrollmentSnapshot[] = []): EnrollmentList {
- return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['windows'], recordLimit: 25, collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive', items };
+ return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['windows'], recordLimit: 25, collectionProfile: 'windows-inventory-v1', collectionPrivacy: 'windows_inventory_metadata_may_be_sensitive', selfRegistrationEnabled:false, items };
 }
 function linuxListing(): EnrollmentList {
  return { schemaVersion: 'tracebolt.enrollment-operator.v2', serverNow, enabled: true, platforms: ['linux'], recordLimit: 25, items: [] };
@@ -46,7 +46,7 @@ async function windows() {
  render(section());
  await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
  select('windows');
- await screen.findByText('Windows · Single invitation · Manual approval');
+ await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
 }
 async function add() {
  await windows();
@@ -60,7 +60,7 @@ async function create() {
  await within(dialog).findByLabelText('One-time invitation secret'); return dialog;
 }
 async function review(item: EnrollmentSnapshot) {
- current = listing([item]); await windows();
+ current = listing([item]); current.selfRegistrationEnabled=true; await windows();
  fireEvent.click(screen.getByRole('button', { name: /Invitations/ }));
  fireEvent.click(screen.getByRole('button', { name: `Review invitation ${invitation}` }));
  return screen.getByRole('dialog', { name: 'Review invitation' });
@@ -79,7 +79,7 @@ describe('Windows enrollment contract and creation consent', () => {
   render(section()); await waitFor(() => expect(screen.getByRole('button', { name: 'Add device' })).toBeEnabled());
   expect(screen.getByRole('combobox', { name: 'Operating system' })).toHaveValue('linux');
   expect(request).toHaveBeenCalledExactlyOnceWith('/enrollment', { signal: expect.any(AbortSignal) });
-  select('windows'); await screen.findByText('Windows · Single invitation · Manual approval');
+  select('windows'); await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
   expect(request).toHaveBeenLastCalledWith('/windows/enrollment', { signal: expect.any(AbortSignal) });
  });
  it('rejects mismatched profiles, privacy, platform rows and bounds before opening a Windows dialog', async () => {
@@ -108,6 +108,62 @@ describe('Windows enrollment contract and creation consent', () => {
   expect(within(dialog).getByText(/After Setup requests service start/)).toHaveTextContent('fresh authenticated report');
   expect(within(dialog).queryByRole('button', { name: 'Copy public installation command' })).not.toBeInTheDocument();
   expect(dialog.textContent).not.toMatch(/rc\.3|Run as root|sha256sum|curl|agent-service/);
+  expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(secret);
+ });
+ it.each(['en', 'de'] as const)('keeps released Setup guidance separate from unchanged bounded inventory consent in %s', async locale => {
+  setLocale(locale, false); operator.insecureTestMode = true; jsdom.reconfigure({ url: 'http://localhost:8080/' });
+  const de = locale === 'de', addLabel = de ? 'Gerät hinzufügen' : 'Add device', createLabel = de ? 'Einladung erstellen' : 'Create invitation';
+  const consentLabel = de ? 'Ich bestätige diese Windows-Inventarerfassung für das neue Gerät.' : collectionConsent;
+  const httpLabel = de ? 'Ich akzeptiere ausdrücklich das unverschlüsselte HTTP-Test-Enrollment und die Übertragung des Windows-Inventars.' : httpConsent;
+  const unchangedScope = de ? [
+   'Begrenztes Windows-Inventar',
+   'Hostname, Schnittstellen-IP-Adressen, Prozessnamen und IDs, Dienstmetadaten und Metadaten installierter Software können persönliche oder sensible Angaben enthalten.',
+   'Jeder Snapshot enthält höchstens 1 Hostnamen, 128 Prozesszeilen, 128 Dienstzeilen, 128 Softwarezeilen und 64 Schnittstellenadresszeilen innerhalb von 48 KiB. Teilergebnisse und Zählungen als Untergrenze werden ausdrücklich angezeigt; diese Werte belegen keine vollständige Geräteabdeckung.',
+   'Keine Befehlszeilen, Umgebungsvariablen, Rohprotokolle, Zugangsdaten, Fernbefehle, Windows-Update- oder CVE-Analyse. Kein KI-Export. Die Sichtbarkeit hängt von der nativen Quelle und den Agent-Berechtigungen ab.',
+   'HTTP-Test: Die Einladung und freigegebene Hostnamen-, Netzwerk-, Prozess-, Dienst- und Softwaremetadaten werden unverschlüsselt übertragen und können abgefangen oder verändert werden. Nur in einer bewusst isolierten Testumgebung verwenden.',
+  ] : [
+   'Bounded Windows inventory',
+   'Hostname, interface IP addresses, process names and IDs, service metadata, and installed software metadata may contain personal or sensitive information.',
+   'Each snapshot carries at most 1 hostname, 128 process rows, 128 service rows, 128 software rows and 64 interface-address rows within 48 KiB. Partial results and lower-bound counts are shown explicitly; these counts do not prove whole-device coverage.',
+   'No command lines, environment variables, raw logs, credentials, remote commands, Windows Update or CVE analysis. No AI export. Visibility depends on the native source and the agent’s permissions.',
+   'HTTP test: the invitation and approved hostname, network, process, service and software metadata travel without encryption and may be intercepted or altered. Use only in a deliberately isolated test environment.',
+  ];
+  vi.mocked(mutate).mockResolvedValue(creation()); render(section());
+  await waitFor(() => expect(screen.getByRole('button', { name: addLabel })).toBeEnabled()); select('windows');
+  await screen.findByText(de ? 'Windows · Einzelne Einladung · Manuelle Freigabe' : 'Windows · Single invitation · Manual approval');
+  fireEvent.click(screen.getByRole('button', { name: addLabel })); const dialog = screen.getByRole('dialog', { name: addLabel });
+  for (const text of unchangedScope) expect(within(dialog).getByText(text, { exact: true })).toBeVisible();
+  expect(dialog).toHaveTextContent(de ? 'Lokale Installation, dauerhafte Identität und die 21 Read-admin-Bereiche benötigen eine separate Zustimmung am Gerät.' : 'Local installation, persistent identity and the 21 Read admin scopes require separate approval on the device.');
+  expect(dialog).toHaveTextContent(de ? 'Der veröffentlichte Preview.3 unterstützt nur TLS.' : 'Published preview.3 is TLS-only.');
+  const collection = within(dialog).getByRole('checkbox', { name: consentLabel }), http = within(dialog).getByRole('checkbox', { name: httpLabel }), button = within(dialog).getByRole('button', { name: createLabel });
+  expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2); expect(collection).not.toBeChecked(); expect(http).not.toBeChecked(); expect(button).toBeDisabled();
+  fireEvent.click(collection); expect(button).toBeDisabled(); fireEvent.click(button); expect(mutate).not.toHaveBeenCalled();
+  fireEvent.click(http); expect(button).toBeEnabled(); fireEvent.click(button);
+  const input = await within(dialog).findByLabelText(de ? 'Einmaliger Einladungsschlüssel' : 'One-time invitation secret');
+  expect(input).toHaveAttribute('type', 'password');
+  expect(mutate).toHaveBeenCalledExactlyOnceWith('/windows/enrollment/invitations', { requestId: expect.stringMatching(/^request_[a-f0-9]{32}$/), platform: 'windows', collectionAcknowledged: true, insecureHTTPAcknowledged: true }, expect.any(AbortSignal));
+  expect(dialog).toHaveTextContent('windows-inventory-v1');
+  for (const text of de ? [
+   'Die öffentliche Bootstrap-Datei unten herunterladen', 'vollständige Vertrauens-Fingerabdrücke unabhängig vergleichen.',
+   'Die 21 lokalen Read-admin-Bereiche sowie die ungeprüften Zustimmungen zu Dienst, dauerhafter Identität und Vertrauensvergleich prüfen.',
+   'Diese Dashboard-Einladung gewährt diese Bereiche nicht.', 'HTTP-Quelltests benötigen eine separate Klartext-Risikobestätigung.',
+   'Die Einladung ausschließlich in der separaten verdeckten Setup-Konsole eingeben.',
+   'vollständigen Geräte-Fingerabdruck und Vergleichswert vergleichen.',
+   'einen frischen authentifizierten Bericht samt tatsächlicher Quellenabdeckung prüfen.',
+   'Eine aktivierte Identität oder ein laufender Dienst allein belegen keine Berichterfassung.',
+   'Frisches Setup überschreibt oder setzt ihn nicht zurück; die Dienstentfernung erhält Dateien, Schlüssel und Zustand.',
+  ] : [
+   'Download the public bootstrap below to a local folder on the Windows device', 'full trust fingerprints independently.',
+   'Review the 21 local Read admin scopes and the unchecked service, persistent-identity and trust approvals.',
+   'This dashboard invitation does not grant those scopes.', 'Source HTTP tests require their separate plaintext-risk acknowledgement.',
+   'Enter the invitation only in Setup’s separate hidden-input console.', 'full device fingerprint and comparison value here before approving',
+   'a fresh authenticated report and actual source coverage.', 'An activated identity or a running service alone does not prove reporting.',
+   'Fresh Setup cannot overwrite or reset it; service removal retains files, keys and state.',
+  ]) expect(dialog).toHaveTextContent(text);
+  expect(dialog.textContent).not.toMatch(/five local read scopes|fünf lokalen Lesebereichen|No released Windows installer|Ein veröffentlichter Windows-Installer/);
+  expect(within(dialog).getByRole('button', { name: de ? 'Bootstrap-Datei herunterladen' : 'Download bootstrap file' })).toBeVisible();
+  expect(within(dialog).queryByRole('button', { name: de ? 'Öffentlichen Installationsbefehl kopieren' : 'Copy public installation command' })).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole('link')).not.toBeInTheDocument();
   expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(secret);
  });
  it('requires a second unchecked HTTP-test acknowledgement and sends true only after both approvals', async () => {
@@ -214,14 +270,14 @@ describe('Windows lifecycle and platform cancellation', () => {
   expect(signal).toBeDefined(); select('linux'); expect(signal!.aborted).toBe(true);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); await act(async () => finish(creation()));
   expect(screen.queryByDisplayValue(secret)).not.toBeInTheDocument(); expect(changed).not.toHaveBeenCalled();
-  select('windows'); await screen.findByText('Windows · Single invitation · Manual approval');
+  select('windows'); await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
   fireEvent.click(screen.getByRole('button', { name: 'Add device' })); expect(screen.getByRole('checkbox', { name: collectionConsent })).not.toBeChecked();
  });
  it('clears a revealed secret on switch and requires new consent after reopening', async () => {
   const dialog = await create(); fireEvent.click(within(dialog).getByRole('button', { name: 'Reveal invitation secret' }));
   const input = screen.getByLabelText('One-time invitation secret'); expect(input).toHaveAttribute('type', 'text');
   select('linux'); expect(input).toHaveValue(''); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(screen.queryByDisplayValue(secret)).not.toBeInTheDocument();
-  select('windows'); await screen.findByText('Windows · Single invitation · Manual approval');
+  select('windows'); await screen.findByText(/Windows · Single invitation · Manual approval|Automatic registration · Manual approval/);
   fireEvent.click(screen.getByRole('button', { name: 'Add device' })); expect(screen.getByRole('checkbox', { name: collectionConsent })).not.toBeChecked();
  });
  it('removes a displayed secret when refreshed Windows consent metadata no longer matches', async () => {
@@ -277,5 +333,32 @@ describe('Linux installation command boundary', () => {
   expect(preparedEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)).toBeNull();
   expect(verifiedDownloadCommand(OFFICIAL_LINUX_BOOTSTRAP_PIN, response.bootstrap, response.snapshot, response.bootstrapSHA256)).toBeNull();
   expect(selectEnrollmentCommand(response.bootstrap, response.snapshot, response.bootstrapSHA256)).toBeNull();
+ });
+});
+
+
+describe('Windows tokenless Rust registration', () => {
+ it('labels pending automatic registration and retains unchecked fingerprint approval', async () => {
+  const item = {...record('claimed_pending',2), registrationMode:'rust-basic-self-registration' as const};
+  const dialog=await review(item);
+  expect(within(dialog).getByText(/automatic registration without an invitation token/)).toBeVisible();
+  expect(within(dialog).getByRole('button',{name:'Approve device'})).toBeDisabled();
+  expect(within(dialog).getByRole('checkbox')).not.toBeChecked();
+  expect(screen.getByText(/Invitation tokens remain optional/)).toBeVisible();
+ });
+});
+
+describe('automatic setup default', () => {
+ it('keeps token optional and requires scope acknowledgement before public bootstrap', async () => {
+  current.selfRegistrationEnabled=true;
+  vi.mocked(mutate).mockResolvedValue({...creation().bootstrap,schemaVersion:'tracebolt.enrollment-bootstrap.auto.v1'});
+  const dialog=await add();
+  const button=within(dialog).getByRole('button',{name:'Set up without token'});
+  expect(button).toBeDisabled();
+  expect(within(dialog).getByRole('checkbox',{name:'Optional: use an invitation token'})).not.toBeChecked();
+  acknowledge(dialog);fireEvent.click(button);
+  await within(dialog).findByRole('button',{name:'Download configuration'});
+  expect(mutate).toHaveBeenCalledWith('/windows/enrollment/automatic-bootstrap',expect.objectContaining({platform:'windows',collectionAcknowledged:true}),expect.any(AbortSignal));
+  expect(within(dialog).queryByLabelText('One-time invitation secret')).not.toBeInTheDocument();
  });
 });

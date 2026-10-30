@@ -1,0 +1,174 @@
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+use tracebolt_windows_agent::{
+    config::tls_builder,
+    config::{Config, EnrollmentMode, read_bounded},
+    enrollment::Enrollment,
+    enrollment_wire::Bootstrap,
+};
+
+#[derive(Parser)]
+#[command(version, about = "Tracebolt basic Windows telemetry service (Rust)")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+#[derive(Subcommand)]
+enum Command {
+    /// Validate public installer inputs without creating files, keys or enrollment state.
+    ValidateConfig {
+        #[arg(long)]
+        manager_origin: String,
+        #[arg(long, default_value = "")]
+        agent_origin: String,
+        #[arg(long, default_value = "")]
+        agent_id: String,
+        #[arg(long, default_value = "auto")]
+        mode: String,
+        #[arg(long, default_value_t = 60)]
+        interval_seconds: u64,
+        #[arg(long)]
+        server_ca_file: Option<PathBuf>,
+    },
+    /// Validate protected configuration and credentials without sending data.
+    Check {
+        #[arg(long)]
+        directory: PathBuf,
+    },
+    /// Create a new ledger for a fresh, approved, never-used endpoint identity.
+    Init {
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(long)]
+        bootstrap: Option<PathBuf>,
+    },
+    /// Advance automatic onboarding by one bounded phase without collecting metrics.
+    Onboard {
+        #[arg(long)]
+        directory: PathBuf,
+    },
+    /// Optional invitation entry, hidden local terminal input; no token in arguments.
+    ClaimInvitation {
+        #[arg(long)]
+        directory: PathBuf,
+    },
+    /// Collect and send one report; print no telemetry or credentials.
+    Once {
+        #[arg(long)]
+        directory: PathBuf,
+    },
+    /// Windows Service Control Manager entry point.
+    Service {
+        #[arg(long)]
+        directory: PathBuf,
+    },
+}
+
+fn main() {
+    if run().is_err() {
+        eprintln!(
+            "Tracebolt operation failed. Check protected configuration, certificate approval, state and server availability. State was not reset."
+        );
+        std::process::exit(1);
+    }
+}
+fn run() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+    match cli.command {
+        Command::ValidateConfig {
+            manager_origin,
+            agent_origin,
+            agent_id,
+            mode,
+            interval_seconds,
+            server_ca_file,
+        } => {
+            let enrollment_mode: EnrollmentMode =
+                serde_json::from_value(serde_json::Value::String(mode))?;
+            Config {
+                schema_version: "tracebolt.rust-windows-basic.v1".into(),
+                manager_origin,
+                agent_origin,
+                agent_id,
+                enrollment_mode,
+                interval_seconds,
+                basic_metrics_acknowledged: true,
+            }
+            .validate()?;
+            let ca = server_ca_file
+                .map(|p| read_bounded(&p, 32768))
+                .transpose()?
+                .unwrap_or_default();
+            tls_builder(&ca)?.build()?;
+            println!(
+                "Public configuration and CA valid; no files or identity created. Manager connectivity and approval not tested."
+            );
+        }
+        Command::Init {
+            directory,
+            bootstrap,
+        } => {
+            if Config::load(&directory)?.enrollment_mode == EnrollmentMode::Preprovided {
+                anyhow::ensure!(
+                    bootstrap.is_none(),
+                    "bootstrap not supported in preprovided mode"
+                );
+                tracebolt_windows_agent::sender::Sender::open(&directory, true)?;
+                println!("Fresh sender state initialized.");
+            } else {
+                let bootstrap: Option<Bootstrap> = bootstrap
+                    .map(|p| -> anyhow::Result<_> {
+                        Ok(serde_json::from_slice(&read_bounded(&p, 65536)?)?)
+                    })
+                    .transpose()?;
+                let enrollment = Enrollment::open(&directory, true, bootstrap)?;
+                println!("{}", enrollment.public_status()?);
+            }
+        }
+        Command::Onboard { directory } => {
+            let mut enrollment = Enrollment::open(&directory, false, None)?;
+            enrollment.step(None)?;
+            println!("{}", enrollment.public_status()?);
+        }
+        Command::ClaimInvitation { directory } => {
+            let mut enrollment = Enrollment::open(&directory, false, None)?;
+            anyhow::ensure!(
+                enrollment.config.enrollment_mode == EnrollmentMode::Invitation,
+                "invitation mode is optional and must be selected at installation"
+            );
+            let secret = rpassword::prompt_password("Optional invitation token (hidden): ")?;
+            enrollment.step(Some(&secret))?;
+            println!("{}", enrollment.public_status()?);
+        }
+        Command::Check { directory } => {
+            tracebolt_windows_agent::runtime::Runtime::open(&directory)?;
+            println!("Local configuration and sender state valid; server connectivity not tested.");
+        }
+        Command::Once { directory } => {
+            #[cfg(windows)]
+            {
+                let mut runtime = tracebolt_windows_agent::runtime::Runtime::open(&directory)?;
+                if runtime.cycle(tracebolt_windows_agent::native::collect)? {
+                    println!("Server acknowledged the report.");
+                } else {
+                    println!("Onboarding pending manager approval; no report sent.");
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = directory;
+                anyhow::bail!("Windows is required for collection");
+            }
+        }
+        Command::Service { directory } => {
+            #[cfg(windows)]
+            tracebolt_windows_agent::service::dispatch(directory)?;
+            #[cfg(not(windows))]
+            {
+                let _ = directory;
+                anyhow::bail!("Windows SCM required");
+            }
+        }
+    }
+    Ok(())
+}

@@ -26,8 +26,9 @@
 
 .package-table-scroll:focus-visible { outline: 3px solid #3aab9877; outline-offset: 3px; }
 
-.package-row-details summary { cursor: pointer; border-radius: 3px; }
-.package-row-details summary:focus-visible { outline: 3px solid #3aab9877; outline-offset: 3px; }
+/* Reserve room for the inset ring around the native marker and every wrapped line, even before focus. */
+.package-row-details summary { cursor: pointer; border-radius: 3px; padding: 6px; }
+.package-row-details summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
 .package-row-details dl { margin: 8px 0 0; font-weight: 400; }
 .package-row-details dt { color: var(--secondary); }
 .package-row-details dd { margin: 3px 0 0; }

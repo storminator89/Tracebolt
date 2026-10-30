@@ -121,6 +121,27 @@ describe('package observations presentation and private lifecycle', () => {
         for (const text of ['500', '490', '499', 'Partial exported inventory', 'Rows truncated by export bounds', 'trixie']) expect(screen.getByText(text)).toBeVisible();
         expect(screen.queryByRole('link')).not.toBeInTheDocument(); expect(document.body.textContent).not.toMatch(/0 CVEs|zero vulnerabilities|Available updates: 0/i); expect(storage).not.toHaveBeenCalled();
     });
+    it.each(['en', 'de'] as const)('reveals each focused package mapping summary without changing disclosure or reads in %s', async locale => {
+        const value = view(), inventory = value.snapshot!.inventory;
+        inventory.items.push(row('fixture-second')); inventory.observedCount = inventory.installedCount = 2;
+        vi.mocked(request).mockResolvedValue(value); setLocale(locale, false);
+        render(<PackageObservationsPanel deviceId="agent_fixture"/>);
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Release- und Quellpaket-Beobachtungen' : 'Release and source-package observations' }));
+        const table = await screen.findByRole('table'), region = table.closest('[tabindex="0"]') as HTMLElement;
+        const summaries = [...table.querySelectorAll('summary')], reveals = summaries.map(summary => {
+            const reveal = vi.fn(function (this: HTMLElement) { expect(this).toBe(summary); expect(summary).toHaveFocus(); });
+            Object.defineProperty(summary, 'scrollIntoView', { configurable: true, value: reveal }); return reveal;
+        });
+        region.focus(); for (const reveal of reveals) expect(reveal).not.toHaveBeenCalled();
+        for (const [index, summary] of summaries.entries()) {
+            summary.focus(); expect(reveals[index]).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+            expect(summary).toHaveFocus(); expect(summary.closest('details')).not.toHaveAttribute('open');
+            fireEvent.click(summary); expect(summary.closest('details')).toHaveAttribute('open');
+            fireEvent.click(summary); expect(summary.closest('details')).not.toHaveAttribute('open');
+            expect(reveals[index]).toHaveBeenCalledTimes(1);
+        }
+        expect(request).toHaveBeenCalledTimes(1);
+    });
     it('keeps binary-default and explicit Source evidence separate in keyboard-focusable row disclosures', async () => {
         const value = view(), inventory = value.snapshot!.inventory;
         inventory.items.push({ ...row('fixture-default'), sourcePackage: 'fixture-default', sourceVersion: '2:1.0~rc1-2+b1', sourceMapping: 'binary-default' });

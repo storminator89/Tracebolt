@@ -133,7 +133,7 @@
           "promptVersion": "tracebolt.diagnostics-prompt.v1",
           "provider": "fixture",
           "ruleId": "health:service",
-          "runbookVersion": "tracebolt.read-only-runbooks.v1"
+          "runbookVersion": "tracebolt.read-only-runbooks.v2"
         },
         "reason": "Schema and evidence IDs passed validation. The suggestions still require human review.",
         "status": "completed"
@@ -170,11 +170,11 @@
           "promptVersion": "not-applicable",
           "provider": "none",
           "ruleId": "health:service",
-          "runbookVersion": "tracebolt.read-only-runbooks.v1"
+          "runbookVersion": "tracebolt.read-only-runbooks.v2"
         },
         "summary": "Der ausgewählte Dienst meldete über 120 Sekunden inaktiv oder fehlgeschlagen. Die Ursache ist unbekannt."
       },
-      "fingerprint": "c13d5f1d71f745f64d71bbef077e888f1855b078b1ab4092e58954b42f7b6d27",
+      "fingerprint": "77815d874d09ab6fd07bddb3fd6c64c8421117f5f55cd5a3739d18da3828559d",
       "generatedAt": "2026-10-07T12:02:00Z",
       "id": "analysis-dddddddddddddddddddddddddddddddd",
       "limitations": [

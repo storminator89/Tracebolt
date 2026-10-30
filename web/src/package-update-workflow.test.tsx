@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT } from './api';
@@ -245,5 +246,64 @@ describe('native selected-update consent and interruption boundaries', () => {
     it('does not reinterpret a legacy mode-less stored approval as native consent', async () => {
         const preview = packageUpdatePreview(); sessionStorage.setItem('tracebolt.package-update-intent', JSON.stringify({ deviceId: updateWorkflowDevice, actorId: updateWorkflowActor, sessionKey: operator.expiresAt, intent: { kind: 'approve', requestId: preview.requestId, previewDigest: preview.digest } }));
         nativeResponses(); render(component()); await screen.findByText(/Inconsistent update evidence/); expect(readPackageUpdates).not.toHaveBeenCalled(); expect(approvePackageUpdates).not.toHaveBeenCalled();
+    });
+});
+
+
+describe('read-first update hierarchy', () => {
+    it.each(['en', 'de'] as const)('keeps one inventory mount through idle, active, uncertain and recovered states in %s', async locale => {
+        setLocale(locale, false);
+        const mounted = vi.fn(), unmounted = vi.fn();
+        function InventoryProbe() {
+            const [search, setSearch] = useState('');
+            useEffect(() => { mounted(); return () => { unmounted(); }; }, []);
+            return <div data-testid="inventory-probe"><input aria-label="Inventory search probe" value={search} onChange={event => setSearch(event.target.value)}/><table><tbody><tr><PackageUpdateSelectionCell {...rows[0]}/><td>curl</td></tr></tbody></table><span>2026-10-07T00:00:00Z</span></div>;
+        }
+        vi.mocked(readPackageUpdates).mockResolvedValue(unavailablePackageUpdates());
+        const result = render(<PackageUpdatesWorkspace deviceId={updateWorkflowDevice} sessionKey={operator.expiresAt} source="complete"><InventoryProbe/></PackageUpdatesWorkspace>);
+        const unavailable = locale === 'en' ? 'Native package updates are not ready on this device.' : 'Native Paketupdates sind auf diesem Gerät nicht bereit.';
+        await screen.findByText(unavailable);
+        const status = result.container.querySelector('.package-update-workflow')!, inventory = screen.getByTestId('inventory-probe'), search = screen.getByRole('textbox'), selection = result.container.querySelector('.package-update-selection')!;
+        const refresh = () => fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Refresh saved update status' : 'Gespeicherten Updatestatus aktualisieren' }));
+        const select = () => screen.getByRole('checkbox', { name: `${locale === 'en' ? 'Select' : 'Auswählen'} curl:amd64` });
+        const prepareSelected = () => screen.getByRole('button', { name: locale === 'en' ? 'Prepare selected updates (simulation)' : 'Ausgewählte Updates vorbereiten (Simulation)' });
+        const stable = () => {
+            expect(screen.getByTestId('inventory-probe')).toBe(inventory); expect(screen.getByRole('textbox')).toBe(search);
+            expect(search).toHaveValue('kept search'); expect(mounted).toHaveBeenCalledTimes(1); expect(unmounted).not.toHaveBeenCalled();
+            expect(status.compareDocumentPosition(inventory) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            expect(inventory.compareDocumentPosition(selection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            expect(screen.getByText('2026-10-07T00:00:00Z')).toBeVisible();
+        };
+        fireEvent.change(search, { target: { value: 'kept search' } }); expect(status).toHaveClass('package-update-workflow-idle'); stable();
+        fireEvent.click(select()); expect(status).not.toHaveClass('package-update-workflow-idle'); expect(prepareSelected()).toBeDisabled(); stable();
+        fireEvent.click(select()); expect(status).toHaveClass('package-update-workflow-idle'); stable();
+        vi.mocked(readPackageUpdates).mockResolvedValue(simulatedPackageUpdates()); refresh();
+        await screen.findByText(/SIMULATION ONLY|NUR SIMULATION/); expect(status).not.toHaveClass('package-update-workflow-idle'); stable();
+        vi.mocked(readPackageUpdates).mockResolvedValue(unavailablePackageUpdates()); refresh();
+        await screen.findByText(unavailable); await waitFor(() => expect(status).toHaveClass('package-update-workflow-idle')); stable();
+        vi.mocked(readPackageUpdates).mockResolvedValue(simulatedPackageUpdates()); refresh(); await screen.findByText(/SIMULATION ONLY|NUR SIMULATION/);
+        fireEvent.click(select()); fireEvent.click(prepareSelected());
+        const review = await screen.findByRole('region', { name: locale === 'en' ? 'Immutable preparation review' : 'Unveränderliche Vorbereitung prüfen' });
+        expect(review.compareDocumentPosition(inventory) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); stable();
+        const ack = screen.getByRole('checkbox', { name: /I have reviewed|Ich habe diese genauen/ }); expect(ack).not.toBeChecked(); fireEvent.click(ack);
+        vi.mocked(approvePackageUpdates).mockRejectedValueOnce(new Error('lost reply'));
+        fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Confirm this exact update (simulation)' : 'Dieses genaue Update bestätigen (Simulation)' }));
+        const recover = await screen.findByRole('button', { name: locale === 'en' ? 'Recover same request status' : 'Status derselben Anfrage wiederherstellen' });
+        expect(recover).toBeVisible(); expect(status).not.toHaveClass('package-update-workflow-idle'); expect(screen.getByRole('region', { name: review.getAttribute('aria-label')! })).toBe(review); stable();
+        const frozen = vi.mocked(approvePackageUpdates).mock.calls[0][1]; expect(sessionStorage.getItem('tracebolt.package-update-intent')).toContain(frozen.requestId);
+        vi.mocked(readPackageUpdates).mockResolvedValue(packageUpdateJob('needs_intervention', frozen)); fireEvent.click(recover);
+        await screen.findByText(locale === 'en' ? 'Needs intervention; outcome not verified' : 'Eingriff nötig; Ausgang nicht verifiziert');
+        expect(status).not.toHaveClass('package-update-workflow-idle'); expect(review).toHaveTextContent(frozen.digest); expect(review).toHaveTextContent(frozen.expiresAt); stable();
+        expect(preparePackageUpdates).toHaveBeenCalledTimes(1); expect(approvePackageUpdates).toHaveBeenCalledTimes(1);
+    });
+    it.each(['en', 'de'] as const)('does not compact read loading or failed status in %s', async locale => {
+        setLocale(locale, false); let complete!: (view: ReturnType<typeof unavailablePackageUpdates>) => void;
+        vi.mocked(readPackageUpdates).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+        const result = render(component()), status = result.container.querySelector('.package-update-workflow')!;
+        expect(status).not.toHaveClass('package-update-workflow-idle'); expect(screen.getByRole('status')).toBeVisible();
+        await act(async () => complete(unavailablePackageUpdates())); expect(status).toHaveClass('package-update-workflow-idle');
+        vi.mocked(readPackageUpdates).mockRejectedValueOnce(new Error('read failed'));
+        fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Refresh saved update status' : 'Gespeicherten Updatestatus aktualisieren' }));
+        await screen.findByRole('alert'); expect(status).not.toHaveClass('package-update-workflow-idle'); expect(preparePackageUpdates).not.toHaveBeenCalled();
     });
 });

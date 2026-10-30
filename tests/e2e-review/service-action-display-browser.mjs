@@ -74,7 +74,7 @@ export function serviceActionDisplayRoute({base,fixture,state}){
 /** Reuse only the runner's browser and static production UI; never its login. */
 export async function serviceActionDisplayBrowserCase({pageAt,expect,base,shot}){
  mark('setup');const page=await pageAt('/devices'),fixture=serviceActionDisplayFixtures();
- const state={forbidden:[],external:[],phase:'ready',previewReads:0,inventoryReads:0};
+ const state={forbidden:[],external:[],phase:'stale',previewReads:0,inventoryReads:0};
  await page.clock.install({time:new Date(actionNow)});await page.clock.pauseAt(new Date(Date.parse(actionNow)+100));
  await page.route('**/*',serviceActionDisplayRoute({base,fixture,state}));
  mark('fixture-document');await openServiceActionDisplay(page,base,actionDevice,()=>settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:'Inventory',exact:true})),mark);
@@ -86,17 +86,22 @@ export async function serviceActionDisplayBrowserCase({pageAt,expect,base,shot})
   await expect(page.locator('input[type=password]')).toHaveCount(0);
   await shot(page,name,serviceActionDisplayDisclosure);
  };
+ const search=page.locator('.system-inventory').getByRole('searchbox'),inventory=page.locator('.system-inventory .package-table-scroll');
+ await expect(inventory.getByRole('table')).toBeVisible();const tableNode=await inventory.getByRole('table').elementHandle(),searchNode=await search.elementHandle();
+ const unchangedInventory=async()=>{expect(await inventory.getByRole('table').evaluate((el,prior)=>el===prior,tableNode)).toBe(true);expect(await search.evaluate((el,prior)=>el===prior,searchNode)).toBe(true);};
+ const unavailableGallery=async()=>{for(const locale of ['en','de'])for(const width of [1440,390]){await page.setViewportSize({width,height:width===390?844:1000});await page.locator('select[aria-label="Language"],select[aria-label="Sprache"]').selectOption(locale);await expect(panel).toHaveClass(/service-action-panel-idle/);await capture(`synthetic-display-service-action-read-first-${width===390?'mobile':'desktop'}-${locale}`,search);await unchangedInventory();}await page.getByLabel('Sprache',{exact:true}).selectOption('en');await page.setViewportSize({width:1440,height:1000});};
+ mark('idle-unavailable');await unavailableGallery();state.phase='ready';await refresh().click();await expect(panel).not.toHaveClass(/service-action-panel-idle/);await unchangedInventory();
  mark('unapproved-review');const select=page.getByRole('button',{name:'Preview try-restart: fixture.service',exact:true});await expect(select).toBeEnabled();await select.click();
  await expect(review()).toContainText('interrupt the service and its dependents');await expect(review()).toContainText('inactive services are not started');await expect(review()).toContainText('Disposable HTTP test');
  for(const value of [actionDevice,actionActor,'fixture.service','service.try-restart'])await expect(review()).toContainText(value);
  await expect(review().getByRole('checkbox')).not.toBeChecked();await expect(review().getByRole('button',{name:'Approve try-restart',exact:true})).toBeDisabled();
- await capture('synthetic-display-service-action-preview-desktop-en');
+ await expect(panel).not.toHaveClass(/service-action-panel-idle/);await unchangedInventory();await capture('synthetic-display-service-action-preview-desktop-en');
  await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(review().getByRole('checkbox')).not.toBeChecked();await capture('synthetic-display-service-action-preview-mobile-de');await capture('synthetic-display-service-action-consent-mobile-de',page.locator('.service-action-consent'));
  await review().getByRole('button',{name:'Vorschau schließen',exact:true}).click();await expect(review()).toHaveCount(0);expect(state.previewReads).toBe(1);
  await page.getByLabel('Sprache',{exact:true}).selectOption('en');
  mark('agent-reported-result');state.phase='complete';await refresh().click();await expect(panel).toContainText('Restart and service health remain unconfirmed.');await expect(panel.getByRole('checkbox')).toHaveCount(0);await capture('synthetic-display-service-action-result-mobile-en');
  await page.setViewportSize({width:1440,height:1000});await capture('synthetic-display-service-action-result-desktop-en');
- mark('unknown-result');state.phase='unknown';await refresh().click();await expect(panel).toContainText('Outcome unknown.');await expect(select).toBeDisabled();await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await capture('synthetic-display-service-action-unknown-mobile-de');
- mark('stale-helper');state.phase='stale';await refresh().click();await expect(panel).toContainText('Der lokale Helper-Bericht ist veraltet.');await expect(panel.getByRole('checkbox')).toHaveCount(0);await capture('synthetic-display-service-action-stale-mobile-de');
+ mark('unknown-result');state.phase='unknown';await refresh().click();await expect(panel).toContainText('Outcome unknown.');await expect(select).toBeDisabled();await page.setViewportSize({width:390,height:844});await page.getByLabel('Language',{exact:true}).selectOption('de');await expect(panel).not.toHaveClass(/service-action-panel-idle/);await unchangedInventory();await capture('synthetic-display-service-action-unknown-mobile-de');
+ mark('stale-helper');state.phase='stale';await refresh().click();await expect(panel).toContainText('Der lokale Helper-Bericht ist veraltet.');await expect(panel.getByRole('checkbox')).toHaveCount(0);await expect(panel).toHaveClass(/service-action-panel-idle/);await unchangedInventory();await capture('synthetic-display-service-action-stale-mobile-de');
  mark('final-no-action-guards');expect(state.previewReads).toBe(1);expect(state.inventoryReads).toBeGreaterThan(0);expect(state.forbidden).toEqual([]);expect(state.external).toEqual([]);expect(await page.context().cookies()).toEqual([]);
 }

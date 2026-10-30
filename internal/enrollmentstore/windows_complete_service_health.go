@@ -11,6 +11,10 @@ import (
 )
 
 func readCompleteServiceHealth(ctx context.Context, t *transaction, device string, names []string, now time.Time) (*windowsservicehealth.CompleteSample, error) {
+	return readCompleteServiceHealthSnapshot(ctx, t, device, names, now, false)
+}
+
+func readCompleteServiceHealthSnapshot(ctx context.Context, t *transaction, device string, names []string, now time.Time, pinAbsence bool) (*windowsservicehealth.CompleteSample, error) {
 	r, e := readWindowsFullServicesRecord(ctx, t, device)
 	if e != nil {
 		return nil, e
@@ -30,6 +34,11 @@ func readCompleteServiceHealth(ctx context.Context, t *transaction, device strin
 		return nil, nil
 	}
 	p := windowsservicehealth.Provenance{Kind: windowsservicehealth.CompleteSourceKind, GrantID: m.GrantID, GrantRevision: m.GrantRevision, GenerationID: m.GenerationID, ManifestSHA256: g.Hash, Sequence: m.Sequence, CapturedAt: m.CaptureStartedAt, CaptureFinishedAt: m.CaptureFinishedAt, ReceivedAt: g.CompletedAt, ExpiresAt: m.ExpiresAt, RowCount: m.RowCount}
+	// Clock-based future absence may turn into presence while a locked read
+	// consumes time. Never admit that ambiguous snapshot for acknowledgement.
+	if pinAbsence && (p.CapturedAt.After(now) || p.ReceivedAt.After(now)) {
+		return nil, enrollmentstate.ErrProof
+	}
 	if !p.Fresh(now) {
 		return nil, nil
 	}
@@ -44,6 +53,16 @@ func readCompleteServiceHealth(ctx context.Context, t *transaction, device strin
 // through the policy commit. The callback may enter only the operator store;
 // its guard reuses this enrollment transaction after SQL waits and before commit.
 func (s *Store) WithWindowsCompleteServiceAuthority(ctx context.Context, expected windowsservicehealth.Input, clock func() time.Time, fn func(func(time.Time) error) error) error {
+	return s.withWindowsCompleteServiceAuthority(ctx, expected, clock, false, fn)
+}
+
+// Inbox acknowledgement admits retained history even when its current source is
+// unavailable, but pins that explicit absence just like a present generation.
+func (s *Store) WithWindowsCompleteIncidentAuthority(ctx context.Context, expected windowsservicehealth.Input, clock func() time.Time, fn func(func(time.Time) error) error) error {
+	return s.withWindowsCompleteServiceAuthority(ctx, expected, clock, true, fn)
+}
+
+func (s *Store) withWindowsCompleteServiceAuthority(ctx context.Context, expected windowsservicehealth.Input, clock func() time.Time, requireSnapshot bool, fn func(func(time.Time) error) error) error {
 	if s == nil || s.storeState == nil || ctx == nil || clock == nil || fn == nil || !expected.Authorized || !expected.Complete || !enrollmentcrypto.ValidHash(expected.CurrentLeaf) || s.config.Binding.CollectionProfile != windowsmanaged.CollectionProfile {
 		return enrollmentstate.ErrProof
 	}
@@ -69,7 +88,7 @@ func (s *Store) WithWindowsCompleteServiceAuthority(ctx context.Context, expecte
 			}
 			// Removal/disable may proceed without source. New/re-enabled selections
 			// carry the reviewed immutable generation, never only a device/name claim.
-			if expected.Selection != nil && !sourceChecked {
+			if (expected.Selection != nil || requireSnapshot) && !sourceChecked {
 				present, e := windowsFullServicesSchemaPresent(ctx, t.conn, s.config.Binding.CollectionProfile)
 				if e != nil {
 					return e
@@ -77,14 +96,17 @@ func (s *Store) WithWindowsCompleteServiceAuthority(ctx context.Context, expecte
 				if !present {
 					return enrollmentstate.ErrProof
 				}
-				sample, e := readCompleteServiceHealth(ctx, t, expected.DeviceID, []string{}, at)
+				sample, e := readCompleteServiceHealthSnapshot(ctx, t, expected.DeviceID, []string{}, at, requireSnapshot && expected.Selection == nil)
 				if e != nil {
 					return e
 				}
-				if sample == nil || sample.Source != *expected.Selection {
+				if (sample == nil) != (expected.Selection == nil) || sample != nil && sample.Source != *expected.Selection {
 					return enrollmentstate.ErrProof
 				}
-				sourceChecked = true
+				// Locked bytes do not freeze time-based absence. A future receipt
+				// can become eligible during a short SQL wait, so nil snapshots
+				// must still be absent at every later guard.
+				sourceChecked = sample != nil
 			}
 			// The locked transaction freezes source bytes/grant/current leaf.
 			// Streaming integrity work may consume time; enforce actual time

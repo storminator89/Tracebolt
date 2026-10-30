@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {windowsMaintenanceBrowserFixture,windowsMaintenanceBrowserChange,windowsMaintenanceTargetKey,windowsMaintenanceCaseName,windowsMaintenanceDisclosure,requireWindowsMaintenanceEvidence,guardWindowsMaintenanceRoute,windowsMaintenanceRouteState,windowsNotificationBrowserFixture,windowsNotificationBrowserEnable} from './windows-maintenance-browser.mjs';
+import {windowsMaintenanceBrowserCase,windowsMaintenanceBrowserFixture,windowsMaintenanceBrowserChange,windowsMaintenanceTargetKey,windowsMaintenanceCaseName,windowsMaintenanceDisclosure,requireWindowsMaintenanceEvidence,guardWindowsMaintenanceRoute,windowsMaintenanceRouteState,windowsNotificationBrowserFixture,windowsNotificationBrowserEnable} from './windows-maintenance-browser.mjs';
+import {completeAssessmentInbox,windowsIncidentInboxBrowserFixture,windowsIncidentInboxQuery} from './windows-incident-inbox-browser.mjs';
 const now='2026-10-12T12:00:00Z',expiry='2026-10-12T13:00:00Z',later='2026-10-12T12:00:01Z',endsAt='2026-10-12T12:30:00Z';
 const read=file=>fs.readFileSync(new URL(file,import.meta.url),'utf8');
 test('invented exact-target start and early end preserve original end and sibling scopes',()=>{
@@ -60,8 +61,9 @@ test('actual Playwright exact labels find the EN/DE notification source without 
   const view=windowsNotificationBrowserFixture(now,expiry);
   const bundle=await require('esbuild').build({entryPoints:[path.join(web,'src/windows-notifications.tsx')],bundle:true,platform:'node',format:'cjs',jsx:'automatic',external:['react','react/jsx-runtime'],write:false,logLevel:'silent',loader:{'.css':'empty'},plugins:[{name:'inert-open-notification-view',setup(build){
    build.onResolve({filter:/^\.\/windows-notifications-resource$/},()=>({path:'resource',namespace:'inert'}));
+   build.onResolve({filter:/^\.\/windows-complete-notifications-resource$/},()=>({path:'complete-resource',namespace:'inert'}));
    build.onResolve({filter:/^\.\/i18n$/},()=>({path:'locale',namespace:'inert'}));
-   build.onLoad({filter:/.*/,namespace:'inert'},item=>({contents:item.path==='locale'?`export const useLocale=()=>[${JSON.stringify(locale)}];`:`export const useWindowsNotifications=()=>({view:${JSON.stringify(view)},loading:false,writing:false,error:false,notice:null,generation:0,age:0,refresh(){},save(){},isUncertain(){return false;}});`,loader:'js'}));
+   build.onLoad({filter:/.*/,namespace:'inert'},item=>({contents:item.path==='locale'?`export const useLocale=()=>[${JSON.stringify(locale)}];`:item.path==='complete-resource'?`export const useWindowsCompleteNotifications=(open)=>{if(open)throw new Error('Complete source must remain closed in the preview label fixture');return {view:null,generation:0,writing:false,isUncertain(){return false;}};};`:`export const useWindowsNotifications=()=>({view:${JSON.stringify(view)},loading:false,writing:false,error:false,notice:null,generation:0,age:0,refresh(){},save(){},isUncertain(){return false;}});`,loader:'js'}));
   }}]});
   // Render the actual production component open with inert data, without a request.
   let stateCalls=0;const react={...React,useState(initial){return [++stateCalls===1?true:initial,()=>{}];}},mod={exports:{}};
@@ -83,4 +85,53 @@ test('actual Playwright exact labels find the EN/DE notification source without 
    assert.deepEqual(query(`internal:role=combobox[name=${JSON.stringify(name)}s]`),[select]);
   }finally{dom.window.close();}
  }
+});
+
+
+test('existing maintenance walkthrough explicitly selects preview without granting complete notifications',()=>{
+ const helper=read('./windows-maintenance-browser.mjs'),component=read('../../web/src/windows-notifications.tsx');
+ assert.match(component,/useState<'preview' \| 'complete'>\('preview'\)/);
+ assert.match(component,/<WindowsCompleteNotifications \{\.\.\.props\} open=\{open && source === 'complete'\}/);
+ const preview="await notifications.getByRole('button',{name:de?'Vorschau':'Preview',exact:true}).click();";
+ assert.equal(helper.split(preview).length-1,1);
+ assert(helper.indexOf(preview)<helper.indexOf("await notifications.getByLabel(de?'Gerät und Prüfung':'Device and check'"));
+ assert(!helper.includes("url.pathname==='/api/fleet/windows-notifications/complete/policy'"));
+});
+
+
+// Capture the actual route installed by this existing real-App consumer. The page
+// stub stops before viewport/UI work; no browser, listener or network is opened.
+test('installed maintenance consumer serves the v2 inbox and denies legacy, malformed and mutation fallback',async()=>{
+ const base='https://maintenance.invalid',stop=new Error('inert route installation complete');let handle,sessionReads=0;
+ const session={authenticated:true,loginMode:'shared',serverNow:now,expiresAt:expiry};
+ const page={
+  request:{get:async(url,options)=>{assert.equal(url,base+'/api/auth/session');assert.deepEqual(options,{maxRedirects:0,timeout:5000});sessionReads++;return {status:()=>200,json:async()=>session,dispose:async()=>{}};}},
+  route:async(pattern,installed)=>{assert.equal(pattern,'**/*');assert.equal(handle,undefined);handle=installed;},
+  setViewportSize:async()=>{throw stop;},
+ };
+ await assert.rejects(windowsMaintenanceBrowserCase({page,base,login:async value=>assert.equal(value,page),expect:()=>assert.fail('No UI execution'),shot:()=>assert.fail('No screenshot')}),error=>error===stop);
+ assert.equal(typeof handle,'function');assert.deepEqual(windowsMaintenanceRouteState(),{failures:0,pending:0});
+ const request=(target,{method='GET',body=null}={})=>{
+  const result={reply:null,continued:0,aborted:[]};return {result,request:()=>({url:()=>target.startsWith('https:')?target:base+target,method:()=>method,postData:()=>body,headers:()=>({})}),
+   fulfill:async value=>{assert.equal(value.status,200);assert.equal(value.contentType,'application/json');result.reply=JSON.parse(value.body);},
+   continue:async()=>{result.continued++;},abort:async reason=>{result.aborted.push(reason);},fetch:async()=>assert.fail('Inbox fixture cannot reach a real endpoint')};
+ };
+ const original=windowsIncidentInboxBrowserFixture(now,expiry).view,route=request('/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery);
+ await handle(route);assert.deepEqual(route.result,{reply:completeAssessmentInbox(original),continued:0,aborted:[]});assert.equal(sessionReads,1);
+ assert.equal(route.result.reply.schemaVersion,'tracebolt.windows-incident-inbox.v2');assert.equal(route.result.reply.items.length,5);
+ const restored={...route.result.reply,schemaVersion:'tracebolt.windows-incident-inbox.v1',items:route.result.reply.items.map(({sourceKind,openingSource,lastBadSource,recoverySource,currentSource,...item})=>{
+  assert.equal(sourceKind,'assessment_v1');assert.deepEqual([openingSource,lastBadSource,recoverySource,currentSource],[null,null,null,null]);return item;
+ })};
+ assert.deepEqual(restored,original);assert.deepEqual(route.result.reply.items.map(item=>item.key),original.items.map(item=>item.key));
+ for(const target of ['/api/fleet/windows-incidents'+windowsIncidentInboxQuery,'/api/fleet/windows-incidents/complete/acknowledge','https://external.invalid/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery]){
+  const denied=request(target,target.endsWith('/acknowledge')?{method:'POST',body:'{}'}:{});await handle(denied);assert.deepEqual(denied.result,{reply:null,continued:0,aborted:['blockedbyclient']});
+ }
+ for(const [target,options] of [
+  ['/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery,{method:'POST',body:'{}'}],
+  ['/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery,{body:'{}'}],
+  ['/api/fleet/windows-incidents/complete?scope=all',{}],
+ ]){
+  const denied=request(target,options);await handle(denied);assert.deepEqual(denied.result,{reply:null,continued:0,aborted:['failed']});
+ }
+ assert.equal(sessionReads,1);assert.deepEqual(windowsMaintenanceRouteState(),{failures:3,pending:0});
 });

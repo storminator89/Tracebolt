@@ -126,3 +126,7 @@ collection, installed service, credentials, host action or browser pixels. Ordin
 hosted CI/screenshots and separately authorized live recipient acceptance remain
 separate gates. Restore older databases with delivery disabled and reconcile the
 receiver before re-enabling; the outbox cannot prove restore-safe external deduplication.
+
+## Complete-generation service source
+
+The separately opted-in [complete-service notification bridge](windows-complete-service-notifications.md) adds a compact explicit Complete source choice. It reuses this Windows outbox and transport with separate canonical approval and tagged v2 episode/payload identities. Existing preview source approval, five-domain v1 API and old keys remain unchanged.

@@ -1,21 +1,25 @@
 # Windows: current functionality and limits
 
 Unsigned [Windows preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
-is available for fresh x64 Read admin setup. Its native acceptance is limited to
-three hosted Server 2025 packaged-Setup cases; complete provider coverage and
-real Linux-manager/shared-dashboard interoperability remain unproved. The source
-also contains separate optional features with their own acceptance gates.
+is published as a prerelease (2026-10-13, 09:38:48 UTC) for fresh x64 Read admin
+setup. Its exact Windows and matching Linux manager/frontend source is
+[`992b8d8c9d9693a97bd63301a3c147e1b2681357`](https://github.com/storminator89/Tracebolt/tree/992b8d8c9d9693a97bd63301a3c147e1b2681357),
+tree `7ceb44dd5bd8a10cfb6aee9b90120df43f4b110c`. Use the release's
+[attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
+and exact manifests; a moving branch or existing manager is not a compatibility
+guarantee. Publication does not authorize installation, enrollment or host changes.
 
-**Preview.3 was published on 13 October 2026**, from source
-`992b8d8c9d9693a97bd63301a3c147e1b2681357`. Build its matching Linux
-manager/frontend separately. The three-case Server 2025 native Setup subset and aggregation passed in
+Native acceptance is limited to the three-case **current21 packaged GUI subset**
+on Windows Server 2025 x64: install/service removal, hidden-input cancellation and
+pending-transport interruption, using a loopback TLS fixture manager. The cases
+and aggregation passed in
 [run 38369063888](https://github.com/storminator89/Tracebolt/actions/runs/38369063888).
-The exact source also passed [full Validate 38369024941](https://github.com/storminator89/Tracebolt/actions/runs/38369024941).
-Use the [attached release guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md)
-and verify its manifest and exact bytes. This is not acceptance of newer main
-commits. The [installation audit](windows-installation-audit.md) distinguishes
-delivery blockers, later source diagnostics and the new dashboard preparation.
-Optional features remain separately configured and approved.
+This does not establish Windows 11, complete native provider coverage, real
+Linux-manager/shared-dashboard interoperability, native restart/reboot or optional
+MSI/WUA/service-action acceptance. Optional features remain separately configured
+and approved; source and browser fixtures do not establish their native acceptance.
+
+The exact preview.3 source also passed [full Validate 38369024941](https://github.com/storminator89/Tracebolt/actions/runs/38369024941). This does not accept newer main commits. The [installation audit](windows-installation-audit.md) covers later dashboard preparation.
 
 [Guides](README.md) · [Fresh Read admin setup](windows-read-admin-setup.md) · [Next priorities](windows-admin-roadmap.md)
 

@@ -17,7 +17,7 @@ func (h *operatorHandler) macosEnrollmentClient(w http.ResponseWriter, r *http.R
 	}
 	path := strings.TrimPrefix(r.URL.Path, macosEnrollmentPrefix)
 	switch path {
-	case "challenge", "claim", "status", "credential", "activate", "renewal/challenge", "renewal/status", "renewal/issue", "renewal/activate":
+	case "challenge", "claim", "self-claim", "self-bootstrap", "status", "credential", "activate", "renewal/challenge", "renewal/status", "renewal/issue", "renewal/activate":
 	default:
 		fail(w, 404, "not_found", "Enrollment route is unavailable.")
 		return
