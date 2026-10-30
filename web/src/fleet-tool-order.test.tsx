@@ -58,8 +58,10 @@ function server(named = false, fleet = devices) {
     return { fetch, posts: () => fetch.mock.calls.filter(([, init]) => init?.method === 'POST'), loseGroups: () => { groups = { ...groups, groups: [] }; }, setAcknowledge: (next: typeof acknowledge) => { acknowledge = next; } };
 }
 async function chooseGroup(id: string) {
-    if (screen.queryByRole('button', { name: 'Fleet groups' })) { fireEvent.click(screen.getByRole('button', { name: 'Fleet groups' })); await flush(); }
-    fireEvent.change(screen.getByRole('combobox', { name: 'Fleet groups' }), { target: { value: id } }); await flush();
+    const group = () => within(panel().querySelector<HTMLElement>('.fleet-groups')!);
+    const toggle = group().queryByRole('button', { name: 'Fleet groups' });
+    if (toggle) { fireEvent.click(toggle); await flush(); }
+    fireEvent.change(group().getByRole('combobox', { name: 'Fleet groups' }), { target: { value: id } }); await flush();
 }
 function localJumps() {
     const before = window.location.hash, length = window.history.length;
@@ -72,9 +74,10 @@ function localJumps() {
     expect(window.location.hash).toBe(before); expect(window.history.length).toBe(length);
 }
 function changeFilters() {
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search devices' }), { target: { value: 'no-match' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Sort devices' }), { target: { value: 'name' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by operating system' }), { target: { value: 'linux' } });
+    const filters = within(panel().querySelector<HTMLElement>('.filter-toolbar')!);
+    fireEvent.change(filters.getByRole('textbox', { name: 'Search devices' }), { target: { value: 'no-match' } });
+    fireEvent.change(within(panel().querySelector<HTMLElement>('.inventory-meta')!).getByRole('combobox', { name: 'Sort devices' }), { target: { value: 'name' } });
+    fireEvent.change(filters.getByRole('combobox', { name: 'Filter by operating system' }), { target: { value: 'linux' } });
 }
 beforeEach(() => { abortProtectedRequests(); localStorage.clear(); sessionStorage.clear(); vi.useFakeTimers(); vi.setSystemTime(windowsNow); setLocale('en', false); window.history.replaceState({}, '', '/#/devices'); vi.spyOn(document, 'hasFocus').mockReturnValue(true); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
