@@ -133,7 +133,7 @@ describe('Windows enrollment contract and creation consent', () => {
   await screen.findByText(de ? 'Windows · Einzelne Einladung · Manuelle Freigabe' : 'Windows · Single invitation · Manual approval');
   fireEvent.click(screen.getByRole('button', { name: addLabel })); const dialog = screen.getByRole('dialog', { name: addLabel });
   for (const text of unchangedScope) expect(within(dialog).getByText(text, { exact: true })).toBeVisible();
-  expect(dialog).toHaveTextContent(de ? 'Lokale Installation und dauerhafte Identitätserstellung erfordern eine separate Zustimmung.' : 'Local installation and persistent identity creation require separate approval.');
+  expect(dialog).toHaveTextContent(de ? 'Lokale Installation, dauerhafte Identität und die 21 Read-admin-Bereiche benötigen eine separate Zustimmung am Gerät.' : 'Local installation, persistent identity and the 21 Read admin scopes require separate approval on the device.');
   const collection = within(dialog).getByRole('checkbox', { name: consentLabel }), http = within(dialog).getByRole('checkbox', { name: httpLabel }), button = within(dialog).getByRole('button', { name: createLabel });
   expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2); expect(collection).not.toBeChecked(); expect(http).not.toBeChecked(); expect(button).toBeDisabled();
   fireEvent.click(collection); expect(button).toBeDisabled(); fireEvent.click(button); expect(mutate).not.toHaveBeenCalled();
@@ -143,25 +143,25 @@ describe('Windows enrollment contract and creation consent', () => {
   expect(mutate).toHaveBeenCalledExactlyOnceWith('/windows/enrollment/invitations', { requestId: expect.stringMatching(/^request_[a-f0-9]{32}$/), platform: 'windows', collectionAcknowledged: true, insecureHTTPAcknowledged: true }, expect.any(AbortSignal));
   expect(dialog).toHaveTextContent('windows-inventory-v1');
   for (const text of de ? [
-   'die zu diesem Manager und dem gewählten Profil passt', 'Setup prüft vor Änderungen die Manager- und Profil-Kompatibilität',
-   'ausdrückliche lokale Zustimmung zu seinen offengelegten Lesebereichen sowie zur dauerhaften Dienst- und Identitätserstellung',
-   'verdeckte Einladungseingabe', 'Diese Dashboard-Bestätigung ersetzt nicht die lokale Bereichsfreigabe in Setup.',
-   'vollständigen Geräte-Fingerabdruck und Vergleichswert', 'HTTPS ist Standard; HTTP-Test braucht eine zusätzliche Klartext-Zustimmung.',
-   'Vorhandene Installationen oder unvollständiger Zustand werden nicht überschrieben oder zurückgesetzt.',
-   'Die unsignierte Windows-preview.3 ist für einen begrenzten Setup-Teilumfang auf Server 2025 x64 veröffentlicht.',
-   'Diese Seite bietet keinen verifizierten Installer-Download oder Download-Befehl.',
-   'Verwende nur geprüfte Artefakte mit passendem Manager und Profil', 'belegt weder Installation noch Dienst- oder Systemneustart auf deinem Windows-Gerät.',
+   'Die öffentliche Bootstrap-Datei unten herunterladen', 'vollständige Vertrauens-Fingerabdrücke unabhängig vergleichen.',
+   'Die 21 lokalen Read-admin-Bereiche sowie die ungeprüften Zustimmungen zu Dienst, dauerhafter Identität und Vertrauensvergleich prüfen.',
+   'Diese Dashboard-Einladung gewährt diese Bereiche nicht.', 'HTTP-Quelltests benötigen eine separate Klartext-Risikobestätigung.',
+   'Die Einladung ausschließlich in der separaten verdeckten Setup-Konsole eingeben.',
+   'vollständigen Geräte-Fingerabdruck und Vergleichswert vergleichen.',
+   'einen frischen authentifizierten Bericht samt tatsächlicher Quellenabdeckung prüfen.',
+   'Eine aktivierte Identität oder ein laufender Dienst allein belegen keine Berichterfassung.',
+   'Frisches Setup überschreibt oder setzt ihn nicht zurück; die Dienstentfernung erhält Dateien, Schlüssel und Zustand.',
+   'Der veröffentlichte Preview.3 unterstützt nur TLS.',
   ] : [
-   'matches this manager and the selected profile', 'verifies manager/profile compatibility before making changes',
-   'explicit local approval of its disclosed read scopes and persistent service/identity creation',
-   'hidden invitation prompt', 'This dashboard acknowledgement does not replace Setup’s local scope approval.',
-   'full device fingerprint and comparison value', 'HTTPS is default; HTTP-test needs a separate plaintext-risk acknowledgement.',
-   'Existing installations and partial state cannot be overwritten or reset.',
-   'Unsigned Windows preview.3 is published for a limited Server 2025 x64 Setup subset.',
-   'This page does not provide a verified installer download or command.',
-   'Use only reviewed artifacts with a matching manager and profile', 'does not establish installation, service restart or reboot acceptance on your Windows device.',
+   'Download the public bootstrap below to a local folder on the Windows device', 'full trust fingerprints independently.',
+   'Review the 21 local Read admin scopes and the unchecked service, persistent-identity and trust approvals.',
+   'This dashboard invitation does not grant those scopes.', 'Source HTTP tests require their separate plaintext-risk acknowledgement.',
+   'Enter the invitation only in Setup’s separate hidden-input console.', 'full device fingerprint and comparison value here before approving',
+   'a fresh authenticated report and actual source coverage.', 'An activated identity or a running service alone does not prove reporting.',
+   'Fresh Setup cannot overwrite or reset it; service removal retains files, keys and state.',
+   'Published preview.3 is TLS-only.',
   ]) expect(dialog).toHaveTextContent(text);
-  expect(dialog.textContent).not.toMatch(/five local read scopes|fünf lokalen Lesebereichen|No released Windows installer|Ein veröffentlichter Windows-Installer|twenty-one|einundzwanzig|21[- ]scope/);
+  expect(dialog.textContent).not.toMatch(/five local read scopes|fünf lokalen Lesebereichen|No released Windows installer|Ein veröffentlichter Windows-Installer/);
   expect(within(dialog).getByRole('button', { name: de ? 'Bootstrap-Datei herunterladen' : 'Download bootstrap file' })).toBeVisible();
   expect(within(dialog).queryByRole('button', { name: de ? 'Öffentlichen Installationsbefehl kopieren' : 'Copy public installation command' })).not.toBeInTheDocument();
   expect(within(dialog).queryByRole('link')).not.toBeInTheDocument();
