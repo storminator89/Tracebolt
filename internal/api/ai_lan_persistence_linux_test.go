@@ -16,6 +16,9 @@ func TestLANProviderForgetsPreviousPersistentProviderAndScope(t *testing.T) {
 	_, session := o.login(t)
 	csrf := session["csrfToken"].(string)
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	settings, err := aiconfig.New(dir, "manager-fixture", "tls")
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +61,9 @@ func TestLANProviderFailsClosedOnPersistentFenceMismatch(t *testing.T) {
 	_, session := o.login(t)
 	csrf := session["csrfToken"].(string)
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	settings, err := aiconfig.New(dir, "manager-fixture", "tls")
 	if err != nil {
 		t.Fatal(err)
