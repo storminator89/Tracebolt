@@ -203,14 +203,39 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-func Load(path string) (Material, error) {
-	fail := func() (Material, error) { return Material{}, ErrConfiguration }
-	raw, e := ReadProtected(path, false, 16384)
-	if e != nil {
-		return fail()
-	}
+
+// Parse validates the same strict configuration shape used by runtime startup.
+// It performs no filesystem, credential, state or network operation.
+func Parse(raw []byte) (Config, error) {
 	var c Config
 	if StrictObject(raw, &c, "schemaVersion", "profile", "operatorListen", "agentListen", "operatorOrigin", "agentOrigin", "tlsCertificateFile", "tlsPrivateKeyFile", "agentClientCAFile", "operatorAuthFile", "stateDirectory", "webDirectory", "insecureHTTPAcknowledged", "serviceActionsConfigFile", "windowsServiceActionsConfigFile", "windowsUpdateJobsConfigFile", "windowsSoftwareJobsConfigFile", "windowsManagedMSIConfigFile", "windowsInventoryEnabled", "macosBasicEnabled", "macosInventoryEnabled", "packageActionsConfigFile") != nil || c.Validate() != nil {
+		return Config{}, ErrConfiguration
+	}
+	return c, nil
+}
+
+// LoadConfig reads configuration only; it never prepares runtime state.
+func LoadConfig(path string) (Config, error) {
+	raw, e := ReadProtected(path, false, 16384)
+	if e != nil {
+		return Config{}, ErrConfiguration
+	}
+	return Parse(raw)
+}
+
+func Load(path string) (Material, error) {
+	c, e := LoadConfig(path)
+	if e != nil {
+		return Material{}, ErrConfiguration
+	}
+	return LoadMaterial(c)
+}
+
+// LoadMaterial validates explicitly supplied configuration and protected material
+// without creating credentials, stores or listeners.
+func LoadMaterial(c Config) (Material, error) {
+	fail := func() (Material, error) { return Material{}, ErrConfiguration }
+	if c.Validate() != nil {
 		return fail()
 	}
 	auth, e := ReadProtected(c.OperatorAuthFile, true, 32768)
