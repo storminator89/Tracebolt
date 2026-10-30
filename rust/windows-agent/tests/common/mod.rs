@@ -81,6 +81,9 @@ impl Manager {
                     }
                     Err(error) => panic!("fixture accept failed: {error}"),
                 };
+                // Winsock accept inherits the listener's nonblocking mode;
+                // rustls StreamOwned below deliberately uses blocking I/O.
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
                     .unwrap();
