@@ -134,6 +134,7 @@ describe('Windows enrollment contract and creation consent', () => {
   fireEvent.click(screen.getByRole('button', { name: addLabel })); const dialog = screen.getByRole('dialog', { name: addLabel });
   for (const text of unchangedScope) expect(within(dialog).getByText(text, { exact: true })).toBeVisible();
   expect(dialog).toHaveTextContent(de ? 'Lokale Installation, dauerhafte Identität und die 21 Read-admin-Bereiche benötigen eine separate Zustimmung am Gerät.' : 'Local installation, persistent identity and the 21 Read admin scopes require separate approval on the device.');
+  expect(dialog).toHaveTextContent(de ? 'Der veröffentlichte Preview.3 unterstützt nur TLS.' : 'Published preview.3 is TLS-only.');
   const collection = within(dialog).getByRole('checkbox', { name: consentLabel }), http = within(dialog).getByRole('checkbox', { name: httpLabel }), button = within(dialog).getByRole('button', { name: createLabel });
   expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2); expect(collection).not.toBeChecked(); expect(http).not.toBeChecked(); expect(button).toBeDisabled();
   fireEvent.click(collection); expect(button).toBeDisabled(); fireEvent.click(button); expect(mutate).not.toHaveBeenCalled();
@@ -151,7 +152,6 @@ describe('Windows enrollment contract and creation consent', () => {
    'einen frischen authentifizierten Bericht samt tatsächlicher Quellenabdeckung prüfen.',
    'Eine aktivierte Identität oder ein laufender Dienst allein belegen keine Berichterfassung.',
    'Frisches Setup überschreibt oder setzt ihn nicht zurück; die Dienstentfernung erhält Dateien, Schlüssel und Zustand.',
-   'Der veröffentlichte Preview.3 unterstützt nur TLS.',
   ] : [
    'Download the public bootstrap below to a local folder on the Windows device', 'full trust fingerprints independently.',
    'Review the 21 local Read admin scopes and the unchecked service, persistent-identity and trust approvals.',
@@ -159,7 +159,6 @@ describe('Windows enrollment contract and creation consent', () => {
    'Enter the invitation only in Setup’s separate hidden-input console.', 'full device fingerprint and comparison value here before approving',
    'a fresh authenticated report and actual source coverage.', 'An activated identity or a running service alone does not prove reporting.',
    'Fresh Setup cannot overwrite or reset it; service removal retains files, keys and state.',
-   'Published preview.3 is TLS-only.',
   ]) expect(dialog).toHaveTextContent(text);
   expect(dialog.textContent).not.toMatch(/five local read scopes|fünf lokalen Lesebereichen|No released Windows installer|Ein veröffentlichter Windows-Installer/);
   expect(within(dialog).getByRole('button', { name: de ? 'Bootstrap-Datei herunterladen' : 'Download bootstrap file' })).toBeVisible();
