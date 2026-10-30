@@ -25,6 +25,49 @@ and its current `expectedRevision`. A catalog response has schema
 `tracebolt.customers.v1` and public-to-the-operator IDs, names and revisions.
 These endpoints do not allocate invitations, keys, installers or grants.
 
+## Customer separation requires separate manager instances
+
+Customer records, assignments and any display filters organize one manager's
+workspace. They are not authorization inputs for customer-scoped API reads,
+CSV export, collection or actions. Existing server permissions and each
+endpoint's explicit local grants still govern those operations. Selecting one
+customer does not hide another customer's data from an otherwise authorized
+operator. This catalog has no customer login, membership or tenant boundary.
+A Windows identity assignment is not an enrollment grant.
+
+For confidential customer boundaries, use separately configured and protected
+manager instances, not one shared manager with a customer filter. Follow the
+[installation runbook](installation.md) independently for each instance:
+
+- Use distinct manager identities and operator/agent origins, with independently
+  approved TLS identities and client-auth trust/issuer material. Do not configure
+  one instance to trust another customer's endpoint issuer or reuse its private
+  keys, endpoint credentials, invitations or local enrollment state.
+- Keep operator authentication, sessions, API/provider credentials and optional
+  delivery destinations separate. A customer ID or hostname is not a credential.
+  No user, role or approval transfers by matching a name between instances.
+- Use separate protected configuration/state directories, databases and deployment
+  volumes. For Compose, distinct project/volume names and bind paths must resolve
+  to different storage. Changing a customer label does not separate them. Host/
+  container access controls and reviewed exposure remain necessary. Never mount
+  or copy another instance's live state.
+- Retain separate protected backup sets with their own access controls and keys;
+  do not merge customer archives or restore A's state as B's manager. Preserve
+  original identities, revocation and consumed-state floors. Restore is not
+  permission to reset or resurrect authority. Follow the runbook's stopped-manager
+  backup/restore procedure and its acceptance requirements.
+- Verify each approved deployment independently: exact TLS origin, pre-login
+  denial, intended operator access, matching endpoint identity and fresh accepted
+  reports. Only after separate authorization, test cross-instance denial using
+  disposable identities, never real customer keys or copied production databases.
+
+This is a deployment separation model, not an automated multi-instance installer
+or proof of hostile-tenant isolation. Two instances on one host do not isolate
+against that host's administrator; use separate hosts/VMs when that is the required
+trust boundary. Source/component tests establish no two-instance native acceptance,
+backup/restore acceptance or production-hardening result. Deployment and credential/
+trust changes still need their own approval.
+
 ## Organizational assignment of activated Windows identities
 
 The current source additionally lets a shared administrator explicitly assign an
