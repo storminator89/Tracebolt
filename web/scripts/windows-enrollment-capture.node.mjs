@@ -7,10 +7,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 import { assertPublicSafe, capturePublicPNG, capture, captureMatrix, compile, compilerConfiguration, disclosure, fontWeights, origin, routeFixture, routeState, viewports } from './capture-windows-enrollment.mjs';
 import { boundedRegular, diagnostic, publicSafeFailures, stages, requireHosted, validateDialogPNG, visibilityControlCases, visibilityControlPhases, visibilityControlStage } from './windows-enrollment-contract.mjs';
 import { approvedBody, creation, csrf, invitation, secret } from './windows-enrollment-fixtures.mjs';
-import { controlHTML, controlRoute, controlURL, runVisibilityControls, controlRangeExpectations, hiddenControlCases, acceptedControlCases, controlFailure } from './windows-enrollment-visibility-controls.mjs';
+import { controlHTML, controlRoute, controlURL, runVisibilityControls, measureVisibilityControl, controlRangeExpectations, hiddenControlCases, acceptedControlCases, controlFailure } from './windows-enrollment-visibility-controls.mjs';
 import { successfulReport, validateCaptureRow, validateEvidence, validateMetadata } from './check-windows-enrollment-evidence.mjs';
 import { collectVisibilityDiagnostic, geometryDiagnosticBudgetMs, measureControlGeometry, registerVisibilityDiagnosticSignal, runVisibilityControls as diagnosticControls, validateVisibilityDiagnostic, visibilityDiagnosticFor } from './windows-enrollment-visibility-diagnostics.mjs';
 import './windows-enrollment-capture-guard.node.mjs';
@@ -393,7 +394,7 @@ function visibilityControlHarness(mode = 'expected', fault = {}) {
  const page = {
   url: () => url, on: (event, callback) => { assert.equal(event, 'pageerror'); pageError = callback; },
   async goto(target) { if (fault.setup === 'document') throw new Error('unexported synthetic error'); calls.push(['control-goto', target]); assert.equal(target, controlURL); await handler({ request: () => ({ url: () => target, method: () => 'GET', postData: () => null, headers: () => ({}) }), fulfill: response => assert.equal(response.body, controlHTML), abort: () => assert.fail('Control navigation blocked') }); url = target; if (fault.setup === 'runtime-errors') pageError(); if (fault.setup === 'route-boundary') await handler({ request: () => ({ url: () => origin + '/api/session', method: () => 'GET', postData: () => null, headers: () => ({}) }), abort: () => {}, fulfill: () => assert.fail('Unexpected fulfillment') }); },
-  locator(selector) { const name = selector.slice(1); assert(visibilityControlCases.includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async callback => { assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); if (name === fault.caseName && fault.measureError) throw new Error('unexported synthetic error'); if (name === fault.caseName && 'observation' in fault) return fault.observation; return { positiveRange: name !== 'closed-secret' && (name !== 'closed-body' || mode !== 'empty'), positiveBox: name !== 'contents' && name !== 'body-contents', native: mode === 'wrong-native' ? false : !hiddenControlCases.includes(name) && name !== 'contents' }; } }; } }; },
+  locator(selector) { const name = selector.slice(1); assert(visibilityControlCases.includes(name)); return { name, owner: page, locator: inner => { assert.equal(inner, '[data-probe]'); return { name, owner: page, evaluate: async (callback, primeIdentifierLayout) => { assert.equal(primeIdentifierLayout, ['closed-body', 'second-summary', 'outer-body', 'inner-body', 'closed-then-visible'].includes(name)); assert.match(callback.toString(), /Element\.prototype\.checkVisibility\.call\(element\)/); if (name === fault.caseName && fault.measureError) throw new Error('unexported synthetic error'); if (name === fault.caseName && 'observation' in fault) return fault.observation; return { positiveRange: name !== 'closed-secret' && (name !== 'closed-body' || mode !== 'empty'), positiveBox: name !== 'contents' && name !== 'body-contents', native: mode === 'wrong-native' ? false : !hiddenControlCases.includes(name) && name !== 'contents' }; } }; } }; },
  };
  const context = { route: async (pattern, fn) => { if (fault.setup === 'route') throw new Error('unexported synthetic error'); assert.equal(pattern, '**/*'); handler = fn; calls.push(['control-route']); }, newPage: async () => { if (fault.setup === 'page') throw new Error('unexported synthetic error'); calls.push(['new-control-page']); return page; }, close: async () => { closed = true; calls.push(['close-control-context']); if (fault.setup === 'close') throw new Error('unexported synthetic error'); } };
  const browser = { newContext: async options => { calls.push(['new-control-context', options]); return context; } };
@@ -732,4 +733,27 @@ test('hard diagnostic timer bounds unresolved cleanup and cannot advance another
  assert.deepEqual(await pending, { schema: 'synthetic-visibility-geometry.v1', status: 'unavailable', reason: 'budget' });
  finishClose(); await new Promise(resolve => setImmediate(resolve));
  assert.equal(h.calls.filter(row => row[0] === 'context').length, 1); assert.equal(h.calls.filter(row => row[0] === 'close').length, 1);
+});
+
+test('positive identifier controls prime synthetic layout before Range; the empty-secret negative stays Range-first', () => {
+ for (const prime of [true, false]) {
+  const calls = []; let laidOut = false;
+  const rect = { x: 0, y: 0, width: 12, height: 8 };
+  const element = {};
+  const context = {
+   Element: { prototype: {
+    getClientRects() { calls.push('box'); laidOut = true; return [rect]; },
+    checkVisibility() { calls.push('native'); return false; },
+   } },
+   document: { createRange() { return {
+    selectNodeContents(node) { assert.equal(node, element); },
+    getClientRects() { calls.push('range'); return laidOut ? [rect] : []; },
+   }; } }, element, prime,
+  };
+  const actual = runInNewContext(`(${measureVisibilityControl.toString()})(element, prime)`, context);
+  assert.equal(actual.positiveRange, prime);
+  assert.equal(actual.positiveBox, true);
+  assert.equal(actual.native, false);
+  assert.deepEqual(calls, prime ? ['box', 'range', 'box', 'native'] : ['range', 'box', 'native']);
+ }
 });

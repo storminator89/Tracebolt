@@ -1508,22 +1508,22 @@ def shell_failure_location(path, sha):
         contract = read_bounded(SHELL_CASES_SOURCE, 16384)
         if (type(contract) is not dict or set(contract) != {'schema', 'cases'}
                 or type(contract['schema']) is not int or contract['schema'] != 1
-                or type(contract['cases']) is not list or len(contract['cases']) != 45
+                or type(contract['cases']) is not list or len(contract['cases']) != 53
                 or any(type(name) is not str or not 0 < len(name) <= 200 for name in contract['cases'])
-                or len(set(contract['cases'])) != 45):
+                or len(set(contract['cases'])) != 53):
             return None
         value = read_bounded(path, 8192)
         if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
                 or set(value) != {'schema', 'sourceSha', 'failures', 'runtimeCases', 'unknownCase'}
                 or type(value['schema']) is not int or value['schema'] != 1 or value['sourceSha'] != sha
                 or type(value['unknownCase']) is not bool
-                or type(value['failures']) is not list or len(value['failures']) > 45
-                or type(value['runtimeCases']) is not list or len(value['runtimeCases']) > 45):
+                or type(value['failures']) is not list or len(value['failures']) > 53
+                or type(value['runtimeCases']) is not list or len(value['runtimeCases']) > 53):
             return None
         previous, locations = 0, []
         for row in value['failures']:
             if (type(row) is not dict or set(row) != ({'case', 'category', 'stage'} if row.get('case') == 36 else {'case', 'category', 'surface', 'phase'} if row.get('case') in (28, 29, 30, 31) else {'case', 'category'})
-                    or type(row['case']) is not int or not previous < row['case'] <= 45
+                    or type(row['case']) is not int or not previous < row['case'] <= 53
                     or type(row['category']) is not str or row['category'] not in SHELL_FAILURE_CATEGORIES
                     or (28 <= row['case'] <= 31 and (type(row['surface']) is not int or not 0 <= row['surface'] < len(SHELL_GALLERY_SURFACES)
                         or type(row['phase']) is not int or not 0 <= row['phase'] < len(SHELL_GALLERY_PHASES)))
@@ -1535,7 +1535,7 @@ def shell_failure_location(path, sha):
             locations.append('case=%d category=%s%s' % (row['case'], category, coordinate))
         previous = 0
         for case in value['runtimeCases']:
-            if type(case) is not int or not previous < case <= 45:
+            if type(case) is not int or not previous < case <= 53:
                 return None
             previous = case
             locations.append('case=%d category=runtime' % case)

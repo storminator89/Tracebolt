@@ -49,8 +49,8 @@ function namesIn(source) {
 
 test('numeric registry binds the exact ordered source cases including literal loop variants and AI', () => {
     assert.deepEqual(Object.keys(contract), ['schema', 'cases']); assert.equal(contract.schema, 1);
-    assert.equal(contract.cases.length, 45); assert.equal(new Set(contract.cases).size, 45);
-    const names = ['run.mjs', 'concise-shell-gallery.mjs', 'shell-scenarios.mjs', 'ai-scenarios.mjs'].flatMap(file => namesIn(sourceFile(file)));
+    assert.equal(contract.cases.length, 53); assert.equal(new Set(contract.cases).size, 53);
+    const names = ['run.mjs', 'concise-shell-gallery.mjs', 'shell-scenarios.mjs', 'ai-scenarios.mjs', 'focus-contrast-shell.mjs'].flatMap(file => namesIn(sourceFile(file)));
     assert.deepEqual(contract.cases, names);
     assert.deepEqual(shellFailureCategories, ['assertion', 'timeout', 'other']);
     assert.ok(Object.isFrozen(shellFailureCategories));
@@ -349,4 +349,13 @@ test('actual numeric probe restores exact DOM bytes and failure identity with ea
   for (const [key, descriptor] of globals) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
  }
  assert.equal(count, 144);
+});
+
+// Newly integrated contrast cases keep original diagnostic IDs stable.
+test('all eight contrast scenarios are source-bound diagnostics without raw text', () => {
+ const diagnostic = createShellFailureDiagnostic();
+ for (const name of contract.cases.slice(45)) diagnostic.failure(name, { matcherResult: {} });
+ const report = diagnostic.report('a'.repeat(40));
+ assert.deepEqual(report.failures, Array.from({length: 8}, (_, i) => ({case: 46+i, category: 'assertion'})));
+ assert.equal(report.unknownCase, false);
 });

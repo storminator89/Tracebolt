@@ -60,6 +60,17 @@ export function controlRoute(state) {
   state.documents++; return route.fulfill({ status: 200, contentType: 'text/html', headers: { 'cache-control': 'no-store' }, body: controlHTML });
  };
 }
+// Closed disclosure descendants may have lazy Range layout in Chromium. Prime
+// only the synthetic identifier controls whose positive Range path is required.
+// Closed-secret remains Range-first, preserving the empty-Range negative control.
+export function measureVisibilityControl(element, primeIdentifierLayout) {
+ if (primeIdentifierLayout) Element.prototype.getClientRects.call(element);
+ const range = document.createRange(); range.selectNodeContents(element);
+ const positiveRange = [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+ const positiveBox = [...Element.prototype.getClientRects.call(element)].some(rect => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) && rect.width > 0 && rect.height > 0);
+ const native = Element.prototype.checkVisibility.call(element);
+ return { positiveRange, positiveBox, native };
+}
 export async function runVisibilityControls({ browser, expect, assertPublicSafe, mark = () => {} }) {
  requireHosted(); mark('visibility-control-context');
  const context = await browser.newContext({ viewport: { width: 800, height: 600 }, locale: 'en-US', reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -75,13 +86,7 @@ export async function runVisibilityControls({ browser, expect, assertPublicSafe,
    const region = page.locator(`#${name}`), probe = region.locator('[data-probe]');
    // Geometry and default native box visibility are deliberately separate.
    checkpoint('measure');
-   const observed = await probe.evaluate(element => {
-    const range = document.createRange(); range.selectNodeContents(element);
-    const positiveRange = [...range.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
-    const positiveBox = [...Element.prototype.getClientRects.call(element)].some(rect => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) && rect.width > 0 && rect.height > 0);
-    const native = Element.prototype.checkVisibility.call(element);
-    return { positiveRange, positiveBox, native };
-   });
+   const observed = await probe.evaluate(measureVisibilityControl, (acceptedControlCases.includes(name) && name !== 'clear') || name === 'closed-then-visible');
    checkpoint('observation-shape'); assert.deepEqual(Object.keys(observed).sort(), ['native', 'positiveBox', 'positiveRange']);
    checkpoint('range-type'); assert.equal(typeof observed.positiveRange, 'boolean');
    checkpoint('box-type'); assert.equal(typeof observed.positiveBox, 'boolean');

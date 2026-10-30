@@ -45,6 +45,14 @@
     "AI invalid provider output never becomes a diagnosis; baseline stays visible",
     "AI repeated approval sends once; local cancellation never revives delayed result",
     "AI mobile consent and completed fixture keep readable bounded layout",
-    "AI manager restart clears provider and synthetic key without changing durable case notes"
+    "AI manager restart clears provider and synthetic key without changing durable case notes",
+    "S03/S04 shell solid-color contrast desktop en light",
+    "S03/S04 shell solid-color contrast desktop en dark",
+    "S03/S04 shell solid-color contrast mobile en light",
+    "S03/S04 shell solid-color contrast mobile en dark",
+    "S03/S04 shell solid-color contrast desktop de light",
+    "S03/S04 shell solid-color contrast desktop de dark",
+    "S03/S04 shell solid-color contrast mobile de light",
+    "S03/S04 shell solid-color contrast mobile de dark"
   ]
 }

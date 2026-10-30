@@ -2317,6 +2317,19 @@ class ShellRouteLoadingDiagnosticTests(unittest.TestCase):
         for forbidden in ['raw-private-marker', SHA, 'PASS:', *map(str, paths)]:
             self.assertNotIn(forbidden, output.getvalue())
 
+    def test_integrated_contrast_cases_have_bounded_failure_coordinates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'shell.json'
+            for case in range(46, 54):
+                path.write_text(json.dumps({'schema': 1, 'sourceSha': SHA,
+                    'failures': [{'case': case, 'category': 'assertion'}],
+                    'runtimeCases': [], 'unknownCase': False}))
+                self.assertEqual(p.shell_failure_location(path, SHA), f'case={case} category=assertion')
+            path.write_text(json.dumps({'schema': 1, 'sourceSha': SHA,
+                'failures': [{'case': 54, 'category': 'assertion'}],
+                'runtimeCases': [], 'unknownCase': False}))
+            self.assertIsNone(p.shell_failure_location(path, SHA))
+
     def test_original_failure_and_browser_acceptance_stay_unchanged(self):
         original = ValueError('inert failure')
         with patch.object(p, 'run', side_effect=original), patch.object(p, 'shell_route_loading_location', return_value=None):
@@ -2341,7 +2354,7 @@ class ShellFailureDiagnosticTests(unittest.TestCase):
         categories = re.search(r'shellFailureCategories = Object.freeze\(\[(.*?)\]\)', source, re.S)
         self.assertEqual(tuple(re.findall(r"'([^']+)'", categories[1])), p.SHELL_FAILURE_CATEGORIES)
         contract = json.loads(p.SHELL_CASES_SOURCE.read_text())
-        self.assertEqual(len(contract['cases']), 45); self.assertEqual(len(set(contract['cases'])), 45)
+        self.assertEqual(len(contract['cases']), 53); self.assertEqual(len(set(contract['cases'])), 53)
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'record.json'
             for category in p.SHELL_FAILURE_CATEGORIES:
@@ -2412,13 +2425,13 @@ console.log(JSON.stringify(diagnostic.report('%s')));
                    {'failures': [{'case': 2, 'category': 'assertion', 'name': 'private-name'}]},
                    {'failures': [{'case': True, 'category': 'assertion'}]},
                    {'failures': [{'case': 0, 'category': 'assertion'}]},
-                   {'failures': [{'case': 46, 'category': 'assertion'}]},
+                   {'failures': [{'case': 54, 'category': 'assertion'}]},
                    {'failures': [{'case': 2, 'category': 'assertion'}] * 2},
                    {'failures': [{'case': 3, 'category': 'assertion'}, {'case': 2, 'category': 'timeout'}]},
                    {'failures': [{'case': 2, 'category': 'assertion'}] * 46},
-                   {'runtimeCases': [True]}, {'runtimeCases': [0]}, {'runtimeCases': [46]},
+                   {'runtimeCases': [True]}, {'runtimeCases': [0]}, {'runtimeCases': [54]},
                    {'runtimeCases': [2, 1]}, {'runtimeCases': [1, 1]}, {'runtimeCases': ['private-name']},
-                   {'runtimeCases': list(range(1, 47))}, {'runtimeCases': {}}, {'failures': {}}]
+                   {'runtimeCases': list(range(1, 55))}, {'runtimeCases': {}}, {'failures': {}}]
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'record.json'
             for extra in invalid:
