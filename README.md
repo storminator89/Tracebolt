@@ -1,5 +1,7 @@
 # Tracebolt
 
+Rust Windows integration test candidates: see [the integrated candidate guide](docs/integrated-test-candidate.md) for the same-source manager and tokenless installer.
+
 **Inventory, logs and diagnostics in one self-hosted dashboard.**
 
 A Go manager and native endpoint agents, with an English/German web interface,
@@ -22,6 +24,12 @@ source features and tested release coverage are listed separately below.
 | macOS | [v0.1.0-macos-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-macos-preview.1), Apple Silicon and Intel service-test packages, preparation helper and runbook | Unsigned and not notarized; native enrollment, installation, launchd operation and reboot persistence are not yet accepted |
 
 ### In the current source
+
+- **Rust Windows basic agent:** a separate source candidate for CPU/RAM/system-drive
+  telemetry, mutual TLS reporting and a simple Windows service package. See the
+  [Rust agent guide](rust/windows-agent/README.md) for build/install steps,
+  fresh-identity prerequisites and pending native acceptance. It does not replace
+  the Go Read admin agent's full inventory or administration features.
 
 - **Redesigned workspace:** an operations overview for open cases, device
   observations and recent changes; **Devices → Inventory / Setup / Fleet tools**

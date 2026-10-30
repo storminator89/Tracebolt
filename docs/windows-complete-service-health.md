@@ -98,11 +98,13 @@ semantics and old endpoint contracts remain supported separately.
 History is bounded to at most 100 incidents, 30-day closed retention and 256 KiB
 per device. Complete provenance may reach the byte limit sooner; only oldest
 closed episodes can be pruned. Open episodes and source floors are never discarded.
-The new complete-source history is shown in its v2 Health panel. Legacy v1 fleet
-incident acknowledgement, notification delivery and service-action review are
-not promoted; v2 episodes do not enter those old contracts. A separately explicit
-v2 fleet incident/notification bridge remains follow-on work. No AI, automatic
-restart, external notification or remediation is authorized by this policy.
+The complete-source history is shown in its v2 Health panel and the explicit
+[v2 fleet inbox and acknowledgement bridge](windows-complete-incident-inbox.md).
+Legacy v1 incident keys/acknowledgements, notification delivery and service-action
+review are not promoted. Complete rows have separate source-qualified identities
+and seen records. A separately opted-in [notification bridge](windows-complete-service-notifications.md) is available as an independent manager source policy.
+No AI, automatic restart, external notification or remediation is authorized by
+this policy.
 
 ## Verification boundary
 

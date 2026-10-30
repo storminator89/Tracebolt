@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "states": [
+    "matched-read",
+    "matched-selected-blank",
+    "matched-preview-unchecked",
+    "unknown",
+    "unsupported"
+  ],
+  "viewports": [
+    {
+      "locale": "en",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "locale": "de",
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "locale": "de",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "captures": [
+    {
+      "phase": "matched-preview-unchecked",
+      "locale": "en",
+      "width": 1440
+    },
+    {
+      "phase": "matched-read",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "phase": "matched-selected-blank",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "phase": "unsupported",
+      "locale": "en",
+      "width": 390
+    },
+    {
+      "phase": "matched-selected-blank",
+      "locale": "de",
+      "width": 1440
+    },
+    {
+      "phase": "unknown",
+      "locale": "de",
+      "width": 1440
+    },
+    {
+      "phase": "matched-preview-unchecked",
+      "locale": "de",
+      "width": 390
+    },
+    {
+      "phase": "unknown",
+      "locale": "de",
+      "width": 390
+    }
+  ]
+}

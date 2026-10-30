@@ -1,0 +1,248 @@
+{
+  "acknowledged": {
+    "schemaVersion": "tracebolt.windows-incident-inbox.v2",
+    "serverNow": "2026-10-13T03:00:48.940154336Z",
+    "authorityExpiresAt": "2026-10-13T03:02:48.940154336Z",
+    "scope": "active",
+    "ack": "all",
+    "offset": 0,
+    "limit": 25,
+    "total": 1,
+    "nextOffset": null,
+    "counts": {
+      "active": 1,
+      "resolved": 0,
+      "acknowledged": 1,
+      "unacknowledged": 0,
+      "total": 1
+    },
+    "coverage": {
+      "devices": 1,
+      "unavailableDevices": 0,
+      "unknownChecks": 1,
+      "disabledChecks": 3
+    },
+    "items": [
+      {
+        "key": "362a9eb7578e63d5b28c67a09f17b71c0e70ed3e0a01ce5763b0dfea08ce1113",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service-complete",
+        "incidentId": "wservice_0000000000000001",
+        "serviceName": "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界",
+        "openedAt": "2026-10-13T03:00:48.940154336Z",
+        "lastConfirmedAt": "2026-10-13T03:00:48.940154336Z",
+        "collectedAt": "2026-10-13T03:00:48.940154336Z",
+        "receivedAt": "2026-10-13T03:00:48.940154336Z",
+        "resolvedAt": null,
+        "recoveryCollectedAt": null,
+        "recoveryReceivedAt": null,
+        "closedReason": "",
+        "status": "attention",
+        "statusValidUntil": "2026-10-13T03:02:48.940154336Z",
+        "evaluatedAt": "2026-10-13T03:00:48.940154336Z",
+        "acknowledgedAt": "2026-10-13T03:00:48.940154336Z",
+        "sourceKind": "windows_full_services",
+        "openingSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        },
+        "lastBadSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        },
+        "recoverySource": null,
+        "currentSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        }
+      }
+    ]
+  },
+  "active": {
+    "schemaVersion": "tracebolt.windows-incident-inbox.v2",
+    "serverNow": "2026-10-13T03:00:48.940154336Z",
+    "authorityExpiresAt": "2026-10-13T03:02:48.940154336Z",
+    "scope": "active",
+    "ack": "all",
+    "offset": 0,
+    "limit": 25,
+    "total": 1,
+    "nextOffset": null,
+    "counts": {
+      "active": 1,
+      "resolved": 0,
+      "acknowledged": 0,
+      "unacknowledged": 1,
+      "total": 1
+    },
+    "coverage": {
+      "devices": 1,
+      "unavailableDevices": 0,
+      "unknownChecks": 1,
+      "disabledChecks": 3
+    },
+    "items": [
+      {
+        "key": "362a9eb7578e63d5b28c67a09f17b71c0e70ed3e0a01ce5763b0dfea08ce1113",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service-complete",
+        "incidentId": "wservice_0000000000000001",
+        "serviceName": "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界",
+        "openedAt": "2026-10-13T03:00:48.940154336Z",
+        "lastConfirmedAt": "2026-10-13T03:00:48.940154336Z",
+        "collectedAt": "2026-10-13T03:00:48.940154336Z",
+        "receivedAt": "2026-10-13T03:00:48.940154336Z",
+        "resolvedAt": null,
+        "recoveryCollectedAt": null,
+        "recoveryReceivedAt": null,
+        "closedReason": "",
+        "status": "attention",
+        "statusValidUntil": "2026-10-13T03:02:48.940154336Z",
+        "evaluatedAt": "2026-10-13T03:00:48.940154336Z",
+        "acknowledgedAt": null,
+        "sourceKind": "windows_full_services",
+        "openingSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        },
+        "lastBadSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        },
+        "recoverySource": null,
+        "currentSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        }
+      }
+    ]
+  },
+  "unknown": {
+    "schemaVersion": "tracebolt.windows-incident-inbox.v2",
+    "serverNow": "2026-10-13T03:00:49.940154336Z",
+    "authorityExpiresAt": "2026-10-13T03:02:49.940154336Z",
+    "scope": "active",
+    "ack": "all",
+    "offset": 0,
+    "limit": 25,
+    "total": 1,
+    "nextOffset": null,
+    "counts": {
+      "active": 1,
+      "resolved": 0,
+      "acknowledged": 1,
+      "unacknowledged": 0,
+      "total": 1
+    },
+    "coverage": {
+      "devices": 1,
+      "unavailableDevices": 0,
+      "unknownChecks": 2,
+      "disabledChecks": 3
+    },
+    "items": [
+      {
+        "key": "362a9eb7578e63d5b28c67a09f17b71c0e70ed3e0a01ce5763b0dfea08ce1113",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service-complete",
+        "incidentId": "wservice_0000000000000001",
+        "serviceName": "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界",
+        "openedAt": "2026-10-13T03:00:48.940154336Z",
+        "lastConfirmedAt": "2026-10-13T03:00:48.940154336Z",
+        "collectedAt": "2026-10-13T03:00:48.940154336Z",
+        "receivedAt": "2026-10-13T03:00:48.940154336Z",
+        "resolvedAt": null,
+        "recoveryCollectedAt": null,
+        "recoveryReceivedAt": null,
+        "closedReason": "",
+        "status": "unknown",
+        "statusValidUntil": null,
+        "evaluatedAt": "2026-10-13T03:00:48.940154336Z",
+        "acknowledgedAt": "2026-10-13T03:00:48.940154336Z",
+        "sourceKind": "windows_full_services",
+        "openingSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        },
+        "lastBadSource": {
+          "kind": "windows_full_services",
+          "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "grantRevision": 1,
+          "generationId": "sample_89ba31173fee90c03709a084b8eae040",
+          "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "sequence": 2,
+          "capturedAt": "2026-10-13T03:00:48.940154336Z",
+          "captureFinishedAt": "2026-10-13T03:00:48.940154336Z",
+          "receivedAt": "2026-10-13T03:00:48.940154336Z",
+          "expiresAt": "2026-10-14T03:00:48.940154336Z",
+          "rowCount": 2051
+        },
+        "recoverySource": null,
+        "currentSource": null
+      }
+    ]
+  }
+}

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -65,7 +67,7 @@ func (w *wireClient) post(ctx context.Context, path string, raw []byte) ([]byte,
 	}
 	// The caller selects only fixed protocol verbs; bootstrap data cannot supply a path.
 	switch path {
-	case "challenge", "claim", "status", "credential", "activate", "renewal/challenge", "renewal/status", "renewal/issue", "renewal/activate":
+	case "challenge", "claim", "self-claim", "status", "credential", "activate", "renewal/challenge", "renewal/status", "renewal/issue", "renewal/activate":
 	default:
 		return nil, ErrResponse
 	}
@@ -188,16 +190,30 @@ func (s *session) status(ctx context.Context) (enrollmentstate.Snapshot, error) 
 	return snap, nil
 }
 func (s *session) claim(ctx context.Context) error {
-	if s.opts.Secret == nil {
-		return ErrInput
-	}
-	secret, e := s.opts.Secret(ctx)
-	if e != nil {
-		clear(secret)
-		if ctx.Err() != nil {
-			return ctx.Err()
+	var secret []byte
+	var e error
+	claimPath := "claim"
+	if s.l.Bootstrap.SchemaVersion == AutomaticBootstrapVersion {
+		// Derive a stable internal claim secret without a prompt or another saved secret.
+		// The exact bootstrap schema in the ledger prevents adopting invitation state.
+		seed := s.key.Seed()
+		mac := hmac.New(sha256.New, seed)
+		_, _ = mac.Write([]byte("Tracebolt automatic enrollment claim secret v1\x00"))
+		secret = []byte(base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
+		clear(seed)
+		claimPath = "self-claim"
+	} else {
+		if s.opts.Secret == nil {
+			return ErrInput
 		}
-		return ErrInput
+		secret, e = s.opts.Secret(ctx)
+		if e != nil {
+			clear(secret)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return ErrInput
+		}
 	}
 	defer clear(secret)
 	if len(secret) != 43 {
@@ -247,7 +263,7 @@ func (s *session) claim(ctx context.Context) error {
 	if e = s.save(); e != nil {
 		return e
 	}
-	body, e := s.wire.post(ctx, "claim", raw)
+	body, e := s.wire.post(ctx, claimPath, raw)
 	if e != nil {
 		var f *httpFailure
 		if errors.As(e, &f) && (f.status == 401 || f.status == 400) {

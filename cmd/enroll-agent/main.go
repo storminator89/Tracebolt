@@ -34,7 +34,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	serviceIdentity := f.String("service-identity", "", "Expected numeric service UID:GID for offline service validation")
 	timeout := f.Duration("timeout", 15*time.Minute, "Approval timeout, at most 30m")
 	if f.Parse(args) != nil || f.NArg() != 0 || *bootstrap == "" || *state == "" {
-		fmt.Fprintln(errOut, "Usage: enroll-agent --bootstrap ABS_PATH --state-directory ABS_PATH [--automatic-certificate-renewal] [--insecure-http-test] [--timeout 15m]. Invitation input is hidden; there is no invitation argument, environment or stdin mode.")
+		fmt.Fprintln(errOut, "Usage: enroll-agent --bootstrap ABS_PATH --state-directory ABS_PATH [--automatic-certificate-renewal] [--insecure-http-test] [--timeout 15m]. Automatic bootstrap registers without a token; optional invitation input is hidden; there is no invitation argument, environment or stdin mode.")
 		return 2
 	}
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {

@@ -33,6 +33,8 @@ var (
 	ErrInput      = errors.New("enrollment invitation input is unavailable or invalid")
 )
 
+const AutomaticBootstrapVersion = "tracebolt.enrollment-bootstrap.auto.v1"
+
 const BootstrapVersion = "tracebolt.enrollment-bootstrap.v2"
 const RenewableBootstrapVersion = "tracebolt.enrollment-bootstrap.renewable.v1"
 
@@ -139,7 +141,10 @@ func publicCertificates(raw string) ([]*x509.Certificate, error) {
 }
 func validateBootstrap(b Bootstrap, now time.Time) (TrustDisplay, error) {
 	fail := func() (TrustDisplay, error) { return TrustDisplay{}, ErrBootstrap }
-	if (b.SchemaVersion != BootstrapVersion && b.SchemaVersion != RenewableBootstrapVersion) || !enrollmentcrypto.ValidID(b.ManagerInstanceID, "manager_") || !enrollmentcrypto.ValidID(b.InvitationID, "invite_") || !enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) {
+	if (b.SchemaVersion != BootstrapVersion && b.SchemaVersion != RenewableBootstrapVersion && b.SchemaVersion != AutomaticBootstrapVersion) || !enrollmentcrypto.ValidID(b.ManagerInstanceID, "manager_") || !enrollmentcrypto.ValidID(b.InvitationID, "invite_") || !enrollmentcrypto.ValidCollectionProfile(b.CollectionProfile) {
+		return fail()
+	}
+	if b.SchemaVersion == AutomaticBootstrapVersion && b.Profile != "tls" {
 		return fail()
 	}
 	if b.SchemaVersion == RenewableBootstrapVersion {

@@ -258,7 +258,7 @@ func (s *Store) changeWindowsMaintenance(ctx context.Context, target WindowsMain
 	if start {
 		// Consume queued work now, so an early end before the worker wakes cannot
 		// release stale backlog. In-flight completion remains truthful, but no retry.
-		if _, err = tx.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN state='queued' THEN 'suppressed' ELSE state END,stop_retry=1,code='maintenance',finished=CASE WHEN state='queued' THEN ? ELSE finished END WHERE device=? AND json_extract(target,'$.invitationId')=? AND json_extract(target,'$.certificateHash')=? AND (?='all' OR domain=?) AND state IN ('queued','in_flight')`, now.UnixMilli(), target.DeviceID, target.InvitationID, target.CertificateHash, target.Domain, target.Domain); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE windows_notification_outbox SET state=CASE WHEN state='queued' THEN 'suppressed' ELSE state END,stop_retry=1,code='maintenance',finished=CASE WHEN state='queued' THEN ? ELSE finished END WHERE device=? AND CASE WHEN domain='service-complete' THEN json_extract(target,'$.target.invitationId') ELSE json_extract(target,'$.invitationId') END=? AND CASE WHEN domain='service-complete' THEN json_extract(target,'$.target.certificateHash') ELSE json_extract(target,'$.certificateHash') END=? AND (?='all' OR domain=? OR (?='service' AND domain='service-complete')) AND state IN ('queued','in_flight')`, now.UnixMilli(), target.DeviceID, target.InvitationID, target.CertificateHash, target.Domain, target.Domain, target.Domain); err != nil {
 			return next, err
 		}
 	}

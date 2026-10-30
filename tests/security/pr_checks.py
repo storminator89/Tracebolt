@@ -89,6 +89,23 @@ DOMAIN_SCRIPTS = {
     'web/scripts/check-first-report-evidence.mjs': {'first-report'},
     'web/scripts/first-report-contract.mjs': {'first-report'},
     'web/scripts/first-report-contract.node.mjs': {'first-report'},
+    'web/scripts/capture-windows-complete-service-review.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-service-review-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-review-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-review-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-service-review-scenes.json': {'windows-service-actions'},
+    'web/scripts/capture-windows-complete-notifications.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-notifications-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-notifications-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-notifications-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-notifications-scenes.json': {'windows-service-actions'},
+    'tests/e2e-review/windows-incident-inbox-browser.mjs': {'windows-incident-inbox'},
+    'tests/e2e-review/windows-incident-inbox-fixtures.test.mjs': {'windows-incident-inbox'},
+    'web/scripts/capture-windows-complete-incident-inbox.mjs': {'windows-service-actions'},
+    'web/scripts/check-windows-complete-incident-inbox-evidence.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-incident-inbox-contract.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-incident-inbox-contract.node.mjs': {'windows-service-actions'},
+    'web/scripts/windows-complete-incident-inbox-scenes.json': {'windows-service-actions'},
     'tests/e2e-review/fleet-groups-browser.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-evidence.mjs': {'fleet-groups'},
     'tests/e2e-review/fleet-groups-fixtures.test.mjs': {'fleet-groups'},
@@ -123,15 +140,37 @@ DOMAIN_SCRIPTS = {
     'web/scripts/run-windows-msi-catalogue-ci.mjs': {'windows-fleet-msi'},
     'web/scripts/windows-msi-catalogue-scenes.json': {'windows-fleet-msi'},
 }
-# These existing UI names do not match the older domain aliases. Keep them in
-# the normal changed/related Vitest path while selecting their verified owner.
+# These exact UI names and the reviewed Go-produced JSON fixture need a more
+# specific owner than the older aliases. Keep their real changed/related Vitest
+# dependency path; unreviewed JSON fixtures retain the broad fallback.
 DOMAIN_UI = {
     'web/src/enrollment.tsx': {'enrollment', 'first-report'},
     'web/src/enrollment-types.ts': {'enrollment', 'first-report'},
     'web/src/enrollment-report.tsx': {'enrollment', 'first-report'},
+    'web/src/windows-complete-service-incident-review.tsx': {'windows-service-actions'},
+    'web/src/windows-complete-service-incident-review-types.ts': {'windows-service-actions'},
+    'web/src/windows-complete-service-incident-review.test.tsx': {'windows-service-actions'},
+    'web/src/windows-complete-service-review-fixture.ts': {'windows-service-actions'},
+    'web/src/windows-complete-service-review-go-fixture.json': {'windows-service-actions'},
+    'web/src/windows-complete-notifications.tsx': {'windows-service-actions'},
+    'web/src/windows-complete-notifications-resource.ts': {'windows-service-actions'},
+    'web/src/windows-complete-notifications-types.ts': {'windows-service-actions'},
+    'web/src/windows-complete-notifications-fixture.ts': {'windows-service-actions'},
+    'web/src/windows-complete-notifications.test.tsx': {'windows-service-actions'},
+    'web/src/windows-notifications.tsx': {'windows-maintenance', 'windows-service-actions'},
+    'web/src/windows-maintenance.css': {'windows-maintenance', 'windows-service-actions'},
     'web/src/windows-fleet-managed-msi.css': {'windows-fleet-msi'},
     'web/src/windows-fleet-managed-msi.test.tsx': {'windows-fleet-msi'},
     'web/src/windows-reusable-managed-msi.test.tsx': {'windows-fleet-msi'},
+}
+# Exact reviewed complete-source Go owners preserve dependency discovery.
+DOMAIN_GO = {
+    'internal/api/windows_complete_service_incident_review.go': {'windows-service-actions'},
+    'internal/api/windows_complete_service_incident_review_test.go': {'windows-service-actions'},
+    'internal/api/windows_complete_notifications.go': {'windows-service-actions'},
+    'internal/api/windows_complete_notifications_test.go': {'windows-service-actions'},
+    'internal/store/windows_complete_notifications.go': {'windows-service-actions'},
+    'internal/store/windows_complete_notifications_test.go': {'windows-service-actions'},
 }
 ALIASES = {'windowsfullservices': ['windows-full-services', 'windows-service-actions'],
            'fleetgroups': ['fleet-groups', 'windows-service-actions'],
@@ -156,6 +195,8 @@ ALIASES = {'windowsfullservices': ['windows-full-services', 'windows-service-act
            'windowshealth': ['lan'], 'windowsnetwork': ['lan'], 'windowsinventory': ['lan'],
            'windowssecurity': ['lan'], 'windowspatch': ['lan'], 'windowsstorage': ['lan'],
            'windowshardware': ['lan'], 'windowssession': ['lan'], 'windowsadapter': ['lan'],
+           'windowscompleteincident': ['windows-incident-inbox', 'windows-service-actions'],
+           'windowsincidentinbox': ['windows-incident-inbox', 'windows-service-actions'],
            'windowsserviceaction': ['windows-service-actions'],
            'windowsservicehealthcomplete': ['lan', 'windows-service-actions'],
            'windowscompleteservice': ['lan', 'windows-service-actions'],
@@ -217,6 +258,8 @@ def affected(packages, seeds):
 
 
 def flow_names(path):
+    if path in DOMAIN_GO:
+        return DOMAIN_GO[path]
     name = Path(path).stem.replace('_', '-').lower()
     compact = name.replace('-', '')
     # One longest-prefix table: a richer domain alias must win over a shorter
@@ -287,7 +330,7 @@ def select(changes, packages, files, sha, runnable=None, generated_allowlist_ver
             flows |= domain
             if not domain:
                 unmapped |= files[path]
-        elif path.startswith('web/src/') and Path(path).suffix in {'.ts', '.tsx', '.css'}:
+        elif path.startswith('web/src/') and (path in DOMAIN_UI or Path(path).suffix in {'.ts', '.tsx', '.css'}):
             web.add(path.removeprefix('web/'))
             domain = DOMAIN_UI.get(path, set()) or flow_names(path)
             flows |= domain
@@ -498,7 +541,17 @@ def web_checks(plan):
     if 'linux-cve-update-review' in plan.get('flows', []):
         run(['node', 'web/scripts/capture-linux-cve-update-review.mjs', '--check'], stage='ui-cve-review-contract')
         run(['node', '--test', 'web/scripts/linux-cve-update-review-contract.node.mjs'], stage='ui-cve-review-evidence-contract')
+    if 'windows-maintenance' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-maintenance-fixtures.test.mjs'], stage='ui-maintenance-notification-contract')
+    if 'windows-incident-inbox' in plan.get('flows', []):
+        run(['node', '--test', 'tests/e2e-review/windows-incident-inbox-fixtures.test.mjs'], stage='ui-incident-inbox-contract')
     if 'windows-service-actions' in plan.get('flows', []):
+        run(['node', 'web/scripts/capture-windows-complete-service-review.mjs', '--check'], stage='ui-complete-service-review-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-service-review-contract.node.mjs'], stage='ui-complete-service-review-evidence-contract')
+        run(['node', 'web/scripts/capture-windows-complete-notifications.mjs', '--check'], stage='ui-complete-notifications-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-notifications-contract.node.mjs'], stage='ui-complete-notifications-evidence-contract')
+        run(['node', 'web/scripts/capture-windows-complete-incident-inbox.mjs', '--check'], stage='ui-complete-incident-contract')
+        run(['node', '--test', 'web/scripts/windows-complete-incident-inbox-contract.node.mjs'], stage='ui-complete-incident-evidence-contract')
         run(['node', 'web/scripts/capture-windows-complete-service-health.mjs', '--check'], stage='ui-complete-service-contract')
         run(['node', '--test', 'web/scripts/windows-complete-service-health-contract.node.mjs'], stage='ui-complete-service-evidence-contract')
         run(['node', '--test', 'tests/e2e-review/windows-update-download-fixtures.test.mjs'], stage='ui-windows-update-download-contract')
@@ -726,6 +779,7 @@ LAN_FAILURE_STAGES = {
         'detail-route-readiness',
         'final-no-action-guards',
         'fixture-document',
+        'idle-unavailable',
         'inventory-tab',
         'services-tab',
         'setup',
@@ -1115,6 +1169,233 @@ def windows_action_failure_location(sha, invocation):
         return None
 
 
+# The Conditional runner already writes a bounded, redacted results report.
+# This bridge releases only coordinates reconstructed from fixed source literals.
+# It never opens screenshots or emits report prose, diagnostics or numeric values.
+CONDITIONAL_FAILURE_CASES = {
+    'Managed package-source enrollment requires explicit scope acknowledgement and never exports invitation material': 'managed-consent',
+    'Device tabs and package/review disclosures issue only their lazy device-bound reads': 'lazy-reads',
+    'Every legacy inventory panel and diagnostic source has bilingual desktop and mobile pixels': 'legacy-gallery',
+    'Operational observations preserve section scope, sample filtering, unavailable data and unknown assessment': 'operational-scope',
+    'Failed latest collection retains labelled older operational rows while package facts become unknown': 'retained-observations',
+    'Partial package-source inventory preserves exact binary/source versions without claiming a complete total': 'partial-packages',
+    'Unconfigured and declared-synthetic catalogs never produce live review candidates or zero-CVE claims': 'catalog-unavailable',
+    'Conditional candidates use reported source version, immutable lineage and unknown authority counts': 'source-bound-review',
+    'Missing source coverage and unsupported Ubuntu release remain partial or unavailable without binary-name fallback': 'source-mismatch',
+    'Unsupported comparison stays a visible conditional row with unavailable comparison rather than an equal or fixed verdict': 'comparison-unavailable',
+    'Real current-state stale, revoked and retention expiry suppress candidates without refreshing old observation times': 'stale-revoked-retention',
+    'Catalog file selection is local, import is revision-bound, and explicit clear returns to empty memory-only state': 'catalog-selection',
+    'Stale catalog CAS rejects replacement and requires a fresh status and file selection': 'catalog-conflict',
+    'Invalid catalog content and a lost committed import preserve honest status without replay or stored file content': 'catalog-lost-import',
+    'Review identity mismatch, invented authoritative counts and changed-input errors discard prior candidates': 'review-identity',
+    'Late review response cannot survive device navigation or a closed disclosure': 'late-review',
+    'Protected 401 clears the private review UI without persisting source data in script storage': 'protected-access-loss',
+    'Persisted-page suspension clears review data until fresh automatic revalidation completes': 'persisted-resume',
+    'Mobile package tables remain keyboard-scrollable within the viewport, and German review preserves unknown-count warnings': 'mobile-localized',
+}
+CONDITIONAL_LITERAL_STAGES = {
+    'setup': 'setup',
+    'open device panel': 'open-device-panel',
+    'safe synthetic viewport capture': 'safe-synthetic-viewport-capture',
+    'six package columns and keyboard-accessible mapping details': 'six-package-columns-and-keyboard-accessible-mapping-details',
+    'fixture setup': 'fixture-setup',
+    'compile fixture': 'compile-fixture',
+    'real API smoke': 'real-api-smoke',
+    'hosted Chromium launch': 'hosted-chromium-launch',
+    'managed consent': 'managed-consent',
+    'lazy reads': 'lazy-reads',
+    'manual coverage refresh injects one storage_busy read': 'manual-coverage-refresh-injects-one-storage-busy-read',
+    'coverage retry reaches the real authenticated handler': 'coverage-retry-reaches-the-real-authenticated-handler',
+    'held real coverage response keeps prior facts cleared': 'held-real-coverage-response-keeps-prior-facts-cleared',
+    'real coverage retry restores observations with unknown authority counts': 'real-coverage-retry-restores-observations-with-unknown-authority-counts',
+    'operational scope': 'operational-scope',
+    'retained observation': 'retained-observation',
+    'partial package facts': 'partial-package-facts',
+    'unavailable and synthetic catalog': 'unavailable-and-synthetic-catalog',
+    'source-bound conditional candidate': 'source-bound-conditional-candidate',
+    'source mismatch': 'source-mismatch',
+    'comparison unavailable': 'comparison-unavailable',
+    'stale identity-bound evidence': 'stale-identity-bound-evidence',
+    'catalog file selection': 'catalog-file-selection',
+    'real catalog revision conflict': 'real-catalog-revision-conflict',
+    'catalog conflict is explained': 'catalog-conflict-is-explained',
+    'refreshed catalog requires a new file selection': 'refreshed-catalog-requires-a-new-file-selection',
+    'invalid catalog rejection': 'invalid-catalog-rejection',
+    'lost committed catalog import': 'lost-committed-catalog-import',
+    'lost import remains explicitly unconfirmed': 'lost-import-remains-explicitly-unconfirmed',
+    'wrong device response': 'wrong-device-response',
+    'device switch during review': 'device-switch-during-review',
+    'protected authorization loss': 'protected-authorization-loss',
+    'persisted pagehide removes review rows': 'persisted-pagehide-removes-review-rows',
+    'persisted pageshow starts automatic review read': 'persisted-pageshow-starts-automatic-review-read',
+    'held resumed review keeps rows absent': 'held-resumed-review-keeps-rows-absent',
+    'persisted auth resume restores visible shell': 'persisted-auth-resume-restores-visible-shell',
+    'fresh resumed review restores exactly one row': 'fresh-resumed-review-restores-exactly-one-row',
+    'mobile package viewport': 'mobile-package-viewport',
+}
+CONDITIONAL_FOCUS_TARGETS = ('legacy-package-table', 'legacy-package-details', 'advisory-toggle')
+FOCUS_PHASES = ('outline geometry read', 'outline geometry classify', 'outline hit-test read', 'keyboard entry', 'computed contrast', 'outline exposure', 'outline left edge', 'outline right edge', 'outline right viewport', 'outline right ancestor', 'outline right mixed', 'outline right table wider', 'outline right table fractional', 'outline right table subpixel', 'outline right table overflow', 'outline right table unverified subpixel', 'outline right table unverified overflow', 'outline top edge', 'outline top band', 'outline header', 'outline bottom edge', 'outline hit top', 'outline hit left', 'outline hit right', 'outline hit bottom', 'outline accepted', 'synthetic capture')
+CONDITIONAL_FOCUS_STAGES = {
+    f'focus contrast {target} {size} {locale} {theme}: {phase}':
+    f'focus-{target}-{size}-{locale}-{theme}-{phase.replace(" ", "-")}'
+    for target in CONDITIONAL_FOCUS_TARGETS for size in ('desktop', 'mobile')
+    for locale in ('en', 'de') for theme in ('light', 'dark') for phase in FOCUS_PHASES
+}
+CONDITIONAL_REPORT_PROSE = {'fixture': 'Three generated disposable identities; every observation and catalog is invented. Direct synthetic admission to the real enrolled store is not transport, collector, native installer or production-fleet validation.', 'catalogDisclosure': 'Invented normalized files may declare synthetic:false solely to exercise unverified interchange semantics; never real vendor data.', 'faultInjection': 'Explicit malformed/identity/count/401/409 responses, lost import, held response, persisted-page events and service-only fixture-clock advances (auth clock stays real); no actual OS/BFCache or real waiting-age claim', 'existingEnrollmentQuarantine': 'Unaffected: 10 enabled, three explicitly skipped; no full enrollment acceptance', 'scope': 'Built React and real authenticated loopback HTTP-test operator, operational/package store, catalog CAS and conditional review handlers'}
+CONDITIONAL_ERROR = 'Bounded assertion failure; request bodies, credentials and private state withheld.'
+COVERAGE_DIAGNOSTIC_STEPS = ('not started', 'busy and disabled', 'prior private facts cleared', 'source heading retained', 'uncertainty warning retained', 'cleared view verified', 'manual refresh', 'storage busy notice', 'upstream retry', 'restored unknown counts')
+
+def conditional_diagnostic_shape(value, case):
+    """Validate existing optional diagnostics without releasing any of their fields."""
+    integer = lambda n, maximum: type(n) is int and 0 <= n <= maximum
+    if type(value) is not dict:
+        return False
+    if value == {'unavailable': True} and type(value['unavailable']) is bool:
+        return True
+    if case == 'lazy-reads':
+        if set(value) != {'coverageRefresh'} or type(value['coverageRefresh']) is not dict:
+            return False
+        v = value['coverageRefresh']
+        return (set(v) == {'step', 'reads', 'statuses', 'mutations', 'routeFailed', 'holdExpired'}
+                and type(v['step']) is str and v['step'] in COVERAGE_DIAGNOSTIC_STEPS
+                and integer(v['reads'], 3) and integer(v['mutations'], 10)
+                and type(v['routeFailed']) is bool and type(v['holdExpired']) is bool
+                and type(v['statuses']) is list and len(v['statuses']) <= 3
+                and all(integer(n, 599) and n >= 100 for n in v['statuses']))
+    if case != 'persisted-resume' or set(value) != {'repeatCount', 'attempts', 'network', 'finalState'}:
+        return False
+    boolean_keys = {'documentVisible', 'privateViewPresent', 'privateInert', 'privateAriaHidden',
+                    'privateVisible', 'appShellPresent', 'reviewPresent', 'reviewBusy', 'reviewAlertPresent'}
+    event_keys = {'pagehide', 'pageshow', 'focus', 'blur', 'visibilitychange'}
+    def snapshot(v):
+        return (type(v) is dict and set(v) == boolean_keys | {'articleCount', 'events'}
+                and all(type(v[key]) is bool for key in boolean_keys) and integer(v['articleCount'], 128)
+                and type(v['events']) is dict and set(v['events']) == event_keys
+                and all(integer(n, 100) for n in v['events'].values()))
+    if (not integer(value['repeatCount'], 10) or value['repeatCount'] < 1 or not snapshot(value['finalState'])
+            or type(value['attempts']) is not list or len(value['attempts']) > value['repeatCount']
+            or type(value['network']) is not list or len(value['network']) > 80):
+        return False
+    for index, attempt in enumerate(value['attempts'], 1):
+        if (type(attempt) is not dict or set(attempt) - {'fulfillFailed'} not in ({'attempt', 'upstream'}, {'attempt', 'upstream', 'state'})
+                or type(attempt['attempt']) is not int or attempt['attempt'] != index
+                or type(attempt['upstream']) is not list or len(attempt['upstream']) > 8
+                or ('state' in attempt and not snapshot(attempt['state']))
+                or ('fulfillFailed' in attempt and (attempt['fulfillFailed'] is not True or not attempt['upstream']))):
+            return False
+        for response in attempt['upstream']:
+            if (type(response) is not dict or set(response) != {'status', 'errorCode'}
+                    or not integer(response['status'], 599) or response['status'] < 100
+                    or type(response['errorCode']) is not str
+                    or response['errorCode'] not in ('none', 'storage_busy', 'review_busy', 'review_changed', 'authentication_required', 'other', 'non_json')):
+                return False
+    # The producer increments after the final completed iteration. Its still-live
+    # listeners can record that one sentinel during finalState collection; this
+    # is not an extra attempt and requires every iteration's completed snapshot.
+    final_sentinel = len(value['attempts']) == value['repeatCount'] and all('state' in row for row in value['attempts'])
+    network_attempt_limit = value['repeatCount'] + int(final_sentinel)
+    for event in value['network']:
+        if (type(event) is not dict or set(event) not in ({'attempt', 'route', 'phase'}, {'attempt', 'route', 'phase', 'status'})
+                or not integer(event['attempt'], network_attempt_limit)
+                or type(event['route']) is not str or event['route'] not in ('auth', 'coverage', 'review')
+                or type(event['phase']) is not str or event['phase'] not in ('request', 'response', 'failed')
+                or ('status' in event) != (event['phase'] == 'response')
+                or ('status' in event and (not integer(event['status'], 599) or event['status'] < 100))):
+            return False
+    return True
+
+
+def conditional_failure_location(sha):
+    """Read this invocation's report through the existing no-follow bounded decoder."""
+    try:
+        path = ROOT / 'artifacts/review/conditional-browser-results.json'
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 131072:
+                return None
+            raw = stream.read(131073)
+        if len(raw) > 131072:
+            return None
+        value = reporter.decode(raw)
+        keys = set(CONDITIONAL_REPORT_PROSE) | {'sourceSha', 'applicationBaselineArchiveSha256', 'createdAt',
+                'runtimeErrorCount', 'secretsExported', 'realTelemetryExported', 'results', 'summary'}
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict or set(value) != keys
+                or value['sourceSha'] != sha
+                or any(value[key] != expected for key, expected in CONDITIONAL_REPORT_PROSE.items())
+                or value['applicationBaselineArchiveSha256'] != 'b3acbd80ba33e173f6425256c75ed1f372c9ea7ff2c9e516e5e937aaf5937d9b'
+                or type(value['createdAt']) is not str or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z', value['createdAt'])
+                or value['secretsExported'] is not False or value['realTelemetryExported'] is not False
+                or type(value['runtimeErrorCount']) is not int or not 0 <= value['runtimeErrorCount'] <= 1000000
+                or type(value['results']) is not list or len(value['results']) > len(CONDITIONAL_FAILURE_CASES)):
+            return None
+        rows, summary = value['results'], value['summary']
+        if (type(summary) is not dict or set(summary) != {'passed', 'failed', 'setupFailure'}
+                or type(summary['setupFailure']) is not bool
+                or any(type(summary[key]) is not int or not 0 <= summary[key] <= len(CONDITIONAL_FAILURE_CASES) for key in ('passed', 'failed'))
+                or (not summary['setupFailure'] and len(rows) != len(CONDITIONAL_FAILURE_CASES))):
+            return None
+        failed, locations = 0, []
+        for row, (name, case) in zip(rows, CONDITIONAL_FAILURE_CASES.items()):
+            if (type(row) is not dict or row.get('name') != name or row.get('status') not in ('PASS', 'FAIL')
+                    or type(row.get('durationMs')) is not int or not 0 <= row['durationMs'] <= 9007199254740991):
+                return None
+            keys = {'name', 'status', 'durationMs'}
+            if row['status'] == 'PASS' and case in ('lazy-reads', 'persisted-resume') and 'diagnostics' not in row:
+                return None
+            if 'diagnostics' in row:
+                keys.add('diagnostics')
+                if case not in ('lazy-reads', 'persisted-resume') or not conditional_diagnostic_shape(row['diagnostics'], case):
+                    return None
+            if row['status'] == 'FAIL':
+                failed += 1
+                keys |= {'stage', 'error'}
+                if row.get('error') != CONDITIONAL_ERROR or type(row.get('stage')) is not str:
+                    return None
+                stage = CONDITIONAL_LITERAL_STAGES.get(row['stage'])
+                if stage is None and case == 'legacy-gallery':
+                    stage = CONDITIONAL_FOCUS_STAGES.get(row['stage'])
+                if stage is None:
+                    return None
+                locations.append('case=' + case + ' stage=' + stage)
+            if set(row) != keys:
+                return None
+        if summary['failed'] != failed or summary['passed'] != len(rows) - failed:
+            return None
+        if summary['setupFailure']:
+            locations.append('setup-failure')
+        if value['runtimeErrorCount']:
+            locations.append('runtime-errors')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_conditional_browser(env, sha):
+    # Remove only this report before entering the failure handler. A failed cleanup
+    # or failed launch without a fresh report cannot project a prior same-head run.
+    path = ROOT / 'artifacts/review/conditional-browser-results.json'
+    directory = None
+    try:
+        directory = reporter.open_log(path.parent)
+        if not stat.S_ISDIR(os.fstat(directory).st_mode):
+            raise ValueError('invalid Conditional diagnostic directory')
+        os.unlink(path.name, dir_fd=directory)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        raise ValueError('could not prepare fresh Conditional diagnostics') from None
+    finally:
+        if directory is not None:
+            os.close(directory)
+    try:
+        run(['node', FLOWS['conditional']], stage='browser-conditional', env={**env, 'TRACEBOLT_SOURCE_SHA': sha})
+    except ValueError:
+        location = conditional_failure_location(sha)
+        if location is not None:
+            print('FAIL Conditional location: ' + location, flush=True)
+        raise  # Preserve the original exception and withheld raw process output.
+
+
 JOURNAL_COORDINATES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/journal-browser-coordinates.json'
 
 
@@ -1299,6 +1580,85 @@ def run_journal_browser(env, sha):
             raise  # Original failure and withheld raw process output stay intact.
 
 
+V3_COORDINATES_SOURCE = Path(__file__).resolve().parents[1] / 'e2e-review/v3-browser-coordinates.json'
+
+
+def v3_failure_location(path, sha):
+    """Project only this invocation's source-bound, finite numeric coordinates."""
+    try:
+        with os.fdopen(reporter.open_log(V3_COORDINATES_SOURCE), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 16384:
+                return None
+            raw = stream.read(16385)
+        if len(raw) > 16384:
+            return None
+        contract = reporter.decode(raw)
+        if (type(contract) is not dict or set(contract) != {'schemaVersion', 'cases', 'stages', 'focus'}
+                or contract['schemaVersion'] != 'tracebolt.v3-browser-coordinates.v1'
+                or type(contract['cases']) is not list or len(contract['cases']) != 10
+                or type(contract['stages']) is not list or not 0 < len(contract['stages']) <= 256):
+            return None
+        for values in (contract['cases'], contract['stages']):
+            if any(type(item) is not str or not 0 < len(item) <= 160 for item in values) or len(set(values)) != len(values):
+                return None
+        focus = contract['focus']
+        if (type(focus) is not dict or set(focus) != {'case', 'targets', 'sizes', 'locales', 'themes', 'phases'}
+                or type(focus['case']) is not int or focus['case'] != 4
+                or focus['targets'] != ['inventory-source-tab', 'complete-package-search', 'complete-package-table', 'complete-package-details']
+                or focus['sizes'] != ['desktop', 'mobile'] or focus['locales'] != ['en', 'de']
+                or focus['themes'] != ['light', 'dark'] or focus['phases'] != list(FOCUS_PHASES)):
+            return None
+        checkpoint_count = len(contract['stages']) + 4 * 2 * 2 * 2 * len(FOCUS_PHASES)
+        with os.fdopen(reporter.open_log(path), 'rb') as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 8192:
+                return None
+            raw = stream.read(8193)
+        if len(raw) > 8192:
+            return None
+        value = reporter.decode(raw)
+        if (type(sha) is not str or not HEX.fullmatch(sha) or type(value) is not dict
+                or set(value) != {'schemaVersion', 'sourceSha', 'failures', 'setupFailure', 'runtimeFailure', 'finalCheckpoint'}
+                or value['schemaVersion'] != 'tracebolt.v3-browser-failure.v1'
+                or type(value['sourceSha']) is not str or value['sourceSha'] != sha
+                or any(type(value[key]) is not bool for key in ('setupFailure', 'runtimeFailure'))
+                or type(value['finalCheckpoint']) is not int or not 0 <= value['finalCheckpoint'] < checkpoint_count
+                or type(value['failures']) is not list or len(value['failures']) > len(contract['cases'])):
+            return None
+        previous, locations = 0, []
+        for row in value['failures']:
+            if (type(row) is not dict or set(row) != {'case', 'checkpoint'}
+                    or type(row['case']) is not int or not previous < row['case'] <= len(contract['cases'])
+                    or type(row['checkpoint']) is not int or not 0 <= row['checkpoint'] < checkpoint_count
+                    or (row['checkpoint'] >= len(contract['stages']) and row['case'] != focus['case'])):
+                return None
+            previous = row['case']
+            locations.append('case=%d checkpoint=%d' % (row['case'], row['checkpoint']))
+        if value['setupFailure']:
+            locations.append('setup-checkpoint=%d' % value['finalCheckpoint'])
+        if value['runtimeFailure']:
+            locations.append('runtime-errors')
+        return '; '.join(locations) or None
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+        return None
+
+
+def run_v3_browser(env, sha):
+    # Fresh private per-invocation path, never artifacts; always removed. Ignore
+    # any inherited destination and explicitly bind the child to this source.
+    with tempfile.TemporaryDirectory(prefix='tracebolt-private-v3-') as private:
+        path = Path(private) / 'coordinates.json'
+        try:
+            run(['node', FLOWS['v3']], stage='browser-v3',
+                env={**env, 'TRACEBOLT_SOURCE_SHA': sha, 'TRACEBOLT_V3_DIAGNOSTICS_PATH': str(path)})
+        except ValueError:
+            location = v3_failure_location(path, sha)
+            if location is not None:
+                print('FAIL V3 location: ' + location, flush=True)
+            raise  # Original failure, redaction and exit semantics are unchanged.
+
+
 def browser_checks(plan):
     run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
@@ -1327,6 +1687,10 @@ def browser_checks(plan):
                 run_shell_browser(env, plan['sha'])
             elif flow == 'journal':
                 run_journal_browser(env, plan['sha'])
+            elif flow == 'conditional':
+                run_conditional_browser(env, plan['sha'])
+            elif flow == 'v3':
+                run_v3_browser(env, plan['sha'])
             else:
                 run(['node', FLOWS[flow]], stage='browser-' + flow, env=env)
         except ValueError:
@@ -1362,6 +1726,12 @@ def browser_checks(plan):
                 stage='browser-update-download-evidence', env=env)
             run(['node', 'web/scripts/check-windows-complete-service-health-evidence.mjs', plan['sha']],
                 stage='browser-complete-service-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-incident-inbox-evidence.mjs', plan['sha']],
+                stage='browser-complete-incident-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-notifications-evidence.mjs', plan['sha']],
+                stage='browser-complete-notifications-evidence', env=env)
+            run(['node', 'web/scripts/check-windows-complete-service-review-evidence.mjs', plan['sha']],
+                stage='browser-complete-service-review-evidence', env=env)
         browser_report(flow, plan['sha'])
     print('PASS: authenticated browser smoke and selected existing flows; synthetic fixtures, not native acceptance.')
 

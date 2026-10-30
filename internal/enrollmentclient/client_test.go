@@ -183,7 +183,7 @@ func (f *clientFixture) serve(w http.ResponseWriter, r *http.Request) {
 		json.Unmarshal(raw, &fields)
 		nonce := fields["challenge"]
 		switch path {
-		case "claim":
+		case "claim", "self-claim":
 			// Keep only public identity fields in fixture records, never invitations.
 			f.claims = append(f.claims, map[string]string{"claimId": fields["claimId"], "requestId": fields["requestId"], "csr": fields["csr"]})
 			if f.dropClaimBefore {
@@ -192,7 +192,11 @@ func (f *clientFixture) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			var v enrollmentstate.Snapshot
-			v, e = f.service.Claim(r.Context(), nonce, raw)
+			if path == "self-claim" {
+				v, e = f.service.SelfClaim(r.Context(), nonce, raw)
+			} else {
+				v, e = f.service.Claim(r.Context(), nonce, raw)
+			}
 			out = v
 			if e == nil && f.autoApprove {
 				_, e = f.service.Approve(r.Context(), v.InvitationID, testID("request", 100), v.Claim.KeyFingerprint, v.Revision)
@@ -930,5 +934,49 @@ func TestEnrollmentValidationPreservesSenderCrashTemporary(t *testing.T) {
 	got, readErr := os.ReadFile(p)
 	if readErr != nil || !bytes.Equal(got, sentinel) {
 		t.Fatal("enrollment validation removed or changed sender temporary")
+	}
+}
+
+func TestAutomaticEnrollmentWithoutToken(t *testing.T) {
+	for _, dropped := range []string{"none", "before", "after"} {
+		t.Run(dropped, func(t *testing.T) {
+			f := newClientFixture(t, "tls")
+			f.bootstrap.SchemaVersion = AutomaticBootstrapVersion
+			f.bootstrap.InvitationID = testID("invite", 999)
+			f.dropClaimBefore = dropped == "before"
+			f.dropClaimAfter = dropped == "after"
+			o := f.options()
+			o.Secret = func(context.Context) ([]byte, error) {
+				t.Fatal("automatic onboarding prompted for a token")
+				return nil, nil
+			}
+			result, err := Run(context.Background(), f.bootstrap, o)
+			if err != nil {
+				t.Fatalf("%v; requests: %v", err, f.requests)
+			}
+			if _, err := lanclient.Load(result.ConfigPath); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, path := range f.requests {
+				if path == "claim" {
+					t.Fatal("used invitation endpoint")
+				}
+				found = found || path == "self-claim"
+			}
+			if !found {
+				t.Fatal("missing self registration")
+			}
+			// Existing identity cannot be silently reinterpreted as an invitation flow.
+			f.bootstrap.SchemaVersion = BootstrapVersion
+			if _, err := Run(context.Background(), f.bootstrap, o); err == nil {
+				t.Fatal("adopted automatic state as invitation state")
+			}
+		})
+	}
+	f := newClientFixture(t, "http-test")
+	f.bootstrap.SchemaVersion = AutomaticBootstrapVersion
+	if _, err := validateBootstrap(f.bootstrap, time.Now()); err == nil {
+		t.Fatal("automatic registration allowed cleartext")
 	}
 }

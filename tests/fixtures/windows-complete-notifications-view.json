@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "tracebolt.windows-complete-notifications.v1",
+  "serverNow": "2026-10-07T12:00:00Z",
+  "authorityExpiresAt": "2026-10-07T12:02:00Z",
+  "destinationHost": "receiver.example.test",
+  "destinationBinding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deliveryEnabled": true,
+  "targets": [
+    {
+      "key": "72975823383bdc2a6f2ab7d9e6efc644c7181944624a9663ac7bc68d5fe7725d",
+      "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain": "service-complete",
+      "revision": 1,
+      "enabled": true,
+      "effective": true,
+      "maintenanceUntil": null,
+      "changedAt": "2026-10-07T12:00:00Z",
+      "healthPolicyRevision": 1,
+      "grantId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "grantRevision": 1,
+      "services": [
+        "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界"
+      ],
+      "actionable": true
+    }
+  ],
+  "counts": {
+    "schemaVersion": "tracebolt.alarm-status.v1",
+    "enabled": true,
+    "queued": 0,
+    "inFlight": 0,
+    "providerAccepted": 1,
+    "failed": 0,
+    "uncertain": 0,
+    "suppressed": 1,
+    "dropped": 0
+  }
+}

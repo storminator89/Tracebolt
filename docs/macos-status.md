@@ -52,7 +52,10 @@ It does not execute or install any target binary.
 
 The source `enroll-agent` accepts a reviewed absolute public bootstrap path and a
 new dedicated private state directory. On macOS it must run as the intended
-nonroot reporting identity. Invitation entry is a hidden controlling-terminal
+nonroot reporting identity. For TLS basic and inventory domains without renewal,
+Add device now defaults to automatic registration: a fresh public
+`tracebolt.enrollment-bootstrap.auto.v1` artifact registers without token entry.
+The optional invitation-token checkbox keeps the hidden controlling-terminal
 prompt. Invitation secrets are never command arguments, environment variables,
 stdin, URLs or files. Compare the complete local public fingerprint and comparison
 value with the manager before approving the identity.
@@ -80,7 +83,8 @@ Python, Homebrew or Xcode.
 The preparation helper verifies the selected package and public TLS bootstrap.
 Its separate `stage --apply` operation prepares a fresh dedicated account and
 fixed protected paths only after explicit local approval. Enrollment remains a
-separate hidden-terminal invitation and fingerprint-approval step. Existing
+separate enrollment and fingerprint-approval step (automatic registration needs
+no invitation prompt). Existing
 identities, accounts and uncertain partial state are not adopted or reset.
 
 `macos-agent-service` retains its read-only nonroot preflight and host-free
@@ -192,3 +196,9 @@ Before any macOS release, separately authorized native tests must establish:
 
 Synthetic manager/provider fixtures and target test-binary compilation cover
 source behavior only. None of these native gates has been executed by this change.
+
+Automatic onboarding requires the updated manager and source-built enrollment
+client; old downloadable packages are not retroactively compatible. The existing
+nonroot account preparation, explicit collection consent, launchd installation,
+and fingerprint approval still apply. Linux integration tests and Darwin builds
+do not establish native macOS installation acceptance.

@@ -534,3 +534,118 @@ same time. This keeps the exact EN/DE assertion valid across the second boundary
 sample timestamp, 24-hour retention deadline, initial+500 ms near-expiry sample
 and subsequent 1,000 ms expiry check remain unchanged. A finite `retained-age`
 diagnostic isolates this assertion without exposing sample or runtime values.
+
+### S03/S04 focus and error color evidence
+
+The existing shell/conditional/v3 runners also exercise the narrow shared
+contrast corrections. See [the scope, arithmetic, and capture recipe](../../docs/focus-contrast.md).
+The `synthetic-focus-contrast-*` images use real controls in existing invented
+fixtures, EN/DE, 1440×1000/390×844 and both themes. Their existing screenshot
+manifest entries include computed `contrast` measurements alongside revision
+and fixture provenance. The helper never launches a browser on import or grants
+any endpoint authority. Source arithmetic is not pixel/browser acceptance; review
+the exact hosted images before closing the visual gate.
+
+Package table/mapping captures additionally enter through real preceding
+controls with forward Tab, reject bounded top/side clipping and LAN-header
+occlusion, and record geometry/hit-test evidence. Only tall table bottoms may
+remain cropped. See the linked correction notes for the exact exposure contract
+and remaining marker/pixel review; no local browser result is implied.
+
+### Conditional failure checkpoint in PR CI
+
+The PR wrapper still withholds all browser stdout/stderr. On a failed Conditional
+run it now reads only that invocation's freshly written
+`conditional-browser-results.json` through the existing no-follow, bounded JSON
+decoder. An exact source SHA, fixed report metadata, case order/counts, summary,
+redacted error sentence, stage vocabulary and optional diagnostic shapes must
+match. Unknown fields, private/raw strings, duplicate JSON keys, symlinks and
+source mismatches yield no checkpoint. Existing optional coverage/lifecycle
+diagnostics are validated but never printed.
+
+Public output is limited to fixed source-owned labels such as
+`FAIL Conditional location: case=legacy-gallery stage=focus-legacy-package-details-mobile-en-light-outline-exposure`.
+The three Conditional focus targets retain the four original check phases and
+add fourteen fixed exposure subphases plus nine fixed right-boundary reasons. Across the unchanged EN/DE ×
+desktop/mobile × light/dark matrix, this gives 648 allowed coordinates. A
+previous same-head report is removed through a no-follow directory descriptor
+before launching this runner; cleanup failure cannot expose old evidence. The
+original failing process/exception remains a failure, and success never enters
+the projector. No screenshot gates, assertions, retries, time budgets, CSS or
+keyboard paths change.
+
+`ConditionalFailureTests` in `tests/security/test_pr_checks.py` exercises the
+actual source-owned `check()` producer and report-object construction in an inert
+Node VM, then Python `run()` and the public checkpoint. It does not import or
+launch the browser runner. These synthetic failure tests establish the diagnostic
+path only; a fresh exact-head hosted run is still needed to identify the actual
+Conditional failure. The V3 runner and public failure projection are unchanged;
+the shared helper also gives its focus checks the finer private phase labels,
+without changing behavior or establishing V3 pixel acceptance.
+
+Exposure subphases identify geometry reading/classification, hit-test reading,
+the existing left/right/top/top-band/header checks, and the existing final
+acceptance check. For that unchanged aggregate assertion, a fixed bottom-edge
+or hit-edge label is selected from its existing boolean inputs; no assertion or
+measurement is relaxed, replaced or added. The historical broad `outline exposure`
+phase remains valid. Every original assertion, the geometry classifier, original
+numerical geometry inputs, hit-test callback and forward-Tab function retain their
+source behavior. Diagnostic-only CSSOM reads do not alter acceptance.
+
+Twenty-two synthetic failing paths execute the actual focus helper, Conditional
+`check()` catch/report producer, Python wrapper and strict decoder in inert tests.
+The public checkpoint contains only a closed phase label, never geometry values,
+hit-test data, DOM text or raw errors. The right-edge checkpoint identifies a failed original clipping assertion; it
+does not establish the responsible boundary or justify a speculative CSS change. A fresh exact-head hosted run and the existing 80-image pixel gate remain
+required.
+
+The right-edge refinement identifies viewport-only, other-ancestor-only, mixed,
+or package-table-only violations. Table-only labels distinguish a target wider
+than an offending scrollport, a measured overhang at most one CSS pixel versus
+larger overflow, and a guarded fractional-client-edge discrepancy. The small
+bucket is diagnostic only; the original 0.5 px failure threshold is unchanged.
+All violating layers are considered, so a table comparison cannot hide another
+ancestor or viewport violation. Unknown metadata retains the broad right-edge
+label rather than exporting an arbitrary value.
+
+The independent fractional edge is the table border-box right minus its computed
+right border; its padding width subtracts both computed borders. The wider-target
+label uses that fractional width only after the same guards pass, never a scaled
+DOMRect width compared with unscaled integer clientWidth. It is considered only with no target/ancestor transform or zoom,
+LTR horizontal writing, automatic scrollbar gutter, no forced vertical scrollbar
+and no measured vertical overflow. If any offending table lacks those guards,
+the fixed label explicitly says unverified. A fractional label only records that
+the independently computed edge contains the outline while the integer-client
+edge fails; it does not prove rendered ring clearance or identify client rounding
+as the sole cause. The original failing assertion still fails. No raw coordinate,
+CSS value, element name or diagnostic object is added to public output.
+
+### V3 private failure coordinates
+
+The PR wrapper projects a failed V3 run through a fresh private per-invocation
+file, outside artifacts. The exact-source registry is
+`v3-browser-coordinates.json`; its ten ordered cases are numbered from one.
+Checkpoints start at zero: the 131 literal/helper stages come first, followed by
+the source-owned focus target/size/locale/theme/phase Cartesian order (995 total).
+Focus checkpoints are admitted only for case 4, the existing compact inventory
+case. No new browser action, assertion, retry, timeout or capture is introduced.
+
+The closed sidecar schema is `tracebolt.v3-browser-failure.v1`, with the exact
+`sourceSha`, ordered unique `failures: [{case, checkpoint}]`, boolean
+`setupFailure` and `runtimeFailure`, and integer `finalCheckpoint`. The public
+line is `FAIL V3 location: case=N checkpoint=N`, optionally containing further
+ordered failure coordinates, `setup-checkpoint=N` or `runtime-errors`, separated
+by `; `. Only validated source-owned numeric ranges and fixed tokens are printed;
+no report names, errors, DOM values, URLs, IDs, source SHA or paths are printed.
+Unknown or malformed records remain withheld. Registry or sidecar read failures
+never establish browser acceptance, and the original process failure is rethrown.
+
+The producer uses exclusive creation with mode 0600 and best-effort writing. The
+wrapper removes its private directory on every exit and ignores inherited
+sidecar destinations. Raw process output, existing reports, screenshot guards,
+all 15 focus assertions and their 0.5 px tolerance, genuine forward Tab, final
+exit condition and successful-only artifact upload remain unchanged. Coordinates
+identify a failed checkpoint, not its cause; fresh hosted results and the original
+80-image inspection are still required. Run the inert producer/writer contracts
+with `node --test tests/e2e-review/v3-browser-coordinates.test.mjs`; the Python PR
+contract suite also runs them and tests the decoder and error propagation.

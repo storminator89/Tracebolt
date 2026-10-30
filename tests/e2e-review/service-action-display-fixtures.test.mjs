@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {serviceActionDisplayFixtures,serviceActionDisplayRoute,serviceActionDisplayDisclosure} from './service-action-display-browser.mjs';
@@ -17,4 +18,15 @@ test('display setup reloads intercepted authentication and selects supported Inv
  await openServiceActionDisplay(page,'http://127.0.0.1:19886',serviceActionDisplayFixtures().device.id,async()=>events.push(['detail-ready']));
  assert.equal(events[0][0],'goto');assert.match(events[0][1],/^http:\/\/127\.0\.0\.1:19886\/#\/devices\/agent_[a-f0-9]+$/);
  assert.deepEqual(events.slice(1),[['reload'],['detail-ready'],['click','tab','Inventory',true],['click','tab','Services',true]]);
+});
+
+
+test('read-first service capture recipe exercises both compact transitions and keeps the same table and search',()=>{
+ const source=fs.readFileSync(new URL('./service-action-display-browser.mjs',import.meta.url),'utf8');
+ assert.match(source,/phase:'stale',previewReads:0/);
+ assert.match(source,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);
+ assert.match(source,/synthetic-display-service-action-read-first/);
+ assert.match(source,/tableNode=await inventory\.getByRole\('table'\)\.elementHandle/);
+ assert.match(source,/searchNode=await search\.elementHandle/);
+ assert.match(source,/mark\('unknown-result'\)[\s\S]*not\.toHaveClass[\s\S]*mark\('stale-helper'\)[\s\S]*toHaveClass/);
 });
