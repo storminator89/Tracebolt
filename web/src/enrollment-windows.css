@@ -18,5 +18,11 @@
 .enrollment-approvals-heading span, .enrollment-approvals-note { color: var(--secondary); font-size: 11px; }
 .enrollment-approvals-note { margin: 0; padding: 10px 20px 14px; line-height: 1.55; }
 .enrollment-approval-times { display: flex; flex-wrap: wrap; gap: 3px 14px; color: var(--secondary); font-size: 11px; line-height: 1.5; }
+.enrollment-capacity { padding: 12px 20px; border-top: 1px solid var(--line); color: var(--secondary); font-size: 11px; line-height: 1.55; }
+.enrollment-capacity p { margin: 0; }
+.enrollment-capacity p + p { margin-top: 5px; }
+.enrollment-capacity strong { color: var(--text); }
+.enrollment-capacity [role="status"] { color: var(--warning); }
 @media (max-width: 760px) { .enrollment-approvals-heading { padding: 15px 17px 0; } .enrollment-approvals-note { padding: 10px 17px 14px; font-size: 12px; } }
 @media (max-width: 760px) { .enrollment-platform-picker { padding: 16px 17px 0; } }
+@media (max-width: 760px) { .enrollment-capacity { padding: 12px 17px; font-size: 12px; } }

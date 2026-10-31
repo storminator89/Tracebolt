@@ -54,9 +54,9 @@ func TestInvitationCreationAdvertisesExactPublicDownloadChecksum(t *testing.T) {
 	}
 	binding := enrollmentstate.Binding{InstanceID: "manager_00000000000000000000000000000001", Profile: "http-test", Origin: "http://127.0.0.1:8787", CollectionProfile: enrollmentcrypto.CollectionProfile, IssuerFingerprint: issuer.Fingerprint()}
 	config := enrollmentstate.DefaultConfig(binding)
-	config.RecordLimit = 25
-	config.InvitationLimit = 25
-	config.PendingLimit = 25
+	config.RecordLimit = 3
+	config.InvitationLimit = 3
+	config.PendingLimit = 3
 	store, e := enrollmentstore.Open(filepath.Join(t.TempDir(), "private", "enrollment.db"), config, id)
 	if e != nil {
 		t.Fatal(e)
@@ -100,4 +100,30 @@ func TestInvitationCreationAdvertisesExactPublicDownloadChecksum(t *testing.T) {
 	if e != nil || len(snapshots) != 1 || snapshots[0].State != enrollmentstate.Created {
 		t.Fatal("public retrieval changed lifecycle")
 	}
+	t.Run("configured capacity is read-only and includes retained terminal records", func(t *testing.T) {
+		read := func(want enrollmentstate.Snapshot) {
+			t.Helper()
+			w := httptest.NewRecorder()
+			h.enrollmentOperator(w, httptest.NewRequest("GET", binding.Origin+"/api/enrollment", nil))
+			var list struct {
+				RecordLimit int                        `json:"recordLimit"`
+				Items       []enrollmentstate.Snapshot `json:"items"`
+			}
+			if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || list.RecordLimit != config.RecordLimit || len(list.Items) != 1 || list.Items[0] != want {
+				t.Fatal("configured capacity or retained snapshot changed", w.Code)
+			}
+		}
+		before := snapshots[0]
+		read(before)
+		read(before)
+		ended, err := service.Terminate(context.Background(), before.InvitationID, "request_00000000000000000000000000000002", before.Revision, enrollmentstate.Canceled)
+		if err != nil {
+			t.Fatal(err)
+		}
+		read(ended)
+		after, err := service.Snapshots(context.Background())
+		if err != nil || len(after) != 1 || after[0] != ended {
+			t.Fatal("capacity read mutated lifecycle", err)
+		}
+	})
 }

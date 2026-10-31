@@ -44,6 +44,7 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 		serverNow := time.Now().UTC()
 		items := []enrollmentstate.Snapshot{}
 		platforms := []string{}
+		recordLimit := enrollmentservice.MaxRecords
 		if h.enrollment != nil {
 			var e error
 			serverNow = h.enrollment.Now()
@@ -53,11 +54,12 @@ func (h *operatorHandler) enrollmentOperator(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			platforms = enrollmentPlatforms(h.enrollment.Binding())
+			recordLimit = h.enrollment.RecordLimit()
 			if h.enrollment.Platform() == "darwin" {
 				platforms = []string{"darwin"}
 			}
 		}
-		response := map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": enrollmentservice.MaxRecords, "items": items, "serverNow": serverNow}
+		response := map[string]any{"enabled": h.enrollment != nil, "schemaVersion": "tracebolt.enrollment-operator.v2", "platforms": platforms, "recordLimit": recordLimit, "items": items, "serverNow": serverNow}
 		// Keep durable snapshots unchanged; this is an operator-only display hint.
 		views := make([]any, 0, len(items))
 		for _, item := range items {

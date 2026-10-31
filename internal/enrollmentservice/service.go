@@ -302,6 +302,17 @@ func (s *Service) Terminate(ctx context.Context, id, requestID string, revision 
 func (s *Service) Snapshots(ctx context.Context) ([]enrollmentstate.Snapshot, error) {
 	return s.store.Snapshots(ctx)
 }
+
+// RecordLimit reports the immutable configured retention cap for this domain,
+// not the maximum supported cap or an available-device count. Terminal records
+// still consume this capacity; reading it never changes enrollment state.
+func (s *Service) RecordLimit() int {
+	if s == nil || s.serviceState == nil || s.store == nil {
+		return 0
+	}
+	return s.store.Config().RecordLimit
+}
+
 func (s *Service) statusProof(ctx context.Context, nonce, purpose string, raw []byte) (enrollmentcrypto.VerifiedStatus, error) {
 	c, e := s.takeChallenge(nonce, purpose)
 	if e != nil {

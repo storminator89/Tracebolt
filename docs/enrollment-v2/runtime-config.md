@@ -66,6 +66,30 @@ not encryption. Backup rollback and issuer replacement require a separately
 reviewed recovery procedure; an old structurally valid full backup cannot be
 detected automatically.
 
+## Record-capacity visibility (TB-18 partial)
+
+The authenticated enrollment list reports the selected domain's actual immutable
+`recordLimit`, which may be below the integrated service's maximum of 25. The
+same bounded list supplies the UI's retained-record counts: activated, pre-activation
+(all stored nonterminal pre-activation phases), and ended/retained. Stored phase
+counts are not claims of current validity: a retained pending record can already
+have passed its deadline. The summary covers the entire selected enrollment
+domain, not only visible history rows or the whole fleet. An activated record is not evidence of a fresh report. Available
+record slots are a snapshot, not a reservation or a guarantee that other
+invitation/pending limits admit a new request.
+
+The EN/DE UI warns when at most the final 20% of record slots remain (rounded up)
+and at exhaustion. Counts are hidden during refresh, failed or unconfirmed reads,
+suspension, or replacement of the operator session. Ending an invitation never
+frees a retained record. Review the pilot capacity before more enrollment; do not
+delete enrollment state, revoked identities, tombstones or replay ledgers to make
+room. This display neither raises a limit nor introduces compaction or migration.
+
+TB-18 remains open: doctor integration, separately reviewed retention/compaction,
+larger-fleet data-path work and reproducible 100/500/1000-device measurements are
+not supplied by this change. Source tests and a production frontend build are
+not native deployment or browser acceptance.
+
 ## Current evidence and remaining gates
 
 Generated-key tests cover protected loading, matching mode restart, manual-mode
