@@ -45,6 +45,47 @@ describe('Linux CVE warnings panel', () => {
         expect(screen.getByRole('button', { name: 'Update security data' })).toBeEnabled(); expect(screen.getByText(/published fix is not an installable APT candidate/)).toBeVisible();
         expect(screen.getByText('Feed download age')).toBeVisible(); expect(screen.queryByRole('button', { name: /install|upgrade/i })).not.toBeInTheDocument(); expect(storage).not.toHaveBeenCalled();
     });
+    it.each([
+        ['en', false, 'Assessment evidence', 'Limited coverage', 'Manual import · origin and fetch time unverified', 'Distribution source-version comparison · no live scan or compliance verdict.'],
+        ['en', true, 'Assessment evidence', 'Limited coverage', 'HTTPS download · publication freshness unverified', 'Distribution source-version comparison · no live scan or compliance verdict.'],
+        ['de', false, 'Bewertungsgrundlage', 'Begrenzte Abdeckung', 'Manueller Import · Herkunft und Abrufzeitpunkt unbestätigt', 'Distributions-Quellversionsvergleich · kein Live-Scan und keine Compliance-Aussage.'],
+        ['de', true, 'Bewertungsgrundlage', 'Begrenzte Abdeckung', 'HTTPS-Abruf · Aktualität der Veröffentlichung unbestätigt', 'Distributions-Quellversionsvergleich · kein Live-Scan und keine Compliance-Aussage.'],
+    ] as const)('exposes report-bound source, method and original times without expanding details in %s (https=%s)', async (locale, https, label, state, trust, method) => {
+        setLocale(locale, false); const view = linuxCVEView(https); vi.mocked(request).mockResolvedValue(view); render(<LinuxCVEPanel deviceId={id}/>);
+        await screen.findByText(state); const evidence = screen.getByLabelText(label);
+        expect(evidence).toBeVisible(); expect(evidence.closest('details')).toBeNull(); expect(evidence.children).toHaveLength(4);
+        expect(evidence.nextElementSibling).toHaveClass('linux-cve-summary');
+        expect(within(evidence).getByText(trust)).toBeVisible(); expect(within(evidence).getByText(method)).toBeVisible();
+        const source = within(evidence).getByRole('link', { name: 'Debian Security Tracker' });
+        expect(source).toHaveAttribute('href', view.report!.feed.sourceUrl); expect(source).toHaveAttribute('rel', 'noopener noreferrer'); expect(source).toHaveAttribute('referrerPolicy', 'no-referrer');
+        expect([...evidence.querySelectorAll('time')].map(time => time.getAttribute('dateTime'))).toEqual([view.inventory!.collectedAt, view.report!.feed.fetchedAt]);
+        expect(request).toHaveBeenCalledExactlyOnceWith(path, { signal: expect.any(AbortSignal) }, LINUX_CVE_VIEW_BYTES);
+        expect(screen.getByText(locale === 'en' ? 'Data sources and coverage' : 'Datenquellen und Abdeckung').closest('details')).not.toHaveAttribute('open');
+    });
+    it('uses the assessment feed rather than the first unrelated cached provider', async () => {
+        const view = linuxCVEView(); const unrelated = structuredClone(view.feeds.snapshots[0]);
+        Object.assign(unrelated, { provider: 'canonical-ubuntu-osv', target: 'ubuntu-24.04-noble', sourceUrl: 'https://security-metadata.canonical.com/osv/', license: 'CC-BY-SA-4.0' }); view.feeds.snapshots.unshift(unrelated);
+        await show(view); const evidence = screen.getByLabelText('Assessment evidence');
+        expect(within(evidence).getByRole('link', { name: 'Debian Security Tracker' })).toHaveAttribute('href', view.report!.feed.sourceUrl);
+        expect(within(evidence).queryByRole('link', { name: 'Ubuntu OSV' })).not.toBeInTheDocument();
+    });
+    it('keeps provenance visible for zero matches and stale retained data without treating either as compliance', async () => {
+        const empty = emptyLinuxCVEView(), rendered = await show(empty);
+        expect(screen.getByLabelText('Assessment evidence')).toHaveTextContent('no live scan or compliance verdict');
+        expect(screen.getByText('No package/version matches in the loaded records. Coverage remains limited.')).toBeVisible();
+        rendered.unmount(); const stale = staleLinuxCVEView(); await show(stale);
+        const evidence = screen.getByLabelText('Assessment evidence'); expect(evidence).toBeVisible();
+        expect(evidence.querySelectorAll('time')[1]).toHaveAttribute('dateTime', stale.report!.feed.fetchedAt);
+        expect(within(evidence).getByText('Manual import · origin and fetch time unverified')).toBeVisible();
+        expect(screen.getByText(/Old data: these matches describe earlier snapshots/)).toBeVisible();
+    });
+    it('clears the evidence along with the report during refresh and does not promote unrelated cached data after an unavailable response', async () => {
+        await show(); const pending = defer<unknown>(); vi.mocked(request).mockReturnValue(pending.promise);
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh assessment' })); expect(screen.queryByLabelText('Assessment evidence')).not.toBeInTheDocument();
+        await act(async () => pending.resolve(unavailableLinuxCVEView()));
+        expect(screen.getByText('Assessment unavailable')).toBeVisible(); expect(screen.queryByLabelText('Assessment evidence')).not.toBeInTheDocument();
+        expect(screen.queryByRole('article')).not.toBeInTheDocument(); expect(request).toHaveBeenCalledTimes(2);
+    });
     it('groups multiple installed versions into one CVE/source package warning', async () => {
         const view = linuxCVEView(), row = structuredClone(view.report!.findings[0]); row.installedSourceVersion = '2:1.0-0'; row.binaries[0].architecture = 'arm64'; row.binaries[0].version = '2:1.0-0'; row.publishedFixedVersion = '2:1.0-3'; view.report!.findings.push(row); view.report!.evaluatedSourceCount = 1; view.inventory!.rowCount = 2;
         Object.assign(view.report!.coverage, { totalCheckCount: 2, completedCheckCount: 2, comparisonCount: 2, matchedFindingCount: 2 });
@@ -152,7 +193,10 @@ describe('Linux CVE warnings panel', () => {
     });
     it('attributes Ubuntu data and its license under source details', async () => {
         const view = linuxCVEView(); for (const feed of [view.feeds.snapshots[0], view.report!.feed!]) Object.assign(feed, { provider: 'canonical-ubuntu-osv', target: 'ubuntu-24.04-noble', sourceUrl: 'https://security-metadata.canonical.com/osv/', license: 'CC-BY-SA-4.0' }); view.report!.findings[0].advisoryUrl = 'https://ubuntu.com/security/CVE-2026-999999';
-        await show(view); fireEvent.click(screen.getByText('Data sources and coverage')); expect(screen.getByText(/Source attribution: Canonical/)).toBeVisible(); expect(screen.getByRole('link', { name: 'CC-BY-SA-4.0' })).toHaveAttribute('href', 'https://creativecommons.org/licenses/by-sa/4.0/');
+        await show(view); const evidence = screen.getByLabelText('Assessment evidence');
+        expect(within(evidence).getByRole('link', { name: 'Ubuntu OSV' })).toHaveAttribute('href', 'https://security-metadata.canonical.com/osv/');
+        expect(within(evidence).getByText('Manual import · origin and fetch time unverified')).toBeVisible();
+        fireEvent.click(screen.getByText('Data sources and coverage')); expect(screen.getByText(/Source attribution: Canonical/)).toBeVisible(); expect(screen.getByRole('link', { name: 'CC-BY-SA-4.0' })).toHaveAttribute('href', 'https://creativecommons.org/licenses/by-sa/4.0/');
     });
     it('shows origin and skipped coverage caveats within secondary details', async () => {
         await show(); fireEvent.click(screen.getByText('Data sources and coverage')); expect(screen.getByText(/backports, PPAs and locally rebuilt/)).toBeVisible(); expect(screen.getByText(/Manual bundle origin and supplied fetch time are unverified/)).toBeVisible(); expect(screen.getByText(/Upstream publication freshness is unknown/)).toBeVisible();
