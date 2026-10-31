@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "69e784a51d3be69c580f19ec014d100fa889a12ac9fcb760be65686a3104f779",
+  "goSourceSha256": "f4f22065bff985870c0972b78d4f585353c9206fbc26d5ecd5c43bb936323e51",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1274,6 +1274,11 @@
       "TestServiceActionExactMutationRoutesOnly",
       "TestServiceActionV2APIEmitsExactImpactAndPreservesV1",
       "TestServiceActionV2ImpactDriftSuppressesPreview",
+      "TestSessionLoginPeerDoesNotTrustForwardedHeaders",
+      "TestSessionManagementLegacySharedBoundsAndSelfRevoke",
+      "TestSessionManagementRequiresAuthenticationAndScopesViews",
+      "TestSessionManagementRevocationRequiresExactBodyCSRFAndGrant",
+      "TestSessionRevocationAfterBodyReadRechecksRequestersAuthority",
       "TestSharedSessionCannotAuthorizeServiceAction",
       "TestSocketOwnerCapabilitiesPublicStaticBoundedAndGuarded",
       "TestSocketOwnerCapabilitiesSharesPublicMetadataBudget",
@@ -3648,6 +3653,7 @@
       "TestDarwinReadProtectedUsesDescriptorAndACLPolicy",
       "TestLoadConfigReadsOnlyTheStrictConfiguration",
       "TestMacOSInventoryConfigurationDefaultOffTLSOnly",
+      "TestManageSessionsRequiresExplicitNamedGrant",
       "TestNamedApplicationCheckCapabilityStrictLoading",
       "TestNamedAuthStrictVersionProfileAndNestedParsing",
       "TestNamedProtectedConfigLoadAndSnapshotIsolation",
@@ -4074,8 +4080,13 @@
     "localrmm/internal/operatorauth": [
       "TestApplicationCheckCapabilityIsExplicitAndSessionBound",
       "TestConfigurationFailClosedAndBounded",
+      "TestConfiguredAbsentActorsReserveBeforeExhaustion",
       "TestCredentialFailureRateAndConcurrencyBounds",
+      "TestExpiredAdmittedMutationRetainsActorQuotaUntilDrain",
       "TestExpiryRejectsAdmissionAndCannotReactivateOnClockRollback",
+      "TestExpiryReleasesActorAndGlobalCapacityWithoutExtendingTimeout",
+      "TestGlobalFallbackReserveWith31RepresentedActors",
+      "TestGlobalFirstSessionReserveAlsoBoundsRepeatedSessions",
       "TestLoginLookupExpiryLogoutAndSecretRedaction",
       "TestLogoutLinearizesAfterAdmittedMutation",
       "TestManagerValueAndPointerFormattingAndCopies",
@@ -4084,9 +4095,14 @@
       "TestNamedConfigurationFailClosed",
       "TestNamedExpiryAndRestartInvalidateAuthority",
       "TestNamedLoginIdentityCapabilitiesAndDefensiveCopies",
+      "TestNamedSessionActorCeilingAndFirstSlotReserve",
       "TestNamedUnknownUserAndWrongModeCannotFallback",
       "TestNamedUnknownUsersShareHashConcurrencyAndRateLimits",
+      "TestRevokedAdmittedMutationRetainsActorQuotaUntilDrain",
       "TestSessionAndPeerMapsAreBounded",
+      "TestSessionRevocationDrainsMutationAndConcurrentRevokers",
+      "TestSessionRevocationScopeAndSelfRevocation",
+      "TestSessionViewsAreBoundedAccountScopedAndSecretFree",
       "TestWindowsUpdateDownloadIsIndependentExplicitGrant"
     ],
     "localrmm/internal/overviewgeneration": [
@@ -4902,6 +4918,14 @@
     "localrmm/internal/windowsagentconfig": [
       "TestRenewableEnrollmentSchemaDoesNotExtendLegacyState",
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
+    ],
+    "localrmm/internal/windowsbasic": [
+      "TestAllCurrentExpandedAgentRouteFamiliesAreDenied",
+      "TestFoundationCannotBeAdvertisedOrEnrolledAsRuntimeSupport",
+      "TestOnlyExactBasicProfileAndRoutePassTheInertPolicy",
+      "TestOnlyFourMeasurementsAndProtocolMetadata",
+      "TestScalarAndTimeBoundaries",
+      "TestStrictClosedShapeRejectsClaimedAuthorityAndEveryExpandedSection"
     ],
     "localrmm/internal/windowscapacity": [
       "TestWindowsCapacityCanonicalCorruptionAndBounds",
