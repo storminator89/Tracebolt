@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {completeAssessmentInbox,windowsIncidentInboxBrowserFixture,windowsIncidentInboxTargetKey,windowsIncidentInboxQuery,windowsIncidentInboxCaseName,windowsIncidentInboxDisclosure,requireWindowsIncidentInboxEvidence,guardWindowsIncidentInboxRoute,windowsIncidentInboxRouteState,windowsIncidentInboxScenes,windowsServiceIncidentReviewDisclosure,windowsServiceIncidentReviewFixture,windowsServiceIncidentReviewRoute} from './windows-incident-inbox-browser.mjs';
+import {completeAssessmentInbox,windowsIncidentInboxShellReadAllowed,windowsIncidentInboxBrowserFixture,windowsIncidentInboxTargetKey,windowsIncidentInboxQuery,windowsIncidentInboxCaseName,windowsIncidentInboxDisclosure,requireWindowsIncidentInboxEvidence,guardWindowsIncidentInboxRoute,windowsIncidentInboxRouteState,windowsIncidentInboxScenes,windowsServiceIncidentReviewDisclosure,windowsServiceIncidentReviewFixture,windowsServiceIncidentReviewRoute} from './windows-incident-inbox-browser.mjs';
 const now='2026-10-12T12:00:00Z',expiry='2026-10-12T13:00:00Z',later='2026-10-12T12:00:01Z';
 const read=file=>fs.readFileSync(new URL(file,import.meta.url),'utf8');
 test('invented five-domain inbox preserves historical evidence across one explicit seen readback',()=>{
@@ -123,4 +123,50 @@ test('v2 hosted envelope preserves every legacy field and rejects silent v1 rout
  assert.deepEqual(restored,view);assert.equal(JSON.stringify(view),before);
  const base='http://127.0.0.1:19911',fixture=windowsServiceIncidentReviewFixture(sharedSession()),external=[],unexpected=[],handle=windowsServiceIncidentReviewRoute({base,fixture,external,unexpected});
  const route=inertRoute(base+'/api/fleet/windows-incidents'+windowsIncidentInboxQuery);await handle(route);assert.equal(route.result.aborted,1);assert.equal(route.result.reply,null);assert.equal(fixture.counts.inbox,0);
+});
+
+
+test('shared device shell admits only its exact organizational GET reads',()=>{
+ const base='http://127.0.0.1:19911';
+ for(const path of ['/api/customers','/api/customer-windows-assignments']){
+  assert.equal(windowsIncidentInboxShellReadAllowed(new URL(base+path),'GET'),true);
+  for(const method of ['POST','PUT','PATCH','DELETE'])assert.equal(windowsIncidentInboxShellReadAllowed(new URL(base+path),method),false);
+  for(const suffix of ['?','?scope=all','/','/assign'])assert.equal(windowsIncidentInboxShellReadAllowed(new URL(base+path+suffix),'GET'),false);
+ }
+ assert.equal(windowsIncidentInboxShellReadAllowed(new URL(base+'/api/unrelated'),'GET'),false);
+});
+
+test('shared production App shell reads stay inside the incident inbox GET allowlist',async()=>{
+ const {createRequire}=await import('node:module'),require=createRequire(new URL('../../web/package.json',import.meta.url));
+ const {JSDOM}=require('jsdom'),{build}=require('esbuild');
+ const compiled=await build({entryPoints:[new URL('../../web/src/main.tsx',import.meta.url).pathname],outdir:'memory-only',bundle:true,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},loader:{'.woff':'dataurl','.woff2':'dataurl'},write:false,logLevel:'silent'});
+ const script=compiled.outputFiles.find(file=>file.path.endsWith('.js')).text;
+ for(const locale of ['en','de']){
+  const base='http://127.0.0.1:19911',serverNow=new Date().toISOString(),expiresAt=new Date(Date.now()+3600000).toISOString();
+  const session={...sharedSession(),serverNow,expiresAt},fixture=windowsServiceIncidentReviewFixture(session),reads=[],unexpected=[],errors=[];
+  const replies={
+   '/api/auth/session':session,'/api/session':{csrfToken:session.csrfToken},'/api/overview':fixture.overview,
+   '/api/enrollment':{schemaVersion:'tracebolt.enrollment-operator.v2',serverNow,enabled:false,platforms:[],recordLimit:25,items:[]},
+   '/api/fleet/identities':{schemaVersion:'tracebolt.fleet-identities.v2',serverNow,items:[]},
+   '/api/customers':{schemaVersion:'tracebolt.customers.v1',customers:[]},
+   '/api/customer-windows-assignments':{schemaVersion:'tracebolt.customer-windows-assignments.v1',serverNow,validUntil:new Date(Date.parse(serverNow)+30000).toISOString(),customers:[],devices:[],unavailableAssignments:0},
+  };
+  const dom=new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:base+'/#/devices',runScripts:'outside-only',pretendToBeVisual:true});
+  try{
+   const w=dom.window;Object.assign(w,{TextEncoder,TextDecoder,structuredClone});w.localStorage.setItem('tracebolt.locale',locale);
+   w.addEventListener('error',event=>{errors.push(event.error?.name);event.preventDefault();});
+   w.fetch=async(url,options={})=>{
+    const absolute=new URL(url,w.location),method=options.method??'GET';reads.push(absolute.pathname);
+    if(absolute.origin!==base||method!=='GET'||absolute.search||!Object.hasOwn(replies,absolute.pathname)||absolute.pathname!=='/api/overview'&&!windowsIncidentInboxShellReadAllowed(absolute,method)){
+     unexpected.push(absolute.pathname);throw new Error('Unexpected synthetic shell request');
+    }
+    return new Response(JSON.stringify(replies[absolute.pathname]),{status:200,headers:{'Content-Type':'application/json'}});
+   };
+   w.eval(script);
+   for(let i=0;i<100&&(!reads.includes('/api/customers')||!reads.includes('/api/customer-windows-assignments'));i++)await new Promise(resolve=>setTimeout(resolve,20));
+   assert.ok(w.document.querySelector('.windows-incident-inbox'));assert.equal(w.document.documentElement.lang,locale);
+   for(const path of ['/api/customers','/api/customer-windows-assignments'])assert.equal(reads.filter(read=>read===path).length,1);
+   assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);
+  }finally{dom.window.close();}
+ }
 });
