@@ -21,7 +21,7 @@ issuer. An old or manual-v1 manager does not implement automatic registration.
 Operator identity comparison/approval remains required; pending requests cannot
 send telemetry. This release does not automatically deploy or reconfigure a manager.
 
-The installer validates public origins/configuration and the CA before creating a service, directory or key. This local preflight does not establish manager readiness or server protocol compatibility.
+For automatic/invitation enrollment the installer validates public origins/configuration and the CA and reads the bounded HTTPS Rust-basic manager capability before creating a service, directory or key. Incompatible managers fail with `MANAGER_PROTOCOL_UNSUPPORTED`; TLS, network and temporary server failures use `MANAGER_PREFLIGHT_UNAVAILABLE`. `init` rechecks before opening enrollment state. The advanced preprovided mode retains its distinct legacy destination semantics and is outside this new preflight. This establishes protocol support at the check, not enrollment, approval, continued network availability or accepted telemetry. The manifest records the separate manager/frontend/agent source commits, Rust-basic profile and required protocol contract; it does not confer Go Read admin capabilities.
 
 Publication from main is gated by the matching Linux manager/frontend build, Rust tests, Go enrollment/protocol/API tests, and a
 disposable Windows Server 2025 installation/onboarding/reporting test using

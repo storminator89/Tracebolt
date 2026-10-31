@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "7fa873d94bb44b34b4b857f233bf686176d74d4d228dcb0465c4861a155145b7",
+  "goSourceSha256": "230cb1fed1be7e28ecc56279a4c996fd48121ae593552a229f0ed4a13c614116",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1189,6 +1189,9 @@
       "TestManagedPreviewHTTPGuardsAndRealSample",
       "TestManagedSourcePolicyCannotBeRelabeledForAIExport",
       "TestMutationValidationAndPersistence",
+      "TestNamedAdministrationContractAnonymousDenials",
+      "TestNamedAdministrationContractDenials",
+      "TestNamedAdministrationContractReadsRemainDistinct",
       "TestNamedCapabilitySeamRequiresCSRFCurrentSessionAndServerActor",
       "TestNamedHTTPTestKeepsSeparateCookieAndPlaintextWarning",
       "TestNamedLANLoginMetadataAndLegacyCompatibility",
@@ -1254,6 +1257,11 @@
       "TestRetainedCreateHasExplicitProtocolWithoutPerReadAcknowledgement",
       "TestRetainedManagerCapabilitiesAreDistinctMetadata",
       "TestReusableWUAAPIExactReviewAndReadOnlyReconciliation",
+      "TestRustBasicCapabilitiesActualTLSListener",
+      "TestRustBasicCapabilitiesRealServiceGuardedNonmutating",
+      "TestRustBasicCapabilitiesRejectsConfiguredRenewal",
+      "TestRustBasicCapabilitiesSharesMetadataAdmission",
+      "TestRustBasicCapabilitiesUnavailableOnDevelopment",
       "TestSecurityCoverageLegitimateEmptyInventoryIsNotZeroCVEs",
       "TestSecurityCoveragePartialStaleUnknownAndRetainedRemainDistinct",
       "TestSecurityCoverageSeparatesInventoryFromUnknownAssessments",
@@ -4289,6 +4297,9 @@
       "TestNativeInputsDoNotBecomeDemoEvidence",
       "TestRulesAndCounterexamples"
     ],
+    "localrmm/internal/rustcompat": [
+      "TestExactPublicContract"
+    ],
     "localrmm/internal/signedhttp": [
       "TestBodyLimitAndSigningHelperIsolation",
       "TestCanonicalOriginConfiguration",
@@ -6302,10 +6313,13 @@
       "TestRuntimeGuardRejectsNonDarwinArchitectureAndToolchain"
     ],
     "localrmm/tests/rustagent": [
+      "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
       "TestRustFrameAcceptedByManager"
     ],
-    "localrmm/tests/rustagent/cmd/nativefixture": [],
+    "localrmm/tests/rustagent/cmd/nativefixture": [
+      "TestCompatibilityGETDoesNotEnterEnrollment"
+    ],
     "localrmm/tests/security": [
       "TestAnalysisDiscardsUpstreamSecretEcho",
       "TestAnalysisNeverFollowsProviderRedirect",

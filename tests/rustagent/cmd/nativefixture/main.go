@@ -34,6 +34,7 @@ import (
 	"localrmm/internal/enrollmentissuer"
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/rustcompat"
 )
 
 type challenge struct {
@@ -189,6 +190,10 @@ func reject(w http.ResponseWriter) {
 	reply(w, 400, map[string]string{"error": "fixture_request_rejected"})
 }
 func (p *peer) enroll(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == rustcompat.Path {
+		p.capabilities(w, r)
+		return
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if r.Method != "POST" || r.TLS == nil || r.TLS.Version < tls.VersionTLS13 || r.Host != strings.TrimPrefix(p.origin, "https://") || r.Header.Get("Content-Type") != "application/json" || r.Header.Get("Cookie") != "" || r.Header.Get("Origin") != "" {
@@ -398,4 +403,35 @@ func (p *peer) telemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, 200, p.receipt)
+}
+
+// The disposable peer exposes only the same static basic contract; GET never
+// enters enrollment parsing or touches invitations, challenges, or files.
+func (p *peer) capabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet || r.TLS == nil || r.TLS.Version < tls.VersionTLS13 || !r.TLS.HandshakeComplete || r.Host != strings.TrimPrefix(p.origin, "https://") || r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.EscapedPath() != r.URL.Path || r.ContentLength != 0 || (r.Body != nil && r.Body != http.NoBody) || len(r.TransferEncoding) > 0 || len(r.Trailer) > 0 {
+		reject(w)
+		return
+	}
+	for name := range r.Header {
+		lower := strings.ToLower(name)
+		switch lower {
+		case "cookie", "origin", "authorization", "proxy-authorization", "forwarded", "x-csrf-token", "content-type", "content-encoding", "range", "if-none-match", "if-modified-since", "if-match", "if-unmodified-since", "if-range", "x-real-ip":
+			reject(w)
+			return
+		}
+		if strings.HasPrefix(lower, "x-forwarded-") {
+			reject(w)
+			return
+		}
+	}
+	raw, err := json.Marshal(rustcompat.Expected(p.origin, p.agentOrigin, true))
+	if err != nil || len(raw) > 2048 {
+		reject(w)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }

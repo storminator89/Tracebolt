@@ -35,8 +35,14 @@ by the installer/client.
 
 ## Protocol
 
+0. Before installer staging or fresh enrollment initialization, read the public,
+   bounded `/v1/windows/rust-basic-capabilities` contract over the independently
+   selected TLS trust. Require the exact Rust-basic/enrollment/frame/receipt
+   versions, origins and automatic-registration capability. This read creates no
+   invitation, key, challenge or ledger and never grants consent. See
+   [compatibility and failure boundaries](rust-manager-compatibility.md).
 1. Generate/persist one fresh Ed25519 key and stable random `invite_`, `claim_`
-   and `request_` identifiers before sending network requests. Derive automated
+   and `request_` identifiers before sending enrollment requests. Derive automated
    claim secret material from that key under a dedicated domain; do not expose
    it to the operator, log it, or write a separate invitation-token file.
 2. POST `{ "invitationId": "invite_<32 lowercase hex>" }` to

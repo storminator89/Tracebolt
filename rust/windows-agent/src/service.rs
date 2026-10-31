@@ -17,11 +17,18 @@ use windows_service::{
 
 pub const NAME: &str = "TraceboltRustAgent";
 static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
+static HEALTH_ENABLED: OnceLock<bool> = OnceLock::new();
 define_windows_service!(ffi_main, service_main);
 
 pub fn dispatch(directory: PathBuf) -> windows_service::Result<()> {
     DIRECTORY.get_or_init(|| directory);
+    HEALTH_ENABLED.get_or_init(|| true);
     service_dispatcher::start(NAME, ffi_main)
+}
+
+pub fn dispatch_without_health(directory: PathBuf) -> windows_service::Result<()> {
+    HEALTH_ENABLED.get_or_init(|| false);
+    dispatch(directory)
 }
 
 fn service_main(_: Vec<OsString>) {
@@ -54,11 +61,23 @@ fn service_main(_: Vec<OsString>) {
     let result = DIRECTORY
         .get()
         .ok_or_else(|| anyhow::anyhow!("missing data directory"))
-        .and_then(|directory| Runtime::open(directory));
-    let Ok(mut sender) = result else {
-        let _ = handle.set_service_status(status(ServiceState::Stopped, 13));
-        return;
+        .and_then(|directory| {
+            if *HEALTH_ENABLED.get().unwrap_or(&true) {
+                Runtime::open(directory)
+            } else {
+                Runtime::open_without_health(directory)
+            }
+        });
+    let mut sender = match result {
+        Ok(sender) => sender,
+        Err(error) => {
+            let code = crate::health::classify(&error);
+            eprintln!("Tracebolt startup: {}. {}", code, code.next_action());
+            let _ = handle.set_service_status(status(ServiceState::Stopped, 13));
+            return;
+        }
     };
+    let mut previous_diagnostic = None;
     let _ = handle.set_service_status(status(ServiceState::Running, 0));
     loop {
         if receive.try_recv().is_ok() {
@@ -66,7 +85,19 @@ fn service_main(_: Vec<OsString>) {
         }
         // Errors never log payloads, private keys, server bodies or identities.
         // Both success and failure wait, so a disconnected endpoint cannot spin.
-        let _ = sender.cycle(native::collect);
+        let outcome = sender.cycle(native::collect);
+        let diagnostic = (sender.health_code(), sender.health_available());
+        if previous_diagnostic != Some(diagnostic) {
+            if outcome.is_err() || (sender.health_requested() && !diagnostic.1) {
+                let code = if !sender.health_requested() || diagnostic.1 {
+                    diagnostic.0
+                } else {
+                    crate::health::Code::HealthUnavailable
+                };
+                eprintln!("Tracebolt diagnostic: {}. {}", code, code.next_action());
+            }
+            previous_diagnostic = Some(diagnostic);
+        }
         if !matches!(
             receive.recv_timeout(sender.interval()),
             Err(mpsc::RecvTimeoutError::Timeout)

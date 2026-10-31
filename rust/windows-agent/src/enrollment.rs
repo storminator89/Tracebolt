@@ -95,6 +95,9 @@ impl Enrollment {
             "preprovided identity mode"
         );
         let ca = crate::config::read_ca(directory)?;
+        if initialize {
+            crate::compatibility::check(&config, &ca)?;
+        }
         let client = crate::config::tls_builder(&ca)?.build()?;
         let state = directory.join("state");
         let lock = OpenOptions::new()
@@ -205,7 +208,13 @@ impl Enrollment {
             .body(bytes)
             .send()?;
         if response.status() != reqwest::StatusCode::OK {
-            return Err(EnrollmentHttp(response.status().as_u16()).into());
+            let status = response.status().as_u16();
+            let code = match status {
+                401 | 403 => crate::health::Code::AuthenticationRejected,
+                404 | 405 | 415 => crate::health::Code::ProtocolUnavailable,
+                _ => crate::health::Code::ManagerRejected,
+            };
+            return Err(anyhow::Error::new(EnrollmentHttp(status)).context(code));
         }
         ensure!(
             response
@@ -310,7 +319,14 @@ impl Enrollment {
             self.ledger.terminal = true;
         }
         self.save()?;
-        ensure!(!self.ledger.terminal, "enrollment terminated");
+        if self.ledger.terminal {
+            return Err(match s["state"].as_str() {
+                Some("revoked") => crate::health::Code::EnrollmentRevoked,
+                Some("expired") => crate::health::Code::EnrollmentExpired,
+                _ => crate::health::Code::EnrollmentTerminated,
+            }
+            .into());
+        }
         Ok(())
     }
     pub fn public_status(&self) -> Result<Value> {
@@ -339,7 +355,7 @@ impl Enrollment {
     pub fn step(&mut self, invitation_secret: Option<&str>) -> Result<Option<Material>> {
         ensure!(
             !self.ledger.terminal,
-            "enrollment terminated; state retained"
+            crate::health::Code::EnrollmentTerminated
         );
         let activated: bool =
             self.connection

@@ -30,9 +30,17 @@ turns off TLS verification or imports trust into Windows. `-AgentOrigin` can
 optionally pin the expected telemetry origin; otherwise it comes from the
 TLS-authenticated manager bootstrap.
 
-The installer first validates public configuration/origins and the CA with the
-actual Rust parser, before it creates a service, directory or key. This local
-validation does not test remote manager readiness or protocol compatibility.
+For automatic/invitation enrollment the installer validates public
+configuration/origins and the CA with the actual Rust parser, then makes one
+bounded, credential-free HTTPS capability read before
+it creates a service, directory or key. An older/incompatible manager fails with
+`MANAGER_PROTOCOL_UNSUPPORTED`; TLS, network and temporary server failures report
+`MANAGER_PREFLIGHT_UNAVAILABLE`. No HTTP fallback, proxy, redirect, trust import,
+or invitation/endpoint identity is used for this check. `init` rechecks before
+opening state, and the enrollment initializer also enforces this for library
+callers. Preflight proves current protocol support, not enrollment, approval,
+continued availability or accepted telemetry. See the
+[compatibility contract](../../docs/rust-manager-compatibility.md).
 
 The installer generates a fresh Ed25519 key locally, creates the restricted
 `TraceboltRustAgent` Windows service, and starts automatic onboarding. There is
@@ -58,7 +66,9 @@ Only this explicit mode asks for an invitation token in a hidden local terminal
 prompt. Tokens never go in command arguments, environment variables or files.
 Existing server invitation workflows remain supported. Advanced provisioning
 can instead use `-CredentialDirectory`, `-AgentId` and `-FreshApprovedIdentity`
-with a fresh, approved, never-used TLS identity; it is not the default.
+with a fresh, approved, never-used TLS identity; it is not the default and its
+distinct legacy telemetry-origin semantics are outside the new compatibility
+preflight. Do not treat that unchanged advanced mode as newly verified.
 
 ## Scope and delivery
 
