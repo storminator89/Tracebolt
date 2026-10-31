@@ -168,7 +168,9 @@ export async function packageUpdatesBrowserCase({pageAt,login,expect,base,shot})
  // network-error diagnostics or relaxing the runner's existing allowlists.
  const recovery=createPackageUpdatesFixture({anchor:new Date(Date.now()-5000).toISOString(),now:()=>Date.now()}),recoveryState={unexpected:[],external:[],loginRequests:0,namedReads:0};
  recovery.loadSimulation();recovery.losePreparedResponse();await page.unroute('**/*',initialRoute);await page.route('**/*',packageUpdatesRoute({base,fixture:recovery,state:recoveryState}));
- const leave=async()=>{await page.goto(`${base}/#/devices`);await expect(panel).toHaveCount(0);};
+ // The investigations route unmounts the device without enabling unrelated
+ // fleet identity/group readers, which this narrow receiver intentionally rejects.
+ const leave=async()=>{await page.goto(`${base}/#/cases`);await expect(panel).toHaveCount(0);};
  const returnToUpdates=async()=>{await page.goto(`${base}/#/devices/${recovery.device}`);await settlePausedDetailRoute(page,expect,page.getByRole('button',{name:'View updates',exact:true}));await page.getByRole('button',{name:'View updates',exact:true}).click();await page.getByLabel('Update view',{exact:true}).selectOption('preview');};
  await leave();await returnToUpdates();await expect(panel).toContainText('SIMULATION ONLY');await selected.check();await prepare().click();await expect(panel).toContainText('The write response was lost');
  const recoveryId=recovery.requestId;expect(recovery.counts.prepare).toBe(1);await leave();await returnToUpdates();

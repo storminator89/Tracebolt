@@ -111,3 +111,24 @@ test('lost preparation envelope keeps one exact committed request available for 
  const recovered=JSON.parse(last(await route(s,`${f.prefix}/jobs/${requestId}`)).body);assert.equal(recovered.preview.requestId,requestId);assert.equal(recovered.preview.digest,f.project().preview.digest);assert.equal(f.counts.prepare,1);assert.equal(f.counts.approve,0);assert.deepEqual(s.state.unexpected,[]);
  const source=read('./package-updates-browser.mjs');assert.match(source,/await leave\(\);await returnToUpdates\(\)/);assert.match(source,/review\.getByRole\('checkbox'\)\)\.not\.toBeChecked/);
 });
+
+
+test('recovery navigation uses the existing investigations read scope and still rejects unrelated fleet readers',async()=>{
+ const s=setup(),f=s.fixture;f.loadSimulation();f.losePreparedResponse();
+ const investigations=async()=>{
+  const result=last(await route(s,'/api/investigations?scope=open&offset=0'));
+  assert.equal(result.kind,'fulfill');assert.equal(JSON.parse(result.body).schemaVersion,'tracebolt.investigations.v1');
+ };
+ // Leave the completed workflow, return, commit one prepare whose envelope is
+ // lost, then leave/return again before reading precisely that original ID.
+ await investigations();await preflight(s);
+ assert.deepEqual(JSON.parse(last(await route(s,f.prefix+'/prepare',{method:'POST',body:prepare(f)})).body),{});
+ await investigations();assert.deepEqual(JSON.parse(last(await route(s,`${f.prefix}/jobs/${requestId}`)).body),{});
+ f.releasePreparedResponse();const recovered=JSON.parse(last(await route(s,`${f.prefix}/jobs/${requestId}`)).body);
+ assert.equal(recovered.preview.requestId,requestId);assert.equal(f.counts.prepare,1);assert.equal(f.counts.approve,0);assert.deepEqual(s.state.unexpected,[]);assert.deepEqual(s.state.external,[]);
+ for(const path of ['/api/fleet/groups','/api/fleet/identities']){
+  const rejected=setup();assert.equal(last(await route(rejected,path)).kind,'abort');assert.deepEqual(rejected.state.unexpected,['unexpected-request']);
+ }
+ const source=read('./package-updates-browser.mjs');assert.match(source,/const leave=async\(\)=>\{await page\.goto\(`\$\{base\}\/#\/cases`\);await expect\(panel\)\.toHaveCount\(0\)/);
+ assert.doesNotMatch(source,/page\.goto\(`\$\{base\}\/#\/devices`\)/);
+});
