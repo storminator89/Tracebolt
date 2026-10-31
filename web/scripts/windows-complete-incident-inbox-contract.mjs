@@ -21,6 +21,12 @@ assert.deepEqual(contract.viewports, ['en', 'de'].flatMap(locale => [1440, 390].
 export const sceneManifestSHA256 = sha256(raw);
 // Preserve the original capture's locale, viewport, then scene order and filenames.
 export const captureMatrix = contract.viewports.flatMap(view => contract.scenes.map(scene => ({ scene, ...view, file: `complete-incident-inbox-${scene}-${view.locale}-${view.width}.png` })));
+// Closed failure coordinates only; never include errors, DOM, geometry or DTOs.
+export const capturePhases = Object.freeze(['fixture', 'context', 'route', 'init', 'page', 'document', 'open', 'service-row', 'source-label', 'review-controls', 'review-closed', 'source-status', 'evidence-open', 'source-unknown', 'provenance-open', 'provenance-value', 'evidence-close', 'badges', 'ack-control', 'fonts', 'page-width', 'toolbar-visible', 'toolbar-geometry', 'row-visible', 'row-geometry', 'text-size', 'screenshot', 'runtime-guards', 'route-guards', 'read-count', 'close']);
+export function captureCoordinate(scene, locale, width, phase) {
+    if (!contract.scenes.includes(scene) || !contract.viewports.some(view => view.locale === locale && view.width === width) || !capturePhases.includes(phase)) return null;
+    return { locale, width, step: `${scene}-${phase}` };
+}
 export const evidenceSummary = () => ({ sceneManifestSHA256, scenes: contract.scenes.length, screenshots: captureMatrix.length, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, disclosure });
 // Called only by the hosted runner/checker, never by the inert fixture tests.
 export async function assertHostedSource(sourceSha, inputs = []) {
