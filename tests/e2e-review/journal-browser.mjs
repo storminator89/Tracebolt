@@ -12,6 +12,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {installJournalPrimaryBody} from './journal-primary-body.mjs';
 import {journalFailureCoordinates} from './journal-browser-diagnostics.mjs';
+import {assertJournalCancellationNavigation} from './journal-navigation-browser.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(path.join(root,'web/package.json'));
@@ -381,10 +382,8 @@ try{
    await page.route('**'+endpoint(),statusHandler);
    await page.route('**'+endpoint('alpha','cancel'),handler);
    try{mark('cancel clears content before lost committed response');await page.getByRole('button',{name:'Cancel request / discard content',exact:true}).click();await expect.poll(()=>arrived).toBe(1);expect(statuses).toEqual([200]);await expect(rows(page)).toHaveCount(0);expect(tally.cancel).toBe(1);
-    await page.getByRole('tab',{name:'Details',exact:true}).click();await expect(panel(page)).toHaveCount(0);
-    const beforeRemountStatus=oldStatusReads;await page.getByRole('tab',{name:'Logs',exact:true}).click();await expect.poll(()=>oldStatusReads).toBeGreaterThan(beforeRemountStatus);await expect(panel(page)).toHaveAttribute('aria-busy','false');
-    await expect(panel(page).getByText('The last action could not be confirmed. Refresh status before issuing another action.',{exact:true})).toBeVisible();await expect(rows(page)).toHaveCount(0);expect(tally.query).toBe(queriesBeforeCancel);expect(tally.cancel).toBe(1);expect(tally.create).toBe(1);
-    release();await page.unroute('**'+endpoint(),statusHandler);await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(state(page)).toHaveText('Canceled');await settled(page);}
+    await assertJournalCancellationNavigation({page,expect,panel,rows,tally,queriesBeforeCancel,statusReads:()=>oldStatusReads,releaseStatus:async()=>{release();await page.unroute('**'+endpoint(),statusHandler);}});
+    release();await expect(state(page)).toHaveText('Canceled');await settled(page);}
    finally{release();await page.unroute('**'+endpoint(),statusHandler);await page.unroute('**'+endpoint('alpha','cancel'),handler);}
    mark('fresh reload preserves cancellation and no automatic new request');const current=await get(endpoint());expect(current.request.state).toBe('canceled');expect(current.contentStatus).toBe('unavailable');expect(current.expectedFloor).toBe('1');await page.reload();await page.getByRole('tab',{name:'Logs',exact:true}).click();await expect(state(page)).toHaveText('Canceled');await expect(rows(page)).toHaveCount(0);expect(tally.cancel).toBe(1);expect(tally.create).toBe(1);await clean(page);
   });
