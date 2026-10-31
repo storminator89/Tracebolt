@@ -95,6 +95,9 @@ impl Enrollment {
             "preprovided identity mode"
         );
         let ca = crate::config::read_ca(directory)?;
+        if initialize {
+            crate::compatibility::check(&config, &ca)?;
+        }
         let client = crate::config::tls_builder(&ca)?.build()?;
         let state = directory.join("state");
         let lock = OpenOptions::new()

@@ -5,6 +5,7 @@ use tracebolt_windows_agent::{
     protocol::{self, Sample},
     state::State,
 };
+mod common;
 
 #[test]
 fn state_survives_restart_and_never_reuses_sequence() {
@@ -42,12 +43,19 @@ fn missing_state_is_not_reinitialized() {
 #[test]
 fn automatic_onboarding_needs_no_token_and_preserves_key_on_restart() {
     use tracebolt_windows_agent::enrollment::Enrollment;
+    let manager = common::Manager::compatible();
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("state")).unwrap();
-    std::fs::write(dir.path().join("config.json"),serde_json::to_vec(&json!({
-        "schemaVersion":"tracebolt.rust-windows-basic.v1","managerOrigin":"https://fixture.example",
-        "basicMetricsAcknowledged":true,"intervalSeconds":60
-    })).unwrap()).unwrap();
+    std::fs::write(
+        dir.path().join("config.json"),
+        serde_json::to_vec(&json!({
+            "schemaVersion":"tracebolt.rust-windows-basic.v1","managerOrigin":manager.origin,
+            "basicMetricsAcknowledged":true,"intervalSeconds":60
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("server-ca.pem"), &manager.ca).unwrap();
     assert!(Enrollment::open(dir.path(), false, None).is_err());
     let enrollment = Enrollment::open(dir.path(), true, None).unwrap();
     let status = enrollment.public_status().unwrap();

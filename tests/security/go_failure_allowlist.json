@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "49cb78bb168aeca163890befec083b941a6332a351e8e775b593dfa60cd224c8",
+  "goSourceSha256": "c276e15921fe3d3ccd200065ede4f2bde84a9db545c1b29c40fb4c8c573d9958",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1247,6 +1247,11 @@
       "TestRetainedCreateHasExplicitProtocolWithoutPerReadAcknowledgement",
       "TestRetainedManagerCapabilitiesAreDistinctMetadata",
       "TestReusableWUAAPIExactReviewAndReadOnlyReconciliation",
+      "TestRustBasicCapabilitiesActualTLSListener",
+      "TestRustBasicCapabilitiesRealServiceGuardedNonmutating",
+      "TestRustBasicCapabilitiesRejectsConfiguredRenewal",
+      "TestRustBasicCapabilitiesSharesMetadataAdmission",
+      "TestRustBasicCapabilitiesUnavailableOnDevelopment",
       "TestSecurityCoverageLegitimateEmptyInventoryIsNotZeroCVEs",
       "TestSecurityCoveragePartialStaleUnknownAndRetainedRemainDistinct",
       "TestSecurityCoverageSeparatesInventoryFromUnknownAssessments",
@@ -4278,6 +4283,9 @@
       "TestNativeInputsDoNotBecomeDemoEvidence",
       "TestRulesAndCounterexamples"
     ],
+    "localrmm/internal/rustcompat": [
+      "TestExactPublicContract"
+    ],
     "localrmm/internal/signedhttp": [
       "TestBodyLimitAndSigningHelperIsolation",
       "TestCanonicalOriginConfiguration",
@@ -6291,10 +6299,13 @@
       "TestRuntimeGuardRejectsNonDarwinArchitectureAndToolchain"
     ],
     "localrmm/tests/rustagent": [
+      "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
       "TestRustFrameAcceptedByManager"
     ],
-    "localrmm/tests/rustagent/cmd/nativefixture": [],
+    "localrmm/tests/rustagent/cmd/nativefixture": [
+      "TestCompatibilityGETDoesNotEnterEnrollment"
+    ],
     "localrmm/tests/security": [
       "TestAnalysisDiscardsUpstreamSecretEcho",
       "TestAnalysisNeverFollowsProviderRedirect",
