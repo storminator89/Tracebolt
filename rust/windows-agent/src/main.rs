@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tracebolt_windows_agent::{
     config::tls_builder,
     config::{Config, EnrollmentMode, read_bounded},
-    enrollment::Enrollment,
+    enrollment::{Enrollment, validate_initial_bootstrap},
     enrollment_wire::Bootstrap,
 };
 
@@ -32,6 +32,9 @@ enum Command {
         interval_seconds: u64,
         #[arg(long)]
         server_ca_file: Option<PathBuf>,
+        /// Public invitation bootstrap; required only for invitation mode.
+        #[arg(long)]
+        bootstrap: Option<PathBuf>,
     },
     /// Validate protected configuration and credentials without sending data.
     Check {
@@ -108,6 +111,7 @@ fn run() -> anyhow::Result<()> {
             mode,
             interval_seconds,
             server_ca_file,
+            bootstrap,
         } => {
             let enrollment_mode: EnrollmentMode =
                 serde_json::from_value(serde_json::Value::String(mode))?;
@@ -121,6 +125,12 @@ fn run() -> anyhow::Result<()> {
                 basic_metrics_acknowledged: true,
             };
             config.validate()?;
+            let bootstrap: Option<Bootstrap> = bootstrap
+                .map(|p| -> anyhow::Result<_> {
+                    Ok(serde_json::from_slice(&read_bounded(&p, 65536)?)?)
+                })
+                .transpose()?;
+            validate_initial_bootstrap(&config, bootstrap.as_ref())?;
             let ca = server_ca_file
                 .map(|p| read_bounded(&p, 32768))
                 .transpose()?
@@ -142,6 +152,12 @@ fn run() -> anyhow::Result<()> {
             bootstrap,
         } => {
             let config = Config::load(&directory)?;
+            let bootstrap: Option<Bootstrap> = bootstrap
+                .map(|p| -> anyhow::Result<_> {
+                    Ok(serde_json::from_slice(&read_bounded(&p, 65536)?)?)
+                })
+                .transpose()?;
+            validate_initial_bootstrap(&config, bootstrap.as_ref())?;
             // Recheck fresh enrollment before any ledger, not just in the
             // installer. Advanced preprovided mode keeps its distinct legacy
             // telemetry-origin behavior and is outside this capability contract.
@@ -152,18 +168,9 @@ fn run() -> anyhow::Result<()> {
                 )?;
             }
             if config.enrollment_mode == EnrollmentMode::Preprovided {
-                anyhow::ensure!(
-                    bootstrap.is_none(),
-                    "bootstrap not supported in preprovided mode"
-                );
                 tracebolt_windows_agent::sender::Sender::open(&directory, true)?;
                 println!("Fresh sender state initialized.");
             } else {
-                let bootstrap: Option<Bootstrap> = bootstrap
-                    .map(|p| -> anyhow::Result<_> {
-                        Ok(serde_json::from_slice(&read_bounded(&p, 65536)?)?)
-                    })
-                    .transpose()?;
                 let enrollment = Enrollment::open(&directory, true, bootstrap)?;
                 println!("{}", enrollment.public_status()?);
             }

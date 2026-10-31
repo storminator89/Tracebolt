@@ -62,6 +62,13 @@ The service does not silently create replacement identities after expiry,
 rejection, revocation or lost state.
 
 **Optional invitation workflow:** add `-InvitationBootstrap <approved-public-bootstrap.json>`.
+The installer includes this public file in its read-only `validate-config`
+preflight, before SCM or directory staging. The same bounded parser checks its
+mode, TLS/non-renewal profile, exact enrollment origin, canonical telemetry origin
+and optional destination pin, public IDs, current issuer/root authority and
+signature, and advertised CA syntax. It never adopts the advertised CA instead
+of your independently selected trust. `init` and library initialization recheck
+these semantics before opening a lock/database or generating a key.
 Only this explicit mode asks for an invitation token in a hidden local terminal
 prompt. Tokens never go in command arguments, environment variables or files.
 Existing server invitation workflows remain supported. Advanced provisioning
@@ -69,6 +76,14 @@ can instead use `-CredentialDirectory`, `-AgentId` and `-FreshApprovedIdentity`
 with a fresh, approved, never-used TLS identity; it is not the default and its
 distinct legacy telemetry-origin semantics are outside the new compatibility
 preflight. Do not treat that unchanged advanced mode as newly verified.
+
+For a local-only, nonmutating invitation-input check (no manager request), use
+`tracebolt-windows-agent.exe validate-config --manager-origin <HTTPS-origin>
+--mode invitation --bootstrap <approved-public-bootstrap.json>` and the same
+optional `--server-ca-file` / `--agent-origin` inputs. Add `--check-manager` for
+the existing bounded compatibility check. Offline validation does not install,
+enroll, prove invitation liveness/approval, or assert connectivity. It is not an
+offline installation mode. See [preflight limits and gates](../../docs/rust-installer-preflight.md).
 
 ## Scope and delivery
 
