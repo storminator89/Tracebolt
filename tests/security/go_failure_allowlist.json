@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "48db49fba4db15b207f0361114e6b0f056b217200a737c09854b7d81735ec8e0",
+  "goSourceSha256": "f4f22065bff985870c0972b78d4f585353c9206fbc26d5ecd5c43bb936323e51",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -4918,6 +4918,14 @@
     "localrmm/internal/windowsagentconfig": [
       "TestRenewableEnrollmentSchemaDoesNotExtendLegacyState",
       "TestWindowsStoreSchemasRemainSeparateAndFixed"
+    ],
+    "localrmm/internal/windowsbasic": [
+      "TestAllCurrentExpandedAgentRouteFamiliesAreDenied",
+      "TestFoundationCannotBeAdvertisedOrEnrolledAsRuntimeSupport",
+      "TestOnlyExactBasicProfileAndRoutePassTheInertPolicy",
+      "TestOnlyFourMeasurementsAndProtocolMetadata",
+      "TestScalarAndTimeBoundaries",
+      "TestStrictClosedShapeRejectsClaimedAuthorityAndEveryExpandedSection"
     ],
     "localrmm/internal/windowscapacity": [
       "TestWindowsCapacityCanonicalCorruptionAndBounds",
