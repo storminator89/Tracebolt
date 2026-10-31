@@ -24,8 +24,11 @@ JOBS = BASE_JOBS | {
 } | {f'Unsigned Windows action source ({arch})' for arch in ['amd64', 'arm64']} | {
     f'Dense package race ({topology}/{profile})' for topology in ['same-handle', 'cross-handle'] for profile in ['tls', 'http-test']
 } | {f'Go race shard ({shard})' for shard in range(3)} | {
+    f'UI unit and interaction shard ({shard}/4)' for shard in range(1, 5)
+} | {
     f'Linux manager container lifecycle ({arch}, TLS and HTTP test)' for arch in ['amd64', 'arm64']
 }
+UI_SHARD_STEPS = {'Install locked dependencies', 'Unit and interaction tests (exact shard)'}
 AGGREGATE_STEPS = {
     'Require successful runtime and race prerequisites',
     "Download this attempt's normalized race evidence",
@@ -73,10 +76,12 @@ def verify_jobs(value, source, run_id, attempt):
                 and job.get('head_sha') == source and job.get('workflow_name') == 'Validate'
                 and job.get('status') == 'completed' and job.get('conclusion') == 'success')
         names.add(job['name']); ids.add(job['id'])
-        if job['name'] == 'Go tests and build-only platform checks':
+        required_steps = (AGGREGATE_STEPS if job['name'] == 'Go tests and build-only platform checks'
+                          else UI_SHARD_STEPS if job['name'].startswith('UI unit and interaction shard (') else set())
+        if required_steps:
             steps = job.get('steps')
             require(type(steps) is list)
-            for expected in AGGREGATE_STEPS:
+            for expected in required_steps:
                 matching = [step for step in steps if step.get('name') == expected]
                 require(len(matching) == 1 and matching[0].get('status') == 'completed'
                         and matching[0].get('conclusion') == 'success')

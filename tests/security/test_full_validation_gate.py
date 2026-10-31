@@ -20,7 +20,8 @@ class GateTests(unittest.TestCase):
         self.jobs = {'total_count': len(g.JOBS), 'jobs': [
             {'id': i + 1, 'name': name, 'run_id': 123, 'run_attempt': 1, 'head_sha': SHA,
              'workflow_name': 'Validate', 'status': 'completed', 'conclusion': 'success',
-             'steps': [{'name': step, 'status': 'completed', 'conclusion': 'success'} for step in sorted(g.AGGREGATE_STEPS)]}
+             'steps': [{'name': step, 'status': 'completed', 'conclusion': 'success'}
+                      for step in sorted(g.UI_SHARD_STEPS if name.startswith('UI unit and interaction shard (') else g.AGGREGATE_STEPS)]}
             for i, name in enumerate(sorted(g.JOBS))]}
         self.routes = {
             g.PREFIX + '/actions/workflows/validate.yml': {'id': 42, 'path': g.WORKFLOW, 'name': 'Validate'},
@@ -65,6 +66,53 @@ class GateTests(unittest.TestCase):
             step['conclusion'] = 'success'
         aggregate['steps'].append(copy.deepcopy(aggregate['steps'][0]))
         with self.assertRaises(ValueError): self.check()
+
+    def test_ui_shards_cover_the_native_partition_and_block_downstream_jobs(self):
+        full = (ROOT / '.github/workflows/validate.yml').read_text()
+        shards = full.split('  frontend-tests:', 1)[1].split('  frontend:', 1)[0]
+        frontend = full.split('  frontend:', 1)[1].split('  browser:', 1)[0]
+        browser = full.split('  browser:', 1)[1]
+        self.assertIn('      fail-fast: false\n      matrix:\n        shard: [1, 2, 3, 4]\n', shards)
+        self.assertIn('        run: npm test -- --maxWorkers=1 --shard=${{ matrix.shard }}/4\n', shards)
+        self.assertNotIn('    if:', shards)
+        self.assertNotIn('    if:', frontend)
+        self.assertNotIn('continue-on-error', shards)
+        self.assertNotIn('--passWithNoTests', shards)
+        self.assertIn('    needs: [frontend-tests]\n', frontend)
+        self.assertIn('    needs: [frontend]\n', browser)
+        self.assertEqual(full.count('run: npm test -- --maxWorkers=1'), 1)
+        self.assertIn('run: npm run typecheck', frontend)
+        self.assertIn('run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/vitest.config.mts', frontend)
+        self.assertIn('run: npm run build', frontend)
+        self.assertEqual({name for name in g.JOBS if name.startswith('UI unit and interaction shard (')},
+                         {f'UI unit and interaction shard ({shard}/4)' for shard in range(1, 5)})
+
+    def test_every_ui_shard_and_its_actual_test_step_are_required(self):
+        for name in sorted(name for name in g.JOBS if name.startswith('UI unit and interaction shard (')):
+            shard = next(row for row in self.jobs['jobs'] if row['name'] == name)
+            for state in ['skipped', 'failure', 'cancelled', None]:
+                shard['conclusion'] = state
+                with self.subTest(name=name, state=state), self.assertRaises(ValueError):
+                    self.check()
+            shard['conclusion'] = 'success'
+            original = copy.deepcopy(shard['steps'])
+            for step in shard['steps']:
+                step['conclusion'] = 'skipped'
+                with self.subTest(name=name, step=step['name']), self.assertRaises(ValueError):
+                    self.check()
+                step['conclusion'] = 'success'
+            for changed in [original[:-1], original + [copy.deepcopy(original[-1])], None]:
+                shard['steps'] = changed
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    self.check()
+            shard['steps'] = original
+            self.jobs['jobs'].remove(shard)
+            self.jobs['total_count'] -= 1
+            with self.subTest(name=name, missing=True), self.assertRaises(ValueError):
+                self.check()
+            self.jobs['jobs'].append(shard)
+            self.jobs['total_count'] += 1
+        self.check()
 
     def test_all_full_jobs_including_debian_are_available_on_manual_and_schedule(self):
         full = (ROOT / '.github/workflows/validate.yml').read_text()
