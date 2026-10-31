@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "230cb1fed1be7e28ecc56279a4c996fd48121ae593552a229f0ed4a13c614116",
+  "goSourceSha256": "3725e34786e2f26c54b61a326d77eb09e91acb9388050af68f9d9f93e2794c31",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -6315,7 +6315,8 @@
     "localrmm/tests/rustagent": [
       "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
-      "TestRustFrameAcceptedByManager"
+      "TestRustFrameAcceptedByManager",
+      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations"
     ],
     "localrmm/tests/rustagent/cmd/nativefixture": [
       "TestCompatibilityGETDoesNotEnterEnrollment"
