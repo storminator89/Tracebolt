@@ -73,12 +73,25 @@ previous valid full backup are not detected by this diagnostic format.
 All public codes and messages come from fixed allowlists; raw error strings,
 paths, URLs, certificate/key material and remote bodies are never interpolated.
 Typed errors are classified, not guessed from words such as “TLS” or “revoked” in
-an exception message.
+an exception message. Transport classification uses the existing request result
+only: no extra DNS lookup, handshake, network probe or retry is introduced. TLS
+and typed network causes are inspected through bounded source/held-I/O-error
+traversal; missing or unfamiliar types stay unclassified. Existing explicit
+operation classes and request timeouts keep their precedence. The public next
+action remains fixed text, never a formatted source error.
+
+The three additional transport codes are derived diagnostic vocabulary only;
+identity, grants, wire telemetry and authoritative state are unchanged. Older
+binaries may reject a sidecar containing a new code as `health-unavailable` rather
+than interpret it or repair it. Preserve that optional sidecar on rollback.
 
 | State | Interpretation |
 | --- | --- |
 | `registration-pending`, `pending-approval` | Separate initial registration from waiting for deliberate manager fingerprint/comparison approval. No new identity or approval is created by diagnostics. |
-| `transport-timeout`, `transport-unclassified` | Timeout or other transport failure. DNS, TLS and routing are **not guessed apart** from unstructured library messages; no definitive offline claim. |
+| `transport-tls-failed` | A typed rustls failure was retained by the request error chain. Review selected trust, peer identity, certificate lifetime and TLS policy. This is not confirmed enrollment revocation or permission to weaken TLS. |
+| `transport-connection-refused` | A typed OS I/O cause reported connection refusal during this attempt. Review approved listeners/ports/policy; refusal does not prove an offline endpoint. |
+| `transport-unreachable` | A typed OS I/O cause reported network/host unreachability during this attempt. Review approved routing/connectivity; no definitive offline claim. |
+| `transport-timeout`, `transport-unclassified` | Timeout or an ambiguous transport failure. The default resolver exposes no portable typed DNS discriminator; `Other`, `NotFound`, error prose and platform-specific numeric codes are not guessed into DNS/TLS/offline states. |
 | `authentication-rejected` | HTTP authorization rejection; it does not itself establish revocation. |
 | `protocol-unavailable`, `manager-rejected`, `receipt-invalid` | Endpoint/protocol status unavailable, other rejection or invalid receipt. No successful acceptance is inferred. |
 | `enrollment-revoked`, `enrollment-expired`, `enrollment-terminated` | A validated, original-binding manager snapshot/retained terminal ledger stopped enrollment. Confirmed specific terminal reason can be retained across restart; no automatic replacement/rearm follows. |
@@ -138,7 +151,13 @@ and restart; valid duplicate receipts retain original times; and diagnostic
 corruption/opt-out do not reset sequence state or stop reporting.
 
 These are source/protocol-fixture checks, **not native Windows acceptance**.
-Outstanding TB-09 gates include complete DNS-versus-TLS/offline classification,
+The typed-cause regressions include injected failures through the real reqwest
+wrapper and disposable loopback wrong-trust/wrong-name TLS rejections. Injected
+network errors are not native DNS/routing acceptance. Source tests never establish
+a live endpoint's offline status.
+
+Outstanding TB-09 gates include portable DNS-failure discrimination and any
+separately supported offline-evidence contract,
 full startup-state diagnosis, native Windows Event Log integration, Windows ACL/
 service acceptance for atomic sidecar replacement and real Windows↔Linux↔browser
 acceptance using unchanged, jointly reviewed release bytes. Keep #136 open until

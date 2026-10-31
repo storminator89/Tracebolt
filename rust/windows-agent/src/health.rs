@@ -37,6 +37,9 @@ pub enum Code {
     ClockInvalid,
     CollectionFailed,
     TransportTimeout,
+    TransportTlsFailed,
+    TransportConnectionRefused,
+    TransportUnreachable,
     TransportUnclassified,
     AuthenticationRejected,
     ManagerRejected,
@@ -66,6 +69,9 @@ impl Code {
             Self::ClockInvalid => "clock-invalid",
             Self::CollectionFailed => "collection-failed",
             Self::TransportTimeout => "transport-timeout",
+            Self::TransportTlsFailed => "transport-tls-failed",
+            Self::TransportConnectionRefused => "transport-connection-refused",
+            Self::TransportUnreachable => "transport-unreachable",
             Self::TransportUnclassified => "transport-unclassified",
             Self::AuthenticationRejected => "authentication-rejected",
             Self::ManagerRejected => "manager-rejected",
@@ -114,6 +120,15 @@ impl Code {
             }
             Self::CollectionFailed => {
                 "Inspect the approved basic source locally; collection failure is not a zero or healthy measurement."
+            }
+            Self::TransportTlsFailed => {
+                "The selected TLS connection failed. Review approved trust, peer identity, certificate validity and TLS policy locally; never disable verification or infer enrollment revocation."
+            }
+            Self::TransportConnectionRefused => {
+                "The connection was refused at this attempt. Review the approved listener, port and network policy locally; refusal does not establish that the endpoint is offline."
+            }
+            Self::TransportUnreachable => {
+                "The network reported an unreachable destination at this attempt. Review approved routing and connectivity locally; this is not proof that the endpoint or manager is offline."
             }
             Self::TransportTimeout | Self::TransportUnclassified => {
                 "Review approved DNS, routing, TLS trust and manager availability locally. This class does not guess DNS versus TLS or prove offline status."
@@ -165,13 +180,43 @@ pub fn classify(error: &anyhow::Error) -> Code {
         return if e.is_timeout() {
             Code::TransportTimeout
         } else {
-            Code::TransportUnclassified
+            transport_cause(e).unwrap_or(Code::TransportUnclassified)
         };
     }
     if error.downcast_ref::<rusqlite::Error>().is_some() {
         return Code::StateUnavailable;
     }
     Code::UnclassifiedFailure
+}
+
+/// Inspect only typed causes within a reqwest failure. io::Error may hold the
+/// TLS cause in get_ref() rather than expose that object through source(). Bound
+/// traversal even if a future dependency supplies a cyclic custom error chain.
+/// Other/NotFound and raw OS values are not portable DNS evidence. In particular,
+/// connection refusal or unreachability never establishes an offline endpoint.
+fn transport_cause(mut cause: &(dyn std::error::Error + 'static)) -> Option<Code> {
+    for _ in 0..32 {
+        if cause.downcast_ref::<rustls::Error>().is_some() {
+            return Some(Code::TransportTlsFailed);
+        }
+        if let Some(error) = cause.downcast_ref::<std::io::Error>() {
+            match error.kind() {
+                std::io::ErrorKind::ConnectionRefused => {
+                    return Some(Code::TransportConnectionRefused);
+                }
+                std::io::ErrorKind::NetworkUnreachable | std::io::ErrorKind::HostUnreachable => {
+                    return Some(Code::TransportUnreachable);
+                }
+                _ => {}
+            }
+            if let Some(inner) = error.get_ref() {
+                cause = inner;
+                continue;
+            }
+        }
+        cause = cause.source()?;
+    }
+    None
 }
 
 #[derive(Clone, Deserialize, Serialize)]

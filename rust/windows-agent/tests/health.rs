@@ -327,3 +327,54 @@ fn extreme_strict_schema_times_fail_closed_without_panicking_or_repairing() {
         Code::ClockInvalid
     );
 }
+
+#[test]
+fn typed_transport_results_round_trip_without_refreshing_receipts_or_exporting_causes() {
+    for code in [
+        Code::TransportTlsFailed,
+        Code::TransportConnectionRefused,
+        Code::TransportUnreachable,
+    ] {
+        let root = fixture();
+        let mut tracker = open_tracker(root.path());
+        tracker.attempt(now()).unwrap();
+        tracker
+            .complete(
+                Code::Accepted,
+                Some(accepted()),
+                now(),
+                0,
+                Duration::from_secs(60),
+                None,
+            )
+            .unwrap();
+        let original = encoded(root.path(), now());
+        let later = now() + ChronoDuration::seconds(40);
+        tracker.attempt(later).unwrap();
+        tracker
+            .complete(code, None, later, 1, Duration::from_secs(67), None)
+            .unwrap();
+        drop(tracker);
+        let retained = encoded(root.path(), later);
+        assert_eq!(retained["state"], code.as_str());
+        assert_eq!(retained["lastAttemptResult"], code.as_str());
+        assert_eq!(
+            retained["lastAcceptedReceipt"],
+            original["lastAcceptedReceipt"]
+        );
+        assert_eq!(retained["receiptObservedAt"], original["receiptObservedAt"]);
+        assert_eq!(retained["retryDelaySeconds"], 67);
+        let bundle =
+            String::from_utf8(health::support_bundle(root.path(), later).unwrap()).unwrap();
+        assert!(bundle.contains(code.as_str()));
+        for private in [
+            "private-",
+            "localhost",
+            "configurationBinding",
+            "rawError",
+            "sourceChain",
+        ] {
+            assert!(!bundle.contains(private));
+        }
+    }
+}
