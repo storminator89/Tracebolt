@@ -14,6 +14,9 @@ existing Windows approval list shows invitation claims without a verified
 customer. See [customer-records.md](customer-records.md). Guided enrollment v2
 uses a single-use invitation secret and its own proof and lifecycle; it has no
 customer hierarchy. See [enrollment-v2/http-contract.md](enrollment-v2/http-contract.md).
+For confidential customer boundaries, use [separate manager instances with
+independent identities, trust, state and backups](customer-records.md#customer-separation-requires-separate-manager-instances);
+a frontend customer filter is not access control.
 Neither feature is a reusable customer installer. Source availability does not
 establish inclusion in a published package or a successful native test.
 The independent `internal/customerclaim`, `internal/customerchallenge`,
