@@ -6,6 +6,7 @@ import (
 	"localrmm/internal/enrollmentstore"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -46,12 +47,15 @@ func TestManagedSourcePolicyCannotBeRelabeledForAIExport(t *testing.T) {
 		if e = s.store.Seed(nil, cases); e != nil {
 			t.Fatal(e)
 		}
-		if w := request(s, "POST", "/api/cases/"+cases[0].ID+"/analyze", `{"configRevision":"`+config.Revision+`"}`, nil); w.Code != 403 {
+		if w := request(s, "POST", "/api/cases/"+cases[0].ID+"/analyze", `{"configRevision":"`+config.Revision+`","previewToken":"`+strings.Repeat("a", 64)+`","packetSHA256":"`+strings.Repeat("b", 64)+`","acknowledge":true}`, nil); w.Code != 403 {
 			t.Fatal("managed source relabeled for export")
 		}
 	}
 	s.store.Close()
-	if w := analyze(t, s, config.Revision); w.Code != 403 {
+	if w := request(s, "POST", "/api/cases/case-demo-win-01-service/analyze-preview", `{}`, nil); w.Code != 403 {
+		t.Fatal("preview read stored evidence before managed exclusion")
+	}
+	if w := request(s, "POST", "/api/cases/case-demo-win-01-service/analyze", `{"configRevision":"`+config.Revision+`","previewToken":"`+strings.Repeat("a", 64)+`","packetSHA256":"`+strings.Repeat("b", 64)+`","acknowledge":true}`, nil); w.Code != 403 {
 		t.Fatal("case titles read before source policy rejection")
 	}
 	if calls.Load() != 0 {

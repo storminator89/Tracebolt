@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "3725e34786e2f26c54b61a326d77eb09e91acb9388050af68f9d9f93e2794c31",
+  "goSourceSha256": "1cc9ba81a3945b29e3c348a7098a7b1f39e58dadab8b96072dfeb946ba425a4c",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1004,6 +1004,12 @@
       "TestBoundaryGuards",
       "TestCachedUpdatesOperatorGuardsAndBoundedUnknown",
       "TestCachedUpdatesRechecksSessionAfterRead",
+      "TestCaseAnalysisPreviewConcurrentReplayIsClaimedBeforeCall",
+      "TestCaseAnalysisPreviewInvalidPacketsFailBeforeTokenIssuance",
+      "TestCaseAnalysisPreviewIsTheExactProviderDataMessage",
+      "TestCaseAnalysisPreviewRejectsChangesWithoutProviderCalls",
+      "TestCaseAnalysisPreviewSessionBindingAndLogout",
+      "TestCaseAnalysisPreviewStrictBoundariesAndCapacity",
       "TestCollectionInvitationAcknowledgementIsProfileBound",
       "TestCompleteGroupServiceHealthRecorderReviewAndFixture",
       "TestCompleteIncidentRecorderCommitAndClosedRequests",

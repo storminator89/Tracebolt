@@ -52,7 +52,7 @@ func TestPackageSourceRemainsUnassessedAndExcludedFromAI(t *testing.T) {
 		t.Fatal("package facts became assessment verdicts")
 	}
 	s.store.Close()
-	w = request(s, "POST", "/api/cases/demo-case-dns/analyze", `{"configRevision":"ignored"}`, nil)
+	w = request(s, "POST", "/api/cases/demo-case-dns/analyze", `{"configRevision":"ignored","previewToken":"`+strings.Repeat("a", 64)+`","packetSHA256":"`+strings.Repeat("b", 64)+`","acknowledge":true}`, nil)
 	if w.Code != 403 || !strings.Contains(w.Body.String(), "evidence_export_not_approved") {
 		t.Fatal("package source read case text or reached provider before exclusion")
 	}

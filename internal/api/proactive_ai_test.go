@@ -122,7 +122,7 @@ func TestProactiveAIExplicitScopeRunsOnceWithoutBrowserAndPersists(t *testing.T)
 
 	// Original manual managed export still fails closed, even with proactive approval.
 	o.app.aiCollectionProfile = "managed-operations-v1"
-	res, _ = o.call(t, "POST", "/api/cases/case-demo-win-01-service/analyze", map[string]string{"configRevision": o.app.ai.config.Revision}, csrf, nil)
+	res, _ = o.call(t, "POST", "/api/cases/case-demo-win-01-service/analyze", map[string]any{"configRevision": o.app.ai.config.Revision, "previewToken": strings.Repeat("a", 64), "packetSHA256": strings.Repeat("b", 64), "acknowledge": true}, csrf, nil)
 	if res.StatusCode != 403 {
 		t.Fatal("manual managed export relaxed")
 	}
