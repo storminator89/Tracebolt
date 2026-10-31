@@ -140,11 +140,23 @@ fn valid_invitation_offline_preflight_is_repeatable_and_never_adopts_trust_or_st
     }
     assert!(validate_initial_bootstrap(&config(origin, EnrollmentMode::Invitation), None).is_err());
     for mode in ["auto", "preprovided"] {
-        assert!(!validate(directory.path(), origin, mode, Some(&file)).status.success());
-        assert!(validate(directory.path(), origin, mode, None).status.success());
+        assert!(
+            !validate(directory.path(), origin, mode, Some(&file))
+                .status
+                .success()
+        );
+        assert!(
+            validate(directory.path(), origin, mode, None)
+                .status
+                .success()
+        );
         assert_eq!(before, snapshot(directory.path()));
     }
-    assert!(!validate(directory.path(), origin, "invitation", None).status.success());
+    assert!(
+        !validate(directory.path(), origin, "invitation", None)
+            .status
+            .success()
+    );
     assert_eq!(before, snapshot(directory.path()));
 }
 
@@ -278,9 +290,7 @@ fn initial_bootstrap_mode_errors_preserve_cli_and_library_inputs() {
         assert!(Enrollment::open(directory.path(), true, input).is_err());
         assert_eq!(before, snapshot(directory.path()));
         let mut command = Command::new(env!("CARGO_BIN_EXE_tracebolt-windows-agent"));
-        command
-            .args(["init", "--directory"])
-            .arg(directory.path());
+        command.args(["init", "--directory"]).arg(directory.path());
         if file.exists() {
             command.arg("--bootstrap").arg(&file);
         }
@@ -326,7 +336,11 @@ fn valid_invitation_init_rechecks_then_creates_a_single_bound_identity() {
     .unwrap();
     fs::write(directory.path().join("server-ca.pem"), &manager.ca).unwrap();
     let file = directory.path().join("bootstrap.json");
-    fs::write(&file, serde_json::to_vec(&bootstrap(&manager.origin)).unwrap()).unwrap();
+    fs::write(
+        &file,
+        serde_json::to_vec(&bootstrap(&manager.origin)).unwrap(),
+    )
+    .unwrap();
     let result = Command::new(env!("CARGO_BIN_EXE_tracebolt-windows-agent"))
         .args(["init", "--directory"])
         .arg(directory.path())
