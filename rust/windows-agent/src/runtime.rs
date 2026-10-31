@@ -1,20 +1,37 @@
 use crate::{
     config::{Config, EnrollmentMode},
     enrollment::Enrollment,
+    health::{self, Code, Tracker},
     protocol::Sample,
     sender::Sender,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::{path::Path, time::Duration};
 
 pub struct Runtime {
     enrollment: Option<Enrollment>,
     sender: Option<Sender>,
-    interval: Duration,
+    report_interval: Duration,
+    delay: Duration,
+    failures: u32,
+    last_code: Code,
+    health: Option<Tracker>,
+    health_requested: bool,
 }
 impl Runtime {
     pub fn open(directory: &Path) -> Result<Self> {
-        let config = Config::load(directory)?;
+        Self::open_with_health(directory, true)
+    }
+    pub fn open_without_health(directory: &Path) -> Result<Self> {
+        Self::open_with_health(directory, false)
+    }
+    fn open_with_health(directory: &Path, health_requested: bool) -> Result<Self> {
+        let config = Config::load(directory).context(Code::ConfigurationInvalid)?;
+        let health = if health_requested {
+            Tracker::open(directory, &config).ok()
+        } else {
+            None
+        };
         let (enrollment, sender) = if config.enrollment_mode == EnrollmentMode::Preprovided {
             (None, Some(Sender::open(directory, false)?))
         } else {
@@ -23,27 +40,112 @@ impl Runtime {
         Ok(Self {
             enrollment,
             sender,
-            interval: Duration::from_secs(config.interval_seconds),
+            report_interval: Duration::from_secs(config.interval_seconds),
+            delay: Duration::from_secs(config.interval_seconds),
+            failures: 0,
+            last_code: health
+                .as_ref()
+                .map_or(Code::NotObserved, Tracker::last_code),
+            health,
+            health_requested,
         })
     }
     pub fn interval(&self) -> Duration {
-        if self.sender.is_some() {
-            self.interval
-        } else {
-            Duration::from_secs(30)
-        }
+        self.delay
     }
     /// False means onboarding remains pending, not a delivered observation.
     pub fn cycle(&mut self, collect: impl FnOnce() -> Result<Sample>) -> Result<bool> {
+        let at = chrono::Utc::now();
+        if self.health.as_mut().is_some_and(|h| h.attempt(at).is_err()) {
+            self.health = None;
+        }
+        let result = self.cycle_inner(collect);
+        let now = chrono::Utc::now();
+        let jitter = uuid::Uuid::new_v4().as_bytes()[0] % 31;
+        self.last_code = match &result {
+            Ok(Some(_)) => Code::Accepted,
+            Ok(None) => self
+                .enrollment
+                .as_ref()
+                .and_then(|e| e.public_status().ok())
+                .and_then(|s| s["phase"].as_str().map(str::to_owned))
+                .map_or(Code::RegistrationPending, |phase| {
+                    if phase == "waiting-for-manager-approval" {
+                        Code::PendingApproval
+                    } else {
+                        Code::RegistrationPending
+                    }
+                }),
+            Err(error) => {
+                let code = health::classify(error);
+                if code == Code::EnrollmentTerminated
+                    && matches!(
+                        self.last_code,
+                        Code::EnrollmentRevoked | Code::EnrollmentExpired
+                    )
+                {
+                    self.last_code
+                } else {
+                    code
+                }
+            }
+        };
+        if result.is_err() {
+            self.failures = self.failures.saturating_add(1).min(16);
+        } else {
+            self.failures = 0;
+        }
+        let base = if self.sender.is_some() {
+            self.report_interval
+        } else {
+            Duration::from_secs(30)
+        };
+        self.delay = if result.is_err() {
+            health::retry_delay(base, self.failures, jitter)
+        } else {
+            base
+        };
+        let certificate = self.sender.as_ref().map(Sender::certificate_not_after);
+        if self.health.as_mut().is_some_and(|h| {
+            h.complete(
+                self.last_code,
+                result.as_ref().ok().and_then(Clone::clone),
+                now,
+                self.failures,
+                self.delay,
+                certificate,
+            )
+            .is_err()
+        }) {
+            self.health = None;
+        }
+        result.map(|accepted| accepted.is_some())
+    }
+    pub fn health_code(&self) -> Code {
+        self.last_code
+    }
+    pub fn health_requested(&self) -> bool {
+        self.health_requested
+    }
+    pub fn health_available(&self) -> bool {
+        self.health.is_some()
+    }
+    fn cycle_inner(
+        &mut self,
+        collect: impl FnOnce() -> Result<Sample>,
+    ) -> Result<Option<crate::protocol::AcceptedReceipt>> {
         if self.sender.is_none() {
             let enrollment = self.enrollment.as_mut().unwrap();
             if let Some(material) = enrollment.step(None)? {
                 self.sender = Some(Sender::enrolled(&enrollment.state_directory(), material)?);
             } else {
-                return Ok(false);
+                return Ok(None);
             }
         }
-        self.sender.as_mut().unwrap().report(collect)?;
-        Ok(true)
+        self.sender
+            .as_mut()
+            .unwrap()
+            .report_receipt(collect)
+            .map(Some)
     }
 }

@@ -1,6 +1,10 @@
 # Named-administration route and actor matrix (TB-06, inventory slice)
 
 Source baseline: `f70de9291803dd7e26f8907c11de821244e307b8` (2026-10-31).
+Reconciled with main `1dd1c4fed3f3368a8b968af1305bca054f012514` after
+#166/#167. The added public Rust compatibility route is included below;
+operator grants and the shared-only administration rows remain unchanged.
+The test inventory is derived from the combined Go tree.
 This is the first slice of [TB-06 / #133](https://github.com/storminator89/Tracebolt/issues/133):
 an inventory and regression contract, **not implementation or acceptance of
 personal-account administration**. No permission, role, account, stored record,
@@ -101,6 +105,7 @@ an operator login is not a substitute for enrollment proof.
 | `POST {C}/renewal/issue` | W | Exact renewal proof plus existing durable issuance fences; endpoint identity |
 | `POST {C}/renewal/activate` | W | Exact renewal proof plus activation floors; endpoint identity |
 | `GET /v2/enrollment/bootstrap/{invite}` | R/export | Public *primary-domain* bootstrap, no existence lookup/secret/status; credential-free bounded request |
+| `GET /v1/windows/rust-basic-capabilities` | R | Public compatibility metadata only; exact valid nonrenewable Windows HTTPS bootstrap/domain, credential-free request and shared public budget; no account or enrollment grant |
 | `GET /v1/windows/setup-capabilities` | R | Public static compatibility only; Windows domain required |
 | `GET /v1/windows/read-admin-setup-capabilities` | R | Public static compatibility only; Windows domain required |
 | `GET /v1/windows/read-admin-setup-capabilities-v2` through `-v10` | R | Nine exact versioned public compatibility routes; no wildcard or grant |
@@ -113,7 +118,7 @@ conditional/range requests or forwarded identity; no GET-to-HEAD promotion.
 Public/native availability does not prove endpoint installation or native
 acceptance. Evidence: enrollment handlers above, `bootstrap_download.go`,
 `windows_setup_capabilities.go`, `socket_owner_capabilities.go`,
-`journal_capabilities.go`.
+`journal_capabilities.go`, `rust_basic_capabilities.go`.
 
 ## 2. Manual trust
 
@@ -265,8 +270,10 @@ Recorded source-fixture verification on 2026-10-31: the focused command below
 passed with the official Go `1.27.1 linux/amd64` toolchain and race detector
 (`ok localrmm/internal/api 2.553s`). `gofmt`, diff whitespace, static parity of
 all 38 documented denial rows and all 14 source-defined capabilities, and local
-documentation links were checked. No full suite, new GitHub CI, real provider,
-installed endpoint, browser E2E or production acceptance was run for this slice.
+documentation links were checked. No full suite, real provider, installed
+endpoint, browser E2E or production acceptance was run in that local check.
+Automatic PR CI is separate exact-head evidence; a passing source fixture does
+not waive failed UI/browser gates or establish native acceptance.
 
 Focused check:
 
