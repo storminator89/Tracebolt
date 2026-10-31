@@ -14,44 +14,82 @@ const sameReceipt = (a: EventHistoryReceipt, b: EventHistoryReceipt) => sameHist
 const matchesApproval = (r: EventHistoryRecord, a: Approval) => r.description.grantId===a.grant && BigInt(r.description.identity.sequence)===BigInt(a.floor)+1n && (a.receipt ? r.description.query.search===undefined && sameSearch(r.description.sourceSearch,a.search) && r.description.searchReceipt!==undefined && sameReceipt(r.description.searchReceipt,a.receipt) && r.description.expiresAt===a.receipt.expiresAt && r.description.query.events.length===a.selected.length && r.description.query.events.every((e,i)=>sameSelectedEvent(e,a.selected[i])) : sameSearch(r.description.query.search,a.search) && r.description.query.events.length===0);
 const activeState = (r?: EventHistoryRecord | null) => r && ['pending', 'claimed', 'accepted'].includes(r.state);
 
+// Navigation keeps only reconciliation metadata, never selected headers,
+// provider names, message bodies, checked consent or history-query authority.
+type HistoryFence = { sessionBinding: string; floor: string; action: 'create' | 'cancel'; identity?: EventHistoryIdentity };
+const historyFences = new Map<string, HistoryFence>();
+const maxHistoryFences = 32;
+let historyFenceEpoch = 0;
+let historyProtectedEpoch = getProtectedRequestEpoch();
+const syncHistoryFenceScope = () => { if (historyProtectedEpoch !== getProtectedRequestEpoch()) { historyProtectedEpoch = getProtectedRequestEpoch(); historyFenceEpoch++; historyFences.clear(); } };
+const retainHistoryFence = (key: string, value: HistoryFence, expected?: HistoryFence): HistoryFence | null => {
+    syncHistoryFenceScope();
+    const current = historyFences.get(key);
+    if (current !== expected || !current && historyFences.size >= maxHistoryFences) return null;
+    const next = { ...value, ...(value.identity ? { identity: { ...value.identity } } : {}) }; historyFences.set(key, next); return next;
+};
+if (typeof window !== 'undefined') window.addEventListener(AUTH_REQUIRED_EVENT, () => { historyFenceEpoch++; historyFences.clear(); });
+function reconcileHistoryFence(key: string, value: EventHistoryView, expected?: HistoryFence) {
+    syncHistoryFenceScope();
+    const fence = historyFences.get(key); if (!fence || expected && fence !== expected || value.sessionBinding !== fence.sessionBinding) return;
+    const record = value.request;
+    // A larger authoritative floor consumes the original create precondition;
+    // this does not attribute someone else's record to our request or reopen it.
+    if (fence.action === 'create' ? BigInt(value.expectedFloor) > BigInt(fence.floor) : fence.identity && (BigInt(value.expectedFloor) > BigInt(fence.identity.sequence) || record && sameHistoryIdentity(record.description.identity, fence.identity) && ['canceled', 'expired'].includes(record.state))) historyFences.delete(key);
+}
+
+
 /** Memory-only, one reviewed selection. Status reads never enqueue or recapture.
  * Epochs fence all late responses; cancellation remains available during a read
  * or ambiguous create, and the original deadline is never recomputed later. */
 export function useWindowsEventHistory(deviceId: string, enabled: boolean, insecure: boolean, sessionKey: string | null) {
     const key = `${deviceId}:${enabled}:${insecure}:${sessionKey ?? ''}`;
+    const fenceKey = JSON.stringify([deviceId, insecure, sessionKey]);
+    syncHistoryFenceScope();
     const [data, setData] = useState<{ key: string; view: EventHistoryView } | null>(null), [result, setResult] = useState<{ key: string; report: EventHistoryReport; expiresAt: string } | null>(null);
     const [busy, setBusy] = useState<'' | 'status' | 'create' | 'query' | 'cancel'>(''), [failure, setFailure] = useState<EventHistoryFailure | null>(null), [reset, setReset] = useState(0), [paused, setPaused] = useState(false), [uncertain, setUncertain] = useState(false);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), protectedScope = useRef(0);
     const current = useRef<EventHistoryView | null>(null), viewAnchor = useRef<Anchor | null>(null), approval = useRef<Approval | null>(null), owned = useRef<EventHistoryRecord | null>(null), pending = useRef<{ controller: AbortController; timeout: number; start: Anchor; action: string } | null>(null);
     const sessionBinding = useRef<string | null>(null), latest = useRef<{ server: string; floorTime: string; anchor: Anchor } | null>(null), deadline = useRef(Infinity), sessionDeadline = useRef(Infinity), capabilityDeadline = useRef(Infinity), lifetimeAnchor = useRef<Anchor | null>(null), floor = useRef('0'), uncertainRef = useRef(false), reconcile = useRef<Reconcile | null>(null);
     const abort = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setBusy(''); }, []);
-    const discard = useCallback((reason: EventHistoryFailure | null = null) => { abort(); current.current = null; approval.current = null; owned.current = null; reconcile.current = null; uncertainRef.current = false; if (alive.current) { setData(null); setResult(null); setUncertain(false); setFailure(reason); setReset(n => n + 1); } }, [abort]);
+    const discard = useCallback((reason: EventHistoryFailure | null = null) => { abort(); current.current = null; approval.current = null; owned.current = null; reconcile.current = null; uncertainRef.current = historyFences.has(fenceKey); if (alive.current) { setData(null); setResult(null); setUncertain(uncertainRef.current); setFailure(reason); setReset(n => n + 1); } }, [abort, fenceKey]);
     const bestEffortCancel = useCallback((identity?: EventHistoryIdentity, intent?: Approval | null) => {
         if ((!identity && !intent) || locked.current || hasLogoutIntent() || getProtectedRequestEpoch() !== protectedScope.current) return;
-        const controller = new AbortController(), timer = window.setTimeout(() => controller.abort(), 10000), cleanupEpoch = getProtectedRequestEpoch();
+        const binding = sessionBinding.current;
+        if (!binding) return;
+        let cleanupFence = historyFences.get(fenceKey);
+        if (cleanupFence && (cleanupFence.sessionBinding !== binding || (identity ? cleanupFence.action !== 'cancel' || !cleanupFence.identity || !sameHistoryIdentity(cleanupFence.identity, identity) : cleanupFence.action !== 'create' || cleanupFence.floor !== intent!.floor))) return;
+        cleanupFence ??= retainHistoryFence(fenceKey, { action: identity ? 'cancel' : 'create', sessionBinding: binding, floor: intent?.floor ?? identity!.sequence, ...(identity ? { identity } : {}) }) ?? undefined;
+        if (!cleanupFence) return;
+        const controller = new AbortController(), timer = window.setTimeout(() => controller.abort(), 10000), cleanupEpoch = getProtectedRequestEpoch(), cleanupFenceEpoch = historyFenceEpoch;
         void (async () => {
-            // A message follow-up can race navigation before replacement commits.
-            // Clear the exact accepted predecessor as well as any new request.
+            // A message follow-up replaces an accepted search. Cancel that exact
+            // predecessor without resolving the still-ambiguous replacement floor.
             if (intent?.receipt) {
-                try { await cancelEventHistory(deviceId,intent.receipt.identity,controller.signal,insecure,sessionKey); } catch { /* Exact-ID conflict means replacement won; reconcile it below. */ }
+                if (historyFences.get(fenceKey) !== cleanupFence) return;
+                try { await cancelEventHistory(deviceId, intent.receipt.identity, controller.signal, insecure, sessionKey); } catch { /* Replacement may have won. */ }
             }
             let target = identity;
             // A lifecycle loss can race a committed create whose response was
             // aborted. Reconcile only that exact captured intent, for at most
             // ten seconds; never enqueue, capture, or render from cleanup.
-            while (!target && intent && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && !hasLogoutIntent()) {
+            while (!target && intent && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && cleanupFenceEpoch === historyFenceEpoch && !hasLogoutIntent()) {
                 const value = await readEventHistory(deviceId, controller.signal, insecure, sessionKey);
-                if (!validEventHistoryView(value, deviceId, sessionKey)) return;
+                if (!validEventHistoryView(value, deviceId, sessionKey) || value.sessionBinding !== binding) return;
                 if (value.request && matchesApproval(value.request, intent)) {
-                    if (!activeState(value.request)) return;
+                    if (!activeState(value.request)) { reconcileHistoryFence(fenceKey, value, cleanupFence); return; }
                     target = value.request.description.identity; break;
                 }
-                if (BigInt(value.expectedFloor) > BigInt(intent.floor)) return;
+                if (BigInt(value.expectedFloor) > BigInt(intent.floor)) { reconcileHistoryFence(fenceKey, value, cleanupFence); return; }
                 await new Promise<void>(resolve => { const delay = window.setTimeout(done, 3000); function done() { window.clearTimeout(delay); controller.signal.removeEventListener('abort', done); resolve(); } controller.signal.addEventListener('abort', done, { once: true }); });
             }
-            if (target && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && !hasLogoutIntent()) await cancelEventHistory(deviceId, target, controller.signal, insecure, sessionKey);
+            if (target && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && cleanupFenceEpoch === historyFenceEpoch && !hasLogoutIntent()) {
+                const upgraded = retainHistoryFence(fenceKey, { action: 'cancel', sessionBinding: binding, floor: target.sequence, identity: target }, cleanupFence); if (!upgraded) return; cleanupFence = upgraded;
+                const value = await cancelEventHistory(deviceId, target, controller.signal, insecure, sessionKey);
+                if (!controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && cleanupFenceEpoch === historyFenceEpoch && validEventHistoryView(value, deviceId, sessionKey)) reconcileHistoryFence(fenceKey, value, cleanupFence);
+            }
         })().catch(() => { /* Local disclosure already ended; never log private errors. */ }).finally(() => window.clearTimeout(timer));
-    }, [deviceId, insecure, sessionKey]);
+    }, [deviceId, fenceKey, insecure, sessionKey]);
     const clear = useCallback((reason: EventHistoryFailure | null = null, cancel = true) => { const intent = approval.current, record = owned.current ?? current.current?.request; const identity = record && activeState(record) && (!intent || matchesApproval(record, intent)) ? record.description.identity : undefined; discard(reason); if (cancel) bestEffortCancel(identity, intent); }, [bestEffortCancel, discard]);
     const begin = useCallback((action: 'status' | 'create' | 'query' | 'cancel') => {
         if (!enabled || !alive.current || locked.current || suspended.current || document.visibilityState === 'hidden' || hasLogoutIntent() || protectedScope.current !== getProtectedRequestEpoch()) return null;
@@ -74,6 +112,7 @@ export function useWindowsEventHistory(deviceId: string, enabled: boolean, insec
     }, [abort, clear, enabled]);
     const accept = useCallback((value: unknown, start: Anchor) => {
         if (!validEventHistoryView(value, deviceId, sessionKey)) { clear('invalid'); return false; }
+        if (historyFences.has(fenceKey) && historyFences.get(fenceKey)!.sessionBinding !== value.sessionBinding) { locked.current = true; clear('session', false); return false; }
         if (sessionBinding.current !== null && sessionBinding.current !== value.sessionBinding) { locked.current = true; clear('session', false); return false; }
         const previous = latest.current;
         if (BigInt(value.expectedFloor) < BigInt(floor.current) || previous && (eventHistoryAge(value.serverNow, previous.server) < 0 || eventHistoryAge(value.serverNow, previous.floorTime) + 1500 < elapsed(previous.anchor))) { clear('clock'); return false; }
@@ -102,8 +141,9 @@ export function useWindowsEventHistory(deviceId: string, enabled: boolean, insec
         if (approval.current && (value.localStatus !== 'enabled' || !value.capability?.enabled || value.capability.grantId !== approval.current.grant || performance.now() >= Math.min(deadline.current, capabilityDeadline.current))) { clear(performance.now() >= Math.min(deadline.current, capabilityDeadline.current) ? 'expired' : 'conflict'); return false; }
         if (value.request && ['canceled', 'expired'].includes(value.request.state)) { approval.current = null; owned.current = null; setResult(null); setReset(n => n + 1); }
         if (value.contentStatus !== 'available') setResult(null);
+        reconcileHistoryFence(fenceKey, value); uncertainRef.current = historyFences.has(fenceKey); setUncertain(uncertainRef.current);
         current.current = value; viewAnchor.current = start; setData({ key, view: value }); setFailure(null); return true;
-    }, [clear, deviceId, key, sessionKey]);
+    }, [clear, deviceId, fenceKey, key, sessionKey]);
     const fail = useCallback((error: unknown, ambiguous = false) => {
         if (error instanceof APIError && (error.status === 401 || error.status === 403)) { locked.current = true; clear('session', false); return; }
         if (ambiguous) { uncertainRef.current = true; setUncertain(true); setResult(null); setFailure('uncertain'); return; }
@@ -130,7 +170,7 @@ export function useWindowsEventHistory(deviceId: string, enabled: boolean, insec
     }, [accept, begin, deviceId, fail, insecure, sessionKey]);
     const submit = useCallback(async (search: HistorySearch, selected: SelectedEvent[], receipt: EventHistoryReceipt | undefined, acknowledge: boolean, plaintext: boolean) => {
         const v=current.current;
-        if (!v || pending.current || uncertainRef.current || !v.configured || v.localStatus!=='enabled' || !v.capability?.enabled || !acknowledge || plaintext!==insecure || !validHistorySearch(search,receipt ? v.request?.description.createdAt : v.serverNow)) return;
+        if (!v || pending.current || uncertainRef.current || historyFences.has(fenceKey) || !v.configured || v.localStatus!=='enabled' || !v.capability?.enabled || !acknowledge || plaintext!==insecure || !validHistorySearch(search,receipt ? v.request?.description.createdAt : v.serverNow)) return;
         if (receipt) {
             if (!result || result.key!==key || !owned.current || !approval.current || v.request?.state!=='accepted' || !v.request.receipt || !sameReceipt(v.request.receipt,receipt) || !sameSearch(v.request.description.query.search,search) || !validSelectedEvents(selected) || selected.some(e=>!result.report.events.some(row=>sameSelectedEvent(row.event,e)))) return;
         } else if (activeState(v.request)) return;
@@ -140,12 +180,14 @@ export function useWindowsEventHistory(deviceId: string, enabled: boolean, insec
         capabilityDeadline.current=(viewAnchor.current??clock()).mono+eventHistoryAge(v.capability.expiresAt,v.serverNow);
         owned.current=null; setResult(null); setReset(n=>n+1);
         const op=begin('create'); if (!op) { approval.current=null; return; }
+        const createFence = retainHistoryFence(fenceKey, { action: 'create', sessionBinding: v.sessionBinding, floor: v.expectedFloor });
+        if (!createFence) { approval.current=null; reconcile.current=null; setFailure('unavailable'); op.finish(); return; }
         try {
             const value=receipt ? await createHistoryMessages(deviceId,v,receipt,selected,acknowledge,plaintext,op.signal,insecure,sessionKey) : await createEventHistory(deviceId,v,search,acknowledge,plaintext,op.signal,insecure,sessionKey);
             if (op.active() && accept(value,op.start)) reconcile.current=null;
-        } catch(error) { if (op.active()) fail(error,!(error instanceof APIError && error.status!==undefined && error.status>=400 && error.status<500)); }
+        } catch(error) { if (op.active()) { const rejected = error instanceof APIError && error.status!==undefined && error.status>=400 && error.status<500; if (rejected) { if (historyFences.get(fenceKey) === createFence) historyFences.delete(fenceKey); approval.current=null; reconcile.current=null; } fail(error,!rejected); } }
         finally { op.finish(); }
-    },[accept,begin,deviceId,fail,insecure,key,result,sessionKey]);
+    },[accept,begin,deviceId,fail,fenceKey,insecure,key,result,sessionKey]);
     const create = useCallback((search: HistorySearch, acknowledge: boolean, plaintext: boolean)=>submit(search,[],undefined,acknowledge,plaintext),[submit]);
     const messages = useCallback((selected: SelectedEvent[], acknowledge: boolean, plaintext: boolean)=>{
         const v=current.current, search=v?.request?.description.query.search, receipt=v?.request?.receipt;
@@ -167,10 +209,13 @@ export function useWindowsEventHistory(deviceId: string, enabled: boolean, insec
             }
             if (!identity) { discard(); return; }
             reconcile.current = { action: 'cancel', identity };
+            const existingFence = historyFences.get(fenceKey);
+            const ownsFence = !existingFence || existingFence.sessionBinding === sessionBinding.current && (existingFence.action === 'cancel' ? existingFence.identity && sameHistoryIdentity(existingFence.identity, identity) : BigInt(existingFence.floor) + 1n === BigInt(identity.sequence));
+            if (!sessionBinding.current || !ownsFence || !retainHistoryFence(fenceKey, { action: 'cancel', sessionBinding: sessionBinding.current, floor: identity.sequence, identity }, existingFence)) { uncertainRef.current = true; setUncertain(true); setFailure('uncertain'); return; }
             const value = await cancelEventHistory(deviceId, identity, op.signal, insecure, sessionKey);
             if (op.active() && accept(value, op.start)) reconcile.current = null;
         } catch (error) { if (op.active()) fail(error, true); } finally { op.finish(); }
-    }, [abort, accept, begin, bestEffortCancel, clear, deviceId, discard, fail, insecure, sessionKey]);
+    }, [abort, accept, begin, bestEffortCancel, clear, deviceId, discard, fail, fenceKey, insecure, sessionKey]);
     useEffect(() => {
         alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden'; protectedScope.current = getProtectedRequestEpoch(); sessionBinding.current = null; latest.current = null; deadline.current = Infinity; sessionDeadline.current = Infinity; capabilityDeadline.current = Infinity; lifetimeAnchor.current = null; floor.current = '0'; uncertainRef.current = false; setUncertain(false); setPaused(suspended.current); discard();
         if (!enabled) return () => { alive.current = false; abort(); };

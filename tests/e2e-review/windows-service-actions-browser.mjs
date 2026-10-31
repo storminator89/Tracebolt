@@ -29,9 +29,12 @@ export function createWindowsServiceActionsFixture(now='2026-10-11T10:00:00Z'){
  const inventory=stamp(windowsView(),windowsNow,now);inventory.deviceId=golden.deviceId;
  const device={...stamp(windowsHealthDevice(),windowsNow,now),id:golden.deviceId,name:'SYNTHETIC · Windows service control',status:'unknown'};
  const session={mode:'lan',transport:'http',insecureTestMode:true,transportWarning:'unencrypted_lan_test',authenticationRequired:true,authenticated:true,csrfToken:csrf,serverNow:now,expiresAt:new Date(Date.parse(now)+3600000).toISOString(),expiresInSeconds:3600,loginMode:'named',actorId:golden.actorId,capabilities:['read','windows_service_control']};
- let phase='ready';const counts={preview:0,approve:0,status:0};
+ let phase='ready',delivery='normal',withheld=false,release;let pending=Promise.resolve();const counts={preview:0,approve:0,status:0};
  return {device,inventory,session,now,preview,approved,complete,counts,
-  view(){counts.status++;return structuredClone(phase==='approved'||phase==='complete'?complete:ready);},
+  holdApproval(mode){if(!['lost','pending'].includes(mode)||phase!=='ready')throw new Error('Invalid synthetic delivery');delivery=mode;withheld=true;pending=new Promise(resolve=>{release=resolve;});},
+  releaseApproval(){withheld=false;release?.();},
+  async deliverApproval(){if(delivery==='pending')await pending;return delivery;},
+  view(){counts.status++;return structuredClone(!withheld&&(phase==='approved'||phase==='complete')?complete:ready);},
   previewAction(raw){if(phase!=='ready'||raw!==JSON.stringify({target:ready.target,operation:'restart'}))return null;phase='preview';counts.preview++;return structuredClone(preview);},
   approveAction(raw){const p=preview.preview;if(phase!=='preview'||raw!==JSON.stringify({previewId:p.id,previewDigest:p.digest}))return null;phase='approved';counts.approve++;return structuredClone(approved);},
  };
@@ -50,7 +53,9 @@ export function windowsServiceActionsRoute({base,fixture,state}){
   if(url.pathname===actionPath+'/preview'||url.pathname===actionPath+'/approve'){
    if(method!=='POST'||request.headers()['x-csrf-token']!==csrf||request.headers()['origin']!==base||request.headers()['content-type']!=='application/json'||typeof raw!=='string'||Buffer.byteLength(raw)>1024)return block('action-shape');
    const value=url.pathname.endsWith('/preview')?fixture.previewAction(raw):fixture.approveAction(raw);
-   return value?reply(value):block('action-binding-or-replay');
+   if(!value)return block('action-binding-or-replay');
+   if(url.pathname.endsWith('/approve')&&await fixture.deliverApproval()==='lost')return route.abort('failed');
+   return reply(value);
   }
   if(url.pathname===prefix+'/windows-full-services/query'){
    const query=windowsFullServicesFixtureQuery({pathname:url.pathname,search:url.search,method,headers:request.headers(),raw},prefix);
@@ -82,20 +87,29 @@ const text={
 export async function exerciseWindowsServiceActions({page,expect,base,fixture,locale,width,shot}){
  const c=text[locale],panel=page.locator('.windows-service-actions');
  const open=async()=>{await page.getByRole('tab',{name:c.inventory,exact:true}).click();await page.getByRole('tab',{name:c.services,exact:true}).click();await expect(panel).toBeVisible();};
+ fixture.holdApproval(width===390?'pending':'lost');
  stage='document';await page.goto(base+'/#/devices/'+fixture.device.id);await page.getByLabel(/Language|Sprache/).selectOption(locale);await expect(page.locator('html')).toHaveAttribute('lang',locale);stage='detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='document';await open();
  stage='review';await panel.getByRole('button',{name:c.select,exact:true}).click();await panel.getByRole('combobox').selectOption('restart');await panel.getByRole('button',{name:c.review,exact:true}).click();
  const review=panel.getByRole('group',{name:c.review,exact:true}),approve=review.getByRole('button',{name:c.approve,exact:true});
  await expect(review).toContainText('FixtureService');await expect(approve).toBeDisabled();await expect(review.getByRole('checkbox',{name:c.ack,exact:true})).not.toBeChecked();expect(fixture.counts).toEqual({preview:1,approve:0,status:1});
  stage='approve';await review.getByRole('checkbox',{name:c.ack,exact:true}).check();await expect(approve).toBeEnabled();
  // Same-task repeated clicks hit the production synchronous one-request lock.
- await approve.evaluate(button=>{button.click();button.click();});await expect(panel.getByRole('status')).toContainText(c.approved);await expect(review).toHaveCount(0);expect(fixture.counts.approve).toBe(1);
+ await approve.evaluate(button=>{button.click();button.click();});await expect.poll(()=>fixture.counts.approve).toBe(1);
+ // Leave while the response is lost or pending; remount must read, never replay.
+ await page.getByRole('tab',{name:'Hostname',exact:true}).click();await expect(panel).toHaveCount(0);
+ const navigationReads=fixture.counts.status;await page.getByRole('tab',{name:c.services,exact:true}).click();await expect(panel).toBeVisible();
+ await expect.poll(()=>fixture.counts.status).toBeGreaterThan(navigationReads);await expect(panel.getByRole('button',{name:c.refresh,exact:true})).toBeEnabled();
+ await expect(panel.getByRole('alert')).toHaveText(locale==='de'?'Die Antwort ist unbestätigt. Zuerst den gespeicherten Status lesen. Keine Ersatzaktion erstellen.':'The response is unconfirmed. Read saved status before doing anything else. Do not create a replacement action.');
+ await expect(panel.getByRole('group',{name:c.review,exact:true})).toHaveCount(0);await expect(panel.getByRole('checkbox')).toHaveCount(0);
+ await expect(panel.getByRole('button',{name:c.review,exact:true})).toHaveCount(0);
+ expect(fixture.counts.preview).toBe(1);expect(fixture.counts.approve).toBe(1);fixture.releaseApproval();
  stage='saved-status';await panel.getByRole('button',{name:c.refresh,exact:true}).click();await expect(panel.getByRole('status').locator('strong')).toHaveText(c.outcome);const receipt=panel.locator('.windows-service-action-receipt');await expect(receipt).not.toHaveAttribute('open');await expect(panel.getByText(c.flags,{exact:true})).toBeHidden();
  await receipt.getByText(c.receipt,{exact:true}).click();await expect(panel.getByText(c.flags,{exact:true})).toBeVisible();
  const deadline=await receipt.locator('time').getAttribute('datetime');expect(deadline).toBe(fixture.complete.job.startDeadline);
- stage='reload';await page.reload();stage='reload-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='reload';await open();await expect(panel.getByRole('status').locator('strong')).toHaveText(c.outcome);await expect(receipt).not.toHaveAttribute('open');await expect(receipt.locator('time')).toHaveAttribute('datetime',deadline);await expect(panel.getByRole('checkbox')).toHaveCount(0);expect(fixture.counts).toEqual({preview:1,approve:1,status:3});
+ stage='reload';await page.reload();stage='reload-detail-route-readiness';await settlePausedDetailRoute(page,expect,page.getByRole('tab',{name:locale==='de'?'Inventar':'Inventory',exact:true}));stage='reload';await open();await expect(panel.getByRole('status').locator('strong')).toHaveText(c.outcome);await expect(receipt).not.toHaveAttribute('open');await expect(receipt.locator('time')).toHaveAttribute('datetime',deadline);await expect(panel.getByRole('checkbox')).toHaveCount(0);expect(fixture.counts.preview).toBe(1);expect(fixture.counts.approve).toBe(1);expect(fixture.counts.status).toBeGreaterThanOrEqual(4);
  stage='capture';await panel.evaluate(el=>el.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await expect(panel.getByText(c.outcome,{exact:true})).toBeInViewport();await expect(receipt.getByText(c.receipt,{exact:true})).toBeInViewport();
  await shot(page,`synthetic-windows-service-actions-${width}-${locale}`,windowsServiceActionsDisclosure);
- stage='complete';return {preview:1,approve:1,status:3,reloadReadback:true,durableStoreAcceptance:false,nativeAcceptance:false};
+ stage='complete';return {preview:1,approve:1,status:fixture.counts.status,navigationReadback:true,approvalDelivery:width===390?'pending':'lost',reloadReadback:true,durableStoreAcceptance:false,nativeAcceptance:false};
 }
 export function requireWindowsServiceActionsEvidence(screenshots,sourceSha){
  const fail=()=>{throw new Error('Windows service action evidence missing or inconsistent');};

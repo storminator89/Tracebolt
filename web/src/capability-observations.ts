@@ -5,9 +5,9 @@ import type { CompletePackageView } from './complete-packages-types';
 import type { JournalView } from './journal-types';
 import { inventoryAge } from './complete-packages-types';
 
-export type CapabilityState = 'supported' | 'available' | 'scope' | 'unsupported' | 'denied' | 'failed' | 'not_configured' | 'stale' | 'unknown' | 'pending' | 'partial' | 'configured';
+export type CapabilityState = 'supported' | 'available' | 'scope' | 'unsupported' | 'denied' | 'failed' | 'not_configured' | 'not_granted' | 'not_collected' | 'stale' | 'unknown' | 'pending' | 'partial' | 'configured';
 export interface CapabilityObservation { state: CapabilityState; at?: string; reason?: string }
-export const capabilityFailure = (reason: string): CapabilityObservation => ({ state: reason === 'permission_denied' ? 'denied' : reason === 'not_supported' ? 'unsupported' : reason === 'not_collected' ? 'unknown' : 'failed', reason });
+export const capabilityFailure = (reason: string): CapabilityObservation => ({ state: reason === 'permission_denied' ? 'denied' : reason === 'not_supported' ? 'unsupported' : reason === 'not_collected' ? 'not_collected' : 'failed', reason });
 const age = (now: string, at: string, elapsed: number) => inventoryAge(now, at) + elapsed;
 const fresh = (now: string, at: string, elapsed: number, limit: number) => Number.isFinite(elapsed) && elapsed >= 0 && age(now, at, elapsed) >= 0 && age(now, at, elapsed) <= limit;
 
@@ -15,6 +15,7 @@ export function systemCapability(view: SystemView, section: SystemSection, elaps
     if (view.status === 'not_configured') return { state: 'not_configured' };
     if (view.status === 'revoked') return { state: 'denied', reason: 'revoked' };
     if (view.status === 'expired') return { state: 'stale' };
+    if (view.status === 'awaiting' && !view.latest) return { state: 'not_collected' };
     if (view.status === 'unknown' || !view.latest) return { state: 'unknown' };
     const meta = view.latest[section];
     // A retained successful generation never conceals a newer failed attempt.
@@ -35,7 +36,7 @@ export function overviewCapability(view: OverviewView, section: OverviewSection,
     if (value.status === 'not_configured') return { state: 'not_configured' };
     if (value.failure && (!complete || BigInt(value.failure.sequence) > BigInt(complete.binding.sequence))) return { ...capabilityFailure(value.failure.reason), at: value.failure.attemptedAt };
     if (value.transfer && (!complete || BigInt(value.transfer.binding.sequence) > BigInt(complete.binding.sequence)) && ['failed', 'expired'].includes(value.transfer.state)) return { state: 'failed', reason: 'transfer_' + value.transfer.state, at: value.transfer.collectedAt };
-    if (!complete) return { state: value.transfer?.state === 'pending' ? 'pending' : 'unknown' };
+    if (!complete) return { state: value.transfer?.state === 'pending' ? 'pending' : value.status === 'awaiting' ? 'not_collected' : 'unknown' };
     const at = complete.manifest.collectedAt;
     if (value.status !== 'available' || complete.state !== 'complete' || !fresh(view.serverNow, at, elapsed, 120000) || inventoryAge(complete.retainedUntil, view.serverNow) <= elapsed) return { state: 'stale', at };
     const fields = complete.manifest[section].fieldCoverage;
@@ -52,7 +53,7 @@ export function packageCapability(view: CompletePackageView, elapsed: number): C
     const complete = view.complete;
     if (view.failure && (!complete || BigInt(view.failure.sequence) > BigInt(complete.binding.sequence))) return { ...capabilityFailure(view.failure.reason), at: view.failure.attemptedAt };
     if (view.transfer && (!complete || BigInt(view.transfer.binding.sequence) > BigInt(complete.binding.sequence)) && ['failed', 'expired'].includes(view.transfer.state)) return { state: 'failed', reason: 'transfer_' + view.transfer.state, at: view.transfer.collectedAt };
-    if (!complete) return { state: view.transfer?.state === 'pending' ? 'pending' : 'unknown' };
+    if (!complete) return { state: view.transfer?.state === 'pending' ? 'pending' : view.status === 'awaiting' ? 'not_collected' : 'unknown' };
     const at = complete.manifest.collectedAt;
     // Full dpkg captures run every six hours; retention is not freshness.
     if (view.status !== 'available' || complete.state !== 'complete' || !fresh(view.serverNow, at, elapsed, 6 * 3600000 + 120000) || inventoryAge(complete.retainedUntil, view.serverNow) <= elapsed) return { state: 'stale', at };
@@ -61,7 +62,9 @@ export function packageCapability(view: CompletePackageView, elapsed: number): C
 
 export function journalCapability(view: JournalView, elapsed: number): CapabilityObservation {
     if (view.localStatus === 'denied') return { state: 'denied', reason: 'permission_denied' };
-    if (!view.configured || view.localStatus === 'disabled' || view.generation?.policyEnabled === false) return { state: 'not_configured' };
+    // Missing manager configuration is not proof of a missing local grant.
+    if (!view.configured) return { state: 'not_configured' };
+    if (view.localStatus === 'disabled' || view.generation?.policyEnabled === false) return { state: 'not_granted', reason: 'local_scope_disabled' };
     if (view.localStatus === 'helper_unavailable' || view.localStatus === 'result_lost') return { state: 'failed', reason: view.localStatus };
     const generation = view.generation;
     if (!generation) return { state: view.localStatus === 'checking' ? 'pending' : 'unknown' };

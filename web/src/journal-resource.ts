@@ -5,7 +5,16 @@ import { hasLogoutIntent } from './auth';
 import { cancelJournal, createJournal, queryJournal, readJournal } from './journal-api';
 import { journalAge, journalBytes, JOURNAL_SEARCH_BYTES, validJournalDevice, validJournalPage, validJournalQuery, validJournalView, sameJournalIdentity, sameJournalQuery, sameJournalAuthorization, sameJournalGeneration } from './journal-types';
 import type { JournalPage, JournalQuery, JournalRequest, JournalView, JournalGenerationView } from './journal-types';
-export type JournalFailure = 'load' | 'invalid' | 'timeout' | 'session' | 'clock' | 'conflict' | 'uncertain';
+export type JournalFailure = 'load' | 'invalid' | 'timeout' | 'session' | 'clock' | 'conflict' | 'uncertain' | 'capacity';
+// A fence retains only a CAS floor/identity, never a unit, query, log or token.
+// Unmount still discards all content and aborts reads, but cannot forget a write
+// that may already have committed. Auth invalidation removes this UI context.
+type JournalFence = { action: 'create'; floor: string } | { action: 'cancel'; identity: JournalRequest['description']['identity'] };
+const journalFences = new Map<string, JournalFence>();
+const JOURNAL_FENCE_LIMIT = 32;
+let journalFenceEpoch = getProtectedRequestEpoch();
+const scopedFences = () => { const epoch = getProtectedRequestEpoch(); if (journalFenceEpoch !== epoch) { journalFences.clear(); journalFenceEpoch = epoch; } return journalFences; };
+if (typeof window !== 'undefined') window.addEventListener(AUTH_REQUIRED_EVENT, () => journalFences.clear());
 type Anchor = { mono: number; wall: number };
 const capture = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
 function elapsed(a: Anchor) { const m = performance.now() - a.mono, w = Date.now() - a.wall; return Number.isFinite(m) && m >= 0 && Number.isFinite(w) && Math.abs(m - w) <= 1500 ? m : Infinity; }
@@ -62,6 +71,11 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         if (sessionKey) sessionDeadline.current = Math.min(sessionDeadline.current, started.mono + journalAge(sessionKey, value.serverNow));
         if (next && ['pending', 'claimed', 'accepted'].includes(next.state) && performance.now() >= retention.current!.deadline) { latestRequest.current = { ...next, state: 'expired', contentStatus: 'unavailable' }; clear('conflict'); return false; }
         if (sessionKey && performance.now() >= sessionDeadline.current) { locked.current = true; clear('session'); return false; }
+        const fences = scopedFences(), fence = fences.get(key);
+        // An advanced durable CAS floor prevents the old create from committing
+        // later. This is reconciliation, not attribution of another writer.
+        if (fence && (fence.action === 'create' ? BigInt(value.expectedFloor) > BigInt(fence.floor) : BigInt(value.expectedFloor) > BigInt(fence.identity.sequence) || value.request && sameJournalIdentity(value.request.description.identity, fence.identity) && ['canceled', 'expired'].includes(value.request.state))) fences.delete(key);
+        setUncertain(fences.has(key));
         latestTime.current = value.serverNow; floor.current = value.expectedFloor; anchor.current = started; current.current = value; setData({ key, view: value }); return true;
     }, [clear, clearRows, deviceId, key, sessionKey]);
     const fail = useCallback((caught: unknown, mutation: boolean) => {
@@ -93,13 +107,13 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
                     value.request.receipt?.resultDigest !== prior.request.receipt?.resultDigest
                 )
             )) { clear('conflict'); return null; }
-            if (acceptView(value, op.started)) { setUncertain(false); return current.current!.serverNow; }
+            if (acceptView(value, op.started) && !scopedFences().has(key)) return current.current!.serverNow;
         } catch (caught) { if (op.active()) fail(caught, false); } finally { op.finish(); }
         return null;
-    }, [acceptView, begin, clear, deviceId, fail, insecureTestMode, sessionKey]);
+    }, [acceptView, begin, clear, deviceId, fail, insecureTestMode, key, sessionKey]);
     const loadPage = useCallback(async (search: string, offset: number, previous: number[]) => {
         const view = current.current;
-        if (pending.current || !view?.request?.receipt || view.contentStatus !== 'available' || journalBytes(search) > JOURNAL_SEARCH_BYTES || !anchor.current || journalAge(view.request.description.expiresAt, view.serverNow) <= elapsed(anchor.current)) return;
+        if (pending.current || scopedFences().has(key) || !view?.request?.receipt || view.contentStatus !== 'available' || journalBytes(search) > JOURNAL_SEARCH_BYTES || !anchor.current || journalAge(view.request.description.expiresAt, view.serverNow) <= elapsed(anchor.current)) return;
         clearRows(); const op = begin(false); if (!op) return;
         try {
             const value = await queryJournal(deviceId, view.request.description.identity, view.request.receipt.resultDigest, search, offset, op.signal, insecureTestMode, sessionKey);
@@ -120,20 +134,24 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
         if (['reported_disabled', 'outside_reported_scope'].includes(journalReportedAccess(view, query.unit))) return;
         const browse = query.browseMode === 'retained-v1';
         if (browse && !journalBrowsingAllowed(view, query.unit)) return;
-        if (!view?.configured || view.generation && (!view.generation.fresh || !anchor.current || journalAge(view.generation.expiresAt, view.serverNow) <= elapsed(anchor.current)) || !browse && (!acknowledgeLogContent || insecureTestMode !== acknowledgePlaintext) || uncertain || !validJournalQuery(query, view.serverNow) || pending.current || view.request && ['pending', 'claimed'].includes(view.request.state)) return;
+        if (!view?.configured || view.generation && (!view.generation.fresh || !anchor.current || journalAge(view.generation.expiresAt, view.serverNow) <= elapsed(anchor.current)) || !browse && (!acknowledgeLogContent || insecureTestMode !== acknowledgePlaintext) || uncertain || scopedFences().has(key) || !validJournalQuery(query, view.serverNow) || pending.current || view.request && ['pending', 'claimed'].includes(view.request.state)) return;
+        if (scopedFences().size >= JOURNAL_FENCE_LIMIT) { setFailure('capacity'); return; }
         clearRows(); const op = begin(true); if (!op) return;
+        scopedFences().set(key, { action: 'create', floor: view.expectedFloor });
         try { const value = await createJournal(deviceId, view.expectedFloor, query, acknowledgePlaintext, op.signal, insecureTestMode, sessionKey, view.generation?.policyGeneration); if (op.active()) acceptView(value, op.started); }
         catch (caught) { if (op.active()) fail(caught, true); } finally { op.finish(); }
-    }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, sessionKey, uncertain]);
+    }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, key, sessionKey, uncertain]);
     const cancelRequest = useCallback(async () => {
         const view = current.current;
-        if (!view?.request || pending.current || uncertain || !['pending', 'claimed', 'accepted'].includes(view.request.state)) return;
+        if (!view?.request || pending.current || uncertain || scopedFences().has(key) || !['pending', 'claimed', 'accepted'].includes(view.request.state)) return;
+        if (scopedFences().size >= JOURNAL_FENCE_LIMIT) { setFailure('capacity'); return; }
         clearRows(); const op = begin(true); if (!op) return;
+        scopedFences().set(key, { action: 'cancel', identity: { ...view.request.description.identity } });
         try { const value = await cancelJournal(deviceId, view.request.description.identity, op.signal, insecureTestMode, sessionKey); if (op.active()) acceptView(value, op.started); }
         catch (caught) { if (op.active()) fail(caught, true); } finally { op.finish(); }
-    }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, sessionKey, uncertain]);
+    }, [acceptView, begin, clearRows, deviceId, fail, insecureTestMode, key, sessionKey, uncertain]);
     useEffect(() => {
-        alive.current = true; protectedScope.current = getProtectedRequestEpoch(); locked.current = false; suspended.current = document.visibilityState === 'hidden'; setPaused(suspended.current); latestTime.current = null; latestRequest.current = null; latestGeneration.current = null; retention.current = null; sessionDeadline.current = Infinity; floor.current = '0'; setUncertain(false); clear();
+        alive.current = true; protectedScope.current = getProtectedRequestEpoch(); locked.current = false; suspended.current = document.visibilityState === 'hidden'; setPaused(suspended.current); latestTime.current = null; latestRequest.current = null; latestGeneration.current = null; retention.current = null; sessionDeadline.current = Infinity; floor.current = '0'; setUncertain(scopedFences().has(key)); clear();
         const lock = () => { locked.current = true; setPaused(false); clear('session'); };
         const suspend = () => {
             suspended.current = true;
@@ -178,7 +196,7 @@ export function useJournal(deviceId: string, insecureTestMode: boolean, sessionK
     // Only a safe status read follows an uncertain mutation. Never replay create/cancel.
     useEffect(() => { if (uncertain && failure === 'uncertain') void refresh(); }, [failure, refresh, uncertain]);
     return {
-        view, page: scopeActive && result?.key === key ? result.page : null, busy, paused, failure, uncertain, reset, refresh: () => {
+        view, page: scopeActive && !scopedFences().has(key) && result?.key === key ? result.page : null, busy, paused, failure, uncertain, reset, refresh: () => {
             // Explicit visible-page refresh may resume a lost/unpaired focus event.
             // It still rechecks the session/status; never replay create or cancel.
             if (!alive.current || locked.current || document.visibilityState === 'hidden' || hasLogoutIntent() || protectedScope.current !== getProtectedRequestEpoch()) return;

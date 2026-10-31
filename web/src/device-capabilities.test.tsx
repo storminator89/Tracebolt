@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceCapabilities } from './device-capabilities';
 import { APIError, AUTH_REQUIRED_EVENT, request } from './api';
@@ -6,10 +6,11 @@ import { setLocale } from './i18n';
 import { systemDevice, systemView } from './system-inventory-fixtures';
 import type { Device } from './types';
 import type { SystemView } from './system-inventory-types';
+import { journalSession, journalView } from './journal-fixtures';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 const authFixture = vi.hoisted(() => ({ expiresAt: '2026-10-05T00:00:00Z' }));
-vi.mock('./auth', () => ({ hasLogoutIntent: () => false, useOperator: () => ({ mode: 'lan', authenticated: true, expiresAt: authFixture.expiresAt, insecureTestMode: false }) }));
+vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), hasLogoutIntent: () => false, useOperator: () => ({ mode: 'lan', authenticated: true, expiresAt: authFixture.expiresAt, insecureTestMode: false }) }));
 const device = (): Device => ({ id: systemDevice, name: 'Synthetic fixture', platform: 'linux', os: 'Debian fixture', source: 'lan', synthetic: false, status: 'unknown', lastSeen: '2026-10-04T00:00:00Z', capabilities: [
     { id: 'host_inventory', name: 'Host attribution', status: 'limited', detail: 'Static scope is not a failed read.' },
     { id: 'systemd', name: 'Service inventory', status: 'scope', detail: 'Source data must establish this result.' },
@@ -52,7 +53,7 @@ describe('compact capability collection status', () => {
         vi.mocked(request).mockResolvedValue({ ...systemView(), deviceId: 'agent_other' });
         render(<DeviceCapabilities device={device()}/>);
         await waitFor(() => expect(screen.getByRole('button', { name: 'Check status' })).toBeEnabled());
-        expect(row('systemd')).toHaveAttribute('data-state', 'unknown');
+        expect(row('systemd')).toHaveAttribute('data-state', 'failed');
         vi.mocked(request).mockRejectedValue(new APIError('Denied', 403));
         fireEvent.click(screen.getByRole('button', { name: 'Check status' }));
         await waitFor(() => expect(row('systemd')).toHaveAttribute('data-state', 'denied'));
@@ -126,5 +127,44 @@ describe('compact capability collection status', () => {
         await act(async () => { await Promise.resolve(); }); expect(request).not.toHaveBeenCalled();
         rendered.rerender(<DeviceCapabilities device={{ ...device(), synthetic: true }}/>);
         await act(async () => { await Promise.resolve(); }); expect(request).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('explains five distinct gap causes and next steps without creating authority (%s)', async locale => {
+        setLocale(locale, false);
+        render(<DeviceCapabilities device={device()}/>);
+        await waitFor(() => expect(row('systemd')).toHaveAttribute('data-state', 'available'));
+        const guide = document.querySelector('.capability-gap-guide')!;
+        expect(guide.querySelectorAll('[data-gap]')).toHaveLength(5);
+        const expected = locale === 'de' ? ['Nicht unterstützt', 'Lokal nicht freigegeben', 'Noch nicht erfasst', 'Veraltet', 'Technisch fehlgeschlagen'] : ['Not supported', 'Not granted locally', 'Not yet collected', 'Stale', 'Technical failure'];
+        expected.forEach(text => expect(within(guide as HTMLElement).getByText(text)).toBeInTheDocument());
+        guide.querySelectorAll('dd').forEach(step => expect(step.textContent!.length).toBeGreaterThan(50));
+        expect(guide).toHaveTextContent(locale === 'de' ? 'Unbekannt oder nicht eingerichtet belegt keine davon.' : 'Unknown or not configured does not establish any of them.');
+        expect(document.querySelector('.capability-heading')).toHaveTextContent(locale === 'de' ? 'Diese Ansicht erteilt keine Freigabe.' : 'This view grants no scope.');
+        expect(row('systemd')).toHaveTextContent(locale === 'de' ? 'Im Profil vorgesehen · lokale Freigabe separat' : 'Advertised by profile · local approval separate');
+        expect(document.querySelector('input,select,textarea')).toBeNull();
+        expect(vi.mocked(request).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+    });
+    it('distinguishes explicit waiting, local denial and source failure from an unconfirmed cause', async () => {
+        const v = systemView(); v.status = 'awaiting'; v.latest = null; v.sequence = null; v.receivedAt = null; v.lastComplete = { services: null, sockets: null };
+        vi.mocked(request).mockResolvedValue(v);
+        const shown = render(<DeviceCapabilities device={device()}/>);
+        await waitFor(() => expect(row('systemd')).toHaveAttribute('data-state', 'not_collected'));
+        expect(row('systemd')).toHaveTextContent('Check the existing agent');
+        const j = journalView('awaiting'); j.deviceId = systemDevice; j.localStatus = 'disabled';
+        const reply = async (path: string) => path === '/auth/session' ? { ...journalSession, expiresAt: authFixture.expiresAt } : j;
+        vi.mocked(request).mockImplementation(reply);
+        const d = device(); d.capabilities = [{ id: 'journal_content', name: 'Logs', status: 'scope', detail: 'Profile support alone does not establish local consent.' }];
+        shown.rerender(<DeviceCapabilities device={d}/>);
+        await waitFor(() => expect(row('journal_content')).toHaveAttribute('data-state', 'not_granted'));
+        expect(row('journal_content')).toHaveTextContent('Not granted locally');
+        expect(row('journal_content')).toHaveTextContent('any new approval starts unchecked');
+        j.configured = false; vi.mocked(request).mockImplementation(reply);
+        fireEvent.click(screen.getByRole('button', { name: 'Check status' }));
+        await waitFor(() => expect(row('journal_content')).toHaveAttribute('data-state', 'not_configured'));
+        expect(row('journal_content')).toHaveTextContent('does not prove whether local consent exists');
+        vi.mocked(request).mockRejectedValue(new Error('DO_NOT_DISPLAY_RAW_SOURCE_ERROR'));
+        fireEvent.click(screen.getByRole('button', { name: 'Check status' }));
+        await waitFor(() => expect(row('journal_content')).toHaveAttribute('data-state', 'failed'));
+        expect(row('journal_content')).toHaveTextContent('Technical failure');
+        expect(document.body).not.toHaveTextContent('DO_NOT_DISPLAY_RAW_SOURCE_ERROR');
     });
 });

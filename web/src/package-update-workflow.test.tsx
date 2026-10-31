@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APIError, AUTH_REQUIRED_EVENT } from './api';
+import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
 import { setLocale } from './i18n';
 import { PackageUpdatesWorkspace, PackageUpdateSelectionCell, PackageUpdateSelectionHeader } from './package-updates';
@@ -12,14 +12,15 @@ vi.mock('./auth', () => ({ useOperator: vi.fn() }));
 vi.mock('./package-update-api', () => ({ approvePackageUpdates: vi.fn(), PackageUpdateNotReady: class extends Error {}, preparePackageUpdates: vi.fn(), readPackageUpdateRetryGate: vi.fn(), readPackageUpdates: vi.fn() }));
 const operator = { mode: 'lan' as const, authenticated: true, hasExplicitMetadata: true, loginMode: 'named' as const, actorId: updateWorkflowActor, capabilities: ['read', 'plan_updates', 'execute_updates'] as const, expiresAt: '2026-10-07T02:00:00Z', insecureTestMode: false, logout: vi.fn(), theme: 'light' as const, setTheme: vi.fn() };
 const rows: PackageIdentity[] = [{ name: 'curl', architecture: 'amd64' }, { name: 'curl', architecture: 'arm64' }];
-function component(source = 'complete', deviceId = updateWorkflowDevice, items = rows) {
-    return <PackageUpdatesWorkspace deviceId={deviceId} sessionKey={operator.expiresAt} source={source}><table><thead><tr><PackageUpdateSelectionHeader/><th>Detected package</th></tr></thead><tbody>{items.map(item => <tr key={`${item.name}:${item.architecture}`}><PackageUpdateSelectionCell {...item}/><td>{item.name}</td></tr>)}</tbody></table></PackageUpdatesWorkspace>;
+function component(source = 'complete', deviceId = updateWorkflowDevice, items = rows, sessionKey = operator.expiresAt) {
+    return <PackageUpdatesWorkspace deviceId={deviceId} sessionKey={sessionKey} source={source}><table><thead><tr><PackageUpdateSelectionHeader/><th>Detected package</th></tr></thead><tbody>{items.map(item => <tr key={`${item.name}:${item.architecture}`}><PackageUpdateSelectionCell {...item}/><td>{item.name}</td></tr>)}</tbody></table></PackageUpdatesWorkspace>;
 }
 const prepareButton = () => screen.getByRole('button', { name: 'Prepare selected updates (simulation)' });
 const approveButton = () => screen.getByRole('button', { name: 'Confirm this exact update (simulation)' });
 async function ready() { await screen.findByText(/SIMULATION ONLY/); }
 async function prepare() { fireEvent.click(screen.getByRole('checkbox', { name: 'Select curl:amd64' })); fireEvent.click(prepareButton()); await screen.findByRole('region', { name: 'Immutable preparation review' }); }
 beforeEach(() => {
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
     sessionStorage.clear(); setLocale('en', false); vi.mocked(useOperator).mockReturnValue(operator);
     vi.mocked(readPackageUpdates).mockReset().mockResolvedValue(simulatedPackageUpdates());
     vi.mocked(readPackageUpdateRetryGate).mockReset().mockResolvedValue(simulatedPackageUpdates());
@@ -305,5 +306,97 @@ describe('read-first update hierarchy', () => {
         vi.mocked(readPackageUpdates).mockRejectedValueOnce(new Error('read failed'));
         fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Refresh saved update status' : 'Gespeicherten Updatestatus aktualisieren' }));
         await screen.findByRole('alert'); expect(status).not.toHaveClass('package-update-workflow-idle'); expect(preparePackageUpdates).not.toHaveBeenCalled();
+    });
+});
+
+
+describe('per-device recovery intent navigation', () => {
+    const key = 'tracebolt.package-update-intent', otherDevice = `agent_${'e'.repeat(32)}`;
+    const savedIntent = () => ({ mode: 'simulation', kind: 'prepare', requestId: packageUpdatePreview().requestId, packages: [rows[0]] });
+    const store = (entries: unknown[]) => ({ schemaVersion: 'tracebolt.package-update-intents.v2', actorId: operator.actorId, sessionKey: operator.expiresAt, insecureTestMode: false, entries });
+    it.each(['prepare', 'approve'] as const)('preserves a lost %s through A → B → A without replay and only clears recovered A', async kind => {
+        if (kind === 'prepare') vi.mocked(preparePackageUpdates).mockRejectedValue(new Error('A response lost'));
+        else vi.mocked(approvePackageUpdates).mockRejectedValue(new Error('A response lost'));
+        vi.mocked(readPackageUpdates).mockImplementation(async deviceId => ({ ...simulatedPackageUpdates(), deviceId }));
+        const mounted = render(component()); await ready();
+        if (kind === 'prepare') { fireEvent.click(screen.getByRole('checkbox', { name: 'Select curl:amd64' })); fireEvent.click(prepareButton()); }
+        else { await prepare(); fireEvent.click(screen.getByRole('checkbox', { name: /I have reviewed/ })); fireEvent.click(approveButton()); }
+        await screen.findByText(/The write response was lost/);
+        const a = kind === 'prepare' ? vi.mocked(preparePackageUpdates).mock.calls[0][1] : vi.mocked(approvePackageUpdates).mock.calls[0][1].requestId;
+        mounted.rerender(component('complete', otherDevice)); await ready();
+        expect(screen.queryByText(a)).not.toBeInTheDocument(); expect(sessionStorage.getItem(key)).toContain(a);
+        expect(vi.mocked(readPackageUpdates).mock.calls.at(-1)?.[2]).toBeUndefined();
+        // B can retain its own uncertainty without replacing A's recovery marker.
+        vi.mocked(preparePackageUpdates).mockRejectedValue(new Error('B response lost'));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Select curl:amd64' })); fireEvent.click(prepareButton()); await screen.findByText(/The write response was lost/);
+        const b = vi.mocked(preparePackageUpdates).mock.calls.at(-1)![1];
+        expect(b).not.toBe(a); expect(sessionStorage.getItem(key)).toContain(a); expect(sessionStorage.getItem(key)).toContain(b);
+        const aPreview = packageUpdatePreview([rows[0]], a);
+        vi.mocked(readPackageUpdates).mockImplementation(async (deviceId, _signal, requestId) => {
+            expect(deviceId).toBe(updateWorkflowDevice); expect(requestId).toBe(a);
+            return packageUpdateJob(kind === 'prepare' ? 'preview_ready' : 'succeeded', aPreview);
+        });
+        const prepares = vi.mocked(preparePackageUpdates).mock.calls.length, approvals = vi.mocked(approvePackageUpdates).mock.calls.length;
+        mounted.rerender(component('preview')); await screen.findByRole('region', { name: 'Immutable preparation review' });
+        expect(sessionStorage.getItem(key)).not.toContain(a); expect(sessionStorage.getItem(key)).toContain(b);
+        expect(preparePackageUpdates).toHaveBeenCalledTimes(prepares); expect(approvePackageUpdates).toHaveBeenCalledTimes(approvals);
+        if (kind === 'prepare') { expect(screen.getByRole('checkbox', { name: /I have reviewed/ })).not.toBeChecked(); expect(approveButton()).toBeDisabled(); }
+    });
+    it.each(['actor', 'session', 'transport'] as const)('does not reuse or disclose retained intent after %s changes', async change => {
+        const intent = savedIntent(); sessionStorage.setItem(key, JSON.stringify(store([{ deviceId: updateWorkflowDevice, intent }])));
+        if (change === 'actor') vi.mocked(useOperator).mockReturnValue({ ...operator, actorId: `operator_${'f'.repeat(32)}` });
+        if (change === 'transport') vi.mocked(useOperator).mockReturnValue({ ...operator, insecureTestMode: true });
+        render(component('complete', updateWorkflowDevice, rows, change === 'session' ? '2026-10-07T03:00:00Z' : operator.expiresAt)); await ready();
+        expect(sessionStorage.getItem(key)).toBeNull(); expect(screen.queryByText(intent.requestId)).not.toBeInTheDocument();
+        expect(vi.mocked(readPackageUpdates).mock.calls.at(-1)?.[2]).toBeUndefined(); expect(preparePackageUpdates).not.toHaveBeenCalled(); expect(approvePackageUpdates).not.toHaveBeenCalled();
+    });
+    it('clears every retained device intent on explicit authentication invalidation', async () => {
+        const intent = savedIntent(); sessionStorage.setItem(key, JSON.stringify(store([{ deviceId: updateWorkflowDevice, intent }, { deviceId: otherDevice, intent: { ...intent, requestId: `update_${'b'.repeat(32)}` } }])));
+        vi.mocked(readPackageUpdates).mockRejectedValue(new APIError('Unavailable'));
+        render(component()); await screen.findByText(/Update status could not be verified/);
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(sessionStorage.getItem(key)).toBeNull(); expect(screen.queryByText(intent.requestId)).not.toBeInTheDocument(); expect(screen.getByText(/Your session or update access changed/)).toBeVisible();
+    });
+    it('clears retained intents on authentication invalidation while every workflow is unmounted', async () => {
+        const intent = savedIntent(); sessionStorage.setItem(key, JSON.stringify(store([{ deviceId: updateWorkflowDevice, intent }])));
+        vi.mocked(readPackageUpdates).mockRejectedValueOnce(new APIError('Unavailable'));
+        const mounted = render(component()); await screen.findByText(/Update status could not be verified/); mounted.unmount();
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(sessionStorage.getItem(key)).toBeNull();
+        render(component()); await ready(); expect(vi.mocked(readPackageUpdates).mock.calls.at(-1)?.[2]).toBeUndefined();
+        expect(screen.queryByText(intent.requestId)).not.toBeInTheDocument(); expect(preparePackageUpdates).not.toHaveBeenCalled();
+    });
+    it('clears all retained devices on protected epoch invalidation without an auth event', async () => {
+        const intent = savedIntent(); sessionStorage.setItem(key, JSON.stringify(store([{ deviceId: updateWorkflowDevice, intent }, { deviceId: otherDevice, intent: { ...intent, requestId: `update_${'b'.repeat(32)}` } }])));
+        vi.mocked(readPackageUpdates).mockRejectedValueOnce(new APIError('Unavailable'));
+        const mounted = render(component()); await screen.findByText(/Update status could not be verified/); mounted.unmount();
+        act(() => abortProtectedRequests());
+        render(component()); await ready(); expect(sessionStorage.getItem(key)).toBeNull();
+        expect(vi.mocked(readPackageUpdates).mock.calls.at(-1)?.[2]).toBeUndefined(); expect(preparePackageUpdates).not.toHaveBeenCalled();
+    });
+    it('does not dispatch a checked old preview after epoch-only invalidation', async () => {
+        render(component()); await ready(); await prepare(); fireEvent.click(screen.getByRole('checkbox', { name: /I have reviewed/ }));
+        act(() => abortProtectedRequests()); fireEvent.click(approveButton());
+        expect(approvePackageUpdates).not.toHaveBeenCalled(); expect(screen.getByText(/Your session or update access changed/)).toBeVisible();
+    });
+    it('does not let a late old-epoch failure erase a newer session recovery store', async () => {
+        let reject!: (error: Error) => void;
+        vi.mocked(readPackageUpdates).mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+        render(component()); act(() => abortProtectedRequests());
+        const raw = JSON.stringify({ ...store([{ deviceId: otherDevice, intent: savedIntent() }]), actorId: `operator_${'f'.repeat(32)}` });
+        sessionStorage.setItem(key, raw); await act(async () => reject(new APIError('Unauthorized', 401)));
+        expect(sessionStorage.getItem(key)).toBe(raw); expect(preparePackageUpdates).not.toHaveBeenCalled(); expect(approvePackageUpdates).not.toHaveBeenCalled();
+    });
+    it('refuses a 33rd uncertain device without evicting any existing recovery intent or submitting', async () => {
+        const entries = Array.from({ length: 32 }, (_, index) => ({ deviceId: `agent_${(index + 1).toString(16).padStart(32, '0')}`, intent: { ...savedIntent(), requestId: `update_${(index + 1).toString(16).padStart(32, '0')}` } }));
+        const raw = JSON.stringify(store(entries)); sessionStorage.setItem(key, raw);
+        render(component()); await ready(); fireEvent.click(screen.getByRole('checkbox', { name: 'Select curl:amd64' })); fireEvent.click(prepareButton());
+        await screen.findByText(/Inconsistent update evidence/); expect(sessionStorage.getItem(key)).toBe(raw); expect(preparePackageUpdates).not.toHaveBeenCalled();
+    });
+    it.each(['extra-field', 'duplicate-device', 'oversized'] as const)('fails closed for %s recovery storage without deleting it', async bad => {
+        const entry = { deviceId: updateWorkflowDevice, intent: savedIntent() };
+        const raw = bad === 'oversized' ? 'x'.repeat(512 * 1024 + 1) : JSON.stringify(store(bad === 'duplicate-device' ? [entry, entry] : [{ ...entry, secret: 'must-not-be-read' }]));
+        sessionStorage.setItem(key, raw); render(component()); await screen.findByText(/Inconsistent update evidence/);
+        expect(sessionStorage.getItem(key)).toBe(raw); expect(readPackageUpdates).not.toHaveBeenCalled(); expect(preparePackageUpdates).not.toHaveBeenCalled();
     });
 });

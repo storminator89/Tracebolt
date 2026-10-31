@@ -29,7 +29,7 @@ export function createPackageUpdatesFixture({anchor=stored.idle.serverNow,now=()
  const offset=Date.parse(anchor)-Date.parse(stored.idle.serverNow);
  requireFixture(Number.isFinite(offset));
  const device=stored.idle.deviceId,actor=stored.preview_ready.preview.actorId,prefix=`/api/devices/${device}/package-updates`;
- let phase='unavailable',requestId=null;
+ let phase='unavailable',requestId=null,hidePreparedResponse=false;
  const counts={reads:0,prepare:0,approve:0};
  const project=(name=phase)=>{
   requireFixture(['unavailable','idle','preview_ready','needs_intervention'].includes(name));
@@ -46,6 +46,7 @@ export function createPackageUpdatesFixture({anchor=stored.idle.serverNow,now=()
  const cached={schemaVersion:'tracebolt.cached-updates-view.v1',deviceId:device,status:'fresh',serverNow:at(0),maxAgeSeconds:120,sequence:'1',receivedAt:at(-1000),expiresAt:at(86398000),latest:{schemaVersion:'tracebolt.cached-apt-updates.v1',scope:'agent-visible-dpkg-and-existing-apt-cache',generationId:'sample_'+'a'.repeat(32),collectedAt:at(-2000),durationMs:1,release:{id:'debian',versionId:'13',versionCodename:'trixie'},coverage:'complete',reason:'none',metadata:{freshness:'unknown',oldestIndexModifiedAt:at(-3602000),ageSeconds:3600,ageBasis:'oldest-local-package-index-mtime',refresh:'not_attempted'},installedCount:items.length,checkedCount:items.length,candidateCount:items.length,heldCount:0,unknownCount:0,truncated:false,items:items.map(item=>({name:item.name,architecture:item.architecture,installedVersion:item.fromVersion,candidateVersion:item.toVersion,state:'candidate_only',installability:'not_evaluated'}))}};
  requireFixture(validCompleteUpdateView(complete,device)&&validCachedUpdatesView(cached,device));
  return {device,actor,prefix,selection,counts,complete,cached,project,get phase(){return phase;},get requestId(){return requestId;},
+  losePreparedResponse(){hidePreparedResponse=true;},releasePreparedResponse(){hidePreparedResponse=false;},wire(value){return hidePreparedResponse&&phase==='preview_ready'?{}:value;},
   loadSimulation(){requireFixture(phase==='unavailable'&&requestId===null);phase='idle';},
   handle(method,path,body){
    if(method==='GET'&&(path===prefix||requestId!==null&&path===`${prefix}/jobs/${requestId}`)){requireFixture(body===null);counts.reads++;return project();}
@@ -97,13 +98,13 @@ export function packageUpdatesRoute({base,fixture,state,now=()=>Date.now()}){
    if(url.pathname.startsWith(fixture.prefix)){
     requireFixture(url.search==='');
     if(method==='GET'){
-     requireFixture(request.postData()===null);const value=fixture.handle(method,url.pathname,null);admission={phase:fixture.phase,observedAt:now()};return json(route,value);
+     requireFixture(request.postData()===null);const value=fixture.handle(method,url.pathname,null);admission={phase:fixture.phase,observedAt:now()};return json(route,fixture.wire(value));
     }
     const headers=await request.allHeaders();
     requireFixture(method==='POST'&&headers['content-type']==='application/json'&&csrf!==''&&headers['x-csrf-token']===csrf&&csrfSequence>consumedCSRF);
     requireFixture(authority!==null&&admission!==null&&authority.admission===admission&&authority.actor===fixture.actor&&now()>=admission.observedAt&&now()-admission.observedAt<10000&&now()>=authority.observedAt&&now()-authority.observedAt<10000&&Date.parse(authority.expiresAt)>now());
     requireFixture(Date.parse(authority.serverNow)>=Date.parse(fixture.project().serverNow));
-    const value=fixture.handle(method,url.pathname,request.postDataJSON());consumedCSRF=csrfSequence;authority=null;admission=null;return json(route,value);
+    const value=fixture.handle(method,url.pathname,request.postDataJSON());consumedCSRF=csrfSequence;authority=null;admission=null;return json(route,fixture.wire(value));
    }
    requireFixture(method==='GET'&&request.postData()===null);
    if(url.pathname===prefix&&url.search==='')return json(route,device());
@@ -124,7 +125,7 @@ export async function packageUpdatesBrowserCase({pageAt,login,expect,base,shot})
  mark('setup');const page=await pageAt('/devices/'+stored.idle.deviceId),start=Date.now();
  await page.clock.install({time:new Date(start)});await page.clock.pauseAt(new Date(start+100));
  const fixture=createPackageUpdatesFixture({anchor:new Date(start-5000).toISOString(),now:()=>Date.now()}),state={unexpected:[],external:[],loginRequests:0,namedReads:0};
- await page.route('**/*',packageUpdatesRoute({base,fixture,state}));
+ const initialRoute=packageUpdatesRoute({base,fixture,state});await page.route('**/*',initialRoute);
  mark('login');await login(page);await page.reload();
  mark('detail-route-readiness');await settlePausedDetailRoute(page,expect,page.getByRole('button',{name:'View updates',exact:true}));
  await page.getByRole('button',{name:'View updates',exact:true}).click();
@@ -162,4 +163,19 @@ export async function packageUpdatesBrowserCase({pageAt,login,expect,base,shot})
  mark('unknown');await expect(panel).toContainText('Needs intervention; outcome not verified');await expect(panel).toContainText('Observed version: Unknown');await expect(panel).toContainText('runner_state_unknown');await expect(panel).toContainText('Unknown · simulation');await expect(approve()).toHaveCount(0);await expect(prepare()).toBeDisabled();await expect(panel).not.toContainText('All approved versions verified');await gallery('unknown',panel.getByRole('region',{name:/^(Saved operation|Gespeicherter Vorgang)$/}));
  mark('guards');await unchangedInventory();await expect(status).not.toHaveClass(/package-update-workflow-idle/);expect(fixture.counts.prepare).toBe(1);expect(fixture.counts.approve).toBe(1);expect(state.loginRequests).toBe(1);expect(state.namedReads).toBeGreaterThanOrEqual(3);expect(state.unexpected).toEqual([]);expect(state.external).toEqual([]);
  expect(await page.evaluate(()=>sessionStorage.getItem('tracebolt.package-update-intent'))).toBeNull();
+ // A second bounded, synthetic receiver exercises actual route unmount/remount.
+ // A malformed successful envelope models a lost write response without adding
+ // network-error diagnostics or relaxing the runner's existing allowlists.
+ const recovery=createPackageUpdatesFixture({anchor:new Date(Date.now()-5000).toISOString(),now:()=>Date.now()}),recoveryState={unexpected:[],external:[],loginRequests:0,namedReads:0};
+ recovery.loadSimulation();recovery.losePreparedResponse();await page.unroute('**/*',initialRoute);await page.route('**/*',packageUpdatesRoute({base,fixture:recovery,state:recoveryState}));
+ // The investigations route unmounts the device without enabling unrelated
+ // fleet identity/group readers, which this narrow receiver intentionally rejects.
+ const leave=async()=>{await page.goto(`${base}/#/cases`);await expect(panel).toHaveCount(0);};
+ const returnToUpdates=async()=>{await page.goto(`${base}/#/devices/${recovery.device}`);await settlePausedDetailRoute(page,expect,page.getByRole('button',{name:'View updates',exact:true}));await page.getByRole('button',{name:'View updates',exact:true}).click();await page.getByLabel('Update view',{exact:true}).selectOption('preview');};
+ await leave();await returnToUpdates();await expect(panel).toContainText('SIMULATION ONLY');await selected.check();await prepare().click();await expect(panel).toContainText('The write response was lost');
+ const recoveryId=recovery.requestId;expect(recovery.counts.prepare).toBe(1);await leave();await returnToUpdates();
+ await expect(panel).toContainText(recoveryId);await expect(prepare()).toBeDisabled();expect(recovery.counts.prepare).toBe(1);expect(recovery.counts.approve).toBe(0);
+ await expect(panel.getByRole('button',{name:'Refresh saved update status',exact:true})).toBeEnabled();recovery.releasePreparedResponse();await panel.getByRole('button',{name:'Refresh saved update status',exact:true}).click();await expect(review).toContainText(recoveryId);await expect(review.getByRole('checkbox')).not.toBeChecked();await expect(approve()).toBeDisabled();
+ expect(recovery.counts.prepare).toBe(1);expect(recovery.counts.approve).toBe(0);expect(recoveryState.unexpected).toEqual([]);expect(recoveryState.external).toEqual([]);expect(recoveryState.loginRequests).toBe(0);
+
 }

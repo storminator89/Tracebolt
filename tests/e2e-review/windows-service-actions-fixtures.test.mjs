@@ -242,3 +242,26 @@ test('frozen worklist heading stays unique with the nested cached-triage heading
   }finally{dom.window.close();}
  }
 });
+
+
+test('navigation delivery faults retain one committed approval without exposing it before readback',async()=>{
+ for(const mode of ['lost','pending']){
+  const f=setup(),p=f.fixture.preview.preview;f.fixture.holdApproval(mode);
+  await f.invoke(f.action+'/preview',{method:'POST',headers:f.headers,raw:JSON.stringify({target:'FixtureService',operation:'restart'})});
+  let settled=false;const pending=f.invoke(f.action+'/approve',{method:'POST',headers:f.headers,raw:JSON.stringify({previewId:p.id,previewDigest:p.digest})}).then(value=>{settled=true;return value;});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(f.fixture.counts.approve,1);assert.equal(settled,mode==='lost');
+  assert.equal((await f.invoke(f.action)).value.job,null);f.fixture.releaseApproval();
+  const response=await pending;assert.equal(mode==='lost'?response.abort:response.status,mode==='lost'?'failed':200);
+  assert.deepEqual((await f.invoke(f.action)).value,f.fixture.complete);assert.equal(f.fixture.counts.approve,1);assert.deepEqual(f.state,{blocked:[],external:[]});
+ }
+});
+
+import {createHistoryNavigationDelivery} from './windows-event-history-browser.mjs';
+test('history navigation transport faults hold the old floor and release without query or consent data',async()=>{
+ for(const mode of ['lost','pending']){
+  const delivery=createHistoryNavigationDelivery(),prior={state:'canceled',sequence:'2'},next={state:'accepted',sequence:'3'};
+  delivery.arm(mode,prior);prior.sequence='mutated';assert.deepEqual(delivery.visible(next),{state:'canceled',sequence:'2'});
+  let settled=false;const pending=delivery.deliver().then(value=>{settled=true;return value;});await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,mode==='lost');
+  delivery.release();assert.equal(await pending,mode);assert.deepEqual(delivery.visible(next),next);assert.equal(await delivery.deliver(),null);
+ }
+});

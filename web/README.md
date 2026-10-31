@@ -75,8 +75,12 @@ and the original intent is retained. Generic 404 or unreadable status cannot
 open that retry gate. An explicit retry preserves the same request and identity set or approval digest. A bounded,
 nonsecret recovery intent in session storage contains only device/actor/session
 scope, request ID, selected identities or approval digest. It contains no token,
-full preview or source provenance, and is cleared on access invalidation or a
-different device/actor/session scope. The manager's saved job remains authoritative.
+full preview or source provenance. A bounded store retains up to 32 independent
+devices for the same actor/session/transport, so visiting another device does not
+erase an unresolved request. It never evicts uncertain work to admit another
+write. Access invalidation or a different actor/session/transport clears that
+context; recovery clears only the matching device. The manager's saved job remains
+authoritative.
 
 Only the explicit simulation adapter can provide an available workflow in this
 source candidate. Its UI is conspicuously labeled **SIMULATION ONLY** and all
@@ -149,6 +153,14 @@ Approval requires the operator to compare both the complete SHA-256 key fingerpr
 
 
 ### Device diagnosis navigation
+
+The Capabilities view separates advertised profile support, independently
+reported local approval and actual collection. Five named missing-data causes
+have distinct EN/DE guidance; unknown configuration is never guessed into a
+missing local grant. Navigation keeps bounded nonsecret operation-reconciliation
+fences, not checked consent or private log/event content. See the
+[TB-20 contract and acceptance matrix](../docs/device-capability-acceptance.md)
+for exact CAS-floor/job matching, capacity, auth invalidation and evidence limits.
 
 The full-width overview presents compact icon-labelled Last report, Warnings and Updates
 cards above CPU, memory and disk observations. Contact is the last accepted report,
