@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "49cb78bb168aeca163890befec083b941a6332a351e8e775b593dfa60cd224c8",
+  "goSourceSha256": "7fa873d94bb44b34b4b857f233bf686176d74d4d228dcb0465c4861a155145b7",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -190,6 +190,8 @@
       "TestReadAdminSetupDiagnosticIsClosed",
       "TestReadAdminSocketProcessMatches",
       "TestReadAdminUpgradeClosedFailureProjection",
+      "TestRestoreQuarantineStopsEveryPreparationBeforeStateOrAuthority",
+      "TestRestoreQuarantineStopsStartupBeforeCredentialLoading",
       "TestSystemdDiagnosticStageAllowlist",
       "TestWindowsEventMaintenanceBoundsAndWarningThrottle",
       "TestWindowsEventMaintenanceCancellationAndInvalidConfiguration",
@@ -218,6 +220,11 @@
       "TestDevelopmentModeSelectsCollectionBeforeFirstSample",
       "TestHTTPWriteBudgetOutlastsAnalysis",
       "TestRealManagerReturnsDelayedFakeProviderResult"
+    ],
+    "localrmm/cmd/manager-restore-quarantine": [
+      "TestRestoreQuarantineCLIExplicitMarkAndReadOnlyStatus",
+      "TestRestoreQuarantineCLIMissingPathAndSecretRedaction",
+      "TestRestoreQuarantineCLIRejectsWrongUIDWithoutWriting"
     ],
     "localrmm/cmd/manager-setup": [
       "TestHelpAndArgumentsAreStaticAndRedacted"
@@ -3653,6 +3660,10 @@
       "TestPackageFrameRawReservationsAndWholeFrame",
       "TestPackageFrameStrictWireNegatives",
       "TestPrivateDirectorySidecarsAndColumnBinding",
+      "TestRestoreQuarantineConcurrentCreationHasOneWinner",
+      "TestRestoreQuarantineEveryMarkerObjectDeniesWithoutReading",
+      "TestRestoreQuarantinePreservesHistoricalBytesAndCannotRearm",
+      "TestRestoreQuarantineProtectedPathsAndMissingDirectory",
       "TestStorageRejectsSymlinksAndInsecureExistingFiles",
       "TestWindowsUpdatesCacheQualityNeverBecomesPatchAssessment",
       "TestWindowsUpdatesSnapshotAndAggregateBudgets",

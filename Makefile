@@ -4,6 +4,7 @@ build:
 	go build -buildvcs=false -trimpath -o bin/agent ./cmd/agent
 	go build -buildvcs=false -trimpath -o bin/dev-agent ./cmd/dev-agent
 	go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
+	go build -buildvcs=false -trimpath -o bin/manager-restore-quarantine ./cmd/manager-restore-quarantine
 	go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
 	go build -buildvcs=false -trimpath -o bin/enroll-agent ./cmd/enroll-agent
 	go build -buildvcs=false -trimpath -o bin/agent-service ./cmd/agent-service
