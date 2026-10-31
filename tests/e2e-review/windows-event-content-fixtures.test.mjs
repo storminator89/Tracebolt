@@ -45,3 +45,12 @@ test('selected-message case is really called inside existing EN/DE desktop/mobil
  assert.match(entry,/import '\.\/windows-event-content-fixtures\.test\.mjs'/);assert.ok(manifest.imported.includes('windows-event-content-fixtures.test.mjs'));assert.ok(!manifest.entries.includes('windows-event-content-fixtures.test.mjs'));
  for(const guard of ['unexpected','writes','external'])assert.ok(runner.includes(`expect(${guard}).toEqual([])`));assert.match(helper,/fixture\.counts\(\)/);assert.match(helper,/page\.keyboard\.press\('Enter'\)/);assert.match(helper,/await advance\(3000\)/);assert.match(helper,/synthetic-windows-selected-messages-\$\{width\}-\$\{locale\}/);assert.doesNotMatch(helper,/chromium\.launch|newContext\(|spawn\(|execFile|writeFile|ignoreHTTPSErrors|fetch\(|localStorage|sessionStorage|waitForTimeout|setDefaultTimeout/);
 });
+
+test('lost create response fixture retains exactly one request behind idle readbacks until release',()=>{
+ const {fixture,args}=setup();fixture.loseCreatedResponse();assert.deepEqual(fixture.response({...args,action:'create',body:request(args)}),{});
+ const idle=fixture.response({...args,action:'',body:null});assert.equal(idle.request,null);assert.equal(idle.expectedFloor,'0');assert.deepEqual(fixture.counts(),{creates:1,queries:0,cancels:0});
+ fixture.releaseCreatedResponse();const recovered=fixture.response({...args,action:'',body:null});assert.equal(recovered.expectedFloor,'1');assert.equal(recovered.request.state,'pending');assert.equal(recovered.request.description.query.events[0].recordId,'18446744073709551615');assert.deepEqual(fixture.counts(),{creates:1,queries:0,cancels:0});
+ const helper=fs.readFileSync(new URL('./windows-event-content-browser.mjs',import.meta.url),'utf8');assert.match(helper,/await leave\(\);await returnToLogs\(\)/);assert.match(helper,/expect\(first\)\.not\.toBeChecked/);assert.match(helper,/expect\(review\)\.toHaveCount\(0\)/);
+});
+
+test('explicit terminal readback resolves fixture recovery without a replayed cancellation or query',()=>{const {fixture,args}=setup();fixture.loseCreatedResponse();fixture.response({...args,action:'create',body:request(args)});fixture.settleCanceled();fixture.releaseCreatedResponse();const terminal=fixture.response({...args,action:'',body:null});assert.equal(terminal.request.state,'canceled');assert.equal(terminal.expectedFloor,'1');assert.deepEqual(fixture.counts(),{creates:1,queries:0,cancels:0});});

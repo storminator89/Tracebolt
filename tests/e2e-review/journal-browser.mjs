@@ -372,10 +372,20 @@ try{
 
   await check('Cancel clears rows immediately and a lost committed response reconciles without mutation replay',async()=>{
    const page=await pageAt();const tally=counts(page);await open(page);await capture(page);await deliver(page);
+   const retained=await get(endpoint()),queriesBeforeCancel=tally.query;
    let release,arrived=0;const statuses=[];const gate=new Promise(r=>release=r);const handler=async route=>{try{const response=await route.fetch();statuses.push(response.status());arrived++;await gate;await route.abort('failed');}catch{}};
+   // Explicit negative fixture: status still reports the old accepted request
+   // while cancellation is unresolved. Never return or query its message body.
+   let oldStatusReads=0;
+   const statusHandler=async route=>{const response=await route.fetch(),value=await response.json();await route.fulfill({response,json:{...value,expectedFloor:retained.expectedFloor,request:retained.request,localStatus:retained.localStatus,contentStatus:'available'}});oldStatusReads++;};
+   await page.route('**'+endpoint(),statusHandler);
    await page.route('**'+endpoint('alpha','cancel'),handler);
-   try{mark('cancel clears content before lost committed response');await page.getByRole('button',{name:'Cancel request / discard content',exact:true}).click();await expect.poll(()=>arrived).toBe(1);expect(statuses).toEqual([200]);await expect(rows(page)).toHaveCount(0);expect(tally.cancel).toBe(1);release();await expect(state(page)).toHaveText('Canceled');await settled(page);}
-   finally{release();await page.unroute('**'+endpoint('alpha','cancel'),handler);}
+   try{mark('cancel clears content before lost committed response');await page.getByRole('button',{name:'Cancel request / discard content',exact:true}).click();await expect.poll(()=>arrived).toBe(1);expect(statuses).toEqual([200]);await expect(rows(page)).toHaveCount(0);expect(tally.cancel).toBe(1);
+    await page.getByRole('tab',{name:'Details',exact:true}).click();await expect(panel(page)).toHaveCount(0);
+    const beforeRemountStatus=oldStatusReads;await page.getByRole('tab',{name:'Logs',exact:true}).click();await expect.poll(()=>oldStatusReads).toBeGreaterThan(beforeRemountStatus);await expect(panel(page)).toHaveAttribute('aria-busy','false');
+    await expect(panel(page).getByText('The last action could not be confirmed. Refresh status before issuing another action.',{exact:true})).toBeVisible();await expect(rows(page)).toHaveCount(0);expect(tally.query).toBe(queriesBeforeCancel);expect(tally.cancel).toBe(1);expect(tally.create).toBe(1);
+    release();await page.unroute('**'+endpoint(),statusHandler);await page.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(state(page)).toHaveText('Canceled');await settled(page);}
+   finally{release();await page.unroute('**'+endpoint(),statusHandler);await page.unroute('**'+endpoint('alpha','cancel'),handler);}
    mark('fresh reload preserves cancellation and no automatic new request');const current=await get(endpoint());expect(current.request.state).toBe('canceled');expect(current.contentStatus).toBe('unavailable');expect(current.expectedFloor).toBe('1');await page.reload();await page.getByRole('tab',{name:'Logs',exact:true}).click();await expect(state(page)).toHaveText('Canceled');await expect(rows(page)).toHaveCount(0);expect(tally.cancel).toBe(1);expect(tally.create).toBe(1);await clean(page);
   });
 

@@ -7,7 +7,7 @@ let stage = 'setup';
 export const capabilityFailureStage = () => stage;
 
 export function capabilitySystemFixture(phase = 'collected', cycle = 0) {
- if (!['collected', 'denied', 'failed', 'stale', 'unsupported'].includes(phase)) throw new Error('Invalid capability fixture phase');
+ if (!['collected', 'denied', 'failed', 'stale', 'unsupported', 'awaiting'].includes(phase)) throw new Error('Invalid capability fixture phase');
  if (!Number.isSafeInteger(cycle) || cycle < 0 || cycle > 1) throw new Error('Invalid capability fixture cycle');
  const view = systemView(), shift = value => new Date(Date.parse(value) + cycle * 300000).toISOString();
  view.serverNow = shift(view.serverNow); view.receivedAt = shift(view.receivedAt);
@@ -26,7 +26,11 @@ export function capabilitySystemFixture(phase = 'collected', cycle = 0) {
   view.serverNow = shift('2026-10-04T00:02:10Z'); view.status = 'stale';
   view.lastComplete.services.status = 'stale'; view.lastComplete.sockets.status = 'stale';
  }
+ if (phase === 'awaiting') Object.assign(view, { serverNow: shift('2026-10-04T00:02:10Z'), status: 'awaiting', latest: null, sequence: null, receivedAt: null, lastComplete: { services: null, sockets: null } });
  return view;
+}
+export function capabilityJournalFixture(phase = 'collected', cycle = 0) {
+ return { schemaVersion: 'tracebolt.journal-view.v1', deviceId: systemDevice, serverNow: capabilitySystemFixture(phase, cycle).serverNow, configured: true, expectedFloor: '0', request: null, localStatus: 'disabled', contentStatus: 'unavailable' };
 }
 export function capabilityDeviceFixture() {
  const metric = { value: null, unit: '%', quality: 'unknown', source: capabilityFixtureDisclosure, collectedAt: systemNow };
@@ -36,6 +40,7 @@ export function capabilityDeviceFixture() {
   { id: 'socket_owner_metadata', name: 'Owner source fixture', status: 'scope', detail: 'No privileged owner provenance is present in this fixture.' },
   { id: 'host_inventory', name: 'Attribution scope fixture', status: 'limited', detail: 'Static scope information, not a failed read.' },
   { id: 'remote_actions', name: 'Unsupported function fixture', status: 'unsupported', detail: 'Not part of this read profile.' },
+  { id: 'journal_content', name: 'Disabled local scope fixture', status: 'scope', detail: 'Status metadata only; local content scope is explicitly disabled.' },
  ] };
 }
 
@@ -50,6 +55,9 @@ export async function capabilityBrowserCase({ pageAt, login, shot, expect, base 
    if (url.origin !== base) { external.push('external'); return route.abort('blockedbyclient'); }
    if (url.pathname === '/api/auth/login' && request.method() === 'POST') return route.continue();
    if (request.method() !== 'GET' || request.postData() !== null) { writes.push('non-read'); return route.abort('blockedbyclient'); }
+   // This one metadata-only GET contains no request, query or log body. Every
+   // other journal/content/query route stays blocked by the original guard.
+   if (url.pathname === prefix + '/journal') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(capabilityJournalFixture(phase, cycle)) });
    if (url.pathname.includes('/journal') || url.pathname.endsWith('/query')) { contentReads.push('content-read'); return route.abort('blockedbyclient'); }
    const fulfill = value => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(value) });
    if (url.pathname === '/api/auth/session') return route.continue();
@@ -76,6 +84,15 @@ export async function capabilityBrowserCase({ pageAt, login, shot, expect, base 
   await expect(row('host_inventory')).not.toHaveClass(/attention/);
   await expect(row('socket_owner_metadata')).toHaveAttribute('data-state', 'unknown');
   await expect(row('remote_actions')).toHaveAttribute('data-state', 'unsupported');
+  await expect(row('journal_content')).toHaveAttribute('data-state', 'not_granted');
+  await expect(row('journal_content')).toContainText(locale === 'de' ? 'Lokal nicht freigegeben' : 'Not granted locally');
+  const guide = page.locator('.capability-gap-guide');
+  await guide.locator('summary').click(); await expect(guide.locator('[data-gap]')).toHaveCount(5);
+  const labels = locale === 'de' ? ['Nicht unterstützt', 'Lokal nicht freigegeben', 'Noch nicht erfasst', 'Veraltet', 'Technisch fehlgeschlagen'] : ['Not supported', 'Not granted locally', 'Not yet collected', 'Stale', 'Technical failure'];
+  for (const label of labels) await expect(guide.getByText(label, { exact: true })).toBeVisible();
+  for (const state of ['unsupported', 'not_granted', 'not_collected', 'stale', 'failed']) await expect(guide.locator(`[data-gap="${state}"] dd`)).not.toBeEmpty();
+  await expect(guide).toContainText(locale === 'de' ? 'Unbekannt oder nicht eingerichtet belegt keine davon.' : 'Unknown or not configured does not establish any of them.');
+  await guide.locator('summary').click();
   await expect(page.locator('.capability-observations details[open]')).toHaveCount(0);
   await expect(page.getByText(device.capabilities[0].detail, { exact: true })).not.toBeVisible();
   await expect(page.locator('.device-tab-scroll')).toHaveCount(0);
@@ -89,6 +106,12 @@ export async function capabilityBrowserCase({ pageAt, login, shot, expect, base 
    await expect(check).toBeEnabled();
    if (locale === 'en') await shot(page, `synthetic-capability-${state}-desktop-en`, capabilityFixtureDisclosure);
   }
+  phase = 'awaiting'; await check.click();
+  await expect(row('systemd')).toHaveAttribute('data-state', 'not_collected');
+  await expect(row('systemd')).toContainText(locale === 'de' ? 'Noch nicht erfasst' : 'Not yet collected');
+  await expect(row('journal_content')).toHaveAttribute('data-state', 'not_granted');
+  await expect(check).toBeEnabled(); phase = 'stale'; await check.click();
+  await expect(row('systemd')).toHaveAttribute('data-state', 'stale');
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow();
   stage = locale + '-mobile-navigation';

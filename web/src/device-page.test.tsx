@@ -71,7 +71,7 @@ describe('dedicated device page', () => {
   fireEvent.click(within(technical).getByText('Device profile & technical details'));
   expect(technical).toHaveAttribute('open'); expect(within(technical).getByText('Device name')).toBeVisible();
   fireEvent.click(within(page).getByRole('tab', { name: /^Capabilities/ }));
-  expect(within(page).getByText('Raw logs')).toBeVisible(); expect(within(page).getByText('Unavailable', { selector: '.capability-state' })).toBeVisible();
+  expect(within(page).getByText('Raw logs')).toBeVisible(); expect(within(page).getByText('Not supported', { selector: '.capability-state' })).toBeVisible();
  });
  it('returns to the inventory with one click and restores a keyboard focus target', async () => {
   const page = await open(); fireEvent.click(within(page).getByRole('button', { name: 'Back to devices' }));

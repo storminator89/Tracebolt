@@ -35,17 +35,21 @@ test('new investigation paragraphs are isolated from the legacy mobile note grid
 });
 
 test('capability browser amendment uses existing synthetic status fixtures and never hides a newer failure', async () => {
- const {capabilitySystemFixture,capabilityDeviceFixture,capabilityFixtureDisclosure}=await import('./capability-scenarios.mjs');
+ const {capabilitySystemFixture,capabilityJournalFixture,capabilityDeviceFixture,capabilityFixtureDisclosure}=await import('./capability-scenarios.mjs');
  const collected=capabilitySystemFixture(),denied=capabilitySystemFixture('denied'),failed=capabilitySystemFixture('failed'),stale=capabilitySystemFixture('stale');
  assert.equal(collected.latest.services.coverage,'complete');assert.equal(denied.latest.services.reason,'permission_denied');assert.equal(failed.latest.services.reason,'read_failed');
  assert.deepEqual(denied.lastComplete,collected.lastComplete);assert.deepEqual(failed.lastComplete,collected.lastComplete);assert.equal(stale.latest.services.observedAt,collected.latest.services.observedAt);assert.equal(stale.status,'stale');
  const renewed=capabilitySystemFixture('collected',1);assert.ok(Date.parse(renewed.serverNow)>Date.parse(stale.serverNow));assert.ok(Date.parse(renewed.latest.services.observedAt)>Date.parse(stale.latest.services.observedAt));assert.notEqual(renewed.latest.generationId,stale.latest.generationId);assert.throws(()=>capabilitySystemFixture('collected',2));
  assert.equal(Object.hasOwn(collected.latest,'socketOwnerProvenance'),false);assert.equal(capabilityDeviceFixture().id,collected.deviceId);assert.match(capabilityFixtureDisclosure,/intercepted synthetic/);assert.match(capabilityFixtureDisclosure,/no host, journal content, capture, grant or data write/);assert.throws(()=>capabilitySystemFixture('invented'));
+ const waiting=capabilitySystemFixture('awaiting');assert.equal(waiting.status,'awaiting');assert.equal(waiting.latest,null);assert.equal(waiting.sequence,null);assert.equal(waiting.receivedAt,null);assert.deepEqual(waiting.lastComplete,{services:null,sockets:null});assert.ok(Date.parse(waiting.serverNow)>=Date.parse(stale.serverNow));
+ const local=capabilityJournalFixture('awaiting');assert.equal(local.configured,true);assert.equal(local.localStatus,'disabled');assert.equal(local.request,null);assert.equal(local.contentStatus,'unavailable');assert.equal(local.expectedFloor,'0');assert.equal(local.deviceId,collected.deviceId);assert.equal(local.serverNow,waiting.serverNow);
 });
 test('capability hosted case is registered once with fixed diagnostic stages and read-only guards', () => {
  const runner=read('./lan-browser.mjs'),module=read('./capability-scenarios.mjs');
  assert.equal((runner.match(/await check\(capabilityCaseName/g)||[]).length,1);assert.match(runner,/capabilityBrowserCase\(\{pageAt,login,expect,base,shot\}\)/);assert.match(runner,/name===capabilityCaseName\?\{stage:capabilityFailureStage\(\)\}/);
  assert.match(module,/system-inventory-fixtures\.ts/);assert.doesNotMatch(module,/chromium\.launch|newContext\(|setDefaultTimeout|waitForTimeout|ignoreHTTPSErrors|execFile|spawn\(/);assert.match(module,/url.origin !== base/);assert.match(module,/request.method\(\) !== 'GET'/);assert.match(module,/request.postData\(\) !== null/);assert.match(module,/url.pathname.includes\('\/journal'\)/);assert.match(module,/url.pathname.endsWith\('\/query'\)/);
+ assert.match(module,/url.pathname === prefix \+ '\/journal'/);assert.match(module,/JSON.stringify\(capabilityJournalFixture\(phase, cycle\)\)/);assert.ok(module.indexOf("request.method() !== 'GET'")<module.indexOf("url.pathname === prefix + '/journal'"));
+ for(const state of ['unsupported','not_granted','not_collected','stale','failed'])assert.ok(module.includes(state));assert.match(module,/capability-gap-guide/);assert.match(module,/toHaveCount\(5\)/);assert.match(module,/\.not\.toBeEmpty\(\)/);
  for(const guard of ['writes','contentReads','external'])assert.ok(module.includes(`expect(${guard}).toEqual([])`));
  assert.match(module,/toHaveClass\(\/observed\/\)/);assert.match(module,/not.toHaveClass\(\/attention\/\)/);assert.match(module,/\['denied', 'failed', 'stale'\]/);assert.match(module,/width: 390, height: 844/);assert.match(module,/getByLabel\('Language'/);assert.match(module,/keyboard.press\('Enter'\)/);
 });

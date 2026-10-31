@@ -1,3 +1,4 @@
+import { abortProtectedRequests } from './api';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { WindowsEventHistoryPanel } from './windows-event-history';
@@ -30,7 +31,7 @@ beforeEach(() => {
         return json({}, 404);
     }));
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { abortProtectedRequests(); cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 async function setup() { render(<WindowsEventHistoryPanel deviceId={windowsDeviceId} admin insecure={false} sessionKey={expires}/>); await flush(); }
 async function search() { fireEvent.click(screen.getByLabelText('Read this time window for my private session.')); fireEvent.click(screen.getByRole('button', { name: 'Search once' })); await flush(); }
 it('validates bounded windows, exact original expiry and empty exhausted results', () => {

@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { LOGOUT_INTENT_KEY } from './auth';
@@ -7,6 +7,7 @@ import { setLocale } from './i18n';
 import { JournalPanel } from './journal';
 import { journalDevice, journalIdentity, journalNow, journalPage, journalSession, journalSessionExpiry, journalView } from './journal-fixtures';
 import { JOURNAL_PAGE_BYTES } from './journal-types';
+import { useJournal } from './journal-resource';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const root = `/api/devices/${journalDevice}/journal`;
 type FetchOverride = (url: string, init?: RequestInit) => Response | Promise<Response> | undefined;
@@ -24,6 +25,90 @@ function open(deviceId = journalDevice) { return render(<JournalPanel deviceId={
 beforeEach(() => { setLocale('en', false); localStorage.clear(); sessionStorage.clear(); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('bounded journal API and lifetime', () => {
+    it('retains an in-flight create across navigation and does not trust unchanged idle status or late responses', async () => {
+        let status = journalView('awaiting'), finish!: (value: Response) => void, signal: AbortSignal | undefined;
+        const fetch = server((url, init) => url === root ? json(status) : url === `${root}/create` ? new Promise<Response>(resolve => { finish = resolve; signal = init?.signal ?? undefined; }) : undefined);
+        const first = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(first.result.current.view).not.toBeNull());
+        const query = { unit: 'fixture.service', start: '2026-10-04T11:45:00Z', end: journalNow, maxPriority: 6 };
+        act(() => { void first.result.current.create(query, true, false); });
+        await waitFor(() => expect(finish).toBeDefined()); first.unmount(); expect(signal?.aborted).toBe(true);
+        const next = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(next.result.current.view).not.toBeNull());
+        expect(next.result.current.uncertain).toBe(true);
+        await act(async () => { await next.result.current.create(query, true, false); finish(json(journalView('pending'))); });
+        expect(next.result.current.uncertain).toBe(true); expect(next.result.current.view?.request).toBeNull();
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/create'))).toHaveLength(1);
+        status = journalView('pending'); act(() => next.result.current.refresh());
+        await waitFor(() => expect(next.result.current.uncertain).toBe(false));
+        expect(next.result.current.view?.request?.description.identity).toEqual(journalIdentity);
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/create'))).toHaveLength(1);
+    });
+    it('keeps an unresolved cancellation fenced after remount until the exact request is terminal', async () => {
+        let status = journalView();
+        const fetch = server(url => url === root ? json(status) : url === `${root}/cancel` ? Promise.reject(new TypeError('Synthetic lost cancel response')) : undefined);
+        const first = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(first.result.current.page).not.toBeNull());
+        const reads = fetch.mock.calls.filter(([url]) => url.endsWith('/query')).length;
+        act(() => first.result.current.cancelRequest());
+        await waitFor(() => expect(first.result.current.uncertain).toBe(true)); first.unmount();
+        const next = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(next.result.current.view).not.toBeNull()); expect(next.result.current.uncertain).toBe(true);
+        expect(next.result.current.page).toBeNull();
+        await act(async () => next.result.current.search(''));
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/query'))).toHaveLength(reads);
+        act(() => next.result.current.cancelRequest());
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/cancel'))).toHaveLength(1);
+        status = journalView('canceled'); act(() => next.result.current.refresh());
+        await waitFor(() => expect(next.result.current.uncertain).toBe(false));
+        expect(next.result.current.page).toBeNull();
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/cancel'))).toHaveLength(1);
+    });
+    it('preserves A while visiting B and retains no content or consent across the navigation', async () => {
+        const other = 'agent_other_journal_fixture';
+        const fetch = server((url) => url === root ? json(journalView('awaiting')) : url === `/api/devices/${other}/journal` ? json({ ...journalView('awaiting'), deviceId: other }) : url.endsWith('/create') ? Promise.reject(new TypeError('Synthetic lost response')) : undefined);
+        const hook = renderHook(({ device }) => useJournal(device, false, journalSessionExpiry), { initialProps: { device: journalDevice } });
+        await waitFor(() => expect(hook.result.current.view).not.toBeNull());
+        await act(async () => hook.result.current.create({ unit: 'fixture.service', start: '2026-10-04T11:45:00Z', end: journalNow, maxPriority: 6 }, true, false));
+        await waitFor(() => expect(hook.result.current.uncertain).toBe(true));
+        hook.rerender({ device: other }); await waitFor(() => expect(hook.result.current.view?.deviceId).toBe(other)); expect(hook.result.current.uncertain).toBe(false);
+        hook.rerender({ device: journalDevice }); await waitFor(() => expect(hook.result.current.view?.deviceId).toBe(journalDevice)); expect(hook.result.current.uncertain).toBe(true);
+        expect(hook.result.current.page).toBeNull(); expect(fetch.mock.calls.filter(([url]) => url.endsWith('/create'))).toHaveLength(1);
+        expect(localStorage.length).toBe(0); expect(sessionStorage.length).toBe(0);
+        hook.unmount(); act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        const next = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(next.result.current.view).not.toBeNull()); expect(next.result.current.uncertain).toBe(false);
+    });
+    it('clears old journal context on auth epoch replacement even without an AUTH event', async () => {
+        const fetch = server(url => url === root ? json(journalView('awaiting')) : url.endsWith('/create') ? Promise.reject(new TypeError('Synthetic lost response')) : undefined);
+        const first = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(first.result.current.view).not.toBeNull());
+        await act(async () => first.result.current.create({ unit: 'fixture.service', start: '2026-10-04T11:45:00Z', end: journalNow, maxPriority: 6 }, true, false));
+        await waitFor(() => expect(first.result.current.uncertain).toBe(true)); first.unmount();
+        act(() => abortProtectedRequests());
+        const next = renderHook(() => useJournal(journalDevice, false, journalSessionExpiry));
+        await waitFor(() => expect(next.result.current.view).not.toBeNull()); expect(next.result.current.uncertain).toBe(false);
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/create'))).toHaveLength(1);
+    });
+    it('bounds unresolved journal work without eviction and frees capacity only through authoritative readback', async () => {
+        const views = new Map<string, ReturnType<typeof journalView>>();
+        const fetch = server(url => {
+            const match = /^\/api\/devices\/(agent_fence_\d+)\/journal(\/create)?$/.exec(url); if (!match) return;
+            if (match[2]) return Promise.reject(new TypeError('Synthetic lost response'));
+            return json(views.get(match[1]) ?? { ...journalView('awaiting'), deviceId: match[1] });
+        });
+        const hooks = Array.from({ length: 33 }, (_, i) => renderHook(() => useJournal(`agent_fence_${i}`, false, journalSessionExpiry)));
+        await waitFor(() => hooks.forEach(hook => expect(hook.result.current.view).not.toBeNull()));
+        const query = { unit: 'fixture.service', start: '2026-10-04T11:45:00Z', end: journalNow, maxPriority: 6 };
+        await act(async () => { await Promise.all(hooks.slice(0, 32).map(hook => hook.result.current.create(query, true, false))); });
+        await act(async () => hooks[32].result.current.create(query, true, false));
+        expect(hooks[32].result.current.failure).toBe('capacity'); expect(hooks[0].result.current.uncertain).toBe(true);
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/create'))).toHaveLength(32);
+        views.set('agent_fence_0', { ...journalView('pending'), deviceId: 'agent_fence_0', request: { ...journalView('pending').request!, description: { ...journalView('pending').request!.description, deviceId: 'agent_fence_0' } } });
+        act(() => hooks[0].result.current.refresh()); await waitFor(() => expect(hooks[0].result.current.uncertain).toBe(false));
+        await act(async () => hooks[32].result.current.create(query, true, false));
+        expect(fetch.mock.calls.filter(([url]) => url.endsWith('/create'))).toHaveLength(33);
+    });
     it.each(['valid', 'malformed', 'invalid', 'disconnected'] as const)('accepts a reference refresh only after a complete validated body (%s)', async outcome => {
         const initial = journalView('awaiting'), refreshed = { ...initial, serverNow: '2026-10-04T12:01:00Z' };
         let refreshing = false, body!: ReadableStreamDefaultController<Uint8Array>, signal: AbortSignal | undefined;

@@ -13,9 +13,10 @@ describe('capability source meaning', () => {
         expect(capabilityFailure('not_supported').state).toBe('unsupported');
         expect(capabilityFailure('read_failed').state).toBe('failed');
         expect(capabilityFailure('source_missing').state).toBe('failed');
-        expect(capabilityFailure('not_collected').state).toBe('unknown');
+        expect(capabilityFailure('not_collected').state).toBe('not_collected');
         expect(systemCapability({ ...systemView(), status: 'not_configured', latest: null }, 'services', 0).state).toBe('not_configured');
-        expect(systemCapability({ ...systemView(), status: 'awaiting', latest: null }, 'services', 0).state).toBe('unknown');
+        expect(systemCapability({ ...systemView(), status: 'awaiting', latest: null }, 'services', 0).state).toBe('not_collected');
+        expect(systemCapability({ ...systemView(), status: 'unknown', latest: null }, 'services', 0).state).toBe('unknown');
         expect(systemCapability(systemView(), 'services', 120001).state).toBe('stale');
     });
     it('does not turn zero rows into a failed or unconfigured source', () => {
@@ -70,7 +71,8 @@ describe('capability source meaning', () => {
     });
     it('never infers successful log access from manager configuration or policy alone', () => {
         const j = journalView('awaiting'); expect(journalCapability(j, 0).state).toBe('unknown');
-        j.localStatus = 'disabled'; expect(journalCapability(j, 0).state).toBe('not_configured');
+        j.localStatus = 'disabled'; expect(journalCapability(j, 0).state).toBe('not_granted');
+        j.configured = false; expect(journalCapability(j, 0).state).toBe('not_configured'); j.configured = true;
         j.localStatus = 'denied'; expect(journalCapability(j, 0).state).toBe('denied');
         j.localStatus = 'helper_unavailable'; expect(journalCapability(j, 0).state).toBe('failed');
         j.localStatus = 'unknown'; j.generation = { schemaVersion: 'tracebolt.journal-generation-view.v2', policyEnabled: true, serviceAuthorization: 'all-system-services', allowedUnits: [], policyGeneration: { revision: '1', generation: 'a'.repeat(64), policyDigest: 'sha256:' + 'b'.repeat(64) }, sequence: '1', observedAt: j.serverNow, receivedAt: j.serverNow, expiresAt: '2026-10-04T12:02:00Z', fresh: true };
