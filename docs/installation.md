@@ -5,6 +5,11 @@ Use a Linux native or Docker **LAN manager** for real devices. The loopback
 fleet installer. A repository link does not provide deployment approval or
 credentials. [Guides](README.md) · [Troubleshooting](troubleshooting.md).
 
+For native Linux guided TLS, the [create-only configuration and read-only doctor
+source candidate](manager-initialization.md) validates already provisioned
+material without initializing databases or changing the host. It is not a
+published manager image or native Windows enrollment acceptance.
+
 ## Fast path for installation agents
 
 1. **Inspect first:** confirm the actual target OS/architecture, chosen clean

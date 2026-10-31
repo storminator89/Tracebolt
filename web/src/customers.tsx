@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutate, request } from './api';
 import { validFleetGroupName } from './fleet-groups-types';
 import { useLocale } from './i18n';
+import { CustomerOrganizationNotice } from './customer-organization-notice';
 import './customers.css';
 
 interface Customer { id: string; name: string; revision: number }
@@ -77,7 +78,7 @@ export function Customers({ sessionExpiresAt }: { sessionExpiresAt: string }) {
     };
     return <section className="panel customers-panel" aria-label={c.title}>
         <div className="customers-heading"><h3>{c.title}</h3><button className="button" type="button" disabled={busy} onClick={() => void refresh()}>{c.refresh}</button></div>
-        <p>{c.scope}</p>
+        <p>{c.scope}</p><CustomerOrganizationNotice/>
         {state === 'loading' && <p role="status">{c.loading}</p>}
         {state !== 'loading' && state !== 'ready' && <p role="alert">{c[state]}</p>}
         {state === 'ready' && catalog && <>

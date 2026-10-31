@@ -8,6 +8,19 @@ import (
 	"unicode/utf8"
 )
 
+// ValidateOperatorAuth reuses the runtime's strict credential schema and verifier
+// policy. No login, password hashing, session or account creation is performed.
+func ValidateOperatorAuth(raw []byte, profile string) error {
+	hash, operators, err := loadOperatorAuth(raw, profile)
+	if err != nil {
+		return ErrConfiguration
+	}
+	if _, err := operatorauth.New(operatorauth.Config{PasswordHash: hash, Operators: operators}); err != nil {
+		return ErrConfiguration
+	}
+	return nil
+}
+
 // authMembers rejects ambiguous keys before typed JSON decoding. It allows
 // nesting only for the v2 operators/capabilities shapes, decoded separately.
 func authMembers(raw []byte, keys ...string) (map[string]json.RawMessage, error) {

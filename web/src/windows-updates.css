@@ -1,4 +1,7 @@
 .windows-updates{min-width:0}
+.windows-updates-evidence{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px 20px;margin:14px 0;font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-updates-evidence dt{font-weight:600;margin-bottom:3px}
+.windows-updates-evidence dd{margin:0;overflow-wrap:anywhere}
 .windows-updates-shortened,.windows-updates-revision{display:block;margin-top:5px;font-size:11px;line-height:1.5;color:var(--secondary)}
 .windows-updates-table th:first-child{width:28%}
 .windows-updates-table th:last-child{width:23%}

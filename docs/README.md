@@ -4,16 +4,31 @@ Start with the task you want to complete. The [project overview](../README.md)
 describes current development functionality. The published endpoint prereleases
 have their own installation guides and narrower feature sets.
 
+## Choose the matching package and evidence first
+
+Use the linked status or candidate guide to select the exact manager/frontend
+and endpoint source, profile, artifacts and acceptance record together. A current
+source feature is not automatically in a published package; a published package
+or successful fixture run is not full native acceptance. Do not combine Go Read
+admin and Rust Basic installation instructions or infer authority from a smaller
+collector. The Rust candidate still uses the broader `windows-inventory-v1`
+manager identity; it is not a distinct basic-only authorization domain. See its
+[scope and delivery contract](../rust/windows-agent/README.md#scope-and-delivery).
+
+Release versions and source pins belong in those guides and their manifests,
+not a second independently maintained download recommendation in this index.
+Historical packages remain linked separately below.
+
 ## Setup
 
-- [Local dashboard demo](../README.md#try-the-local-dashboard)
+- [Local dashboard demo](../README.md#try-the-dashboard-locally)
 - [Linux/Docker manager installation](installation.md)
 - [Connect a Linux device](dashboard-verified-download.md) and [review its read-admin scope](read-admin-onboarding.md)
-- [Windows current functionality and limits](windows-status.md)
+- [Windows Go Read admin: published package, matching source and bounded native evidence](windows-status.md)
 - [Windows fresh-install audit, priorities and shorter preparation](windows-installation-audit.md)
-- [Install Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2) using its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
 - [Windows Read admin scope and setup](windows-read-admin-setup.md)
-- [Historical Windows preview.1 installation](windows-prerelease-historical/windows-prerelease-install.md)
+- [Rust Windows Basic integrated test candidate](integrated-test-candidate.md): separate manager/package pairing and remaining native gates
+- [macOS unsigned service-test package](macos-prerelease.md) and [basic/inventory source limits](macos-status.md): architecture and profile selection; native installation and reboot acceptance remain pending
 - [Troubleshoot missing data or incomplete setup](troubleshooting.md)
 
 ## Everyday use
@@ -46,8 +61,9 @@ have their own installation guides and narrower feature sets.
   [selected-service](windows-service-health.md) policies. Use [fleet groups](fleet-groups-health.md)
   to organize devices and review one-time Windows disk/CPU/RAM settings. The
   separate [ongoing group-monitoring source feature](fleet-group-monitoring.md) adds
-  reviewed opt-ins for exact existing members and metrics. It is not part of
-  published Windows preview.2. Group membership alone never enables a policy.
+  reviewed opt-ins for exact existing members and metrics. Check the
+  [exact release boundary](windows-status.md) before using it with a published
+  package. Group membership alone never enables a policy.
 - **Optional settings:** [application checks](application-checks.md),
   [DNS/TCP checks](application-network-checks.md), [webhook alarms](alarm-delivery.md),
   [Health AI](proactive-ai-diagnostics.md) and [service-log AI](proactive-service-log-ai.md).
@@ -68,7 +84,7 @@ and stale results retain their original meaning.
   [fresh reusable cached-update jobs](windows-reusable-cached-update-jobs.md) and
   [guided MSI catalogue review](windows-multi-package-msi-catalogue.md#guided-package-review).
   These source workflows require separate consent and native acceptance;
-  preview.2's packaged-Setup results do not validate optional actions.
+  the Go preview's packaged-Setup subset does not validate optional actions.
 - Existing development interfaces: [Linux read-admin update](read-admin-upgrade.md)
   and [inventory opt-in](guided-inventory-setup.md)
 - [Frontend development](../web/README.md), [LAN runtime](lan-runtime.md),
@@ -78,3 +94,13 @@ and stale results retain their original meaning.
 Scope contracts, release manifests and acceptance records remain alongside the
 implementation they describe. Prior milestone/test narratives are kept in the
 [archive](archive/README.md); they are not current setup instructions.
+
+## Historical Windows packages
+
+These are retained provenance, not the current setup recommendation. Use each
+historical package's own source pin, manifest and narrower scope; do not pair it
+with an arbitrary current manager. Current Go Windows release selection remains
+in [Windows status](windows-status.md); Rust Basic is a separate candidate above.
+
+- [Windows preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2) and its [attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md)
+- [Windows preview.1 historical installation guide](windows-prerelease-historical/windows-prerelease-install.md)
