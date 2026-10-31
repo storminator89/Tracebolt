@@ -18,6 +18,7 @@ import (
 	"localrmm/internal/lantrust"
 	"localrmm/internal/linuxcvefeed"
 	"localrmm/internal/linuxcveprogress"
+	"localrmm/internal/managerstatus"
 	"localrmm/internal/model"
 	"localrmm/internal/offlinecatalog"
 	"localrmm/internal/operatorauth"
@@ -36,6 +37,8 @@ import (
 )
 
 type LANOperatorConfig struct {
+	// ManagerStatus is private cached process-operation evidence, not device health.
+	ManagerStatus                     *managerstatus.Monitor
 	MacOSInventoryEnrollment          *enrollmentservice.Service
 	MacOSInventoryEnrollmentBootstrap EnrollmentBootstrap
 	MacOSEnrollment                   *enrollmentservice.Service
@@ -73,6 +76,7 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	managerStatus             *managerstatus.Monitor
 	windowsManagedMSI         *windowsmanagedmsimanager.Manager
 	windowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
 	windowsUpdateJobs         *windowsupdatejob.Manager
@@ -295,7 +299,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.PackageActions != nil {
 		packages = c.PackageActions
 	}
-	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	h := &operatorHandler{managerStatus: c.ManagerStatus, packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
 	h.windowsUpdateJobs = c.WindowsUpdateJobs
 	h.windowsSoftwareJobs = c.WindowsSoftwareJobs
 	h.windowsManagedMSI = c.WindowsManagedMSI
@@ -452,6 +456,18 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.URL.Path == "/livez" {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			fail(w, 405, "method_not_allowed", "Method is unsupported.")
+			return
+		}
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		write(w, http.StatusOK, map[string]bool{"live": true})
+		return
+	}
 	if r.URL.Path == "/v1/windows/rust-basic-capabilities" {
 		h.rustBasicCapabilities(w, r)
 		return
@@ -542,6 +558,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	stopRevocation := context.AfterFunc(session.Lifetime(), cancel)
 	defer stopRevocation()
 	r = r.WithContext(context.WithValue(ctx, operatorRequestKey{}, operatorRequest{session: session, origin: h.origin, active: func() bool { _, err := h.auth.Lookup(token); return err == nil }}))
+	if r.URL.Path == "/api/manager/readiness" || r.URL.Path == "/api/manager/metrics" {
+		h.managerStatusAPI(w, r)
+		return
+	}
 	if r.URL.Path == "/api/auth/sessions" || r.URL.Path == "/api/auth/sessions/revoke" {
 		h.sessionsAPI(w, r, session)
 		return

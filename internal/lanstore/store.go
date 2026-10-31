@@ -83,6 +83,14 @@ func Open(path string) (*Store, error) {
 		return nil, ErrStorage
 	}
 	u := url.URL{Scheme: "file", Path: absolute}
+	// Preserve the existing connection-local safety contract after a canceled or
+	// uncertain connection is discarded. This does not change any configured
+	// value, schema, authority state or startup initialization behavior.
+	q := u.Query()
+	for _, pragma := range []string{"busy_timeout(5000)", "synchronous(FULL)", "foreign_keys(ON)"} {
+		q.Add("_pragma", pragma)
+	}
+	u.RawQuery = q.Encode()
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, ErrStorage
