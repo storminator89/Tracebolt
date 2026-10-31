@@ -46,18 +46,18 @@ describe('Linux CVE warnings panel', () => {
         expect(screen.getByText('Feed download age')).toBeVisible(); expect(screen.queryByRole('button', { name: /install|upgrade/i })).not.toBeInTheDocument(); expect(storage).not.toHaveBeenCalled();
     });
     it.each([
-        ['en', false, 'Assessment evidence', 'Limited coverage', 'Manual import · origin and fetch time unverified', 'Reported source versions compared with published distribution fixes; no live scan or compliance assessment.'],
-        ['en', true, 'Assessment evidence', 'Limited coverage', 'HTTPS download · publication freshness unverified', 'Reported source versions compared with published distribution fixes; no live scan or compliance assessment.'],
-        ['de', false, 'Bewertungsgrundlage', 'Begrenzte Abdeckung', 'Manueller Import · Herkunft und Abrufzeitpunkt unbestätigt', 'Gemeldete Quellversionen werden mit veröffentlichten Distributions-Fixes verglichen; kein Live-Scan und keine Compliance-Prüfung.'],
-        ['de', true, 'Bewertungsgrundlage', 'Begrenzte Abdeckung', 'HTTPS-Abruf · Aktualität der Veröffentlichung unbestätigt', 'Gemeldete Quellversionen werden mit veröffentlichten Distributions-Fixes verglichen; kein Live-Scan und keine Compliance-Prüfung.'],
+        ['en', false, 'Assessment evidence', 'Limited coverage', 'Manual import · origin and fetch time unverified', 'Distribution source-version comparison · no live scan or compliance verdict.'],
+        ['en', true, 'Assessment evidence', 'Limited coverage', 'HTTPS download · publication freshness unverified', 'Distribution source-version comparison · no live scan or compliance verdict.'],
+        ['de', false, 'Bewertungsgrundlage', 'Begrenzte Abdeckung', 'Manueller Import · Herkunft und Abrufzeitpunkt unbestätigt', 'Distributions-Quellversionsvergleich · kein Live-Scan und keine Compliance-Aussage.'],
+        ['de', true, 'Bewertungsgrundlage', 'Begrenzte Abdeckung', 'HTTPS-Abruf · Aktualität der Veröffentlichung unbestätigt', 'Distributions-Quellversionsvergleich · kein Live-Scan und keine Compliance-Aussage.'],
     ] as const)('exposes report-bound source, method and original times without expanding details in %s (https=%s)', async (locale, https, label, state, trust, method) => {
         setLocale(locale, false); const view = linuxCVEView(https); vi.mocked(request).mockResolvedValue(view); render(<LinuxCVEPanel deviceId={id}/>);
         await screen.findByText(state); const evidence = screen.getByLabelText(label);
-        expect(evidence).toBeVisible(); expect(evidence.closest('details')).toBeNull();
+        expect(evidence).toBeVisible(); expect(evidence.closest('details')).toBeNull(); expect(evidence.children).toHaveLength(3);
         expect(within(evidence).getByText(trust)).toBeVisible(); expect(within(evidence).getByText(method)).toBeVisible();
         const source = within(evidence).getByRole('link', { name: 'Debian Security Tracker' });
         expect(source).toHaveAttribute('href', view.report!.feed.sourceUrl); expect(source).toHaveAttribute('rel', 'noopener noreferrer'); expect(source).toHaveAttribute('referrerPolicy', 'no-referrer');
-        expect([...evidence.querySelectorAll('time')].map(time => time.getAttribute('dateTime'))).toEqual([view.inventory!.collectedAt, view.report!.feed.fetchedAt]);
+        expect([...evidence.querySelectorAll('time')].map(time => time.getAttribute('dateTime'))).toEqual([view.report!.assessedAt, view.inventory!.collectedAt, view.report!.feed.fetchedAt]);
         expect(request).toHaveBeenCalledExactlyOnceWith(path, { signal: expect.any(AbortSignal) }, LINUX_CVE_VIEW_BYTES);
         expect(screen.getByText(locale === 'en' ? 'Data sources and coverage' : 'Datenquellen und Abdeckung').closest('details')).not.toHaveAttribute('open');
     });
@@ -70,11 +70,11 @@ describe('Linux CVE warnings panel', () => {
     });
     it('keeps provenance visible for zero matches and stale retained data without treating either as compliance', async () => {
         const empty = emptyLinuxCVEView(), rendered = await show(empty);
-        expect(screen.getByLabelText('Assessment evidence')).toHaveTextContent('no live scan or compliance assessment');
+        expect(screen.getByLabelText('Assessment evidence')).toHaveTextContent('no live scan or compliance verdict');
         expect(screen.getByText('No package/version matches in the loaded records. Coverage remains limited.')).toBeVisible();
         rendered.unmount(); const stale = staleLinuxCVEView(); await show(stale);
         const evidence = screen.getByLabelText('Assessment evidence'); expect(evidence).toBeVisible();
-        expect(evidence.querySelectorAll('time')[1]).toHaveAttribute('dateTime', stale.report!.feed.fetchedAt);
+        expect(evidence.querySelectorAll('time')[2]).toHaveAttribute('dateTime', stale.report!.feed.fetchedAt);
         expect(within(evidence).getByText('Manual import · origin and fetch time unverified')).toBeVisible();
         expect(screen.getByText(/Old data: these matches describe earlier snapshots/)).toBeVisible();
     });
