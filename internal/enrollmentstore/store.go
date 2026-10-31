@@ -224,6 +224,15 @@ func openStore(path string, config enrollmentstate.Config, issuerDER []byte, pol
 	q := u.Query()
 	q.Set("mode", "rw")
 	q.Set("_pragma", "busy_timeout(5000)")
+	// Reapply the same existing connection-local safety values on reconnect,
+	// including after an uncertain canceled diagnostic/authority connection.
+	// No identity, schema, profile or authority value is changed here.
+	for _, pragma := range []string{"synchronous(FULL)", "foreign_keys(ON)", "trusted_schema(OFF)", fmt.Sprintf("max_page_count(%d)", databaseCap(config.Binding.CollectionProfile)/completeInventoryPageSize)} {
+		q.Add("_pragma", pragma)
+	}
+	if physicalInventoryProfile(config.Binding.CollectionProfile) {
+		q.Add("_pragma", "cache_spill(OFF)")
+	}
 	u.RawQuery = q.Encode()
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {

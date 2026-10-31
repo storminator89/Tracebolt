@@ -25,6 +25,7 @@ import (
 	"localrmm/internal/lantrust"
 	"localrmm/internal/linuxcvefeed"
 	"localrmm/internal/linuxcveprogress"
+	"localrmm/internal/managerstatus"
 	"localrmm/internal/model"
 	"localrmm/internal/operatorauth"
 	"localrmm/internal/packagecontroller"
@@ -47,6 +48,7 @@ import (
 )
 
 type prepared struct {
+	diagnostics               *managerDiagnostics
 	operator, agent           http.Handler
 	operatorTLS, agentTLS     *tls.Config
 	close                     func()
@@ -587,7 +589,12 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{WindowsManagedMSIRegistry: managedMSI, WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	diagnostics, e := newManagerDiagnostics(m, managerDiagnosticSources{Application: appStore, Trust: trustStore, Auth: auth, Linux: enrolledService, Windows: windowsService, MacOSBasic: macosService, MacOSInventory: macosInventoryService, MacOSInventoryRetained: macosInventoryMaintenance}, nil)
+	if e != nil {
+		closeAll()
+		return nil, e
+	}
+	operatorConfig := api.LANOperatorConfig{ManagerStatus: diagnostics.monitor, WindowsManagedMSIRegistry: managedMSI, WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
@@ -676,7 +683,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	} else {
 		agent = withMacOSInventoryIngress(agent, nil)
 	}
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, macosInventoryMaintenance: macosInventoryMaintenance, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
+	return &prepared{diagnostics: diagnostics, operator: diagnostics.monitor.Wrap(managerstatus.Operator, operator), agent: diagnostics.monitor.Wrap(managerstatus.Agent, agent), operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, macosInventoryMaintenance: macosInventoryMaintenance, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -709,6 +716,10 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		operator = tls.NewListener(operator, p.operatorTLS)
 		agent = tls.NewListener(agent, p.agentTLS)
 	}
+	statusCtx, stopStatus := context.WithCancel(ctx)
+	statusDone := make(chan struct{})
+	go func() { defer close(statusDone); p.diagnostics.monitor.Run(statusCtx) }()
+	defer func() { stopStatus(); <-statusDone }()
 	if p.applicationChecks != nil {
 		checksCtx, stopChecks := context.WithCancel(ctx)
 		checksDone := make(chan struct{})
@@ -760,9 +771,11 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		maintenanceDone := make(chan struct{})
 		go func() {
 			defer close(maintenanceDone)
-			_ = p.maintenance.RunInventoryMaintenance(maintenanceCtx, func() {
+			p.diagnostics.linux.Start()
+			defer p.diagnostics.linux.Stop()
+			_ = p.maintenance.RunInventoryMaintenanceObserved(maintenanceCtx, func() {
 				log.Print("Complete inventory maintenance is unavailable; retained observations are preserved.")
-			})
+			}, maintenanceObserver(p.diagnostics.linux))
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
@@ -771,9 +784,11 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		maintenanceDone := make(chan struct{})
 		go func() {
 			defer close(maintenanceDone)
-			_ = runWindowsEventMaintenance(maintenanceCtx, p.windowsMaintenance, func() {
+			p.diagnostics.windows.Start()
+			defer p.diagnostics.windows.Stop()
+			_ = runWindowsEventMaintenanceObserved(maintenanceCtx, p.windowsMaintenance, func() {
 				log.Print("Windows inventory/content maintenance is unavailable; retained data remains protected.")
-			})
+			}, maintenanceObserver(p.diagnostics.windows))
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
@@ -782,9 +797,11 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		maintenanceDone := make(chan struct{})
 		go func() {
 			defer close(maintenanceDone)
-			_ = p.macosInventoryMaintenance.RunMacOSInventoryMaintenance(maintenanceCtx, func() {
+			p.diagnostics.macos.Start()
+			defer p.diagnostics.macos.Stop()
+			_ = p.macosInventoryMaintenance.RunMacOSInventoryMaintenanceObserved(maintenanceCtx, func() {
 				log.Print("macOS inventory maintenance is unavailable; retained data remains protected.")
-			})
+			}, maintenanceObserver(p.diagnostics.macos))
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
@@ -804,6 +821,8 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 	case <-ctx.Done():
 	case err = <-results:
 	}
+	stopStatus()
+	<-statusDone
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = operators.Shutdown(shutdown)
