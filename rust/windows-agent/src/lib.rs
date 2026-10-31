@@ -2,6 +2,7 @@ pub mod compatibility;
 pub mod config;
 pub mod enrollment;
 pub mod enrollment_wire;
+pub mod health;
 #[cfg(windows)]
 pub mod native;
 pub mod protocol;
