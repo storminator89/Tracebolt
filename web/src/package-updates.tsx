@@ -5,7 +5,7 @@ import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { approvePackageUpdates, PackageUpdateNotReady, preparePackageUpdates, readPackageUpdateRetryGate, readPackageUpdates } from './package-update-api';
 import type { PackageUpdateAccess } from './package-update-api';
-import { canonicalPackageSelection, packageIdentityKey, packageUpdateBlocksNew, packageUpdatePending, packageUpdateReady, validPackageIdentity, validPackageUpdateID } from './package-update-types';
+import { canonicalPackageSelection, packageIdentityKey, packageUpdateBlocksNew, packageUpdatePending, packageUpdateReady, packageUpdateTime, validPackageIdentity, validPackageUpdateID } from './package-update-types';
 import type { PackageIdentity, PackageUpdateState, PackageUpdateView } from './package-update-types';
 import './package-updates.css';
 
@@ -52,6 +52,49 @@ export function PackageUpdatesWorkspace({ deviceId, sessionKey, source, children
     return <Workflow key={key} deviceId={deviceId} sessionKey={sessionKey}>{children}</Workflow>;
 }
 type Intent = { mode: 'simulation' | 'native' } & ({ kind: 'prepare'; requestId: string; packages: PackageIdentity[] } | { kind: 'approve'; requestId: string; previewDigest: string });
+// Recovery metadata is not authority. Keep at most 32 unresolved device intents
+// for one actor/session/transport, without evicting uncertainty to admit a write.
+// Browser-tab scope is intentional; durable manager jobs remain authoritative.
+const intentStorageKey = 'tracebolt.package-update-intent';
+const intentStoreSchema = 'tracebolt.package-update-intents.v2';
+const maxIntents = 32, maxIntentStoreBytes = 512 * 1024;
+let intentProtectedEpoch = getProtectedRequestEpoch();
+type StoredIntent = { deviceId: string; intent: Intent };
+const exactFields = (value: unknown, keys: string[]): boolean => !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+function validIntent(value: unknown): value is Intent {
+    if (!value || typeof value !== 'object') return false;
+    const saved = value as Intent;
+    return ['simulation', 'native'].includes(saved.mode) && validPackageUpdateID(saved.requestId, 'update_') && (
+        saved.kind === 'prepare' && exactFields(saved, ['mode', 'kind', 'requestId', 'packages']) && Array.isArray(saved.packages) && saved.packages.length > 0 && saved.packages.length <= 32 && saved.packages.every(validPackageIdentity) && new Set(saved.packages.map(packageIdentityKey)).size === saved.packages.length ||
+        saved.kind === 'approve' && exactFields(saved, ['mode', 'kind', 'requestId', 'previewDigest']) && typeof saved.previewDigest === 'string' && /^sha256:[a-f0-9]{64}$/.test(saved.previewDigest));
+}
+function clearIntents() { try { sessionStorage.removeItem(intentStorageKey); } catch { /* Retained metadata blocks recovery; it never authorizes a write. */ } }
+// Retained intents outlive the panel. Authentication invalidation must clear
+// them even while navigation has unmounted every update workspace.
+if (typeof window !== 'undefined') window.addEventListener(AUTH_REQUIRED_EVENT, () => { intentProtectedEpoch = getProtectedRequestEpoch(); clearIntents(); });
+function loadIntents(access: PackageUpdateAccess | null): StoredIntent[] {
+    if (intentProtectedEpoch !== getProtectedRequestEpoch()) { intentProtectedEpoch = getProtectedRequestEpoch(); clearIntents(); }
+    const raw = sessionStorage.getItem(intentStorageKey);
+    if (!raw) return [];
+    if (raw.length > maxIntentStoreBytes) throw new TypeError('Invalid recovery metadata');
+    const saved = JSON.parse(raw);
+    const legacy = exactFields(saved, ['deviceId', 'actorId', 'sessionKey', 'intent']);
+    if (!legacy && !exactFields(saved, ['schemaVersion', 'actorId', 'sessionKey', 'insecureTestMode', 'entries'])) throw new TypeError('Invalid recovery metadata');
+    if (!validPackageUpdateID(saved.actorId, 'operator_') || !packageUpdateTime(saved.sessionKey) || !legacy && (saved.schemaVersion !== intentStoreSchema || typeof saved.insecureTestMode !== 'boolean')) throw new TypeError('Invalid recovery scope');
+    // An authenticated context change must not reuse or disclose a prior actor's
+    // intent. A device-only navigation deliberately does not clear the store.
+    if (!access || saved.actorId !== access.actorId || saved.sessionKey !== access.sessionKey || !legacy && saved.insecureTestMode !== access.insecureTestMode) { clearIntents(); return []; }
+    const entries: unknown = legacy ? [{ deviceId: saved.deviceId, intent: saved.intent }] : saved.entries;
+    if (!Array.isArray(entries) || !entries.length || entries.length > maxIntents || !entries.every(entry => exactFields(entry, ['deviceId', 'intent']) && validPackageUpdateID(entry.deviceId, 'agent_') && validIntent(entry.intent)) || new Set(entries.map(entry => entry.deviceId)).size !== entries.length) throw new TypeError('Invalid recovery entries');
+    return entries as StoredIntent[];
+}
+function saveIntents(access: PackageUpdateAccess, entries: StoredIntent[]) {
+    if (!entries.length) { sessionStorage.removeItem(intentStorageKey); return; }
+    if (entries.length > maxIntents) throw new TypeError('Recovery capacity reached');
+    const raw = JSON.stringify({ schemaVersion: intentStoreSchema, actorId: access.actorId, sessionKey: access.sessionKey, insecureTestMode: access.insecureTestMode, entries });
+    if (raw.length > maxIntentStoreBytes) throw new TypeError('Recovery capacity reached');
+    sessionStorage.setItem(intentStorageKey, raw);
+}
 type Anchor = { mono: number; wall: number };
 type RetryGate = { requestId: string; executionMode: 'unavailable' | 'simulation' | 'native'; available: boolean; started: Anchor };
 const anchorNow = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
@@ -70,13 +113,13 @@ function Workflow({ deviceId, sessionKey, children }: { deviceId: string; sessio
     const [selection, setSelection] = useState<PackageIdentity[]>([]), [view, setView] = useState<PackageUpdateView | null>(null), [loading, setLoading] = useState<'read' | 'prepare' | 'approve' | null>(null);
     const [error, setError] = useState<'readError' | 'invalid' | 'session' | 'notReady' | null>(null), [uncertain, setUncertain] = useState<Intent | null>(null), [ack, setAck] = useState(false), [, tick] = useState(0);
     const [retryGate, setRetryGate] = useState<RetryGate | null>(null);
+    const mountedEpoch = useRef(getProtectedRequestEpoch());
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), pending = useRef<AbortController | null>(null), current = useRef<PackageUpdateView | null>(null), clock = useRef<Anchor | null>(null), uncertainRef = useRef<Intent | null>(null), frozen = useRef(new Map<string, string>());
     const authenticated = operator?.mode === 'lan' && operator.authenticated;
     const named = authenticated && operator.hasExplicitMetadata === true && operator.loginMode === 'named' && validPackageUpdateID(operator.actorId, 'operator_') && !!sessionKey;
     const canPlan = !!named && operator.capabilities?.includes('plan_updates') === true, canExecute = !!named && operator.capabilities?.includes('execute_updates') === true;
-    const storageKey = 'tracebolt.package-update-intent';
-    const forgetIntent = () => { if (storageKey) { try { sessionStorage.removeItem(storageKey); } catch { /* Retaining an intent only blocks another operation. */ } } };
     const access: PackageUpdateAccess | null = named ? { actorId: operator.actorId!, sessionKey: sessionKey!, insecureTestMode: operator.insecureTestMode } : null;
+    const forgetIntent = () => { try { if (access) saveIntents(access, loadIntents(access).filter(entry => entry.deviceId !== deviceId)); } catch { /* Retaining an intent only blocks another operation. */ } };
     const accept = (next: PackageUpdateView, started: Anchor, intent?: Intent) => {
         if (!Number.isFinite(elapsed(started)) || current.current && Date.parse(next.serverNow) < Date.parse(current.current.serverNow)) throw new TypeError('Unreliable update clock');
         const expected = intent ?? uncertainRef.current;
@@ -98,10 +141,11 @@ function Workflow({ deviceId, sessionKey, children }: { deviceId: string; sessio
     };
     const run = async (intent?: Intent) => {
         if (!alive.current || locked.current || suspended.current || pending.current || !authenticated) return;
+        if (mountedEpoch.current !== getProtectedRequestEpoch()) { locked.current = true; uncertainRef.current = null; setUncertain(null); current.current = null; setView(null); setSelection([]); setAck(false); setError('session'); return; }
         if (intent && !access) return;
         const retrying = !!uncertainRef.current;
         if (intent) {
-            try { sessionStorage.setItem(storageKey, JSON.stringify({ deviceId, actorId: access!.actorId, sessionKey, intent })); } catch { setError('invalid'); return; }
+            try { const entries = loadIntents(access); saveIntents(access!, [...entries.filter(entry => entry.deviceId !== deviceId), { deviceId, intent }]); } catch { setError('invalid'); return; }
             uncertainRef.current = intent;
         }
         const controller = new AbortController(), epoch = getProtectedRequestEpoch(), started = anchorNow(); pending.current = controller;
@@ -136,8 +180,8 @@ function Workflow({ deviceId, sessionKey, children }: { deviceId: string; sessio
             accept(next, started, intent);
             if (intent?.kind === 'approve') setAck(false);
         } catch (caught) {
-            if (!alive.current || pending.current !== controller || suspended.current) return;
-            if (caught instanceof APIError && caught.status === 401 || epoch !== getProtectedRequestEpoch()) { locked.current = true; forgetIntent(); uncertainRef.current = null; setUncertain(null); setError('session'); current.current = null; setView(null); setSelection([]); setAck(false); }
+            if (!alive.current || pending.current !== controller || suspended.current || epoch !== getProtectedRequestEpoch()) return;
+            if (caught instanceof APIError && caught.status === 401) { locked.current = true; clearIntents(); uncertainRef.current = null; setUncertain(null); setError('session'); current.current = null; setView(null); setSelection([]); setAck(false); }
             else if (caught instanceof PackageUpdateNotReady) {
                 if (!retrying) { forgetIntent(); uncertainRef.current = null; setUncertain(null); }
                 setAck(false); current.current = null; clock.current = null; setView(null); setError('notReady');
@@ -150,16 +194,11 @@ function Workflow({ deviceId, sessionKey, children }: { deviceId: string; sessio
     useEffect(() => {
         alive.current = true;
         try {
-            const raw = sessionStorage.getItem(storageKey);
-            if (raw && raw.length <= 16384) {
-                const stored = JSON.parse(raw), saved = stored?.intent as Intent;
-                if (stored.deviceId !== deviceId || stored.actorId !== access?.actorId || stored.sessionKey !== sessionKey) forgetIntent();
-                else if (saved && ['simulation', 'native'].includes(saved.mode) && validPackageUpdateID(saved.requestId, 'update_') && (saved.kind === 'prepare' && Array.isArray(saved.packages) && saved.packages.length > 0 && saved.packages.length <= 32 && saved.packages.every(validPackageIdentity) && new Set(saved.packages.map(packageIdentityKey)).size === saved.packages.length || saved.kind === 'approve' && /^sha256:[a-f0-9]{64}$/.test(saved.previewDigest))) { uncertainRef.current = saved; setUncertain(saved); }
-                else { locked.current = true; setError('invalid'); }
-            } else if (raw) { locked.current = true; setError('invalid'); }
+            const saved = loadIntents(access).find(entry => entry.deviceId === deviceId)?.intent;
+            if (saved) { uncertainRef.current = saved; setUncertain(saved); }
         } catch { locked.current = true; setError('invalid'); }
         const clear = () => { setRetryGate(null); pending.current?.abort(); pending.current = null; current.current = null; clock.current = null; setView(null); setSelection([]); setAck(false); setLoading(null); };
-        const lock = () => { locked.current = true; forgetIntent(); uncertainRef.current = null; setUncertain(null); clear(); setError('session'); };
+        const lock = () => { locked.current = true; clearIntents(); uncertainRef.current = null; setUncertain(null); clear(); setError('session'); };
         const suspend = () => { suspended.current = true; clear(); };
         const restore = () => { if (locked.current || document.visibilityState === 'hidden') return; suspended.current = false; void runRef.current(); };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();

@@ -1,7 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AUTH_REQUIRED_EVENT } from './api';
+import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { setLocale } from './i18n';
+import { useWindowsEventContent } from './windows-event-content-resource';
 import { WindowsLogsPanel } from './windows-logs';
 import { eventContentAccepted, eventContentRecord, eventContentResult, eventContentSession, eventContentSessionExpires, eventContentView } from './windows-event-content-fixture';
 import type { EventContentResult, EventContentView, SelectedEvent } from './windows-event-content-types';
@@ -25,6 +26,8 @@ const acknowledge = () => fireEvent.click(screen.getByLabelText('I acknowledge t
 const submit = () => { review(); acknowledge(); fireEvent.click(screen.getByRole('button', { name: 'Request messages once' })); };
 async function setup() { const ui = render(<WindowsLogsPanel resource={inventory()} contentAccess={access}/>); await flush(); return ui; }
 beforeEach(() => {
+    // Each fixture is a fresh administrative session; remount tests below do not reset it.
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
     vi.useFakeTimers(); vi.setSystemTime(windowsNow); setLocale('en', false); localStorage.clear(); sessionStorage.clear(); view = eventContentView(); accepted = true; transform = v => v; override = null; calls.length = 0;
     vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
         calls.push({ path, options }); const special = override?.(path, options); if (special) return special;
@@ -146,5 +149,71 @@ describe('real event-content hook, API and Logs integration', () => {
     });
     it('does not automatically reopen an earlier accepted result', async () => {
         view.request = eventContentAccepted(eventContentRecord(selection())); view.contentStatus = 'available'; view.expectedFloor = '1'; await setup(); expect(screen.getByText(/belongs to an earlier view/)).toBeVisible(); expect(created()).toHaveLength(0); expect(queried()).toHaveLength(0);
+    });
+});
+
+describe('event-content nonsecret navigation fences', () => {
+    const mount = async () => { const hook = renderHook(() => useWindowsEventContent(windowsDeviceId, true, false, eventContentSessionExpires)); await flush(); return hook; };
+    const create = async (hook: Awaited<ReturnType<typeof mount>>) => { act(() => { void hook.result.current.create(selection(), windowsEventsView().events, true, false); }); await flush(); };
+    it.each(['lost', 'inflight'] as const)('retains %s create ambiguity across unmount and idle readbacks without consent or query replay', async mode => {
+        override = path => path === prefix + '/create' ? mode === 'lost' ? Promise.reject(new TypeError('lost')) : new Promise(() => {}) : undefined;
+        const first = await mount(); await create(first); first.unmount(); await flush();
+        const second = await mount(); expect(second.result.current.uncertain).toBe(true); expect(second.result.current.requestOwned).toBe(false); expect(second.result.current.report).toBeNull();
+        await create(second); expect(created()).toHaveLength(1); expect(queried()).toHaveLength(0);
+        view = { ...view, expectedFloor: '1' }; act(() => second.result.current.refresh()); await flush();
+        expect(second.result.current.uncertain).toBe(false); expect(second.result.current.requestOwned).toBe(false); expect(queried()).toHaveLength(0); expect(localStorage.length + sessionStorage.length).toBe(0);
+    });
+    it('keeps failed lifecycle cancellation fenced through absent and wrong-identity terminal status', async () => {
+        accepted = false; const first = await mount(); await create(first); const original = structuredClone(view.request!);
+        override = path => path === prefix + '/cancel' ? Promise.reject(new TypeError('lost cancel')) : undefined;
+        first.unmount(); await flush(); view = { ...view, request: null, contentStatus: 'unavailable' };
+        const second = await mount(); expect(second.result.current.uncertain).toBe(true);
+        const wrong = structuredClone(original); wrong.description.identity.id = 'winevent_' + 'a'.repeat(32); wrong.state = 'canceled'; wrong.canceledAt = windowsNow;
+        view = { ...view, request: wrong, contentStatus: 'canceled' }; act(() => second.result.current.refresh()); await flush(); expect(second.result.current.uncertain).toBe(true);
+        view = { ...view, request: { ...original, state: 'canceled', canceledAt: windowsNow } }; act(() => second.result.current.refresh()); await flush(); expect(second.result.current.uncertain).toBe(false); expect(queried()).toHaveLength(0); expect(created()).toHaveLength(1);
+    });
+    it('old delayed cleanup cannot overwrite or delete a newly approved create fence', async () => {
+        override = path => path === prefix + '/create' ? Promise.reject(new TypeError('lost')) : undefined;
+        const first = await mount(); await create(first); let finish!: (value: Response) => void;
+        override = path => path === prefix ? new Promise(resolve => { finish = resolve; }) : undefined;
+        first.unmount(); await flush(); const oldRead = finish; const oldRecord = eventContentRecord(selection());
+        view = { ...view, expectedFloor: '1', request: { ...oldRecord, state: 'canceled', canceledAt: windowsNow }, contentStatus: 'canceled' };
+        override = path => path === prefix + '/create' ? Promise.reject(new TypeError('new lost')) : undefined;
+        const second = await mount(); expect(second.result.current.uncertain).toBe(false); await create(second); expect(created()).toHaveLength(2); expect(second.result.current.uncertain).toBe(true);
+        await act(async () => oldRead(json({ ...eventContentView(), expectedFloor: '1', request: oldRecord, contentStatus: 'pending' }))); await flush();
+        expect(calls.filter(c => c.path === prefix + '/cancel')).toHaveLength(0);
+        act(() => second.result.current.refresh()); await flush(); expect(second.result.current.uncertain).toBe(true); await create(second); expect(created()).toHaveLength(2);
+    });
+    it('clears prior-session fences on epoch invalidation without AUTH_REQUIRED_EVENT', async () => {
+        override = path => path === prefix + '/create' ? Promise.reject(new TypeError('lost')) : undefined;
+        const first = await mount(); await create(first); first.unmount(); await flush(); act(() => abortProtectedRequests());
+        const second = await mount(); expect(second.result.current.uncertain).toBe(false); await create(second); expect(created()).toHaveLength(2);
+    });
+    it('does not adopt a retained fence after the authenticated binding changes', async () => {
+        override = path => path === prefix + '/create' ? Promise.reject(new TypeError('lost')) : undefined;
+        const first = await mount(); await create(first); first.unmount(); await flush();
+        view = { ...view, sessionBinding: 'a'.repeat(64) };
+        const second = await mount(); expect(second.result.current.failure).toBe('session'); expect(second.result.current.view).toBeNull();
+        await create(second); expect(created()).toHaveLength(1); expect(queried()).toHaveLength(0);
+    });
+    it.each(['session', 'transport'] as const)('does not transfer a fence to another %s scope', async kind => {
+        override = path => path === prefix + '/create' ? Promise.reject(new TypeError('lost')) : undefined;
+        const first = await mount(); await create(first); first.unmount(); await flush();
+        const scoped = renderHook(() => useWindowsEventContent(windowsDeviceId, true, kind === 'transport', kind === 'session' ? '2026-10-08T13:00:00Z' : eventContentSessionExpires)); await flush();
+        expect(scoped.result.current.uncertain).toBe(false); expect(scoped.result.current.requestOwned).toBe(false); expect(created()).toHaveLength(1); expect(queried()).toHaveLength(0); scoped.unmount();
+        const original = await mount(); expect(original.result.current.uncertain).toBe(true);
+    });
+    it('isolates devices, bounds unresolved fences without eviction, and recovers capacity on sign-in epoch', async () => {
+        override = path => { const match = path.match(/^\/api\/devices\/(agent_[a-f0-9]{32})\/windows-event-content(\/create)?$/); if (match) return match[2] ? Promise.reject(new TypeError('lost')) : Promise.resolve(json({ ...eventContentView(), deviceId: match[1] })); };
+        const ids = Array.from({ length: 33 }, (_, i) => `agent_${(i + 1).toString(16).padStart(32, '0')}`);
+        for (const id of ids) {
+            const h = renderHook(() => useWindowsEventContent(id, true, false, eventContentSessionExpires)); await flush(); expect(h.result.current.uncertain).toBe(false);
+            act(() => { void h.result.current.create(selection(), windowsEventsView().events, true, false); }); await flush(); h.unmount(); await flush();
+        }
+        expect(calls.filter(c => c.path.endsWith('/create'))).toHaveLength(32);
+        const old = renderHook(() => useWindowsEventContent(ids[0], true, false, eventContentSessionExpires)); await flush(); expect(old.result.current.uncertain).toBe(true); old.unmount();
+        act(() => abortProtectedRequests());
+        const fresh = renderHook(() => useWindowsEventContent(ids[32], true, false, eventContentSessionExpires)); await flush();
+        act(() => { void fresh.result.current.create(selection(), windowsEventsView().events, true, false); }); await flush(); expect(calls.filter(c => c.path.endsWith('/create'))).toHaveLength(33);
     });
 });

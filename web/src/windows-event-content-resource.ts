@@ -13,40 +13,76 @@ type Reconcile = { action: 'create' | 'cancel'; identity?: EventContentIdentity;
 type Approval = { selected: SelectedEvent[]; generation: string; digest: string; capturedAt: string; floor: string; grant: string };
 const matchesApproval = (r: EventContentRecord, a: Approval) => r.description.headerGenerationId === a.generation && r.description.headerSnapshotDigest === a.digest && r.description.headerCollectedAt === a.capturedAt && r.description.grantId === a.grant && BigInt(r.description.identity.sequence) === BigInt(a.floor) + 1n && r.description.query.events.length === a.selected.length && r.description.query.events.every((e, i) => sameSelectedEvent(e, a.selected[i]));
 const activeState = (r?: EventContentRecord | null) => r && ['pending', 'claimed', 'accepted'].includes(r.state);
+// Navigation keeps only reconciliation metadata, never selected headers,
+// provider names, message bodies, checked consent or content-query authority.
+type ContentFence = { sessionBinding: string; floor: string; action: 'create' | 'cancel'; identity?: EventContentIdentity };
+const contentFences = new Map<string, ContentFence>();
+const maxContentFences = 32;
+let contentFenceEpoch = 0;
+let contentProtectedEpoch = getProtectedRequestEpoch();
+const syncContentFenceScope = () => { if (contentProtectedEpoch !== getProtectedRequestEpoch()) { contentProtectedEpoch = getProtectedRequestEpoch(); contentFenceEpoch++; contentFences.clear(); } };
+const retainContentFence = (key: string, value: ContentFence, expected?: ContentFence): ContentFence | null => {
+    syncContentFenceScope();
+    const current = contentFences.get(key);
+    if (current !== expected || !current && contentFences.size >= maxContentFences) return null;
+    const next = { ...value, ...(value.identity ? { identity: { ...value.identity } } : {}) }; contentFences.set(key, next); return next;
+};
+if (typeof window !== 'undefined') window.addEventListener(AUTH_REQUIRED_EVENT, () => { contentFenceEpoch++; contentFences.clear(); });
+function reconcileContentFence(key: string, value: EventContentView, expected?: ContentFence) {
+    syncContentFenceScope();
+    const fence = contentFences.get(key); if (!fence || expected && fence !== expected || value.sessionBinding !== fence.sessionBinding) return;
+    const record = value.request;
+    // A larger authoritative floor consumes the original create precondition;
+    // this does not attribute someone else's record to our request or reopen it.
+    if (fence.action === 'create' ? BigInt(value.expectedFloor) > BigInt(fence.floor) : fence.identity && (BigInt(value.expectedFloor) > BigInt(fence.identity.sequence) || record && sameContentIdentity(record.description.identity, fence.identity) && ['canceled', 'expired'].includes(record.state))) contentFences.delete(key);
+}
+
 
 /** Memory-only, one reviewed selection. Status reads never enqueue or recapture.
  * Epochs fence all late responses; cancellation remains available during a read
  * or ambiguous create, and the original deadline is never recomputed later. */
 export function useWindowsEventContent(deviceId: string, enabled: boolean, insecure: boolean, sessionKey: string | null) {
     const key = `${deviceId}:${enabled}:${insecure}:${sessionKey ?? ''}`;
+    const fenceKey = JSON.stringify([deviceId, insecure, sessionKey]);
+    syncContentFenceScope();
     const [data, setData] = useState<{ key: string; view: EventContentView } | null>(null), [result, setResult] = useState<{ key: string; report: EventContentReport; expiresAt: string } | null>(null);
     const [busy, setBusy] = useState<'' | 'status' | 'create' | 'query' | 'cancel'>(''), [failure, setFailure] = useState<EventContentFailure | null>(null), [reset, setReset] = useState(0), [paused, setPaused] = useState(false), [uncertain, setUncertain] = useState(false);
     const alive = useRef(false), locked = useRef(false), suspended = useRef(false), epoch = useRef(0), protectedScope = useRef(0);
     const current = useRef<EventContentView | null>(null), viewAnchor = useRef<Anchor | null>(null), approval = useRef<Approval | null>(null), owned = useRef<EventContentRecord | null>(null), pending = useRef<{ controller: AbortController; timeout: number; start: Anchor; action: string } | null>(null);
     const sessionBinding = useRef<string | null>(null), latest = useRef<{ server: string; floorTime: string; anchor: Anchor } | null>(null), deadline = useRef(Infinity), sessionDeadline = useRef(Infinity), capabilityDeadline = useRef(Infinity), lifetimeAnchor = useRef<Anchor | null>(null), floor = useRef('0'), uncertainRef = useRef(false), reconcile = useRef<Reconcile | null>(null);
     const abort = useCallback(() => { epoch.current++; pending.current?.controller.abort(); window.clearTimeout(pending.current?.timeout); pending.current = null; if (alive.current) setBusy(''); }, []);
-    const discard = useCallback((reason: EventContentFailure | null = null) => { abort(); current.current = null; approval.current = null; owned.current = null; reconcile.current = null; uncertainRef.current = false; if (alive.current) { setData(null); setResult(null); setUncertain(false); setFailure(reason); setReset(n => n + 1); } }, [abort]);
+    const discard = useCallback((reason: EventContentFailure | null = null) => { abort(); current.current = null; approval.current = null; owned.current = null; reconcile.current = null; uncertainRef.current = contentFences.has(fenceKey); if (alive.current) { setData(null); setResult(null); setUncertain(uncertainRef.current); setFailure(reason); setReset(n => n + 1); } }, [abort, fenceKey]);
     const bestEffortCancel = useCallback((identity?: EventContentIdentity, intent?: Approval | null) => {
         if ((!identity && !intent) || locked.current || hasLogoutIntent() || getProtectedRequestEpoch() !== protectedScope.current) return;
-        const controller = new AbortController(), timer = window.setTimeout(() => controller.abort(), 10000), cleanupEpoch = getProtectedRequestEpoch();
+        const binding = sessionBinding.current;
+        if (!binding) return;
+        let cleanupFence = contentFences.get(fenceKey);
+        if (cleanupFence && (cleanupFence.sessionBinding !== binding || (identity ? cleanupFence.action !== 'cancel' || !cleanupFence.identity || !sameContentIdentity(cleanupFence.identity, identity) : cleanupFence.action !== 'create' || cleanupFence.floor !== intent!.floor))) return;
+        cleanupFence ??= retainContentFence(fenceKey, { action: identity ? 'cancel' : 'create', sessionBinding: binding, floor: intent?.floor ?? identity!.sequence, ...(identity ? { identity } : {}) }) ?? undefined;
+        if (!cleanupFence) return;
+        const controller = new AbortController(), timer = window.setTimeout(() => controller.abort(), 10000), cleanupEpoch = getProtectedRequestEpoch(), cleanupFenceEpoch = contentFenceEpoch;
         void (async () => {
             let target = identity;
             // A lifecycle loss can race a committed create whose response was
             // aborted. Reconcile only that exact captured intent, for at most
             // ten seconds; never enqueue, capture, or render from cleanup.
-            while (!target && intent && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && !hasLogoutIntent()) {
+            while (!target && intent && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && cleanupFenceEpoch === contentFenceEpoch && !hasLogoutIntent()) {
                 const value = await readEventContent(deviceId, controller.signal, insecure, sessionKey);
-                if (!validEventContentView(value, deviceId, sessionKey)) return;
+                if (!validEventContentView(value, deviceId, sessionKey) || value.sessionBinding !== binding) return;
                 if (value.request && matchesApproval(value.request, intent)) {
-                    if (!activeState(value.request)) return;
+                    if (!activeState(value.request)) { reconcileContentFence(fenceKey, value, cleanupFence); return; }
                     target = value.request.description.identity; break;
                 }
-                if (BigInt(value.expectedFloor) > BigInt(intent.floor)) return;
+                if (BigInt(value.expectedFloor) > BigInt(intent.floor)) { reconcileContentFence(fenceKey, value, cleanupFence); return; }
                 await new Promise<void>(resolve => { const delay = window.setTimeout(done, 3000); function done() { window.clearTimeout(delay); controller.signal.removeEventListener('abort', done); resolve(); } controller.signal.addEventListener('abort', done, { once: true }); });
             }
-            if (target && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && !hasLogoutIntent()) await cancelEventContent(deviceId, target, controller.signal, insecure, sessionKey);
+            if (target && !controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && cleanupFenceEpoch === contentFenceEpoch && !hasLogoutIntent()) {
+                const upgraded = retainContentFence(fenceKey, { action: 'cancel', sessionBinding: binding, floor: target.sequence, identity: target }, cleanupFence); if (!upgraded) return; cleanupFence = upgraded;
+                const value = await cancelEventContent(deviceId, target, controller.signal, insecure, sessionKey);
+                if (!controller.signal.aborted && cleanupEpoch === getProtectedRequestEpoch() && cleanupFenceEpoch === contentFenceEpoch && validEventContentView(value, deviceId, sessionKey)) reconcileContentFence(fenceKey, value, cleanupFence);
+            }
         })().catch(() => { /* Local disclosure already ended; never log private errors. */ }).finally(() => window.clearTimeout(timer));
-    }, [deviceId, insecure, sessionKey]);
+    }, [deviceId, fenceKey, insecure, sessionKey]);
     const clear = useCallback((reason: EventContentFailure | null = null, cancel = true) => { const intent = approval.current, record = owned.current ?? current.current?.request; const identity = record && activeState(record) && (!intent || matchesApproval(record, intent)) ? record.description.identity : undefined; discard(reason); if (cancel) bestEffortCancel(identity, intent); }, [bestEffortCancel, discard]);
     const begin = useCallback((action: 'status' | 'create' | 'query' | 'cancel') => {
         if (!enabled || !alive.current || locked.current || suspended.current || document.visibilityState === 'hidden' || hasLogoutIntent() || protectedScope.current !== getProtectedRequestEpoch()) return null;
@@ -69,6 +105,7 @@ export function useWindowsEventContent(deviceId: string, enabled: boolean, insec
     }, [abort, clear, enabled]);
     const accept = useCallback((value: unknown, start: Anchor) => {
         if (!validEventContentView(value, deviceId, sessionKey)) { clear('invalid'); return false; }
+        if (contentFences.has(fenceKey) && contentFences.get(fenceKey)!.sessionBinding !== value.sessionBinding) { locked.current = true; clear('session', false); return false; }
         if (sessionBinding.current !== null && sessionBinding.current !== value.sessionBinding) { locked.current = true; clear('session', false); return false; }
         const previous = latest.current;
         if (BigInt(value.expectedFloor) < BigInt(floor.current) || previous && (eventContentAge(value.serverNow, previous.server) < 0 || eventContentAge(value.serverNow, previous.floorTime) + 1500 < elapsed(previous.anchor))) { clear('clock'); return false; }
@@ -96,8 +133,9 @@ export function useWindowsEventContent(deviceId: string, enabled: boolean, insec
         if (approval.current && (value.localStatus !== 'enabled' || !value.capability?.enabled || value.capability.grantId !== approval.current.grant || performance.now() >= Math.min(deadline.current, capabilityDeadline.current))) { clear(performance.now() >= Math.min(deadline.current, capabilityDeadline.current) ? 'expired' : 'conflict'); return false; }
         if (value.request && ['canceled', 'expired'].includes(value.request.state)) { approval.current = null; owned.current = null; setResult(null); setReset(n => n + 1); }
         if (value.contentStatus !== 'available') setResult(null);
+        reconcileContentFence(fenceKey, value); uncertainRef.current = contentFences.has(fenceKey); setUncertain(uncertainRef.current);
         current.current = value; viewAnchor.current = start; setData({ key, view: value }); setFailure(null); return true;
-    }, [clear, deviceId, key, sessionKey]);
+    }, [clear, deviceId, fenceKey, key, sessionKey]);
     const fail = useCallback((error: unknown, ambiguous = false) => {
         if (error instanceof APIError && (error.status === 401 || error.status === 403)) { locked.current = true; clear('session', false); return; }
         if (ambiguous) { uncertainRef.current = true; setUncertain(true); setResult(null); setFailure('uncertain'); return; }
@@ -124,14 +162,16 @@ export function useWindowsEventContent(deviceId: string, enabled: boolean, insec
     }, [accept, begin, deviceId, fail, insecure, sessionKey]);
     const create = useCallback(async (selected: SelectedEvent[], headers: WindowsEvents, acknowledge: boolean, plaintext: boolean) => {
         const v = current.current;
-        if (!v || pending.current || uncertainRef.current || !v.configured || v.localStatus !== 'enabled' || !v.capability?.enabled || !v.headers || activeState(v.request) || !validSelectedEvents(selected) || !acknowledge || plaintext !== insecure || v.headers.generationId !== headers.generationId || v.headers.collectedAt !== headers.collectedAt || eventContentAge(v.headers.expiresAt, v.serverNow) <= 0 || selected.some(e => !headers.channels.some(c => c.channel === e.channel && c.rows.some(r => sameSelectedEvent({ ...r, channel: c.channel }, e))))) return;
+        if (!v || pending.current || uncertainRef.current || contentFences.has(fenceKey) || !v.configured || v.localStatus !== 'enabled' || !v.capability?.enabled || !v.headers || activeState(v.request) || !validSelectedEvents(selected) || !acknowledge || plaintext !== insecure || v.headers.generationId !== headers.generationId || v.headers.collectedAt !== headers.collectedAt || eventContentAge(v.headers.expiresAt, v.serverNow) <= 0 || selected.some(e => !headers.channels.some(c => c.channel === e.channel && c.rows.some(r => sameSelectedEvent({ ...r, channel: c.channel }, e))))) return;
         approval.current = { selected: selected.map(e => ({ ...e })), generation: v.headers.generationId, digest: v.headers.snapshotDigest, capturedAt: v.headers.collectedAt, floor: v.expectedFloor, grant: v.capability.grantId };
         reconcile.current = { action: 'create', intent: approval.current }; deadline.current = Infinity; capabilityDeadline.current = (viewAnchor.current ?? clock()).mono + eventContentAge(v.capability.expiresAt, v.serverNow); owned.current = null; setResult(null);
         const op = begin('create'); if (!op) { approval.current = null; return; }
+        const createFence = retainContentFence(fenceKey, { action: 'create', sessionBinding: v.sessionBinding, floor: v.expectedFloor });
+        if (!createFence) { approval.current = null; reconcile.current = null; setFailure('unavailable'); op.finish(); return; }
         try { const value = await createEventContent(deviceId, v, selected, acknowledge, plaintext, op.signal, insecure, sessionKey); if (op.active() && accept(value, op.start)) reconcile.current = null; }
-        catch (error) { if (op.active()) fail(error, !(error instanceof APIError && error.status !== undefined && error.status >= 400 && error.status < 500)); }
+        catch (error) { if (op.active()) { const rejected = error instanceof APIError && error.status !== undefined && error.status >= 400 && error.status < 500; if (rejected) { if (contentFences.get(fenceKey) === createFence) contentFences.delete(fenceKey); approval.current = null; reconcile.current = null; } fail(error, !rejected); } }
         finally { op.finish(); }
-    }, [accept, begin, deviceId, fail, insecure, sessionKey]);
+    }, [accept, begin, deviceId, fail, fenceKey, insecure, sessionKey]);
     const cancel = useCallback(async () => {
         const r = owned.current ?? current.current?.request, a = approval.current;
         reconcile.current = { action: 'cancel', ...(r && (!a || matchesApproval(r, a)) ? { identity: r.description.identity } : a ? { intent: a } : {}) };
@@ -148,10 +188,13 @@ export function useWindowsEventContent(deviceId: string, enabled: boolean, insec
             }
             if (!identity) { discard(); return; }
             reconcile.current = { action: 'cancel', identity };
+            const priorFence = contentFences.get(fenceKey);
+            const compatible = !priorFence || priorFence.sessionBinding === sessionBinding.current && (priorFence.action === 'create' ? BigInt(priorFence.floor) + 1n === BigInt(identity.sequence) : !!priorFence.identity && sameContentIdentity(priorFence.identity, identity));
+            if (!sessionBinding.current || !compatible || !retainContentFence(fenceKey, { action: 'cancel', sessionBinding: sessionBinding.current, floor: identity.sequence, identity }, priorFence)) { uncertainRef.current = true; setUncertain(true); setFailure('uncertain'); return; }
             const value = await cancelEventContent(deviceId, identity, op.signal, insecure, sessionKey);
             if (op.active() && accept(value, op.start)) reconcile.current = null;
         } catch (error) { if (op.active()) fail(error, true); } finally { op.finish(); }
-    }, [abort, accept, begin, bestEffortCancel, clear, deviceId, discard, fail, insecure, sessionKey]);
+    }, [abort, accept, begin, bestEffortCancel, clear, deviceId, discard, fail, fenceKey, insecure, sessionKey]);
     useEffect(() => {
         alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden'; protectedScope.current = getProtectedRequestEpoch(); sessionBinding.current = null; latest.current = null; deadline.current = Infinity; sessionDeadline.current = Infinity; capabilityDeadline.current = Infinity; lifetimeAnchor.current = null; floor.current = '0'; uncertainRef.current = false; setUncertain(false); setPaused(suspended.current); discard();
         if (!enabled) return () => { alive.current = false; abort(); };
