@@ -6,8 +6,10 @@ a separate, broader profile. Neither is a production RMM release.
 
 ## Get matching components
 
-The **Rust Windows basic agent** workflow builds a Windows x64 ZIP/EXE and Linux
-amd64 manager from the same source commit. Use the candidate's manifest and
+Choose a published **integrated Rust test** prerelease from the
+[release list](https://github.com/storminator89/Tracebolt/releases). The
+**Rust Windows basic agent** workflow builds its Windows x64 ZIP/EXE and Linux
+amd64 manager from the same source commit. Use that candidate's manifest and
 SHA256SUMS to select and verify both components. Main publication uses a new
 immutable candidate tag per commit; older preview assets are not overwritten.
 Do not combine the Rust preview with an arbitrary older main manager.
@@ -44,11 +46,17 @@ locally displayed fingerprint and comparison value in Devices / Setup / Windows,
 then approve the matching identity. Only a fresh accepted report confirms data
 arrival. Optional invitation mode remains described in the package README.
 
-Local configuration/CA validation runs before service/directory/key creation.
-Optional invitation-bootstrap content and preprovided client certificate/key
-validation still occur after staging. This does not yet prove remote manager
-capability before staging; incompatible
-managers and network errors remain candidate limitations (TB-01/TB-09).
+In current main, automatic/invitation installation validates configuration/CA,
+optional public invitation-bootstrap content and the bounded HTTPS Rust-basic
+manager capability before service/directory/key creation. `init` and library
+initialization recheck before opening enrollment state. See the
+[compatibility contract](rust-manager-compatibility.md) and
+[invitation preflight limits](rust-installer-preflight.md). Older immutable test
+packages keep their original behavior: check the chosen source pin and included
+README rather than assuming every candidate has the current checks. Advanced
+preprovided credentials remain outside the new compatibility preflight; full
+path/ACL/executable-hash and native negative-case acceptance remain open. A
+successful check cannot promise later network availability or accepted reports.
 
 ## Evidence and remaining gates
 
