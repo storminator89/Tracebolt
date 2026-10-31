@@ -64,9 +64,11 @@ manager instances, not one shared manager with a customer filter. Follow the
 This is a deployment separation model, not an automated multi-instance installer
 or proof of hostile-tenant isolation. Two instances on one host do not isolate
 against that host's administrator; use separate hosts/VMs when that is the required
-trust boundary. Source/component tests establish no two-instance native acceptance,
-backup/restore acceptance or production-hardening result. Deployment and credential/
-trust changes still need their own approval.
+trust boundary. A bounded [organizational-boundary acceptance regression](customer-organization-acceptance.md)
+checks two separate Linux manager processes with disposable identities, trust,
+state and backup copies, plus unchanged API/CSV permissions. That is not a real
+customer deployment, general backup/restore or production-hardening result.
+Deployment and credential/trust changes still need their own approval.
 
 ## Organizational assignment of activated Windows identities
 

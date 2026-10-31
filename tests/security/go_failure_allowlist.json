@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "2a26b2dbaf7541584a7cf8834d3534bf02fd8cc5c280d9600a2520faf50b9a84",
+  "goSourceSha256": "69e784a51d3be69c580f19ec014d100fa889a12ac9fcb760be65686a3104f779",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -140,6 +140,7 @@
       "TestCompleteMVPSenderFailureCategories",
       "TestCompleteMVPWaitRequiresSuccessAndRespectsDeadline",
       "TestCompleteMVPWaitRetryCannotReplaceSuccessOrTerminalFailure",
+      "TestCustomerSeparateManagerProcesses",
       "TestGuidedMaterialRedactionAndProtection",
       "TestGuidedRuntimeModeIsolationAndRestart",
       "TestGuidedRuntimeRejectsLegacyTombstone",
@@ -1044,6 +1045,8 @@
       "TestCustomerFinalManagerBindingCheck",
       "TestCustomerFinalSessionCheckAndCommittedUncertainty",
       "TestCustomerManagerRejectsChangedBindingAndExpiredIssuer",
+      "TestCustomerOrganizationAssignmentPreservesDataAndAuthority",
+      "TestCustomerOrganizationMetadataCannotPromoteNamedOrAnonymousAuthority",
       "TestCustomerWindowsAssignmentAuthorityChangeRollsBack",
       "TestCustomerWindowsAssignmentHistoryAndIssuerLifetime",
       "TestCustomerWindowsAssignmentResponseLossRequiresReconciliation",
