@@ -77,6 +77,12 @@ function LinuxCVESession({ deviceId, canWrite, sessionExpiresAt, authorityKey, o
         {resource.error && <p role="alert" className="linux-cve-notice caution"><TriangleAlert size={16}/>{labels[resource.error]}</p>}
         {resource.notice && !(resource.notice === 'uncertain' && resource.error === 'uncertain') && <p role="status" className="linux-cve-notice">{labels[resource.notice]}</p>}
         {view && <>
+            {activeReport && <dl className="linux-cve-times" aria-label={labels.evidence}>
+                <div><dt>{labels.source}</dt><dd><a href={report.feed.sourceUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{publisher(report.feed)}</a><br/>{report.feed.trust === 'https_origin_only' ? labels.httpsSource : labels.importedSource}</dd></div>
+                <div><dt>{labels.method}</dt><dd>{labels.comparison}</dd></div>
+                <div><dt>{labels.collected}</dt><dd><time dateTime={view.inventory!.collectedAt}>{date(view.inventory!.collectedAt, locale)}</time></dd></div>
+                <div><dt>{labels.reportFetched}</dt><dd><time dateTime={report.feed.fetchedAt}>{date(report.feed.fetchedAt, locale)}</time></dd></div>
+            </dl>}
             <div className="linux-cve-summary"><div className="linux-cve-count"><strong aria-label={activeReport && !report.coverage.evaluationComplete ? `${labels.atLeast} ${format(report.coverage.matchedWarningCount)}` : undefined}>{activeReport ? `${report.coverage.evaluationComplete ? '' : '≥ '}${format(report.coverage.matchedWarningCount)}` : '—'}</strong><span>{warnings === null ? labels.unavailableCount : labels.warnings}</span></div><div>
                 <p className="linux-cve-state">{labels[view.status]}</p>
                 {activeReport && report.unassessedRecordCount > 0 && <p className="linux-cve-warning">{!report.coverage.evaluationComplete && `${labels.atLeast} `}{format(report.unassessedRecordCount)} {report.unassessedRecordCount === 1 ? labels.unassessedSingle : labels.unassessed}</p>}

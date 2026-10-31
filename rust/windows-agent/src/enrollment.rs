@@ -83,6 +83,71 @@ fn parse_cert(bytes: &[u8]) -> Result<X509Certificate<'_>> {
     Ok(cert)
 }
 
+/// Validate fresh enrollment inputs without opening state or generating a key.
+/// An offline call checks local semantics only; it neither adopts bootstrap trust
+/// nor proves manager availability, invitation validity or operator approval.
+pub fn validate_initial_bootstrap(
+    config: &Config,
+    bootstrap: Option<&wire::Bootstrap>,
+) -> Result<()> {
+    ensure!(
+        (config.enrollment_mode == EnrollmentMode::Invitation) == bootstrap.is_some(),
+        "invitation bootstrap required only in invitation mode"
+    );
+    if let Some(bootstrap) = bootstrap {
+        validate_bootstrap(config, bootstrap)?;
+    }
+    Ok(())
+}
+
+fn valid_id(value: &str, prefix: &str) -> bool {
+    value.strip_prefix(prefix).is_some_and(|suffix| {
+        suffix.len() == 32
+            && suffix
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            && suffix.bytes().any(|b| b != b'0')
+    })
+}
+
+fn validate_bootstrap(config: &Config, b: &wire::Bootstrap) -> Result<()> {
+    ensure!(
+        b.schema_version == "tracebolt.enrollment-bootstrap.v2"
+            && b.profile == "tls"
+            && b.renewal_policy.is_empty()
+            && b.collection_profile == wire::COLLECTION
+            && b.enrollment_origin == config.manager_origin,
+        "bootstrap scope mismatch"
+    );
+    ensure!(
+        valid_id(&b.manager_instance_id, "manager_") && valid_id(&b.invitation_id, "invite_"),
+        "invalid bootstrap identity"
+    );
+    Config::validate_origin(&b.agent_origin)?;
+    ensure!(
+        config.agent_origin.is_empty() || config.agent_origin == b.agent_origin,
+        "telemetry destination mismatch"
+    );
+    let root_der = cert_der(&b.issuer_root_pem)?;
+    let issuer_der = cert_der(&b.issuer_pem)?;
+    let root = parse_cert(&root_der)?;
+    let issuer = parse_cert(&issuer_der)?;
+    ensure!(
+        root.is_ca()
+            && issuer.is_ca()
+            && root.validity().is_valid()
+            && issuer.validity().is_valid(),
+        "invalid issuing authority"
+    );
+    issuer
+        .verify_signature(Some(root.public_key()))
+        .map_err(|_| anyhow::anyhow!("issuer signature rejected"))?;
+    // Advertised server trust is public input, never a replacement for the
+    // independently selected CA/WebPKI trust used by the client.
+    crate::config::tls_builder(b.server_ca_pem.as_bytes())?.build()?;
+    Ok(())
+}
+
 impl Enrollment {
     pub fn open(
         directory: &Path,
@@ -95,6 +160,9 @@ impl Enrollment {
             "preprovided identity mode"
         );
         let ca = crate::config::read_ca(directory)?;
+        if initialize {
+            validate_initial_bootstrap(&config, bootstrap.as_ref())?;
+        }
         if initialize {
             crate::compatibility::check(&config, &ca)?;
         }
@@ -119,10 +187,6 @@ impl Enrollment {
         connection.execute_batch("PRAGMA synchronous=FULL; PRAGMA journal_mode=DELETE;")?;
         let binding = config.binding(&[], &ca)?;
         if initialize {
-            ensure!(
-                (config.enrollment_mode == EnrollmentMode::Invitation) == bootstrap.is_some(),
-                "invitation bootstrap required only in invitation mode"
-            );
             let key = KeyPair::generate_for(&PKCS_ED25519)?;
             let mut params = CertificateParams::new(Vec::<String>::new())?;
             params.distinguished_name = DistinguishedName::new();
@@ -230,38 +294,11 @@ impl Enrollment {
         Ok(serde_json::from_slice(&raw)?)
     }
     fn validate_bootstrap(&self, b: &wire::Bootstrap) -> Result<()> {
+        validate_bootstrap(&self.config, b)?;
         ensure!(
-            b.schema_version == "tracebolt.enrollment-bootstrap.v2"
-                && b.profile == "tls"
-                && b.renewal_policy.is_empty()
-                && b.collection_profile == wire::COLLECTION
-                && b.enrollment_origin == self.config.manager_origin
-                && b.invitation_id == self.ledger.invitation_id,
-            "bootstrap scope mismatch"
+            b.invitation_id == self.ledger.invitation_id,
+            "bootstrap invitation mismatch"
         );
-        ensure!(
-            b.manager_instance_id.starts_with("manager_") && b.manager_instance_id.len() == 40,
-            "invalid manager identity"
-        );
-        Config::validate_origin(&b.agent_origin)?;
-        ensure!(
-            self.config.agent_origin.is_empty() || self.config.agent_origin == b.agent_origin,
-            "telemetry destination mismatch"
-        );
-        let root_der = cert_der(&b.issuer_root_pem)?;
-        let issuer_der = cert_der(&b.issuer_pem)?;
-        let root = parse_cert(&root_der)?;
-        let issuer = parse_cert(&issuer_der)?;
-        ensure!(
-            root.is_ca()
-                && issuer.is_ca()
-                && root.validity().is_valid()
-                && issuer.validity().is_valid(),
-            "invalid issuing authority"
-        );
-        issuer
-            .verify_signature(Some(root.public_key()))
-            .map_err(|_| anyhow::anyhow!("issuer signature rejected"))?;
         Ok(())
     }
     fn challenge(&self, purpose: &str) -> Result<wire::Context> {

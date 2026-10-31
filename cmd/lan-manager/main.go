@@ -66,6 +66,10 @@ func prepareWithAlarms(m lanconfig.Material, enrollment *enrollmentconfig.Materi
 	return prepareWithApplicationChecks(m, enrollment, alarms, applicationcheck.Config{})
 }
 func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentconfig.Material, alarms alarmdelivery.Config, checks applicationcheck.Config) (*prepared, error) {
+	// Deny before any store opening, schema initialization or authority use.
+	if err := lanstore.CheckRestoreQuarantine(m.Config.StateDirectory); err != nil {
+		return nil, err
+	}
 	managerID := ""
 	if enrollment != nil {
 		managerID = enrollment.StoreConfig().Binding.InstanceID
@@ -818,9 +822,12 @@ func main() {
 	if *path == "" || flag.NArg() != 0 {
 		log.Fatal("Tracebolt LAN manager requires --lan-config PATH")
 	}
-	material, err := lanconfig.Load(*path)
+	material, err := loadStartupMaterial(*path)
 	if err != nil {
-		log.Fatal("Tracebolt LAN configuration rejected; verify profile, file ownership, TLS identity and protected material")
+		if errors.Is(err, lanstore.ErrRestoreQuarantined) {
+			log.Fatal(lanstore.ErrRestoreQuarantined)
+		}
+		log.Fatal("Tracebolt LAN configuration or restore-quarantine status rejected; keep writers stopped and inspect protected paths/material")
 	}
 	var enrollment *enrollmentconfig.Material
 	if *enrollmentPath != "" {

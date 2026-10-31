@@ -618,14 +618,26 @@ UID/GID and integrity; protect backups as telemetry/security data, encrypt under
 site policy, and do not upload them to Git/CI/chat. This project has no backup CLI.
 Keep endpoint sender state too; do not clone one sender's state/identity to another.
 
-**Restore:** with services stopped, restore into a private location/volume owned
+**Restore:** the current source has an explicit [deny-only restore quarantine](restore-quarantine.md)
+for the updated `lan-manager`, not a complete restore/release workflow. With all
+writers **and automatic/concurrent starts disabled**, mark the restored private
+state before any manager startup. The marker blocks startup before stores,
+listeners or authority use; no reconciliation/release command exists. A missing
+marker or matching backup hash never proves freshness, and older binaries/raw
+whole-volume rollbacks are not detected. Do not remove the marker to resume an
+old snapshot; keep recovery stopped until current authority is independently
+reconciled through a reviewed release workflow.
+
+For the separately approved offline materialization, with services stopped,
+restore into a private location/volume owned
 by the same intended runtime UID, using the matching profile/config/build. Test
 first in an isolated target, with deliberate network exposure and no duplicate
 writer. Old backups can predate revocations and replay floors: reconcile those
 security changes before reconnecting endpoints. Never treat a stale backup as a
 safe trust reset. Endpoints with pending/advanced sequences need review; do not
 “synchronize” them by deleting state. Confirm sign-in, expected public approvals,
-revocations and accepted observations after restoring.
+revocations and accepted observations only after a separately reviewed, current
+authority reconciliation and quarantine release are implemented and approved.
 
 **Update:** choose a reviewed revision and its CI results; keep the old source,
 manager binary/UI or exact Docker image ID, configuration and consistent stopped
@@ -636,8 +648,10 @@ existing state. Re-run acceptance. No automatic updater is shipped.
 **Rollback:** do not simply run an old binary against a possibly migrated newer
 DB. Restore the matching pre-update backup and tested build after reviewing lost
 telemetry and intervening approval/revocation changes. Never restore a revoked
-identity silently. There is no guaranteed database downgrade path or automatic
-rollback tool.
+identity silently. Rollback remains offline and quarantined; never start an
+older binary to bypass the marker. Current-authority reconciliation and a reviewed
+quarantine-release implementation are still required. There is no guaranteed
+database downgrade path or automatic rollback tool.
 
 **Uninstall:** stop/remove only the known deployment containers or foreground
 binaries. For an explicitly installed Linux agent, use the reviewed owned

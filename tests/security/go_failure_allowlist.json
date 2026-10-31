@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "621052182f3e934fb1b6e65d4ab9bd8471860fff837ec131c2a1f4e938e7b4cf",
+  "goSourceSha256": "2a26b2dbaf7541584a7cf8834d3534bf02fd8cc5c280d9600a2520faf50b9a84",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -190,6 +190,8 @@
       "TestReadAdminSetupDiagnosticIsClosed",
       "TestReadAdminSocketProcessMatches",
       "TestReadAdminUpgradeClosedFailureProjection",
+      "TestRestoreQuarantineStopsEveryPreparationBeforeStateOrAuthority",
+      "TestRestoreQuarantineStopsStartupBeforeCredentialLoading",
       "TestSystemdDiagnosticStageAllowlist",
       "TestWindowsEventMaintenanceBoundsAndWarningThrottle",
       "TestWindowsEventMaintenanceCancellationAndInvalidConfiguration",
@@ -218,6 +220,11 @@
       "TestDevelopmentModeSelectsCollectionBeforeFirstSample",
       "TestHTTPWriteBudgetOutlastsAnalysis",
       "TestRealManagerReturnsDelayedFakeProviderResult"
+    ],
+    "localrmm/cmd/manager-restore-quarantine": [
+      "TestRestoreQuarantineCLIExplicitMarkAndReadOnlyStatus",
+      "TestRestoreQuarantineCLIMissingPathAndSecretRedaction",
+      "TestRestoreQuarantineCLIRejectsWrongUIDWithoutWriting"
     ],
     "localrmm/cmd/manager-setup": [
       "TestHelpAndArgumentsAreStaticAndRedacted"
@@ -3661,6 +3668,10 @@
       "TestPackageFrameRawReservationsAndWholeFrame",
       "TestPackageFrameStrictWireNegatives",
       "TestPrivateDirectorySidecarsAndColumnBinding",
+      "TestRestoreQuarantineConcurrentCreationHasOneWinner",
+      "TestRestoreQuarantineEveryMarkerObjectDeniesWithoutReading",
+      "TestRestoreQuarantinePreservesHistoricalBytesAndCannotRearm",
+      "TestRestoreQuarantineProtectedPathsAndMissingDirectory",
       "TestStorageRejectsSymlinksAndInsecureExistingFiles",
       "TestWindowsUpdatesCacheQualityNeverBecomesPatchAssessment",
       "TestWindowsUpdatesSnapshotAndAggregateBudgets",
@@ -6304,7 +6315,8 @@
     "localrmm/tests/rustagent": [
       "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
-      "TestRustFrameAcceptedByManager"
+      "TestRustFrameAcceptedByManager",
+      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations"
     ],
     "localrmm/tests/rustagent/cmd/nativefixture": [
       "TestCompatibilityGETDoesNotEnterEnrollment"

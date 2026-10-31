@@ -2,6 +2,11 @@
 
 `protocol_test.go` and `enrollment_test.go` consume invented fixtures emitted by
 Rust examples and validate them using the real Go ingress and crypto contracts.
+`installer_bootstrap_preflight_test.go` and `manager_preflight_test.go` are
+source-order contracts only, not PowerShell/SCM execution. Portable Rust
+`tests/installer_preflight.rs` checks bounded public bootstrap semantics and
+rejection before enrollment state/key creation using disposable local inputs;
+see [the bounded preflight contract](../../docs/rust-installer-preflight.md).
 
 `cmd/nativefixture` is a **test-only loopback protocol peer**, not a production
 manager. It uses the production Go enrollment cryptography, issuer, state engine
