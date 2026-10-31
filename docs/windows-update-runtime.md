@@ -125,6 +125,12 @@ enter public/basic observations, AI/provider packets, event-content grants or
 action permissions. Zero retained rows never means current, fully patched or
 compliant. Titles and vendor severity are cached labels, not CVE assessments.
 
+The Updates panel names the WUA cache source, offline inspection method, original
+capture time and inspection age together in English and German. Inspection age
+uses the existing manager-clock/monotonic reference, not the browser wall clock,
+receipt or refresh time; cache freshness remains unknown. Denied, unavailable or
+offline-unverified attempts never display a successful inspection method.
+
 ## Verification and separate native gate
 
 Portable fixtures cover protected create-only consent, stopped/owned lifecycle
