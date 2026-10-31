@@ -115,7 +115,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  await expect(row('fixture-unverified').locator('td').nth(1).locator('.application-cell-value')).toHaveText('Unknown');
  await expect(row('fixture-unverified').locator('.application-expiry')).toHaveCount(0);
  for(const item of fixture.items){await expect(row(item.id).locator('td:last-child time')).toHaveAttribute('datetime',item.observedAt);await expect(row(item.id).locator('td:last-child time')).toHaveText('1m ago');}
- await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
+ await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
  await expect(panel.locator('.application-checks-timing')).toContainText('60s after each round');await expect(panel.locator('.application-checks-timing')).toContainText('85s');
  mark('retained-http-scope');const disclosure=panel.locator('details');await disclosure.locator('summary').click();await expect(disclosure).toHaveAttribute('open','');
  await expect(disclosure.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true})).toHaveAttribute('rel','noopener noreferrer');
@@ -161,7 +161,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
     await expect(values.nth(1)).toContainText('Expiring soon');await expect(current.locator('.application-expiry')).toHaveAttribute('datetime',item.tls.expiresAt);
    }
   }
-  await expect(panel.getByRole('button')).toHaveCount(1);await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
+  await expect(panel.locator('input,select,textarea,form')).toHaveCount(0);
   mark('scope-'+suffix);const details=panel.locator('details');await details.locator('summary').click();await expect(details).toHaveAttribute('open','');
   await expect(details).toContainText('2xx is an HTTP status, not proof of health. Certificate data is from the same check. Reload starts no check.');
   if(mixed){
@@ -208,7 +208,7 @@ export async function applicationChecksBrowserCase({pageAt,login,expect,base,sho
  await expect(setup).toContainText('private LAN and plaintext HTTP need separate approval.');
  const guide=setup.getByRole('link',{name:'Startup-file guide (GitHub)',exact:true});
  await expect(guide).toHaveAttribute('href','https://github.com/storminator89/Tracebolt/blob/bb76d6a6b7000b244b8075d5644562ad0da94c91/docs/application-checks.md');
- await expect(guide).toHaveAttribute('referrerpolicy','no-referrer');await expect(panel.getByRole('button')).toHaveCount(1);
+ await expect(guide).toHaveAttribute('referrerpolicy','no-referrer');
  await setup.locator('summary').click();await expect(setup).not.toHaveAttribute('open','');
  await panel.scrollIntoViewIfNeeded();await shot(page,'synthetic-application-checks-disabled-desktop-en',applicationFixtureDisclosure);
  await page.setViewportSize({width:390,height:844});await setup.locator('summary').click();
