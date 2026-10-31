@@ -7,7 +7,6 @@ import (
 	"embed"
 	"golang.org/x/sys/windows"
 	"io"
-	"localrmm/internal/enrollmentclient"
 	"localrmm/internal/lanclient"
 	"localrmm/internal/windowspackage"
 	"localrmm/internal/windowsservice"
@@ -46,102 +45,62 @@ func main() {
 		setupWizardAlert("This Setup package is incomplete or corrupt. Obtain the reviewed Setup.exe and verify its release provenance. Nothing was installed.")
 		os.Exit(2)
 	}
-	config := windowssetupui.Config{InitialPublicBootstrap: publicBootstrap, AutomaticRenewalDisclosure: enrollmentclient.AutomaticRenewalPrivacy, Version: manifest.Version, SourceCommit: manifest.SourceCommit, PayloadSHA256: manifest.SHA256, Architecture: manifest.Architecture, Disclosure: setupWizardDisclosure(), HTTPDisclosure: setupWizardHTTPDisclosure(), ReadAdminDisclosure: setupWizardReadAdminDisclosure(false), ReadAdminHTTPDisclosure: setupWizardReadAdminDisclosure(true), ReadAdminSummary: setupWizardReadAdminSummary(), ReadAdminHTTPSummary: setupWizardReadAdminHTTPRiskSummary}
-	hooks := windowssetupui.Hooks{Preview: setupWizardPreview}
-	installProfile := func(ctx context.Context, raw []byte, insecureAcknowledged bool, readAdmin bool, renewalAcknowledged bool, progress func(string)) error {
-		acknowledgedBootstrap := setupWizardAcknowledgedBootstrap
-		if readAdmin {
-			acknowledgedBootstrap = setupWizardReadAdminAcknowledgedBootstrap
-		}
-		ctx, stop := context.WithCancel(ctx)
-		defer stop()
-		var console io.Writer
-		steps := setupWizardInstallSteps{
-			validate: func(b []byte) error {
-				if manifest.Validate(payload) != nil {
-					return errLifecycle
-				}
-				_, _, err := acknowledgedBootstrap(b, insecureAcknowledged, renewalAcknowledged)
-				if err != nil {
-					return errLifecycle
-				}
-				return nil
-			},
-			preflight: windowspackage.Preflight,
-			compatibility: func(ctx context.Context, raw []byte) error {
-				b, err := setupWizardBootstrap(raw)
-				if err != nil {
-					return err
-				}
-				requestCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-				defer cancel()
-				expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
-				if readAdmin {
-					expected = windowssetup.ExpectedReadAdminV10(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
-				}
-				return lanclient.CheckWindowsSetupManager(requestCtx, b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM), expected)
-			},
-			console: func() (func() error, error) {
-				w, close, err := setupWizardConsole(stop)
-				console = w
-				return close, err
-			},
-			provision: func(ctx context.Context, raw []byte) (string, func() error, error) {
-				r, err := windowspackage.Provision(ctx, payload, manifest, raw)
-				if err != nil {
-					return "", nil, err
-				}
-				return r.BootstrapPath, r.Close, nil
-			},
-			install: func(ctx context.Context, path string) error {
-				_, consent, err := acknowledgedBootstrap(raw, insecureAcknowledged, renewalAcknowledged)
-				if err != nil {
-					return err
-				}
-				_, err = installReadObservationWithProgress(ctx, path, consent, console, console, progress, renewalAcknowledged)
-				return err
-			},
-		}
-		err := setupWizardInstall(ctx, raw, steps, progress)
-		if err != nil {
-			setupWizardFailure(err, progress)
-		}
-		return err
-	}
-	hooks.Install = func(ctx context.Context, raw []byte, insecure bool, progress func(string)) error {
-		return installProfile(ctx, raw, insecure, false, false, progress)
-	}
-	hooks.InstallReadAdmin = func(ctx context.Context, raw []byte, insecure bool, progress func(string)) error {
-		return installProfile(ctx, raw, insecure, true, false, progress)
-	}
-	hooks.InstallRenewable = func(ctx context.Context, raw []byte, renewal bool, progress func(string)) error {
-		return installProfile(ctx, raw, false, false, renewal, progress)
-	}
-	hooks.InstallReadAdminRenewable = func(ctx context.Context, raw []byte, renewal bool, progress func(string)) error {
-		return installProfile(ctx, raw, false, true, renewal, progress)
-	}
-	hooks.Uninstall = func(ctx context.Context, progress func(string)) error {
-		err := setupWizardUninstallWithLease(ctx, openReceiptStore, setupWizardRemovalSteps{
-			inspectOwned: windowsservice.InspectOwned, inspectRemoval: windowsservice.InspectRemoval, stop: windowsservice.ApplyStop, remove: uninstallWithUpdateOwnership,
-			pending: func(err error) bool { return windowsservice.CanWaitRemovalObservation(err) && setupRemovalPending(err) },
-			wait: func(ctx context.Context) error {
-				t := time.NewTimer(250 * time.Millisecond)
-				defer t.Stop()
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-t.C:
-					return nil
-				}
-			},
-		}, progress)
-		if err != nil {
-			progress(setupRemovalFailureText(err))
-		}
-		return err
+	config, hooks, err := setupFrontend(payload, manifest, publicBootstrap, nativeSetupFrontendBackend())
+	if err != nil {
+		setupWizardAlert("This Setup package is incomplete or corrupt. Obtain the reviewed Setup.exe and verify its release provenance. Nothing was installed.")
+		os.Exit(2)
 	}
 	if windowssetupui.Run(config, hooks) != nil {
 		os.Exit(1)
+	}
+}
+
+// Native operations remain the existing coordinator, called in this process only
+// after the frontend and each backend layer's original approval/identity guards.
+func nativeSetupFrontendBackend() setupFrontendBackend {
+	return setupFrontendBackend{
+		preflight: windowspackage.Preflight,
+		compatibility: func(ctx context.Context, raw []byte, readAdmin bool) error {
+			b, err := setupWizardBootstrap(raw)
+			if err != nil {
+				return err
+			}
+			requestCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			expected := windowssetup.Expected(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+			if readAdmin {
+				expected = windowssetup.ExpectedReadAdminV10(b.ManagerInstanceID, b.EnrollmentOrigin, b.AgentOrigin)
+			}
+			return lanclient.CheckWindowsSetupManager(requestCtx, b.EnrollmentOrigin, b.Profile, []byte(b.ServerCAPEM), expected)
+		},
+		console: setupWizardConsole,
+		provision: func(ctx context.Context, payload []byte, manifest windowspackage.Manifest, raw []byte) (string, func() error, error) {
+			r, err := windowspackage.Provision(ctx, payload, manifest, raw)
+			if err != nil {
+				return "", nil, err
+			}
+			return r.BootstrapPath, r.Close, nil
+		},
+		install: func(ctx context.Context, path string, consent lanclient.WindowsCapabilityConsent, console io.Writer, progress func(string), renewal bool) error {
+			_, err := installReadObservationWithProgress(ctx, path, consent, console, console, progress, renewal)
+			return err
+		},
+		uninstall: func(ctx context.Context, progress func(string)) error {
+			return setupWizardUninstallWithLease(ctx, openReceiptStore, setupWizardRemovalSteps{
+				inspectOwned: windowsservice.InspectOwned, inspectRemoval: windowsservice.InspectRemoval, stop: windowsservice.ApplyStop, remove: uninstallWithUpdateOwnership,
+				pending: func(err error) bool { return windowsservice.CanWaitRemovalObservation(err) && setupRemovalPending(err) },
+				wait: func(ctx context.Context) error {
+					t := time.NewTimer(250 * time.Millisecond)
+					defer t.Stop()
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-t.C:
+						return nil
+					}
+				},
+			}, progress)
+		},
 	}
 }
 
