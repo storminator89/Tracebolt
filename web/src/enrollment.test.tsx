@@ -43,7 +43,95 @@ describe('explicit enrollment availability and public exports',()=>{
   expect(vi.mocked(request).mock.calls.every(([path])=>path==='/auth/session'||path==='/enrollment')).toBe(true);
  });
  it('exports a fixed public schema and rejects secret-bearing or private-key bootstrap data',()=>{const response=creation();const exported=publicBootstrap(response.bootstrap,response.snapshot,secret)!;expect(JSON.stringify(exported)).not.toContain(secret);expect(Object.keys(exported)).toHaveLength(10);expect(publicBootstrap({...response.bootstrap,invitationSecret:secret},response.snapshot,secret)).toBeNull();expect(publicBootstrap({...response.bootstrap,issuerPem:'-----BEGIN PRIVATE KEY-----'},response.snapshot,secret)).toBeNull();expect(publicBootstrap({...response.bootstrap,enrollmentOrigin:'https://attacker.example'},response.snapshot,secret)).toBeNull();expect(publicBootstrap({...response.bootstrap,invitationId:'invite_'+'9'.repeat(32)},response.snapshot,secret)).toBeNull();});
- it('counts retained terminal records toward the real capacity',async()=>{current=listing(Array.from({length:25},(_,i)=>({...record('revoked',9),invitationID:'invite_'+i.toString(16).padStart(32,'0')})));render(section());await screen.findByText(/Limit reached: 25 retained records/);expect(screen.getByRole('button',{name:'Add device'})).toBeDisabled();expect(mutate).not.toHaveBeenCalled();});
+ it('counts retained terminal records toward the real capacity',async()=>{current=listing(Array.from({length:25},(_,i)=>({...record('revoked',9),invitationID:'invite_'+i.toString(16).padStart(32,'0')})));render(section());await screen.findByText(/Record limit reached/);expect(screen.getByRole('button',{name:'Add device'})).toBeDisabled();expect(mutate).not.toHaveBeenCalled();});
+});
+
+describe('enrollment-domain capacity',()=>{
+ it('partitions every retained state without treating activation as a fresh report',async()=>{
+  const states:EnrollmentState[]=['created','claimed_pending','approved','issuance_intent','issued','activated','expired','canceled','rejected','revoked'];
+  current={...listing(states.map((state,i)=>({...record(state),invitationID:'invite_'+i.toString(16).padStart(32,'0')}))),recordLimit:12};render(section());
+  const capacity=await screen.findByRole('region',{name:'Enrollment capacity'});
+  expect(capacity).toHaveTextContent('10 of 12 retained records · 2 record slots available');
+  expect(capacity).toHaveTextContent('Activated records: 1 · Pre-activation records: 5 · Ended, retained: 4');
+  expect(capacity).toHaveTextContent('an activated identity does not confirm a fresh report');
+  expect(capacity).toHaveTextContent('Nearing the record limit');
+  expect(capacity).toHaveTextContent('Canceling or revoking does not free slots');
+  expect(capacity).toHaveTextContent('Do not delete enrollment state or replay ledgers');
+  expect(screen.getByRole('button',{name:'Add device'})).toBeEnabled();
+  fireEvent.click(screen.getByRole('button',{name:/Invitations/}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Show ended'}));
+  expect(capacity).toHaveTextContent('10 of 12 retained records');expect(mutate).not.toHaveBeenCalled();
+ });
+ it('labels elapsed pre-activation phases as stored records, not live progress',async()=>{
+  const expired=record('claimed_pending');expired.deadlineAt=1791046799;
+  current=listing([expired]);render(section());
+  const capacity=await screen.findByRole('region',{name:'Enrollment capacity'});
+  expect(capacity).toHaveTextContent('Pre-activation records: 1');
+  expect(capacity).toHaveTextContent('Counts reflect stored phases, not current validity');
+  expect(capacity).toHaveTextContent('do not reserve admission or override invitation/pending limits');
+  expect(capacity).not.toHaveTextContent('In progress');
+  fireEvent.click(screen.getByRole('button',{name:/Invitations/}));
+  expect(screen.getByText('Deadline passed')).toBeVisible();expect(mutate).not.toHaveBeenCalled();
+ });
+ it('uses a smaller configured limit and warns before it is exhausted',async()=>{
+  current={...listing([record('canceled')]),recordLimit:2};render(section());
+  const capacity=await screen.findByRole('region',{name:'Enrollment capacity'});
+  expect(capacity).toHaveTextContent('1 of 2 retained records · 1 record slots available');
+  expect(capacity).toHaveTextContent('Nearing the record limit');expect(screen.getByRole('button',{name:'Add device'})).toBeEnabled();
+  expect(mutate).not.toHaveBeenCalled();
+ });
+ it('warns exactly when the final 20 percent of record slots remain',async()=>{
+  const items=Array.from({length:20},(_,i)=>({...record('canceled'),invitationID:'invite_'+i.toString(16).padStart(32,'0')}));
+  current=listing(items.slice(0,19));render(section());
+  let capacity=await screen.findByRole('region',{name:'Enrollment capacity'});
+  expect(capacity).toHaveTextContent('19 of 25 retained records');expect(within(capacity).queryByRole('status')).toBeNull();
+  current=listing(items);fireEvent.click(screen.getByRole('button',{name:'Refresh enrollment status'}));
+  capacity=await screen.findByRole('region',{name:'Enrollment capacity'});
+  expect(capacity).toHaveTextContent('20 of 25 retained records');expect(within(capacity).getByRole('status')).toHaveTextContent('Nearing the record limit');
+  expect(mutate).not.toHaveBeenCalled();
+ });
+ it('never carries capacity from Linux into a newly selected Windows domain',async()=>{
+  current={...listing([record('canceled')]),recordLimit:2};
+  let finish!:(value:EnrollmentList)=>void;
+  vi.mocked(request).mockImplementation(async path=>path==='/windows/enrollment'?new Promise<EnrollmentList>(resolve=>{finish=resolve;}):structuredClone(current));
+  render(section());expect(await screen.findByRole('region',{name:'Enrollment capacity'})).toHaveTextContent('1 of 2 retained records');
+  fireEvent.change(screen.getByRole('combobox',{name:'Operating system'}),{target:{value:'windows'}});
+  expect(screen.queryByRole('region',{name:'Enrollment capacity'})).toBeNull();
+  const windows:EnrollmentList={...listing(),platforms:['windows'],recordLimit:7,collectionProfile:'windows-inventory-v1',collectionPrivacy:'windows_inventory_metadata_may_be_sensitive'};
+  await act(async()=>finish(windows));
+  const capacity=await screen.findByRole('region',{name:'Enrollment capacity'});
+  expect(capacity).toHaveTextContent('0 of 7 retained records');expect(capacity).not.toHaveTextContent('1 of 2');expect(mutate).not.toHaveBeenCalled();
+ });
+ it('does not present the supported maximum as enabled capacity for an unavailable domain',async()=>{
+  current=listing([],false);render(section());await screen.findByText('Enrollment is not configured on this manager.');
+  expect(screen.queryByRole('region',{name:'Enrollment capacity'})).toBeNull();expect(mutate).not.toHaveBeenCalled();
+ });
+ it.each([0,26,1])('rejects invalid capacity reads rather than displaying invented availability (%s)',async limit=>{
+  current={...listing(limit===1?[record(),{...record(),invitationID:'invite_'+'2'.repeat(32)}]:[]),recordLimit:limit};render(section());
+  await screen.findByRole('alert');expect(screen.queryByRole('region',{name:'Enrollment capacity'})).toBeNull();
+  expect(screen.getByRole('button',{name:'Add device'})).toBeDisabled();expect(mutate).not.toHaveBeenCalled();
+ });
+ it('conceals the capacity snapshot when the page is suspended',async()=>{
+  render(section());await screen.findByRole('region',{name:'Enrollment capacity'});
+  act(()=>window.dispatchEvent(new Event('pagehide')));
+  expect(screen.queryByRole('region',{name:'Enrollment capacity'})).toBeNull();expect(mutate).not.toHaveBeenCalled();
+ });
+ it('hides the last capacity while refreshing and after a failed read',async()=>{
+  render(section());await screen.findByRole('region',{name:'Enrollment capacity'});
+  let reject!:(error:Error)=>void;vi.mocked(request).mockImplementationOnce(()=>new Promise((_,fail)=>{reject=fail;}));
+  fireEvent.click(screen.getByRole('button',{name:'Refresh enrollment status'}));
+  expect(screen.queryByRole('region',{name:'Enrollment capacity'})).toBeNull();
+  await act(async()=>reject(new Error('fixture read unavailable')));await screen.findByRole('alert');
+  expect(screen.queryByRole('region',{name:'Enrollment capacity'})).toBeNull();expect(mutate).not.toHaveBeenCalled();
+ });
+ it('shows German capacity and retained-state guidance at the configured limit',async()=>{
+  setLocale('de',false);current={...listing([record('revoked')]),recordLimit:1};render(section());
+  const capacity=await screen.findByRole('region',{name:'Enrollment-Kapazität'});
+  expect(capacity).toHaveTextContent('1 von 1 gespeicherten Einträgen · 0 freie Eintragsplätze');
+  expect(capacity).toHaveTextContent('Beendet, aufbewahrt: 1');expect(capacity).toHaveTextContent('Eintragslimit erreicht');
+  expect(capacity).toHaveTextContent('Enrollment-Zustand und Replay-Ledger nicht löschen');
+  expect(screen.getByRole('button',{name:'Gerät hinzufügen'})).toBeDisabled();expect(mutate).not.toHaveBeenCalled();
+ });
 });
 
 describe('one-time invitation handling',()=>{
