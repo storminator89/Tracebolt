@@ -46,6 +46,13 @@ and a passing disposable fixture do not establish full native acceptance.
   [read-only configuration doctor](docs/manager-initialization.md) for approved,
   preprovisioned material. This does not install a service, create credentials,
   test a live deployment or validate database contents.
+- **Enrollment capacity:** the [selected domain's retained-record summary](docs/enrollment-v2/runtime-config.md#record-capacity-visibility-tb-18-partial)
+  shows its actual configured limit (at most 25), available slots and stored
+  activated/pre-activation/ended counts, with near-limit/full warnings. Ended
+  records still consume slots; counts do not prove current validity or fresh
+  reports. This display does not expand limits, compact state or establish
+  larger-fleet acceptance; [TB-18](https://github.com/storminator89/Tracebolt/issues/145)
+  remains open.
 - **Evidence and recovery:** Windows cached-update and Linux CVE summaries show
   source/method and original evidence times. A separate
   [deny-only restore quarantine](docs/restore-quarantine.md) blocks updated
