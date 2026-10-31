@@ -52,9 +52,11 @@ describe('package summary inset-ring clearance source contract', () => {
     });
 });
 
-for (const surface of ['legacy', 'complete'] as const) for (const locale of ['en', 'de'] as const) for (const theme of ['light', 'dark'] as const) {
-    it(`${surface}/${locale}/${theme}: shares stable clearance with native disclosure semantics and unchanged reads`, async () => {
-        setLocale(locale, false); document.documentElement.dataset.theme = theme;
+// Padding, native disclosure semantics and read counts do not vary by theme.
+// Painted light/dark focus-ring evidence belongs to the existing browser gate.
+for (const surface of ['legacy', 'complete'] as const) for (const locale of ['en', 'de'] as const) {
+    it(`${surface}/${locale}: shares stable clearance with native disclosure semantics and unchanged reads`, async () => {
+        setLocale(locale, false); document.documentElement.dataset.theme = 'light';
         const view = completeView(2), rows = completeRows(2);
         rows.forEach((row, index) => Object.assign(row, { sourcePackage: `qa-source-${'long-segment-'.repeat(8)}${index}`, sourceMapping: 'source-field' }));
         if (surface === 'complete') {

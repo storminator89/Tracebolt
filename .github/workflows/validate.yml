@@ -589,8 +589,36 @@ jobs:
           echo 'PASS: 14 real two-process transport checks including actual expiry; no telemetry uploaded.'
 
 
+  # Native Vitest sharding keeps the same default-discovered tests and one
+  # worker per runner; no file lists, retries, or relaxed assertions.
+  frontend-tests:
+    name: UI unit and interaction shard (${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Unit and interaction tests (exact shard)
+        run: npm test -- --maxWorkers=1 --shard=${{ matrix.shard }}/4
+
   frontend:
     name: UI types, tests and production build
+    # A failed, cancelled, or skipped matrix child blocks this job and browser.
+    needs: [frontend-tests]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -608,8 +636,6 @@ jobs:
         run: npm ci
       - name: Type check
         run: npm run typecheck
-      - name: Unit and interaction tests
-        run: npm test -- --maxWorkers=1
       - name: Independent UI regression tests
         working-directory: .
         run: ./web/node_modules/.bin/vitest run --config tests/e2e-review/vitest.config.mts
