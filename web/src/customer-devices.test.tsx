@@ -28,6 +28,7 @@ describe('customer assignment for activated Windows identities', () => {
         vi.mocked(mutate).mockResolvedValue(assigned);
         render(<CustomerDevices sessionExpiresAt={future}/>);
         await selectBoth();
+        expect(screen.getByText('Organization, not tenant isolation')).toBeVisible();
         expect(screen.getAllByText(device.identity).length).toBeGreaterThan(0);
         const confirm = screen.getByRole('checkbox');
         expect(confirm).not.toBeChecked();
@@ -39,6 +40,24 @@ describe('customer assignment for activated Windows identities', () => {
         expect(within(screen.getByRole('list', {name:'Recorded assignments'})).getByText('Acme')).toBeVisible();
         expect(mutate).toHaveBeenCalledExactlyOnceWith('/customer-windows-assignments', {customerId:customer.id,customerRevision:3,deviceId:device.deviceId,identity:device.identity,acknowledged:true}, expect.any(AbortSignal));
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+    it('keeps both customers visible while an organizational selection performs no extra read or write', async () => {
+        const other = {id:`customer_${'4'.repeat(32)}`,name:'Other customer',revision:1};
+        const otherDevice = {deviceId:`agent_${'5'.repeat(32)}`,identity:'cd'.repeat(32),customerId:other.id};
+        const unassignedDevice = {deviceId:`agent_${'6'.repeat(32)}`,identity:'ef'.repeat(32),customerId:''};
+        vi.mocked(request).mockResolvedValue({...view,customers:[customer,other],devices:[assigned.devices[0],otherDevice,unassignedDevice]});
+        render(<CustomerDevices sessionExpiresAt="2089-01-01T00:00:00Z"/>);
+        const selection = await screen.findByLabelText('Select a customer');
+        const list = screen.getByRole('list',{name:'Recorded assignments'});
+        for (const selected of [customer.id,other.id]) {
+            fireEvent.change(selection,{target:{value:selected}});
+            expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+            expect(within(list).getByText(customer.name,{exact:true})).toBeVisible();
+            expect(within(list).getByText(other.name,{exact:true})).toBeVisible();
+            expect(screen.getByRole('button',{name:'Assign reviewed identity'})).toBeDisabled();
+            expect(mutate).not.toHaveBeenCalled();
+        }
+        expect(request).toHaveBeenCalledExactlyOnceWith('/customer-windows-assignments',{signal:expect.any(AbortSignal)});
     });
     it('clears acknowledgement when the selected customer changes', async () => {
         const other = {id:`customer_${'4'.repeat(32)}`,name:'Other',revision:1};

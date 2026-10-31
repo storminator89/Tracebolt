@@ -117,9 +117,31 @@ Auth and language component checks run with the app's unit suite. Real browser a
 
 ## Conditional device enrollment
 
-LAN inventory includes a Linux enrollment panel backed by `/api/enrollment`. Creating a Linux invitation requires the manager to explicitly report enabled Linux support; unconfigured, failed and capacity-limited states keep creation disabled. Development/demo mode does not show an enabled enrollment flow. A compatible manager can separately enable Windows inventory enrollment; its unsigned Setup preview is unreleased and lacks full native lifecycle acceptance. See [Windows status and limitations](../docs/windows-status.md). macOS enrollment remains unavailable. Runtime issuer/client integration and real-handler browser acceptance are separate gates.
+LAN Setup reads the selected platform's explicitly enabled manager domain.
+Unconfigured, failed and capacity-limited states keep creation disabled;
+development/demo mode does not provide an enabled enrollment flow. Linux uses
+`/api/enrollment`. Windows and macOS domains are separate opt-ins, not additional
+permissions inferred from Linux enrollment or a manager upgrade.
 
-The creation response contains a one-time invitation secret. It is masked by default and retained only in the open dialog's memory. Reveal and clipboard copy require separate explicit clicks. Closing, navigating, hiding the page, claiming the invitation or losing operator access removes it from the UI; this is not a secure-memory zeroization guarantee. Explicitly copied clipboard contents remain the operator's responsibility. An uncertain creation is never automatically replayed; the operator checks the current record, cancels if needed and creates a replacement.
+For the published unsigned **Go Windows Read admin** Setup, use
+[Windows status and limitations](../docs/windows-status.md) for the exact matching
+manager/frontend pin, release guide and bounded Server 2025 packaged-Setup
+acceptance. This does not establish full native lifecycle, Windows 11 or newer
+source acceptance. The [Rust Windows Basic integrated test candidate](../docs/integrated-test-candidate.md)
+is a separate package/collection path; do not substitute its installation
+instructions or infer Read admin coverage from its basic metrics. Its manager
+identity still uses `windows-inventory-v1`, not a distinct basic-only authorization
+domain; see [Rust scope and delivery](../rust/windows-agent/README.md#scope-and-delivery).
+
+Current macOS source supports separately enabled basic TLS and fresh read-inventory
+enrollment. See [macOS source limits](../docs/macos-status.md) and the
+[unsigned service-test package boundary](../docs/macos-prerelease.md). A compatible
+source path and downloadable package do not establish native enrollment,
+installation, launchd operation or reboot persistence. Existing basic grants never
+promote to inventory. Runtime issuer/client integration, real-handler browser
+acceptance and native installation remain separate evidence classes.
+
+In optional invitation-token mode, the creation response contains a one-time invitation secret. It is masked by default and retained only in the open dialog's memory. Reveal and clipboard copy require separate explicit clicks. Closing, navigating, hiding the page, claiming the invitation or losing operator access removes it from the UI; this is not a secure-memory zeroization guarantee. Explicitly copied clipboard contents remain the operator's responsibility. An uncertain creation is never automatically replayed; the operator checks the current record, cancels if needed and creates a replacement.
 
 Only a whitelisted public bootstrap schema can be downloaded, on an explicit click. It contains exact destinations, profile, public trust material and the invitation ID. Secret-bearing downloads are unsupported. The UI rejects extra bootstrap fields, private-key material and mismatched destinations/identity before enabling export. The compatible native client must independently validate that public trust and take the invitation through its hidden prompt; no invitation is placed in a URL, command argument or browser storage.
 

@@ -24,6 +24,7 @@ describe('customer catalog', () => {
         render(<Customers sessionExpiresAt={future}/>);
         expect(await screen.findByText('No customers yet.')).toBeVisible();
         expect(screen.getByText(/do not isolate access or assign devices or installers/)).toBeVisible();
+        expect(screen.getByText('Organization, not tenant isolation')).toBeVisible();
         fireEvent.change(screen.getByLabelText('Customer name'), { target: { value: 'Acme' } });
         fireEvent.click(screen.getByRole('button', { name: 'Create customer' }));
         expect(await screen.findByText('Acme')).toBeVisible();
@@ -102,6 +103,7 @@ describe('customer catalog', () => {
         render(<Customers sessionExpiresAt={future}/>);
         const panel = await screen.findByRole('region', { name: 'Kunden' });
         expect(within(panel).getByText(/ordnen weder Geräte noch Installer zu/)).toBeVisible();
+        expect(within(panel).getByText('Organisation, keine Mandantentrennung')).toBeVisible();
         fireEvent.change(within(panel).getByLabelText('Kundenname'), { target: { value: '  ' } });
         expect(within(panel).getByRole('button', { name: 'Kunde erstellen' })).toBeDisabled();
     });

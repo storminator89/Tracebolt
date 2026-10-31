@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutate, request } from './api';
 import { validFleetGroupName } from './fleet-groups-types';
 import { useLocale } from './i18n';
+import { CustomerOrganizationNotice } from './customer-organization-notice';
 import { acceptWindowsHealthClock, windowsHealthElapsed } from './windows-health-clock';
 import { validWindowsCapacityTimestamp } from './windows-capacity-types';
 import { inventoryAge } from './complete-packages-types';
@@ -106,7 +107,7 @@ export function CustomerDevices({ sessionExpiresAt }: { sessionExpiresAt: string
     };
     return <section className="panel customer-devices-panel" aria-label={c.title}>
         <div className="customer-devices-heading"><h3>{c.title}</h3><button className="button" type="button" disabled={busy} onClick={() => void refresh()}>{c.refresh}</button></div>
-        <p>{c.scope}</p><p>{c.pending} {locale === 'de' ? 'Der Prüfstand kann sich jederzeit ändern; der Manager prüft beim Speichern erneut.' : 'The snapshot can change at any time; the manager checks again when saving.'}</p>
+        <p>{c.scope}</p><CustomerOrganizationNotice/><p>{c.pending} {locale === 'de' ? 'Der Prüfstand kann sich jederzeit ändern; der Manager prüft beim Speichern erneut.' : 'The snapshot can change at any time; the manager checks again when saving.'}</p>
         {state === 'loading' && <p role="status">{c.loading}</p>}
         {state !== 'loading' && state !== 'ready' && <p role="alert">{c[state]}</p>}
         {state === 'ready' && view && <>

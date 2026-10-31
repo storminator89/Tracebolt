@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import { useLocale } from './i18n';
-import { fullDate } from './utils';
+import { fullDate, relativeTime } from './utils';
+import { inventoryAge } from './complete-packages-types';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsUpdate, WindowsUpdates } from './windows-updates-types';
 import './windows-inventory-tables.css';
@@ -12,14 +13,15 @@ const copy = {
         caution: 'Cached data only. Cache freshness is unknown; this is not a current patch assessment. An empty result does not mean the device is fully patched.',
         refreshSummary: 'Refresh reads the saved report only; it does not scan or install.',
         refresh: 'Refresh checks only the latest accepted manager report. It does not start an online scan, refresh the Windows cache, download or install updates.',
-        ahead: 'The capture time is ahead of the manager clock or the time reference changed. Update rows are hidden until the timing can be verified.', captured: 'Cache inspected', stale: 'Stale inspection. These values describe the original capture; the cache itself may be older.',
+        ahead: 'The capture time is ahead of the manager clock or the time reference changed. Update rows are hidden until the timing can be verified.', captured: 'Original capture time', stale: 'Stale inspection. These values describe the original capture; the cache itself may be older.',
+        evidence: 'Update evidence', sourceLabel: 'Source', method: 'Inspection method', offline: 'Offline WUA cache inspection only; no online scan.', notVerified: 'No successful offline cache inspection verified.', inspectionAge: 'Inspection age', unknownAge: 'Unknown',
         observed: 'Cached result observed', bounded: 'Bounded cached result', partial: 'Partial cached result', denied: 'Access denied', unavailableQuality: 'Unavailable',
         retained: 'captured', observedCount: 'cached results observed', atLeast: 'at least', omitted: 'Some rows are omitted by collection, metadata-read or transfer limits.',
         empty: 'No non-hidden, not-installed software updates were returned from this caller-visible cache. This does not establish current patch coverage.', failed: 'No update rows are available. This does not establish an empty cache or a fully patched device.',
         search: 'Filter captured updates', sort: 'Sort captured updates', noMatches: 'No captured updates match this filter.',
         'title-asc': 'Title: A to Z', 'title-desc': 'Title: Z to A', 'severity-desc': 'Vendor severity: highest first', 'severity-asc': 'Vendor severity: lowest first', 'downloaded-desc': 'Already downloaded: first', 'downloaded-asc': 'Not downloaded: first',
         rowTitle: 'Title', kb: 'KB articles', severity: 'Vendor severity', downloaded: 'Already downloaded', identity: 'Update ID / revision', revision: 'Revision', yes: 'Yes', no: 'No', unspecified: 'Unspecified', critical: 'Critical', important: 'Important', moderate: 'Moderate', low: 'Low', noKB: 'None reported', shortened: 'Title or KB metadata shortened',
-        bounds: 'Scope & limits', source: 'Source: wua-cache · cache freshness: unknown', scope: 'Caller-visible cached Windows Update Agent results for non-hidden, not-installed software updates. Installed, hidden and driver updates are excluded; the configured source and default supersedence behavior are unchanged.',
+        bounds: 'Scope & limits', source: 'Windows Update Agent cache (wua-cache) · cache freshness: unknown', scope: 'Caller-visible cached Windows Update Agent results for non-hidden, not-installed software updates. Installed, hidden and driver updates are excluded; the configured source and default supersedence behavior are unchanged.',
         counts: 'The observed count describes this cached search, before row validation and retention limits. Exact counts do not guarantee readable metadata or whole-device coverage. Partial counts can be lower bounds, including zero.',
         tableScope: 'Search, sorting and pages cover captured rows only; other updates may be missing.',
         limits: 'At most 128 native entries are examined and 64 rows retained within 24 KiB. Search, sorting and pages use only these accepted rows. They cannot recover omitted updates or prove the highest-severity updates were retained.',
@@ -33,14 +35,15 @@ const copy = {
         caution: 'Nur Cache-Daten. Die Aktualität des Caches ist unbekannt; dies ist keine aktuelle Patch-Bewertung. Ein leeres Ergebnis bedeutet nicht, dass das Gerät vollständig gepatcht ist.',
         refreshSummary: 'Aktualisieren liest nur die gespeicherte Meldung; es sucht und installiert keine Updates.',
         refresh: 'Aktualisieren prüft nur die neueste akzeptierte Manager-Meldung. Es startet keine Online-Suche, aktualisiert den Windows-Cache nicht und lädt oder installiert keine Updates.',
-        ahead: 'Die Erfassungszeit liegt aus Sicht des Managers in der Zukunft oder die Zeitreferenz hat sich geändert. Updatezeilen bleiben ausgeblendet, bis die Zeit geprüft werden kann.', captured: 'Cache geprüft', stale: 'Veraltete Prüfung. Diese Werte beschreiben die ursprüngliche Erfassung; der Cache selbst kann älter sein.',
+        ahead: 'Die Erfassungszeit liegt aus Sicht des Managers in der Zukunft oder die Zeitreferenz hat sich geändert. Updatezeilen bleiben ausgeblendet, bis die Zeit geprüft werden kann.', captured: 'Ursprünglicher Erfassungszeitpunkt', stale: 'Veraltete Prüfung. Diese Werte beschreiben die ursprüngliche Erfassung; der Cache selbst kann älter sein.',
+        evidence: 'Update-Nachweis', sourceLabel: 'Quelle', method: 'Prüfmethode', offline: 'Nur Offline-Prüfung des WUA-Caches; keine Online-Suche.', notVerified: 'Keine erfolgreiche Offline-Prüfung des Caches bestätigt.', inspectionAge: 'Alter der Prüfung', unknownAge: 'Unbekannt',
         observed: 'Cache-Ergebnis beobachtet', bounded: 'Begrenztes Cache-Ergebnis', partial: 'Teilweises Cache-Ergebnis', denied: 'Zugriff verweigert', unavailableQuality: 'Nicht verfügbar',
         retained: 'erfasst', observedCount: 'Cache-Ergebnisse beobachtet', atLeast: 'mindestens', omitted: 'Einige Zeilen fehlen durch Erfassungs-, Metadatenlese- oder Übertragungsgrenzen.',
         empty: 'Aus diesem für den Aufrufer sichtbaren Cache wurden keine nicht ausgeblendeten, nicht installierten Softwareupdates zurückgegeben. Dies belegt keine aktuelle Patch-Abdeckung.', failed: 'Keine Updatezeilen verfügbar. Dies belegt weder einen leeren Cache noch ein vollständig gepatchtes Gerät.',
         search: 'Erfasste Updates filtern', sort: 'Erfasste Updates sortieren', noMatches: 'Keine erfassten Updates entsprechen diesem Filter.',
         'title-asc': 'Titel: A bis Z', 'title-desc': 'Titel: Z bis A', 'severity-desc': 'Hersteller-Schweregrad: höchste zuerst', 'severity-asc': 'Hersteller-Schweregrad: niedrigste zuerst', 'downloaded-desc': 'Bereits heruntergeladen: zuerst', 'downloaded-asc': 'Nicht heruntergeladen: zuerst',
         rowTitle: 'Titel', kb: 'KB-Artikel', severity: 'Hersteller-Schweregrad', downloaded: 'Bereits heruntergeladen', identity: 'Update-ID / Revision', revision: 'Revision', yes: 'Ja', no: 'Nein', unspecified: 'Nicht angegeben', critical: 'Kritisch', important: 'Wichtig', moderate: 'Mittel', low: 'Niedrig', noKB: 'Keine gemeldet', shortened: 'Titel oder KB-Metadaten gekürzt',
-        bounds: 'Umfang & Grenzen', source: 'Quelle: wua-cache · Cache-Aktualität: unbekannt', scope: 'Für den Aufrufer sichtbare Cache-Ergebnisse des Windows Update Agent für nicht ausgeblendete, nicht installierte Softwareupdates. Installierte, ausgeblendete und Treiberupdates sind ausgeschlossen; konfigurierte Quelle und Standardverhalten für ersetzte Updates bleiben unverändert.',
+        bounds: 'Umfang & Grenzen', source: 'Windows Update Agent-Cache (wua-cache) · Cache-Aktualität: unbekannt', scope: 'Für den Aufrufer sichtbare Cache-Ergebnisse des Windows Update Agent für nicht ausgeblendete, nicht installierte Softwareupdates. Installierte, ausgeblendete und Treiberupdates sind ausgeschlossen; konfigurierte Quelle und Standardverhalten für ersetzte Updates bleiben unverändert.',
         counts: 'Die beobachtete Zahl beschreibt diese Cache-Suche vor Zeilenvalidierung und Aufbewahrungsgrenzen. Exakte Zahlen garantieren weder lesbare Metadaten noch eine vollständige Geräteabdeckung. Teilweise erfasste Zahlen können Untergrenzen sein, auch bei null.',
         tableScope: 'Suche, Sortierung und Seiten zeigen nur erfasste Zeilen; weitere Updates können fehlen.',
         limits: 'Höchstens 128 native Einträge werden geprüft und 64 Zeilen innerhalb von 24 KiB aufbewahrt. Suche, Sortierung und Seiten nutzen nur diese akzeptierten Zeilen. Fehlende Updates werden dadurch nicht sichtbar; die Auswahl belegt nicht, dass die schwerwiegendsten Updates enthalten sind.',
@@ -98,13 +101,21 @@ export function WindowsUpdatesPanel({ resource }: { resource: WindowsInventoryRe
     const controls = reset ? { ...initialControls(), scope } : state;
     if (reset) setState(controls);
     const quality = updates?.quality === 'unavailable' ? c.unavailableQuality : updates?.quality === 'observed' && updates.truncated ? c.bounded : updates ? c[updates.quality] : null;
+    // Use the retained manager clock and the resource's existing monotonic anchor,
+    // never the browser wall clock or the latest receipt as a new capture time.
+    const inspectionAge = updates && resource.view ? inventoryAge(resource.view.serverNow, updates.collectedAt) + resource.elapsedMS : Infinity;
+    const inspected = updates && (updates.quality === 'observed' || updates.quality === 'partial') && updates.reason !== 'windows_updates_offline_not_verified';
     return <section className="windows-updates" aria-label={c.title}>
         <div className="windows-inventory-section-header"><h3>{c.title}</h3>{quality && <span className="windows-inventory-quality">{quality}</span>}</div>
         <p className="windows-inventory-caution">{c.caution}</p><p className="windows-inventory-exclusions">{c.refreshSummary}</p>
         {!updates ? <p role="status" className="windows-inventory-empty">{resource.updatesExpired ? c.expired : resource.updatesAhead ? c.ahead : resource.snapshot ? c.missing : c.unavailable}</p> : <>
-            <p className="windows-inventory-times">{c.captured} <time dateTime={updates.collectedAt}>{fullDate(updates.collectedAt)}</time></p>
+            <dl className="windows-updates-evidence" aria-label={c.evidence}>
+                <div><dt>{c.sourceLabel}</dt><dd>{c.source}</dd></div>
+                <div><dt>{c.method}</dt><dd>{inspected ? c.offline : c.notVerified}</dd></div>
+                <div><dt>{c.captured}</dt><dd><time dateTime={updates.collectedAt}>{fullDate(updates.collectedAt)}</time></dd></div>
+                <div><dt>{c.inspectionAge}</dt><dd>{Number.isFinite(inspectionAge) && inspectionAge >= 0 ? relativeTime(updates.collectedAt, Date.parse(updates.collectedAt) + inspectionAge) : c.unknownAge}</dd></div>
+            </dl>
             {resource.updatesStale && <p role="status" className="windows-inventory-caution">{c.stale}</p>}
-            <p className="windows-inventory-exclusions">{c.source}</p>
             {(updates.quality === 'observed' || updates.quality === 'partial') && <p className="windows-inventory-count">{updates.rows.length} {c.retained} · {updates.countExact ? '' : `${c.atLeast} `}{updates.observedCount} {c.observedCount}</p>}
             {updates.reason && <p className="windows-inventory-caution">{c.reasons[updates.reason]}</p>}{updates.truncated && <p className="windows-inventory-caution">{c.omitted}</p>}
             {updates.rows.length ? <UpdatesTable updates={updates} locale={locale} controls={controls} onChange={value => setState({ ...value, scope: controls.scope })}/> : <p className="windows-inventory-empty">{updates.quality === 'observed' && updates.observedCount === 0 ? c.empty : c.failed}</p>}
