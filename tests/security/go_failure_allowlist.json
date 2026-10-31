@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "f4f22065bff985870c0972b78d4f585353c9206fbc26d5ecd5c43bb936323e51",
+  "goSourceSha256": "4a86e9b5ca41f24eaa1895cd0635056159c093389fd39883a01f96c204acf77f",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -6340,10 +6340,13 @@
       "TestRuntimeGuardRejectsNonDarwinArchitectureAndToolchain"
     ],
     "localrmm/tests/rustagent": [
+      "TestPublicGoIssuedCredentialMatchesFixedContract",
       "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
       "TestRustFrameAcceptedByManager",
-      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations"
+      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations",
+      "TestRustServicePortRemainsOutsideBasicProductionBuild",
+      "TestRustServiceStatusSectionMatchesManagerContract"
     ],
     "localrmm/tests/rustagent/cmd/nativefixture": [
       "TestCompatibilityGETDoesNotEnterEnrollment"

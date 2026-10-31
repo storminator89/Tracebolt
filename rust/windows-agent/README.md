@@ -100,6 +100,12 @@ identity profile remains `windows-inventory-v1`; the Rust collector implements
 only its basic subset. Automatic registration does not create a new server-side
 basic-only authorization domain or bypass operator approval.
 
+Activated enrollment resumes revalidate the original saved server/profile,
+claim, approval and issuance binding and the exact Go fixed-leaf template before
+handing material to the sender. This does not grant additional collection or
+replace the manager's live revocation/authorization checks. See the
+[inventory authority gates](../../docs/rust-inventory-authority-gates.md).
+
 HTTPS mutual TLS uses the selected trust roots. Redirects, HTTP plaintext and
 proxy environment settings are disabled. Receipt identity, sequence and original
 collection time must match. Exact pending bytes survive failed sends and restart

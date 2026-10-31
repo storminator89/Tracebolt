@@ -2,6 +2,9 @@
 
 `protocol_test.go` and `enrollment_test.go` consume invented fixtures emitted by
 Rust examples and validate them using the real Go ingress and crypto contracts.
+`credential-fixture.json` is the reverse, public-only Go issuer fixture: Rust's
+private fixed-leaf verifier and `credential_contract_test.go` check the same DER,
+original intent and fixed clock. It contains no private key or live credential.
 `installer_bootstrap_preflight_test.go` and `manager_preflight_test.go` are
 source-order contracts only, not PowerShell/SCM execution. Portable Rust
 `tests/installer_preflight.rs` checks bounded public bootstrap semantics and
