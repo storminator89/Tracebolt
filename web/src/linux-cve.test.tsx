@@ -53,11 +53,12 @@ describe('Linux CVE warnings panel', () => {
     ] as const)('exposes report-bound source, method and original times without expanding details in %s (https=%s)', async (locale, https, label, state, trust, method) => {
         setLocale(locale, false); const view = linuxCVEView(https); vi.mocked(request).mockResolvedValue(view); render(<LinuxCVEPanel deviceId={id}/>);
         await screen.findByText(state); const evidence = screen.getByLabelText(label);
-        expect(evidence).toBeVisible(); expect(evidence.closest('details')).toBeNull(); expect(evidence.children).toHaveLength(3);
+        expect(evidence).toBeVisible(); expect(evidence.closest('details')).toBeNull(); expect(evidence.children).toHaveLength(4);
+        expect(evidence.nextElementSibling).toHaveClass('linux-cve-summary');
         expect(within(evidence).getByText(trust)).toBeVisible(); expect(within(evidence).getByText(method)).toBeVisible();
         const source = within(evidence).getByRole('link', { name: 'Debian Security Tracker' });
         expect(source).toHaveAttribute('href', view.report!.feed.sourceUrl); expect(source).toHaveAttribute('rel', 'noopener noreferrer'); expect(source).toHaveAttribute('referrerPolicy', 'no-referrer');
-        expect([...evidence.querySelectorAll('time')].map(time => time.getAttribute('dateTime'))).toEqual([view.report!.assessedAt, view.inventory!.collectedAt, view.report!.feed.fetchedAt]);
+        expect([...evidence.querySelectorAll('time')].map(time => time.getAttribute('dateTime'))).toEqual([view.inventory!.collectedAt, view.report!.feed.fetchedAt]);
         expect(request).toHaveBeenCalledExactlyOnceWith(path, { signal: expect.any(AbortSignal) }, LINUX_CVE_VIEW_BYTES);
         expect(screen.getByText(locale === 'en' ? 'Data sources and coverage' : 'Datenquellen und Abdeckung').closest('details')).not.toHaveAttribute('open');
     });
@@ -74,7 +75,7 @@ describe('Linux CVE warnings panel', () => {
         expect(screen.getByText('No package/version matches in the loaded records. Coverage remains limited.')).toBeVisible();
         rendered.unmount(); const stale = staleLinuxCVEView(); await show(stale);
         const evidence = screen.getByLabelText('Assessment evidence'); expect(evidence).toBeVisible();
-        expect(evidence.querySelectorAll('time')[2]).toHaveAttribute('dateTime', stale.report!.feed.fetchedAt);
+        expect(evidence.querySelectorAll('time')[1]).toHaveAttribute('dateTime', stale.report!.feed.fetchedAt);
         expect(within(evidence).getByText('Manual import · origin and fetch time unverified')).toBeVisible();
         expect(screen.getByText(/Old data: these matches describe earlier snapshots/)).toBeVisible();
     });
