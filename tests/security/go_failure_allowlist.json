@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "f4f22065bff985870c0972b78d4f585353c9206fbc26d5ecd5c43bb936323e51",
+  "goSourceSha256": "268013b6f5ceaf4e39d8382499563796d664960c431c8e5186c9a8f182184187",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -529,6 +529,16 @@
       "TestSetupFiniteFailurePhases",
       "TestSetupFirstFailureMetadataDoesNotAdoptSecondaryNativeCause",
       "TestSetupFirstInstallFailureStillAttemptsReceiptWrite",
+      "TestSetupFrontendAllProfileTransportAndRenewalHookMappings",
+      "TestSetupFrontendCancellationAndIncompleteProvisionNeverInstall",
+      "TestSetupFrontendConstructionIsInertAndPreservesExactPresentation",
+      "TestSetupFrontendEveryFailureRetainsOrderingAndFiniteDiagnostics",
+      "TestSetupFrontendNativeBackendRetainsExactHardenedCoordinator",
+      "TestSetupFrontendNativeEntryRetainsDefaultUIAndNoNewApplySurface",
+      "TestSetupFrontendPreviewAndOversizedApplyRemainReadOnly",
+      "TestSetupFrontendRejectsInvalidConstructionBeforeAnyBackendOperation",
+      "TestSetupFrontendRejectsMissingOperationInputsAndPreservesRemovalAdapter",
+      "TestSetupFrontendSnapshotsPublicInputBeforeProgressCallbacks",
       "TestSetupJournalHeldThroughEffectsAndCloseFailureRetainsResult",
       "TestSetupMetadataPreservesErrorIdentityRenderingAndInnerStage",
       "TestSetupNativePointerWrapperLifetime",
