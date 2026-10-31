@@ -22,6 +22,12 @@ describe('explicit access contract',()=>{
   it('shows LAN sign-in and keeps app data absent',async()=>{vi.mocked(request).mockResolvedValue(anonymous);render(<AuthBoundary><PrivateApp/></AuthBoundary>);await screen.findByLabelText('Operator-Passwort');expect(screen.queryByLabelText('Operator-Benutzername')).not.toBeInTheDocument();expect(screen.queryByText('Geschützte Geräte')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Anmelden'})).toBeDisabled();});
 });
 describe('named operator display contract',()=>{
+  it('recognizes only explicit bounded session-management metadata',()=>{
+    expect(validOperatorSession({...namedAuthenticated,capabilities:['read','manage_sessions']})).toBe(true);
+    expect(validOperatorSession({...namedAuthenticated,capabilities:['read','manage_sessions','manage_sessions']})).toBe(false);
+    expect(validOperatorSession({...namedAuthenticated,capabilities:['read','Manage_sessions']})).toBe(false);
+    expect(validOperatorSession({...authenticated,loginMode:'shared',actorId:null,capabilities:['read','manage_sessions']})).toBe(false);
+  });
   it('accepts complete named metadata and explicit legacy/development metadata',()=>{
     expect(validOperatorSession(namedAnonymous)).toBe(true);
     expect(validOperatorSession(namedAuthenticated)).toBe(true);

@@ -131,3 +131,20 @@ func TestNamedApplicationCheckCapabilityStrictLoading(t *testing.T) {
 		}
 	}
 }
+
+func TestManageSessionsRequiresExplicitNamedGrant(t *testing.T) {
+	valid := strings.Replace(namedAuthJSON(), `"read","restart_service"`, `"read","manage_sessions"`, 1)
+	_, operators, err := loadOperatorAuth([]byte(valid), HTTPTest)
+	if err != nil || len(operators) != 1 || len(operators[0].Capabilities) != 2 || operators[0].Capabilities[1] != operatorauth.ManageSessions {
+		t.Fatal("explicit session-management grant rejected")
+	}
+	for _, invalid := range []string{
+		strings.Replace(valid, `"read","manage_sessions"`, `"manage_sessions"`, 1),
+		strings.Replace(valid, `"manage_sessions"`, `"manage_sessions","manage_sessions"`, 1),
+		strings.Replace(valid, `"manage_sessions"`, `"Manage_sessions"`, 1),
+	} {
+		if _, _, err := loadOperatorAuth([]byte(invalid), HTTPTest); err == nil {
+			t.Fatal("invalid session authority accepted")
+		}
+	}
+}
