@@ -1,5 +1,17 @@
 /** UI strings only. Evidence, logs and model output are never translated here. */
 export const english = {
+  "Datenvorschau abgebrochen. Keine Analyse gestartet.": "Data preview canceled. No analysis was started.",
+  "Die Datenvorschau ist abgelaufen. Bitte Belege und Ziel erneut prüfen.": "The data preview expired. Review the evidence and destination again.",
+  "Die Datenvorschau konnte nicht bestätigt werden. Bitte erneut prüfen.": "The data preview could not be confirmed. Please review again.",
+  "Die Datenvorschau konnte nicht bestätigt werden. Es wurde keine Analyse gestartet.": "The data preview could not be confirmed. No analysis was started.",
+  "Die Datenvorschau ist abgelaufen oder geändert. Bitte erneut prüfen.": "The data preview expired or changed. Please review again.",
+  "Die Vorschau oder Anbieter-Konfiguration wurde geändert. Das überholte Ergebnis wird nicht angezeigt.": "The preview or provider configuration changed. The superseded result is not displayed.",
+  "Die Analyse konnte nicht bestätigt werden. Daten können bereits übertragen worden sein. Keine automatische Wiederholung; bitte erneut prüfen.": "The analysis could not be confirmed. Data may already have been sent. No automatic retry; please review again.",
+  "Falltitel, Zusammenfassung und Beleg-Rohtexte werden ohne automatische Geheimnisfilterung gesendet. Auch Loopback- und LAN-Anbieter können extern weiterleiten.": "The case title, summary and raw evidence text are sent without automatic secret filtering. Loopback and LAN providers may also forward data externally.",
+  "Maßgeblich ist das vollständige Datenpaket in dieser Vorschau. Die Anfrage führt keine Befehle aus.": "The complete data packet in this preview is authoritative. The request does not execute commands.",
+  "Exaktes Datenpaket": "Exact data packet",
+  "Keine automatische Geheimnisfilterung. Alle unten angezeigten Felder werden übertragen; die Vorschau startet keine KI-Anfrage.": "No automatic secret filtering. All fields shown below will be transmitted; the preview does not start an AI request.",
+
   'Anbieterantwort nicht verfügbar': 'Provider response unavailable',
   'Vorschau gültig bis': 'Preview valid until',
   'Die Beobachtung änderte sich während der KI-Anfrage. Daten können bereits übertragen worden sein. Kein Ergebnis übernommen.': 'The observation changed during the AI request. Data may already have been sent. No result was retained.',

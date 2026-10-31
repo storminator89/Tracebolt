@@ -394,6 +394,11 @@ func (s *Server) requiredCSRF(r *http.Request) string {
 }
 func (s *Server) cancelSessionAnalysis(id string) {
 	s.ai.mu.Lock()
+	for token, permit := range s.ai.casePreviews {
+		if permit.Session == id {
+			delete(s.ai.casePreviews, token)
+		}
+	}
 	if s.ai.activeOwner == id && s.ai.activeCancel != nil {
 		s.ai.activeCancel()
 	}

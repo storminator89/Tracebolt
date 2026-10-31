@@ -90,7 +90,7 @@ func TestNamedReadRoutesDenyAdministrativeWritesButKeepQueries(t *testing.T) {
 	for _, path := range []string{
 		"/api/lan/agents/approve", "/api/lan/agents/" + namedDeviceID + "/revoke",
 		"/api/enrollment/invitations", "/api/ai/config", "/api/ai/config/clear",
-		"/api/cases/case-demo-win-01-service/notes", "/api/cases/case-demo-win-01-service/analyze",
+		"/api/cases/case-demo-win-01-service/notes", "/api/cases/case-demo-win-01-service/analyze", "/api/cases/case-demo-win-01-service/analyze-preview",
 		"/api/security/cves/sync", "/api/security/cves/import", "/api/security/catalog/import",
 		"/api/devices/" + namedDeviceID + "/journal/create", "/api/devices/" + namedDeviceID + "/journal/cancel",
 		"/api/devices/" + namedDeviceID + "/health/acknowledge", "/api/devices/" + namedDeviceID + "/health/services",

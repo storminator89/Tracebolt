@@ -34,7 +34,7 @@ transmission took place.
 5. Keep device names, device IDs/IPs, case notes, timeline entries, unrelated evidence and case-supplied next-step prose out of the packet. Fixed read-only runbooks come from server code.
 6. Send a fixed system instruction and a separate JSON-encoded, untrusted user-data message. Strict structured output is requested and independently validated afterward.
 
-This field selection is **not secret redaction**. A password, personal information or sensitive text embedded in a selected title, summary, source, detail or value would still be transmitted. Current collectors avoid many such fields, but that is not a guarantee for future log inputs. Before enabling a remote destination, show exactly these field categories and obtain explicit approval. Raw-log scanning and broader collection need their own bounded source/retention/redaction policy; they must not inherit approval from this slice.
+This field selection is **not secret redaction**. A password, personal information or sensitive text embedded in a selected title, summary, source, detail or value would still be transmitted. Current collectors avoid many such fields, but that is not a guarantee for future log inputs. Before enabling a remote destination, review the exact packet preview and destination and obtain explicit approval. Raw-log scanning and broader collection need their own bounded source/retention/redaction policy; they must not inherit approval from this slice.
 
 ### Hard limits
 
@@ -166,9 +166,85 @@ The intended user flow is native case investigation with an explicit analyze act
 
 1. Configure the base URL/model and, if needed, a newly entered key through a CSRF-protected manager settings flow. Saving configuration must not make a test/inference request automatically. Keep key storage separate from ordinary case SQLite data and browser/local storage; the initial in-memory configuration resets on manager restart. The complete LAN manager can instead retain an explicitly saved protected configuration under the linked persistence contract.
 2. For a remote provider, show the exact destination and data-field categories, and obtain explicit consent. Treat an origin change as a fresh approval/key-binding decision.
-3. Analyze only a stored case under a specific configuration revision. Apply the manager's loopback/Host/Origin/CSRF/body boundary and a manager-wide concurrency guard. Cancel active old-config requests when settings change; mark an old response superseded before display.
+3. Prepare the exact stored-case packet through the protected preview endpoint below, then explicitly approve that one expiring snapshot and configuration revision. Apply the manager's loopback/Host/Origin/CSRF/body boundary and manager-wide concurrency guard. Cancel active old-config requests when settings change; mark an old response superseded before display.
 4. Display deterministic findings and AI suggestions separately. Link citations to the matching packet evidence, surface missing/stale/synthetic context, and keep the uncertainty label visible even after successful validation.
 5. Do not auto-run `nextCheck`, store a model statement as an observed fact, resolve a case, or schedule a recurring scan from this response.
+
+## Exact manual case preview (TB-24 bounded slice)
+
+Manual case analysis now requires **Review AI analysis → review the exact packet
+and destination → explicitly confirm**. The dialog displays the server-prepared
+canonical JSON data message, its SHA-256, saved URL/model and original two-minute
+review expiry. Its title and evidence count come from this packet, not the
+browser's possibly older case card. Missing evidence, collection quality,
+timestamps, synthetic labels and gaps are included without silently truncating
+or substituting the source. JSON/evidence/model text is rendered inertly.
+
+- `POST /api/cases/{caseId}/analyze-preview` accepts exactly `{}` under the existing
+  administrator, same-origin, CSRF and strict body boundaries. It calls the same
+  `BuildPacket` provenance/bounds gates and makes **no provider call**. The response
+  contains `schemaVersion: tracebolt.case-analysis-preview.v1`, `caseId`,
+  `configRevision`, `baseURL`, `endpointOrigin`, `model`, `packetJSON`,
+  `packetSHA256`, `serverNow`, `validUntil` and `previewToken`. The packet remains at most 24 KiB.
+- `POST /api/cases/{caseId}/analyze` accepts exactly `configRevision`,
+  `previewToken`, `packetSHA256` and `acknowledge: true`. Old revision-only requests
+  fail closed. Browsers cannot supply a prompt, destination, model or replacement
+  packet. The manager rebuilds the current trusted case packet, compares its hash
+  with the preview's server-owned binding, and passes that **same case snapshot**
+  to the existing deterministic builder and provider service. If the stored packet
+  changed since review, the operator must prepare and approve a new preview.
+- A random 256-bit token binds one case, exact packet hash, provider revision and
+  operator session. It expires after two minutes or the earlier session deadline.
+  There are at most 128 pending previews per manager. Expired entries are pruned
+  before admitting another preview; capacity failure never evicts an active
+  approval or sends data. Pending records retain **metadata only**, not packet,
+  key, log or model prose, and are never persisted. Logout removes that session's
+  previews; provider replacement/clear and a detected storage fence clear them.
+- An owner-confirmed, well-formed current-revision attempt consumes its token
+  before provider admission, including packet/hash/case/expiry mismatch or a busy
+  slot. An unknown token or another session never consumes somebody else's token.
+  A failure, lost response or local cancellation never automatically retries.
+  Preparing a new preview after an uncertain call is a **new explicit attempt**
+  and may incur another provider charge; this is not durable incident deduplication.
+- A change after admission cannot substitute newer evidence: the call uses the
+  already checked trusted snapshot. Config/session cancellation still applies;
+  already sent bytes cannot be recalled. Returned results include `previewToken`
+  and the same packet hash in provenance. The browser checks token, provider
+  revision/destination/model, complete packet values and both provenance hashes,
+  and discards late/canceled/superseded results. Case/settings changes and expiry
+  clear the dialog/consent. Snapshot/config final checks do not promise that the
+  world remains unchanged after response delivery.
+
+This is **not secret redaction**: a secret embedded in an allowed title, summary,
+source, detail or value is still present in the preview and would be sent after
+approval. Pattern masking from another AI scope must not be inferred here. The
+human must review those texts; unrecognized secrets and identifying information
+remain a review responsibility. Neither this preview nor a LAN/loopback URL
+proves local processing or provider retention behavior. Key readback, protected
+plaintext-storage disclosures, credential origin binding, managed-profile export
+blocks, prompt/schema separation and the absence of tool/action authority remain
+unchanged.
+
+### Path inventory and remaining TB-24 gates
+
+| Path | Existing approval/export boundary | Status in this slice |
+| --- | --- | --- |
+| Manual stored case (`BuildPacket` / `Analyze`) | Exact bounded packet plus one case/session/provider approval | New exact preview/export binding; no raw log or managed-profile promotion |
+| One-time DNS/TCP review (`AnalyzeNetworkReview`) | Own source-generation/current-observation and session-bound one-time review | Unchanged; not a manual-case token |
+| Proactive health (`AnalyzeHealth`) | Default-off exact provider/device `health-summary-v1`; typed summary, claim-before-call | Unchanged; category/scope review is not a new per-incident exact-packet preview |
+| Proactive service-log (`AnalyzeJournal`) | Separate default-off exact provider/credential/device/service/policy/window/capture/export acknowledgements | Unchanged; best-effort scope-specific masking, bounded memory-only content |
+| Explicit provider test (`TestProvider`) | Exact provider revision and fixed synthetic fixture only | Unchanged; never substitutes customer evidence or grants ongoing export |
+
+Synthetic contract fixtures compare the canonical preview against the actual
+fake provider user message and returned packet/hash; cover excluded-field markers,
+instruction-like text, changed/expired/wrong-session/wrong-case/hash/provider
+bindings, replay, strict bodies/CSRF and capacity. They do not establish model
+semantic compliance, comprehensive secret masking, real-provider interoperability,
+quality improvement or native/deployed acceptance. No real provider, key or user
+telemetry is required for these fixtures. A held-out diagnosis comparison with
+evidence IDs and a no-model baseline, real destination review and an appropriate
+proactive review UX remain separate TB-24 gates; this slice does not close the
+whole issue or authorize any new provider/scope/host configuration.
 
 ## Evaluation fixture plan and release gates
 

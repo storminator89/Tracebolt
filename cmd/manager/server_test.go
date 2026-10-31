@@ -97,8 +97,9 @@ func TestRealManagerReturnsDelayedFakeProviderResult(t *testing.T) {
 	token := call("GET", "/api/session", nil, "")["csrfToken"].(string)
 	revision := call("GET", "/api/ai/config", nil, "")["revision"].(string)
 	saved := call("POST", "/api/ai/config", map[string]any{"expectedRevision": revision, "baseURL": provider.URL + "/v1", "model": "fixture-slow", "apiKey": "", "approvedOrigin": provider.URL, "allowRemoteEvidence": false, "useLegacyMaxTokens": false}, token)
+	preview := call("POST", "/api/cases/case-demo-win-01-service/analyze-preview", map[string]any{}, token)
 	started := time.Now()
-	result := call("POST", "/api/cases/case-demo-win-01-service/analyze", map[string]string{"configRevision": saved["revision"].(string)}, token)
+	result := call("POST", "/api/cases/case-demo-win-01-service/analyze", map[string]any{"configRevision": saved["revision"], "previewToken": preview["previewToken"], "packetSHA256": preview["packetSHA256"], "acknowledge": true}, token)
 	if time.Since(started) < 10*time.Second {
 		t.Fatal("test did not cross old deadline")
 	}

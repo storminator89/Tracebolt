@@ -1,6 +1,6 @@
 import './ai-analysis.css';
 import { t, ui, useLocale } from './i18n';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowRight, Bot, Check, ChevronRight, CircleHelp, Cloud, FileCheck2, Fingerprint, Info, KeyRound, Link2, LoaderCircle, LockKeyhole, RefreshCw, Send, Server, ShieldCheck, SlidersHorizontal, Square, Trash2, TriangleAlert } from 'lucide-react';
 import { APIError, mutate, request } from './api';
 import type { AIConfig, AnalysisResult, Claim, EndpointInfo } from './ai-types';
@@ -10,6 +10,8 @@ import { Dialog, Loading, SectionHead, Source } from './components';
 import { fullDate, qualityLabels } from './utils';
 import { AIProviderTest } from './ai-provider-test';
 import { publicCAFingerprint } from './ai-ca';
+import { parseCaseAnalysisPreview, validCaseAnalysisResult } from './ai-case-preview';
+import type { CaseAnalysisPreview } from './ai-case-preview';
 function useAIConfig() {
     const [config, setConfig] = useState<AIConfig | null>(null);
     const [loading, setLoading] = useState(true);
@@ -187,69 +189,83 @@ export function AIAnalysisPanel({ item, onSettings }: {
     const { config, setConfig, loading, error, refresh } = useAIConfig();
     const [result, setResult] = useState<AnalysisResult | null>(null);
     const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
-    const [confirm, setConfirm] = useState<AIConfig | null>(null);
+    const [confirm, setConfirm] = useState<CaseAnalysisPreview | null>(null);
     const [reviewed, setReviewed] = useState(false);
     const [pending, setPending] = useState(false);
     const [analysisError, setAnalysisError] = useState('');
     const [preparing, setPreparing] = useState(false);
     const operation = useRef<AbortController | null>(null);
     const alive = useRef(true);
-    useEffect(() => { alive.current = true; return () => { alive.current = false; operation.current?.abort(); }; }, []);
+    const active = (current: AbortController) => alive.current && operation.current === current && !current.signal.aborted;
+    const reset = useCallback(() => {
+        operation.current?.abort(); operation.current = null;
+        setConfirm(null); setReviewed(false); setResult(null); setSelectedEvidence(null);
+        setPending(false); setPreparing(false); setAnalysisError('');
+    }, []);
+    useLayoutEffect(() => { alive.current = true; reset(); return () => { alive.current = false; operation.current?.abort(); operation.current = null; }; }, [item, reset]);
+    useEffect(() => {
+        const changed = () => { reset(); void refresh(); };
+        window.addEventListener('tracebolt-ai-config-changed', changed);
+        return () => window.removeEventListener('tracebolt-ai-config-changed', changed);
+    }, [reset, refresh]);
+    useEffect(() => {
+        if (!confirm) return;
+        const expire = () => { setConfirm(null); setReviewed(false); setAnalysisError(t('Die Datenvorschau ist abgelaufen. Bitte Belege und Ziel erneut prüfen.')); };
+        const timer = window.setTimeout(expire, Math.max(0, confirm.expiresAtMs - Date.now()));
+        return () => window.clearTimeout(timer);
+    }, [confirm]);
     const begin = async () => {
-        setPreparing(true);
-        setAnalysisError('');
-        const latest = await refresh();
-        if (alive.current) {
-            setPreparing(false);
-            if (latest?.configured) {
-                if (result && result.configRevision !== latest.revision)
-                    setResult(null);
-                setReviewed(false);
-                setConfirm(latest);
-            }
+        if (operation.current || confirm) return;
+        const current = new AbortController(); operation.current = current;
+        setPreparing(true); setAnalysisError(''); setReviewed(false); setSelectedEvidence(null);
+        try {
+            const latest = await refresh();
+            if (!active(current) || !latest?.configured) return;
+            const response = await mutate<unknown>(`/cases/${encodeURIComponent(item.id)}/analyze-preview`, {}, current.signal);
+            if (!active(current)) return;
+            const preview = parseCaseAnalysisPreview(response, item.id);
+            if (!preview || preview.configRevision !== latest.revision || preview.baseURL !== latest.baseURL || preview.endpointOrigin !== latest.endpointOrigin || preview.model !== latest.model)
+                throw new APIError(t('Die Datenvorschau konnte nicht bestätigt werden. Bitte erneut prüfen.'));
+            if (result && result.configRevision !== latest.revision) setResult(null);
+            setConfirm(preview);
+        } catch {
+            if (active(current)) setAnalysisError(t('Die Datenvorschau konnte nicht bestätigt werden. Es wurde keine Analyse gestartet.'));
+        } finally {
+            if (active(current)) { operation.current = null; setPreparing(false); }
         }
     };
     const analyze = async () => {
-        if (!confirm || !reviewed || pending)
-            return;
+        if (!confirm || !reviewed || operation.current || pending) return;
         const selected = confirm;
-        setConfirm(null);
-        setPending(true);
-        setAnalysisError('');
-        setResult(null);
-        const current = new AbortController();
-        operation.current = current;
+        setConfirm(null); setReviewed(false);
+        if (selected.expiresAtMs <= Date.now() || selected.caseId !== item.id || selected.configRevision !== config?.revision) {
+            setAnalysisError(t('Die Datenvorschau ist abgelaufen oder geändert. Bitte erneut prüfen.')); return;
+        }
+        const current = new AbortController(); operation.current = current;
+        setPending(true); setAnalysisError(''); setResult(null); setSelectedEvidence(null);
         try {
-            const response = await mutate<AnalysisResult>(`/cases/${encodeURIComponent(item.id)}/analyze`, { configRevision: selected.revision }, current.signal);
-            if (!alive.current || current.signal.aborted)
-                return;
+            const response = await mutate<unknown>(`/cases/${encodeURIComponent(selected.caseId)}/analyze`, { configRevision: selected.configRevision, previewToken: selected.previewToken, packetSHA256: selected.packetSHA256, acknowledge: true }, current.signal);
+            if (!active(current)) return;
             const latest = await request<AIConfig>('/ai/config', { signal: current.signal });
-            if (!alive.current || current.signal.aborted)
-                return;
-            setConfig(latest);
-            if (response.superseded || response.configRevision !== selected.revision || latest.revision !== selected.revision) {
-                setAnalysisError(t("Die Anbieter-Konfiguration wurde ge\u00E4ndert. Das \u00FCberholte Ergebnis wird nicht angezeigt."));
-                return;
+            if (!active(current)) return;
+            if (!validAIConfig(latest) || !latest.configured || latest.revision !== selected.configRevision || !validCaseAnalysisResult(response, selected)) {
+                setAnalysisError(t('Die Vorschau oder Anbieter-Konfiguration wurde geändert. Das überholte Ergebnis wird nicht angezeigt.')); return;
             }
-            setResult(response);
-        }
-        catch (err) {
-            if (alive.current && !current.signal.aborted) {
-                setAnalysisError(safeAIError(err));
-                if (err instanceof APIError && err.status === 409)
-                    void refresh();
+            setConfig(latest); setResult(response);
+        } catch {
+            if (active(current)) {
+                setAnalysisError(t('Die Analyse konnte nicht bestätigt werden. Daten können bereits übertragen worden sein. Keine automatische Wiederholung; bitte erneut prüfen.'));
+                void refresh();
             }
-        }
-        finally {
-            if (alive.current && !current.signal.aborted)
-                setPending(false);
+        } finally {
+            if (active(current)) { operation.current = null; setPending(false); }
         }
     };
-    const cancel = () => { operation.current?.abort(); setPending(false); setAnalysisError(t("Anfrage lokal abgebrochen. Bereits \u00FCbertragene Daten k\u00F6nnen nicht zur\u00FCckgeholt werden.")); void refresh(); };
+    const cancel = () => { operation.current?.abort(); operation.current = null; setPending(false); setPreparing(false); setAnalysisError(preparing ? t("Datenvorschau abgebrochen. Keine Analyse gestartet.") : t("Anfrage lokal abgebrochen. Bereits übertragene Daten können nicht zurückgeholt werden.")); void refresh(); };
     const info = endpointInfo(config?.baseURL || '');
     const findings = result?.ai.status === 'completed' ? result.ai.findings : null;
     const statusLabels: Record<string, string> = { not_configured: t("Anbieter nicht eingerichtet"), canceled: t("Anfrage abgebrochen"), timeout: t("Zeitlimit erreicht"), busy: t("Andere Analyse l\u00E4uft"), invalid_response: t("Antwort nicht verwendbar"), unavailable: t("Anbieterantwort nicht verfügbar") };
-    return <section className="panel ai-analysis-panel"><SectionHead title={t("KI-Einordnung")} action={<span className="ai-suggestion-label"><Bot size={14}/>{t("Optional")}</span>}/>{error ? <div className="ai-inline-error" role="alert"><TriangleAlert size={16}/><p>{ui(error)}</p><button className="button small" onClick={() => void refresh()}>{t("Erneut versuchen")}</button></div> : loading && !config ? <Loading label={t("KI-Konfiguration wird geladen \u2026")}/> : !config?.configured ? <div className="ai-unconfigured"><span><Bot size={24}/></span><div><h3>{t("Noch kein Anbieter eingerichtet")}</h3></div><button className="button" onClick={onSettings}>{t("Einrichten")}<ArrowRight size={14}/></button></div> : <><div className="ai-analysis-toolbar"><div className="ai-model-label">{info.local ? <Server size={16}/> : <Cloud size={16}/>}<div><strong>{config.model}</strong><span title={config.baseURL}>{config.endpointOrigin}</span></div></div>{pending ? <button className="button" onClick={cancel}><Square size={13}/>{t("Abbrechen")}</button> : <button className="button" onClick={() => void begin()} disabled={preparing || config.busy}>{preparing ? <LoaderCircle className="spin" size={14}/> : <Send size={14}/>}{t("KI-Analyse prüfen")}</button>}</div>{pending ? <div className="ai-progress" role="status"><LoaderCircle size={18} className="spin"/><span>{t("Fallbelege werden analysiert …")}<small>{t("Der Regelbefund bleibt unver\u00E4ndert.")}</small></span></div> : config.busy ? <div className="ai-status-note"><Info size={14}/><span>{t("Eine andere Analyse l\u00E4uft.")}</span><button className="text-button" onClick={() => void refresh()}><RefreshCw size={12}/>{t("Status pr\u00FCfen")}</button></div> : null}</>}{analysisError && <div className="ai-inline-error" role="alert"><TriangleAlert size={16}/><p>{ui(analysisError)}</p></div>}{result && !findings && <div className="ai-result-status" role="status"><TriangleAlert size={18}/><div><strong>{statusLabels[result.ai.status] || t("Kein verwertbares Ergebnis")}</strong><p>{result.ai.reason || t("Der deterministische Befund bleibt g\u00FCltig. Es wurde keine Ma\u00DFnahme ausgef\u00FChrt.")}</p></div></div>}{result && findings && <div className="ai-result"><div className="ai-result-heading"><span><Bot size={14}/>{t("KI-Hypothesen")}<Source synthetic={result.packet.case.synthetic}/></span><span className="ai-unconfirmed"><CircleHelp size={13}/>{t("Ursache nicht best\u00E4tigt")}</span></div><ClaimList items={findings.hypotheses} evidence={result.packet.evidence} onEvidence={setSelectedEvidence}/>{(result.packet.gaps.length > 0 || findings.missingData.length > 0) && <details className="ai-findings-disclosure ai-data-gaps"><summary><TriangleAlert size={14}/>{t("Fehlende Daten")}<span>{result.packet.gaps.length + findings.missingData.length}</span><ChevronRight size={14}/></summary><ul>{result.packet.gaps.map((gap, index) => <li key={index}>{({ "missing-evidence": t("Verkn\u00FCpfte Belege fehlen"), "quality-stale": t("Veraltete Beobachtung"), "quality-unknown": t("Daten nicht verf\u00FCgbar"), "quality-denied": t("Zugriff auf Beobachtung verweigert"), "no-evidence": t("Keine Belege vorhanden") } as Record<string, string>)[gap.code] || gap.detail}{gap.evidenceIDs.length > 0 && <small>{gap.evidenceIDs.join(" · ")}</small>}</li>)}{findings.missingData.map((missing, index) => <li key={`missing-${index}`}>{missing}</li>)}</ul></details>}{findings.counterevidence.length > 0 && <ClaimList title={t("Gegenbelege")} items={findings.counterevidence} evidence={result.packet.evidence} onEvidence={setSelectedEvidence}/>}{result.ai.nextSteps.length > 0 && <div className="ai-next-check"><h3>{t("Nächste Prüfung · nur lesend")}</h3><ol>{result.ai.nextSteps.map((step, index) => <li key={index}>{ui(step)}</li>)}</ol></div>}<details className="ai-findings-disclosure ai-provenance"><summary><Fingerprint size={14}/>{t("Herkunft & Grenzen")}<ChevronRight size={14}/></summary><dl><div><dt>{t("Modell")}</dt><dd>{result.ai.provenance.model}</dd></div><div><dt>{t("Ziel")}</dt><dd>{result.ai.provenance.destination}</dd></div><div><dt>{t("Erstellt")}</dt><dd>{fullDate(result.generatedAt)}</dd></div><div><dt>{t("Belegzeitpunkte")}</dt><dd>{result.packet.observationWindow.from ? fullDate(result.packet.observationWindow.from) : t("Unbekannt")} – {result.packet.observationWindow.to ? fullDate(result.packet.observationWindow.to) : t("Unbekannt")}</dd></div><div><dt>{t("Prompt / Runbook")}</dt><dd>{result.ai.provenance.promptVersion} / {result.ai.provenance.runbookVersion}</dd></div><div><dt>{t("Paket-Hash")}</dt><dd><code>{result.ai.provenance.packetSHA256}</code></dd></div></dl><ul>{result.limitations.map((limit, index) => <li key={index}>{limit}</li>)}</ul><p>{t("Quellen bestätigen keine Hypothese. Neuladen verwirft dieses Ergebnis.")}</p></details></div>}{selectedEvidence && <Dialog title={t("Analysierter Beleg: {0}", { "0": selectedEvidence.title })} onClose={() => setSelectedEvidence(null)} className="ai-confirm-dialog ai-snapshot-dialog"><div className="eyebrow">{t("ANALYSIERTER BELEG")}</div><h2>{selectedEvidence.title}</h2><div className="ai-snapshot-badges"><Source synthetic={selectedEvidence.synthetic}/><span className={`quality-pill quality-${selectedEvidence.quality}`}>{qualityLabels[selectedEvidence.quality]}</span></div><code className="ai-snapshot-value">{selectedEvidence.value || t("Kein Wert vorhanden")}</code><p>{selectedEvidence.detail}</p><dl><div><dt>{t("Quelle")}</dt><dd>{selectedEvidence.source}</dd></div><div><dt>{t("Erfasst")}</dt><dd>{fullDate(selectedEvidence.collectedAt)}</dd></div><div><dt>{t("Beleg-ID")}</dt><dd><code>{selectedEvidence.id}</code></dd></div></dl><div className="ai-status-note"><Fingerprint size={14}/><span>{t("Unver\u00E4nderter Beleg aus dem analysierten Datenpaket.")}</span></div></Dialog>}{confirm && <Dialog title={t("Fallbelege zur KI-Analyse senden")} onClose={() => { setConfirm(null); setReviewed(false); }} className="ai-confirm-dialog ai-evidence-confirm"><div className="confirm-symbol"><Send size={21}/></div><h2>{t("Fallbelege senden?")}</h2><Destination info={endpointInfo(confirm.baseURL)} endpoint={confirm.baseURL} compact/><div className="ai-confirm-case"><FileCheck2 size={16}/><div><strong>{item.title}</strong><span>{item.evidenceIds.length}{" " + t("verkn\u00FCpfte Belege \u00B7 Modell:") + " "}{confirm.model}</span></div><Source synthetic={item.synthetic}/></div><div className="ai-send-warning"><TriangleAlert size={17}/><p>{t("Falltitel, Zusammenfassung und Beleg-Rohtexte werden ohne automatische Geheimnisfilterung gesendet. Auch Loopback-Anbieter k\u00F6nnen extern weiterleiten.")}</p></div><details className="ai-disclosure"><summary><Info size={14}/>{t("Was wird \u00FCbertragen?")}<ChevronRight size={14}/></summary><ul><li>{t("Fallmetadaten: Titel, Zusammenfassung, Kategorie, Regel, Zeitpunkte und Demo-Kennzeichnung.")}</li><li>{t("Ausgew\u00E4hlte verkn\u00FCpfte Belege: Titel, Quelle, Detail, Wert, Zeitpunkt und Datenqualit\u00E4t. H\u00F6chstens 32 Belege und 24 KiB Paketgr\u00F6\u00DFe.")}</li><li>{t("Keine Notizen, Ger\u00E4tekennungen oder unbeteiligte Telemetrie.")}</li><li>{t("Die Belegtexte stehen oben im Fall. Die Anfrage f\u00FChrt keine Befehle aus.")}</li></ul></details><label className="check-field review-consent"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)}/><span>{t("Ich habe Belege und Ziel gepr\u00FCft und gebe diese einzelne Anfrage frei.")}</span></label><div className="confirm-actions"><button className="button" onClick={() => { setConfirm(null); setReviewed(false); }}>{t("Abbrechen")}</button><button className="button primary" onClick={() => void analyze()} disabled={!reviewed}><Send size={14}/>{t("Jetzt analysieren")}</button></div></Dialog>}</section>;
+    return <section className="panel ai-analysis-panel"><SectionHead title={t("KI-Einordnung")} action={<span className="ai-suggestion-label"><Bot size={14}/>{t("Optional")}</span>}/>{error ? <div className="ai-inline-error" role="alert"><TriangleAlert size={16}/><p>{ui(error)}</p><button className="button small" onClick={() => void refresh()}>{t("Erneut versuchen")}</button></div> : loading && !config ? <Loading label={t("KI-Konfiguration wird geladen \u2026")}/> : !config?.configured ? <div className="ai-unconfigured"><span><Bot size={24}/></span><div><h3>{t("Noch kein Anbieter eingerichtet")}</h3></div><button className="button" onClick={onSettings}>{t("Einrichten")}<ArrowRight size={14}/></button></div> : <><div className="ai-analysis-toolbar"><div className="ai-model-label">{info.local ? <Server size={16}/> : <Cloud size={16}/>}<div><strong>{config.model}</strong><span title={config.baseURL}>{config.endpointOrigin}</span></div></div>{preparing && <button className="button" onClick={cancel}>{t("Abbrechen")}</button>}{pending ? <button className="button" onClick={cancel}><Square size={13}/>{t("Abbrechen")}</button> : <button className="button" onClick={() => void begin()} disabled={preparing || !!confirm || config.busy}>{preparing ? <LoaderCircle className="spin" size={14}/> : <Send size={14}/>}{t("KI-Analyse prüfen")}</button>}</div>{pending ? <div className="ai-progress" role="status"><LoaderCircle size={18} className="spin"/><span>{t("Fallbelege werden analysiert …")}<small>{t("Der Regelbefund bleibt unver\u00E4ndert.")}</small></span></div> : config.busy ? <div className="ai-status-note"><Info size={14}/><span>{t("Eine andere Analyse l\u00E4uft.")}</span><button className="text-button" onClick={() => void refresh()}><RefreshCw size={12}/>{t("Status pr\u00FCfen")}</button></div> : null}</>}{analysisError && <div className="ai-inline-error" role="alert"><TriangleAlert size={16}/><p>{ui(analysisError)}</p></div>}{result && !findings && <div className="ai-result-status" role="status"><TriangleAlert size={18}/><div><strong>{statusLabels[result.ai.status] || t("Kein verwertbares Ergebnis")}</strong><p>{result.ai.reason || t("Der deterministische Befund bleibt g\u00FCltig. Es wurde keine Ma\u00DFnahme ausgef\u00FChrt.")}</p></div></div>}{result && findings && <div className="ai-result"><div className="ai-result-heading"><span><Bot size={14}/>{t("KI-Hypothesen")}<Source synthetic={result.packet.case.synthetic}/></span><span className="ai-unconfirmed"><CircleHelp size={13}/>{t("Ursache nicht best\u00E4tigt")}</span></div><ClaimList items={findings.hypotheses} evidence={result.packet.evidence} onEvidence={setSelectedEvidence}/>{(result.packet.gaps.length > 0 || findings.missingData.length > 0) && <details className="ai-findings-disclosure ai-data-gaps"><summary><TriangleAlert size={14}/>{t("Fehlende Daten")}<span>{result.packet.gaps.length + findings.missingData.length}</span><ChevronRight size={14}/></summary><ul>{result.packet.gaps.map((gap, index) => <li key={index}>{({ "missing-evidence": t("Verkn\u00FCpfte Belege fehlen"), "quality-stale": t("Veraltete Beobachtung"), "quality-unknown": t("Daten nicht verf\u00FCgbar"), "quality-denied": t("Zugriff auf Beobachtung verweigert"), "no-evidence": t("Keine Belege vorhanden") } as Record<string, string>)[gap.code] || gap.detail}{gap.evidenceIDs.length > 0 && <small>{gap.evidenceIDs.join(" · ")}</small>}</li>)}{findings.missingData.map((missing, index) => <li key={`missing-${index}`}>{missing}</li>)}</ul></details>}{findings.counterevidence.length > 0 && <ClaimList title={t("Gegenbelege")} items={findings.counterevidence} evidence={result.packet.evidence} onEvidence={setSelectedEvidence}/>}{result.ai.nextSteps.length > 0 && <div className="ai-next-check"><h3>{t("Nächste Prüfung · nur lesend")}</h3><ol>{result.ai.nextSteps.map((step, index) => <li key={index}>{ui(step)}</li>)}</ol></div>}<details className="ai-findings-disclosure ai-provenance"><summary><Fingerprint size={14}/>{t("Herkunft & Grenzen")}<ChevronRight size={14}/></summary><dl><div><dt>{t("Modell")}</dt><dd>{result.ai.provenance.model}</dd></div><div><dt>{t("Ziel")}</dt><dd>{result.ai.provenance.destination}</dd></div><div><dt>{t("Erstellt")}</dt><dd>{fullDate(result.generatedAt)}</dd></div><div><dt>{t("Belegzeitpunkte")}</dt><dd>{result.packet.observationWindow.from ? fullDate(result.packet.observationWindow.from) : t("Unbekannt")} – {result.packet.observationWindow.to ? fullDate(result.packet.observationWindow.to) : t("Unbekannt")}</dd></div><div><dt>{t("Prompt / Runbook")}</dt><dd>{result.ai.provenance.promptVersion} / {result.ai.provenance.runbookVersion}</dd></div><div><dt>{t("Paket-Hash")}</dt><dd><code>{result.ai.provenance.packetSHA256}</code></dd></div></dl><ul>{result.limitations.map((limit, index) => <li key={index}>{limit}</li>)}</ul><p>{t("Quellen bestätigen keine Hypothese. Neuladen verwirft dieses Ergebnis.")}</p></details></div>}{selectedEvidence && <Dialog title={t("Analysierter Beleg: {0}", { "0": selectedEvidence.title })} onClose={() => setSelectedEvidence(null)} className="ai-confirm-dialog ai-snapshot-dialog"><div className="eyebrow">{t("ANALYSIERTER BELEG")}</div><h2>{selectedEvidence.title}</h2><div className="ai-snapshot-badges"><Source synthetic={selectedEvidence.synthetic}/><span className={`quality-pill quality-${selectedEvidence.quality}`}>{qualityLabels[selectedEvidence.quality]}</span></div><code className="ai-snapshot-value">{selectedEvidence.value || t("Kein Wert vorhanden")}</code><p>{selectedEvidence.detail}</p><dl><div><dt>{t("Quelle")}</dt><dd>{selectedEvidence.source}</dd></div><div><dt>{t("Erfasst")}</dt><dd>{fullDate(selectedEvidence.collectedAt)}</dd></div><div><dt>{t("Beleg-ID")}</dt><dd><code>{selectedEvidence.id}</code></dd></div></dl><div className="ai-status-note"><Fingerprint size={14}/><span>{t("Unver\u00E4nderter Beleg aus dem analysierten Datenpaket.")}</span></div></Dialog>}{confirm && <Dialog title={t("Fallbelege zur KI-Analyse senden")} onClose={() => { setConfirm(null); setReviewed(false); }} className="ai-confirm-dialog ai-evidence-confirm"><div className="confirm-symbol"><Send size={21}/></div><h2>{t("Fallbelege senden?")}</h2><Destination info={endpointInfo(confirm.baseURL)} endpoint={confirm.baseURL} compact/><div className="ai-confirm-case"><FileCheck2 size={16}/><div><strong>{confirm.packet.case.title}</strong><span>{confirm.packet.evidence.length}{" " + t("verkn\u00FCpfte Belege \u00B7 Modell:") + " "}{confirm.model}</span></div><Source synthetic={confirm.packet.case.synthetic}/></div><div className="ai-send-warning"><TriangleAlert size={17}/><p>{t("Falltitel, Zusammenfassung und Beleg-Rohtexte werden ohne automatische Geheimnisfilterung gesendet. Auch Loopback- und LAN-Anbieter k\u00F6nnen extern weiterleiten.")}</p></div><details className="ai-disclosure"><summary><Info size={14}/>{t("Was wird \u00FCbertragen?")}<ChevronRight size={14}/></summary><ul><li>{t("Fallmetadaten: Titel, Zusammenfassung, Kategorie, Regel, Zeitpunkte und Demo-Kennzeichnung.")}</li><li>{t("Ausgew\u00E4hlte verkn\u00FCpfte Belege: Titel, Quelle, Detail, Wert, Zeitpunkt und Datenqualit\u00E4t. H\u00F6chstens 32 Belege und 24 KiB Paketgr\u00F6\u00DFe.")}</li><li>{t("Keine Notizen, Ger\u00E4tekennungen oder unbeteiligte Telemetrie.")}</li><li>{t("Maßgeblich ist das vollständige Datenpaket in dieser Vorschau. Die Anfrage führt keine Befehle aus.")}</li></ul></details><div className="ai-exact-packet"><h3>{t("Exaktes Datenpaket")}</h3><p>{t("Keine automatische Geheimnisfilterung. Alle unten angezeigten Felder werden übertragen; die Vorschau startet keine KI-Anfrage.")}</p><pre tabIndex={0} aria-label={t("Exaktes Datenpaket")}>{confirm.packetJSON}</pre><p>{t("Paket-Hash")}: <code>{confirm.packetSHA256}</code></p><p>{t("Vorschau gültig bis")}: {fullDate(confirm.validUntil)}</p></div><label className="check-field review-consent"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)}/><span>{t("Ich habe Belege und Ziel gepr\u00FCft und gebe diese einzelne Anfrage frei.")}</span></label><div className="confirm-actions"><button className="button" onClick={() => { setConfirm(null); setReviewed(false); }}>{t("Abbrechen")}</button><button className="button primary" onClick={() => void analyze()} disabled={!reviewed}><Send size={14}/>{t("Jetzt analysieren")}</button></div></Dialog>}</section>;
 }
 function ClaimList({ title, items, evidence, onEvidence }: {
     title?: string;

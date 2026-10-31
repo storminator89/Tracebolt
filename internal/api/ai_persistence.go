@@ -59,6 +59,7 @@ func (s *Server) configurePersistentAI(settings *aiconfig.Settings, keyed bool) 
 	return nil
 }
 func (a *aiState) blockPersistenceLocked() {
+	a.casePreviews = nil
 	if a.activeCancel != nil {
 		a.activeCancel()
 	}

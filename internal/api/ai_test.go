@@ -47,7 +47,9 @@ func configure(t *testing.T, s *Server, base, key string) publicAIConfig {
 }
 func analyze(t *testing.T, s *Server, revision string) *httptest.ResponseRecorder {
 	t.Helper()
-	return request(s, "POST", "/api/cases/case-demo-win-01-service/analyze", `{"configRevision":"`+revision+`"}`, nil)
+	preview := previewCase(t, s, "case-demo-win-01-service")
+	preview.ConfigRevision = revision
+	return request(s, "POST", "/api/cases/case-demo-win-01-service/analyze", caseAnalysisBody(t, preview), nil)
 }
 func result(t *testing.T, w *httptest.ResponseRecorder) caseAnalysisResponse {
 	t.Helper()

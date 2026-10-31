@@ -12,7 +12,6 @@ import (
 	"io"
 	"localrmm/internal/aiconfig"
 	"localrmm/internal/analysis"
-	"localrmm/internal/store"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,6 +46,7 @@ type aiState struct {
 	mu                   sync.Mutex
 	reviewKey            [32]byte
 	networkReviews       map[string]networkReviewPermit
+	casePreviews         map[string]caseAnalysisPermit
 	proactive            proactiveAIApproval
 	persistence          *aiconfig.Settings
 	persistentKeyAllowed bool
@@ -72,7 +72,7 @@ func defaultAIConfig(revision string) publicAIConfig {
 		"Default provider settings support literal loopback or an explicitly approved public HTTPS origin. A separate process-memory-only option permits an explicitly approved private IPv4 LAN HTTPS destination.",
 		"Loopback transport does not prove local inference: that server may forward requests elsewhere. Model provenance is a configured label, not weight verification.",
 		"An explicit analysis sends the case title/summary and selected evidence title/source/detail/value/timestamps/quality. Operator notes, device names, IPs and unrelated telemetry are excluded.",
-		"Evidence text is not secret-redacted. Review the case and the exact destination before starting an analysis.",
+		"Evidence text is not secret-redacted. Review the exact packet preview and destination before starting an analysis.",
 		"Manual case analysis has no command execution, extra collection, retry, fallback or remediation. Background health analysis requires a separate device/provider scope.",
 	}}
 }
@@ -225,8 +225,12 @@ func (s *Server) aiMutation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	if len(parts) != 4 || parts[0] != "api" || parts[1] != "cases" || parts[3] != "analyze" || !validID(parts[2]) {
+	if len(parts) != 4 || parts[0] != "api" || parts[1] != "cases" || (parts[3] != "analyze" && parts[3] != "analyze-preview") || !validID(parts[2]) {
 		fail(w, 404, "not_found", "Analysis endpoint not found.")
+		return
+	}
+	if parts[3] == "analyze-preview" {
+		s.previewCaseAnalysis(w, r, parts[2])
 		return
 	}
 	s.analyzeCase(w, r, parts[2])
@@ -371,6 +375,7 @@ func (s *Server) saveAIConfig(w http.ResponseWriter, r *http.Request) {
 		view.Limitations[1] = "This process-memory-only provider trusts only the explicitly approved private CA and verifies the exact IP address using standard TLS."
 	}
 	s.ai.resetProactiveLocked(revision)
+	s.ai.casePreviews = nil
 	s.ai.config = view
 	s.ai.service = analysis.NewService(provider)
 	viewResult := s.ai.publicLocked()
@@ -414,6 +419,7 @@ func (s *Server) clearAIConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.ai.resetProactiveLocked(revision)
+	s.ai.casePreviews = nil
 	s.ai.config = defaultAIConfig(revision)
 	s.ai.service = analysis.NewService(nil)
 	viewResult := s.ai.publicLocked()
@@ -424,32 +430,26 @@ func (s *Server) clearAIConfig(w http.ResponseWriter, r *http.Request) {
 type caseAnalysisResponse struct {
 	analysis.Result
 	ConfigRevision string `json:"configRevision"`
+	PreviewToken   string `json:"previewToken"`
 	Superseded     bool   `json:"superseded"`
 }
 
 func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) {
 	var input struct {
 		ConfigRevision string `json:"configRevision"`
+		PreviewToken   string `json:"previewToken"`
+		PacketSHA256   string `json:"packetSHA256"`
+		Acknowledge    bool   `json:"acknowledge"`
 	}
-	if !readObject(w, r, 1024, []string{"configRevision"}, &input) {
+	if !readObject(w, r, 1024, []string{"configRevision", "previewToken", "packetSHA256", "acknowledge"}, &input) {
 		return
 	}
-	// Instance policy is restored from trusted enrollment state. Client/case
-	// tags cannot relabel a managed source as legacy/basic to permit export.
-	s.mu.RLock()
-	profile := s.aiCollectionProfile
-	s.mu.RUnlock()
-	if profile != "" && profile != "basic-readonly-v1" {
-		fail(w, 403, "evidence_export_not_approved", "This collection profile is not approved for AI export.")
+	if !input.Acknowledge || len(input.ConfigRevision) > 64 || !caseAnalysisDigest(input.PreviewToken) || !caseAnalysisDigest(input.PacketSHA256) {
+		fail(w, 400, "invalid_analysis_review", "Review the exact packet and explicitly confirm this one-time export.")
 		return
 	}
-	c, err := s.store.Case(id)
-	if errors.Is(err, store.ErrNotFound) {
-		fail(w, 404, "not_found", "Case not found.")
-		return
-	}
-	if err != nil {
-		s.internal(w)
+	c, _, digest, ok := s.caseAnalysisSnapshot(w, id)
+	if !ok {
 		return
 	}
 	if !operatorStillActive(w, r) {
@@ -471,12 +471,29 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 		fail(w, 409, "config_revision_mismatch", "Provider settings changed. Review the current destination before starting.")
 		return
 	}
+	permit, exists := s.ai.casePreviews[input.PreviewToken]
+	if !exists || permit.Session != caseAnalysisSession(r) {
+		s.ai.mu.Unlock()
+		failCaseAnalysisChanged(w)
+		return
+	}
+	// A confirmation is single-use, including stale/uncertain or busy attempts.
+	// The map stores only binding metadata, never evidence, a key or model prose.
+	delete(s.ai.casePreviews, input.PreviewToken)
+	if permit.CaseID != id || permit.Revision != input.ConfigRevision || permit.Digest != input.PacketSHA256 || permit.Digest != digest || !time.Now().Before(permit.Until) {
+		s.ai.mu.Unlock()
+		failCaseAnalysisChanged(w)
+		return
+	}
 	if s.ai.busy {
 		s.ai.mu.Unlock()
 		fail(w, 409, "analysis_busy", "Another analysis is still running or canceling.")
 		return
 	}
 	deadline := time.Now().Add(analysis.MaxTimeout)
+	if permit.Until.Before(deadline) {
+		deadline = permit.Until
+	}
 	owner := ""
 	if operator, ok := operatorContext(r); ok {
 		owner = operator.session.ID
@@ -503,6 +520,28 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 		}
 		s.ai.mu.Unlock()
 	}()
+	// The service receives this same trusted case snapshot, not another store read
+	// or client-supplied packet. BuildPacket is deterministic; its canonical JSON
+	// is exactly the preview's data message even if telemetry changes afterward.
+	if !operatorStillActive(w, r) {
+		return
+	}
+	if ctx.Err() != nil {
+		failCaseAnalysisChanged(w)
+		return
+	}
+	s.ai.mu.Lock()
+	storageOK := s.ai.persistenceCurrentLocked()
+	same := s.ai.config.Revision == input.ConfigRevision && s.ai.service == service
+	s.ai.mu.Unlock()
+	if !storageOK {
+		fail(w, 503, "ai_settings_unavailable", "Saved AI settings are blocked. Review protected storage before use.")
+		return
+	}
+	if !same {
+		failCaseAnalysisChanged(w)
+		return
+	}
 	result, err := service.Analyze(ctx, c, c.Evidence)
 	if operator, ok := operatorContext(r); ok && (operator.active == nil || !operator.active()) {
 		fail(w, 401, "authentication_required", "Operator session expired or was revoked.")
@@ -515,7 +554,7 @@ func (s *Server) analyzeCase(w http.ResponseWriter, r *http.Request, id string) 
 	s.ai.mu.Lock()
 	superseded := s.ai.config.Revision != input.ConfigRevision
 	s.ai.mu.Unlock()
-	write(w, 200, caseAnalysisResponse{Result: result, ConfigRevision: input.ConfigRevision, Superseded: superseded})
+	write(w, 200, caseAnalysisResponse{Result: result, ConfigRevision: input.ConfigRevision, PreviewToken: input.PreviewToken, Superseded: superseded})
 }
 
 func (s *Server) aiConfigured() bool {
