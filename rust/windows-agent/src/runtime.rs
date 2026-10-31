@@ -18,6 +18,13 @@ pub struct Runtime {
     health: Option<Tracker>,
     health_requested: bool,
 }
+
+enum Outcome {
+    Pending,
+    Interrupted,
+    Accepted(crate::protocol::AcceptedReceipt),
+}
+
 impl Runtime {
     pub fn open(directory: &Path) -> Result<Self> {
         Self::open_with_health(directory, true)
@@ -55,16 +62,31 @@ impl Runtime {
     }
     /// False means onboarding remains pending, not a delivered observation.
     pub fn cycle(&mut self, collect: impl FnOnce() -> Result<Sample>) -> Result<bool> {
+        self.cycle_until_stopped(collect, || false)
+    }
+    /// Cooperative SCM stop at phase boundaries: skip a cycle if already stopped
+    /// and do not append telemetry to enrollment after an observed stop. A phase
+    /// already admitted (including collection plus send) finishes normally;
+    /// no pending bytes/counters are reset or repaired.
+    pub fn cycle_until_stopped(
+        &mut self,
+        collect: impl FnOnce() -> Result<Sample>,
+        stopping: impl Fn() -> bool,
+    ) -> Result<bool> {
+        if stopping() {
+            return Ok(false);
+        }
         let at = chrono::Utc::now();
         if self.health.as_mut().is_some_and(|h| h.attempt(at).is_err()) {
             self.health = None;
         }
-        let result = self.cycle_inner(collect);
+        let result = self.cycle_inner(collect, stopping);
         let now = chrono::Utc::now();
         let jitter = uuid::Uuid::new_v4().as_bytes()[0] % 31;
         self.last_code = match &result {
-            Ok(Some(_)) => Code::Accepted,
-            Ok(None) => self
+            Ok(Outcome::Accepted(_)) => Code::Accepted,
+            Ok(Outcome::Interrupted) => Code::AttemptInterrupted,
+            Ok(Outcome::Pending) => self
                 .enrollment
                 .as_ref()
                 .and_then(|e| e.public_status().ok())
@@ -109,7 +131,10 @@ impl Runtime {
         if self.health.as_mut().is_some_and(|h| {
             h.complete(
                 self.last_code,
-                result.as_ref().ok().and_then(Clone::clone),
+                match &result {
+                    Ok(Outcome::Accepted(receipt)) => Some(receipt.clone()),
+                    _ => None,
+                },
                 now,
                 self.failures,
                 self.delay,
@@ -119,7 +144,7 @@ impl Runtime {
         }) {
             self.health = None;
         }
-        result.map(|accepted| accepted.is_some())
+        result.map(|outcome| matches!(outcome, Outcome::Accepted(_)))
     }
     pub fn health_code(&self) -> Code {
         self.last_code
@@ -133,19 +158,27 @@ impl Runtime {
     fn cycle_inner(
         &mut self,
         collect: impl FnOnce() -> Result<Sample>,
-    ) -> Result<Option<crate::protocol::AcceptedReceipt>> {
+        stopping: impl Fn() -> bool,
+    ) -> Result<Outcome> {
         if self.sender.is_none() {
             let enrollment = self.enrollment.as_mut().unwrap();
             if let Some(material) = enrollment.step(None)? {
                 self.sender = Some(Sender::enrolled(&enrollment.state_directory(), material)?);
             } else {
-                return Ok(None);
+                return Ok(if stopping() {
+                    Outcome::Interrupted
+                } else {
+                    Outcome::Pending
+                });
             }
+        }
+        if stopping() {
+            return Ok(Outcome::Interrupted);
         }
         self.sender
             .as_mut()
             .unwrap()
             .report_receipt(collect)
-            .map(Some)
+            .map(Outcome::Accepted)
     }
 }

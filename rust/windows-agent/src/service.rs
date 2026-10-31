@@ -1,8 +1,12 @@
-use crate::{native, runtime::Runtime};
+use crate::{
+    native,
+    runtime::Runtime,
+    service_lifecycle::{Lifecycle, Phase},
+};
 use std::{
     ffi::OsString,
     path::PathBuf,
-    sync::{OnceLock, mpsc},
+    sync::{Arc, Mutex, OnceLock, mpsc},
     time::Duration,
 };
 use windows_service::{
@@ -11,7 +15,7 @@ use windows_service::{
         ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus,
         ServiceType,
     },
-    service_control_handler::{self, ServiceControlHandlerResult},
+    service_control_handler::{self, ServiceControlHandlerResult, ServiceStatusHandle},
     service_dispatcher,
 };
 
@@ -19,6 +23,56 @@ pub const NAME: &str = "TraceboltRustAgent";
 static DIRECTORY: OnceLock<PathBuf> = OnceLock::new();
 static HEALTH_ENABLED: OnceLock<bool> = OnceLock::new();
 define_windows_service!(ffi_main, service_main);
+
+#[derive(Default)]
+struct Reporter {
+    lifecycle: Mutex<Lifecycle>,
+    handle: OnceLock<ServiceStatusHandle>,
+}
+impl Reporter {
+    fn stopping(&self) -> bool {
+        self.lifecycle.lock().map_or(true, |s| s.stopping())
+    }
+
+    fn report(&self, phase: Phase, code: u32) -> bool {
+        let Ok(mut lifecycle) = self.lifecycle.lock() else {
+            return false;
+        };
+        if !lifecycle.transition(phase) {
+            return false;
+        }
+        // Hold the same lock through SetServiceStatus. Otherwise a concurrent
+        // startup could publish Running after the callback published StopPending.
+        let state = match phase {
+            Phase::StartPending => ServiceState::StartPending,
+            Phase::Running => ServiceState::Running,
+            Phase::StopPending => ServiceState::StopPending,
+            Phase::Stopped => ServiceState::Stopped,
+        };
+        let pending = matches!(phase, Phase::StartPending | Phase::StopPending);
+        self.handle.get().is_some_and(|handle| {
+            handle
+                .set_service_status(ServiceStatus {
+                    service_type: ServiceType::OWN_PROCESS,
+                    current_state: state,
+                    controls_accepted: if phase == Phase::Running {
+                        ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN
+                    } else {
+                        ServiceControlAccept::empty()
+                    },
+                    exit_code: ServiceExitCode::Win32(code),
+                    checkpoint: u32::from(pending),
+                    wait_hint: if pending {
+                        Duration::from_secs(30)
+                    } else {
+                        Duration::ZERO
+                    },
+                    process_id: None,
+                })
+                .is_ok()
+        })
+    }
+}
 
 pub fn dispatch(directory: PathBuf) -> windows_service::Result<()> {
     DIRECTORY.get_or_init(|| directory);
@@ -33,8 +87,13 @@ pub fn dispatch_without_health(directory: PathBuf) -> windows_service::Result<()
 
 fn service_main(_: Vec<OsString>) {
     let (send, receive) = mpsc::channel();
+    let reporter = Arc::new(Reporter::default());
+    let control_reporter = reporter.clone();
     let Ok(handle) = service_control_handler::register(NAME, move |event| match event {
         ServiceControl::Stop | ServiceControl::Shutdown => {
+            // Notify SCM immediately, even while a bounded request is finishing.
+            // The worker observes this terminal phase before starting more work.
+            control_reporter.report(Phase::StopPending, 0);
             let _ = send.send(());
             ServiceControlHandlerResult::NoError
         }
@@ -43,20 +102,11 @@ fn service_main(_: Vec<OsString>) {
     }) else {
         return;
     };
-    let status = |state, code| ServiceStatus {
-        service_type: ServiceType::OWN_PROCESS,
-        current_state: state,
-        controls_accepted: if state == ServiceState::Running {
-            ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN
-        } else {
-            ServiceControlAccept::empty()
-        },
-        exit_code: ServiceExitCode::Win32(code),
-        checkpoint: 0,
-        wait_hint: Duration::from_secs(20),
-        process_id: None,
-    };
-    let _ = handle.set_service_status(status(ServiceState::StartPending, 0));
+    let _ = reporter.handle.set(handle);
+    if !reporter.report(Phase::StartPending, 0) {
+        reporter.report(Phase::Stopped, 13);
+        return;
+    }
     // SCM arguments contain only the fixed protected configuration directory.
     let result = DIRECTORY
         .get()
@@ -73,19 +123,22 @@ fn service_main(_: Vec<OsString>) {
         Err(error) => {
             let code = crate::health::classify(&error);
             eprintln!("Tracebolt startup: {}. {}", code, code.next_action());
-            let _ = handle.set_service_status(status(ServiceState::Stopped, 13));
+            reporter.report(Phase::Stopped, 13);
             return;
         }
     };
     let mut previous_diagnostic = None;
-    let _ = handle.set_service_status(status(ServiceState::Running, 0));
+    if !reporter.report(Phase::Running, 0) {
+        reporter.report(Phase::Stopped, if reporter.stopping() { 0 } else { 13 });
+        return;
+    }
     loop {
-        if receive.try_recv().is_ok() {
+        if reporter.stopping() || receive.try_recv().is_ok() {
             break;
         }
         // Errors never log payloads, private keys, server bodies or identities.
         // Both success and failure wait, so a disconnected endpoint cannot spin.
-        let outcome = sender.cycle(native::collect);
+        let outcome = sender.cycle_until_stopped(native::collect, || reporter.stopping());
         let diagnostic = (sender.health_code(), sender.health_available());
         if previous_diagnostic != Some(diagnostic) {
             if outcome.is_err() || (sender.health_requested() && !diagnostic.1) {
@@ -105,6 +158,6 @@ fn service_main(_: Vec<OsString>) {
             break;
         }
     }
-    let _ = handle.set_service_status(status(ServiceState::StopPending, 0));
-    let _ = handle.set_service_status(status(ServiceState::Stopped, 0));
+    reporter.report(Phase::StopPending, 0);
+    reporter.report(Phase::Stopped, 0);
 }

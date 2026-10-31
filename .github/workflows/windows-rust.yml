@@ -39,6 +39,11 @@ jobs:
           cargo run --locked --example enrollment_fixture > ../../tests/rustagent/enrollment-fixture.json
       - run: go test ./tests/rustagent ./internal/enrollmentstore ./internal/enrollmentservice ./internal/api
         timeout-minutes: 12
+      - name: Disposable Go/Rust TLS activation-stop-resume contract
+        run: |
+          go build -o "$RUNNER_TEMP/tracebolt-runtime-peer" ./tests/rustagent/cmd/nativefixture
+          cd rust/windows-agent
+          cargo run --locked --example runtime_stop_fixture -- "$RUNNER_TEMP/tracebolt-runtime-peer"
       - run: python3 -B tests/rustagent/test_release_manifest.py
   manager-package:
     runs-on: ubuntu-24.04
@@ -77,13 +82,21 @@ jobs:
           persist-credentials: false
       - name: Test and build unsigned package (no installation or native collection)
         shell: pwsh
-        run: ./deploy/windows-rust/Build-Package.ps1
+        run: |
+          ./tests/rustagent/Test-PackageStaging.ps1
+          ./deploy/windows-rust/Build-Package.ps1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod
       - name: Disposable Windows service acceptance
         shell: pwsh
-        run: ./tests/rustagent/Run-NativeAcceptance.ps1 -Executable ./artifacts/windows-rust/tracebolt-windows-agent.exe
+        run: ./tests/rustagent/Run-NativeAcceptance.ps1 -PackageArchive ./artifacts/windows-rust.zip
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: tracebolt-rust-windows-native-evidence
+          path: artifacts/windows-rust-native.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: tracebolt-rust-windows-x64-unsigned

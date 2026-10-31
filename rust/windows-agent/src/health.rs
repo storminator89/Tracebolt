@@ -26,6 +26,7 @@ pub const MAX_RETRY_SECONDS: u64 = 3600;
 pub enum Code {
     NotObserved,
     AttemptInProgress,
+    AttemptInterrupted,
     RegistrationPending,
     PendingApproval,
     Accepted,
@@ -58,6 +59,7 @@ impl Code {
         match self {
             Self::NotObserved => "not-observed",
             Self::AttemptInProgress => "attempt-in-progress",
+            Self::AttemptInterrupted => "attempt-interrupted",
             Self::RegistrationPending => "registration-pending",
             Self::PendingApproval => "pending-approval",
             Self::Accepted => "accepted",
@@ -99,6 +101,9 @@ impl Code {
             }
             Self::AttemptInProgress => {
                 "The latest attempt has no recorded completion. Inspect service state locally; do not retry or reset identity to repair uncertainty."
+            }
+            Self::AttemptInterrupted => {
+                "Service stop was observed before another telemetry operation. Original identity, pending bytes and sequence floors are retained; this is not a new accepted report."
             }
             Self::RegistrationPending => {
                 "Review the existing registration and manager reachability; preserve the same identity and state."

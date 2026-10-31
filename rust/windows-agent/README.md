@@ -115,8 +115,12 @@ administrators and SYSTEM retain full access. Failure leaves staging/state for
 inspection rather than silently adopting or resetting it. Check both service
 state and **fresh accepted reports in the authenticated dashboard**.
 
-Stop/shutdown interrupts interval waits. In-flight enrollment can take up to
-20 seconds and telemetry up to roughly 16 seconds to finish. `check --directory`
+Stop/shutdown immediately reports StopPending to SCM and interrupts interval
+waits. It is cooperative at phase boundaries: an already admitted enrollment
+phase can take up to 20 seconds, or a telemetry phase roughly 16 seconds, to
+finish. An observed stop between enrollment activation and telemetry prevents
+the second phase from starting; an admitted collection/send is not force-killed.
+Pending bytes and sequence floors remain authoritative. `check --directory`
 validates local configuration/state without sending. With the service stopped,
 `onboard --directory` advances one enrollment phase and prints only public status;
 `once --directory` sends one report once activated. No payloads, credentials or
@@ -138,7 +142,10 @@ Studio C++ Build Tools:
 ```
 
 Output: `artifacts/windows-rust.zip`, containing EXE, installation/removal scripts,
-this guide and SHA256 hashes. Packages are unsigned; normal Windows execution
+this guide and SHA256 hashes. Packaging uses a fresh allowlisted staging area
+and refuses any existing output directory or ZIP without changing it. For a
+repeat build, select a new `-OutputDirectory`; no automatic cleanup is performed.
+Packages are unsigned; normal Windows execution
 policy and OS protections still apply.
 
 ```sh
@@ -155,7 +162,9 @@ Tests use invented data and disposable keys. They cover real loopback mutual TLS
 redirect refusal, exact retry after invalid receipts/restart, ledger protection,
 and Rust-generated enrollment proofs verified by the actual Go crypto package.
 The actual Go ingress validator accepts the Rust telemetry fixture. The Windows
-CI acceptance fixture is isolated from production and validates installed-service
-onboarding/reporting against the Go protocol/crypto. See the exact release's CI
+CI acceptance fixture is isolated from production. It extracts and verifies the
+exact package ZIP, uses that ZIP's own installer/EXE/removal script, and checks
+installed-service onboarding/reporting, durable local receipt, bounded stop and
+restart against the Go protocol/crypto. See the exact release's CI
 results for native coverage. Windows 10/11, reboot persistence and real shared
 Linux-manager/dashboard interoperability are separate acceptance targets.
