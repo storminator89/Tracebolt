@@ -1,12 +1,13 @@
 # Tracebolt
 
-Rust Windows integration test candidates: see [the integrated candidate guide](docs/integrated-test-candidate.md) for the same-source manager and tokenless installer.
-
 **Inventory, logs and diagnostics in one self-hosted dashboard.**
 
 A Go manager and native endpoint agents, with an English/German web interface,
 light and dark themes, and mobile layouts. Tracebolt is a development pilot;
 source features and tested release coverage are listed separately below.
+
+**Status reviewed: 31 October 2026.** Published previews are controlled-test
+packages, not a production-ready or unattended RMM release.
 
 [Get started](#get-started) · [Screenshots](#screenshots) · [Releases](https://github.com/storminator89/Tracebolt/releases) · [Guides](docs/README.md)
 
@@ -18,18 +19,49 @@ source features and tested release coverage are listed separately below.
 
 | Component | Available now | Main limit |
 | --- | --- | --- |
-| Manager | Linux, native or Docker; authenticated dashboard and agent ingress | Built and configured separately from endpoint downloads |
+| Manager | Linux, native or Docker; authenticated dashboard and agent ingress; matching Linux amd64 binary/frontend in Rust integrated test releases | TLS, protected issuer material and operator authentication must still be provisioned; no zero-configuration deployment |
 | Linux | [v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3), amd64 Read admin installation | Ubuntu 24.04 / Debian 13, systemd, cgroup v2, kernel 6.5+; [ARM64/Pi](docs/linux-arm64-support.md) remains a source/testing path |
-| Windows | [v0.1.0-windows-preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3), unsigned x64 Setup with 21-scope Read admin review | Native acceptance covers three hosted Server 2025 packaged-Setup cases; Windows 10/11 and complete provider coverage are unverified |
+| Windows — Go Read admin | [v0.1.0-windows-preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3), unsigned x64 Setup with 21-scope Read admin review | Native acceptance covers three hosted Server 2025 packaged-Setup cases; Windows 10/11 and complete provider coverage are unverified |
+| Windows — Rust Basic | Published [integrated test candidates](docs/integrated-test-candidate.md): unsigned x64 ZIP/EXE plus same-source Linux manager/frontend | CPU, physical RAM, system-drive capacity and uptime only; Server 2025 protocol-fixture evidence, not real Windows→Linux-manager→browser acceptance |
 | macOS | [v0.1.0-macos-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-macos-preview.1), Apple Silicon and Intel service-test packages, preparation helper and runbook | Unsigned and not notarized; native enrollment, installation, launchd operation and reboot persistence are not yet accepted |
 
-### In the current source
+Go Read admin and Rust Basic are **different endpoint profiles**, not successive
+versions of one installer. Select the manager/frontend and endpoint together from
+the chosen release's manifest and verify its hashes. Do not mix arbitrary main
+builds, older previews or packages from different integrated candidates. Publication
+and a passing disposable fixture do not establish full native acceptance.
 
-- **Rust Windows basic agent:** a separate source candidate for CPU/RAM/system-drive
-  telemetry, mutual TLS reporting and a simple Windows service package. See the
-  [Rust agent guide](rust/windows-agent/README.md) for build/install steps,
-  fresh-identity prerequisites and pending native acceptance. It does not replace
-  the Go Read admin agent's full inventory or administration features.
+### Recent progress in main — partial delivery
+
+- **Rust onboarding:** automatic registration without an invitation token by
+  default, deliberate dashboard fingerprint/comparison approval, a bounded
+  [manager compatibility check](docs/rust-manager-compatibility.md) and
+  [invitation-input preflight](docs/rust-installer-preflight.md) before persistent
+  staging. Full installer path/ACL/hash and native negative-case acceptance remain open.
+- **Rust diagnostics:** read-only `status --json` and an allowlisted
+  `support-bundle`, original accepted-report age, bounded backoff and typed
+  TLS/connectivity failure classes. [Diagnostic limits](docs/rust-agent-health.md):
+  unknown transport/startup states remain unknown; service `Running` is not success.
+- **Manager preparation:** create-only native Linux configuration and a
+  [read-only configuration doctor](docs/manager-initialization.md) for approved,
+  preprovisioned material. This does not install a service, create credentials,
+  test a live deployment or validate database contents.
+- **Evidence and recovery:** Windows cached-update and Linux CVE summaries show
+  source/method and original evidence times. A separate
+  [deny-only restore quarantine](docs/restore-quarantine.md) blocks updated
+  manager startup when explicitly marked; it is not consistent backup, freshness
+  reconciliation or a recovery-release workflow.
+- **Administration boundaries:** the [named-account route matrix](docs/named-administration-matrix.md)
+  documents existing admission and denial contracts; full personal-account
+  administration is not implemented. [Customer records](docs/customer-records.md)
+  organize devices; filters and assignments are not tenant isolation.
+
+These are bounded increments, not completion of their broader tasks. The
+[31-task delivery plan](https://github.com/storminator89/Tracebolt/issues/127)
+tracks the remaining acceptance criteria and dependencies. Source functionality
+below can be newer than any selected pinned package.
+
+### In the current source
 
 - **Redesigned workspace:** an operations overview for open cases, device
   observations and recent changes; **Devices → Inventory / Setup / Fleet tools**
@@ -90,10 +122,17 @@ toolchain, builds the current source and opens a fresh loopback-only session:
 2. **Linux:** configure guided enrollment, then use **Add device** and its
    [verified rc.3 installation command](docs/dashboard-verified-download.md).
    Review the local scope and compare/approve the device fingerprint.
-3. **Windows:** download [preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
+3. **Windows — choose one profile:** for broader Go Read admin, download [preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3)
    and follow its attached [installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md).
    Build the manager/frontend from the guide's exact source pin. Verify the
    release hashes, review Setup's unchecked permissions and keep OS protections intact.
+   For the smaller **Rust Basic** collector, use its
+   [integrated candidate guide](docs/integrated-test-candidate.md) and
+   [package instructions](rust/windows-agent/README.md) instead. Take
+   `windows-rust.zip` and `manager-linux-amd64.tar.gz` from the **same** immutable
+   candidate; configure the manager separately. Default onboarding needs no
+   invitation token, but still needs local scope acknowledgement and dashboard
+   identity approval. Do not reuse a Go Read admin identity or retained Rust state.
 4. **macOS test package:** download the archive and matching preparation helper
    for Apple Silicon (`arm64`) or Intel (`amd64`) from [preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-macos-preview.1).
    Start with the [release guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-macos-preview.1/macos-prerelease.md)
@@ -110,15 +149,26 @@ enrollment needs `windowsInventoryEnabled: true`, approved guided-enrollment
 issuer material and an explicit `--enrollment-config` alongside `--lan-config`.
 See [enrollment configuration](docs/enrollment-v2/runtime-config.md) and the
 [fresh renewal policy](docs/automatic-certificate-renewal.md). The pinned manager's
-invitation help is outdated; the release guide and Setup's 21-scope review govern
-the installation. Enter invitations only at the hidden local prompt.
+invitation help is outdated for Go preview.3; its release guide and Setup's
+21-scope review govern that installation. Rust Basic requires the matching
+TLS **non-renewal** Windows domain and its own compatibility contract; it is not
+21-scope collection or a distinct basic-only server authorization domain. Enter
+invitation secrets only at the hidden local prompt when using invitation mode.
 
 ## Important limits
 
-- **Windows preview:** real Linux-manager/shared-dashboard interoperability,
+- **Windows Go preview:** real Linux-manager/shared-dashboard interoperability,
   native restart/reboot, renewal cutover and optional MSI/WUA/service actions
   remain unverified. Setup is unsigned. Service removal retains files, keys and
   state; it does not revoke manager trust.
+- **Rust Basic test candidate:** the hosted Server 2025 service fixture covers
+  installation, onboarding, reports, service restart and removal, not a real
+  Linux-manager/shared-dashboard workflow. Windows 10/11, actual OS reboot,
+  signed packaging, identity-preserving upgrade/repair and full purge remain open.
+  Automatic certificate renewal is not implemented; credentials are issuer-bound
+  and typically valid for at most seven days. This is not unattended fleet support.
+  Removal retains identity/state and does not revoke manager trust; never reset
+  counters or delete used state to repair an installation.
 - **macOS preview:** public downloads are service-test candidates, not a
   production-ready installer. Keep Gatekeeper and other OS protections intact;
   stop if local policy blocks the unsigned package. Basic and inventory grants
@@ -132,7 +182,11 @@ the installation. Enter invitations only at the hidden local prompt.
   remote shell or integrated remote desktop.
 - **Deployment:** HTTPS is the default. HTTP is only for explicitly approved
   isolated tests and exposes credentials/content. Production hardening and
-  verified reboot persistence remain open.
+  verified reboot persistence remain open. Recent merged work has known red
+  focused UI/browser checks; full source/browser acceptance and enforced
+  release gates remain tracked in [TB-02](https://github.com/storminator89/Tracebolt/issues/129)
+  and [TB-25](https://github.com/storminator89/Tracebolt/issues/152). A published
+  unsigned test candidate is not an all-green production-release claim.
 
 ## Screenshots
 
