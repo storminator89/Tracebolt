@@ -54,18 +54,22 @@ describe('health service selection', () => {
     });
 
     it('uses native keyboard checkboxes and keeps Enter search separate from Save', async () => {
+        // Keyboard/form semantics need two choices, not a full inventory page.
+        // The separate scan-window test retains the large-inventory boundary.
+        view = systemView(2); rows = serviceRows(2);
         const user = userEvent.setup(), rendered = await open();
         const checkbox = screen.getByRole('checkbox', { name: rows[0].name }); checkbox.focus(); await user.keyboard(' '); expect(checkbox).toBeChecked();
         await user.keyboard(' '); expect(checkbox).not.toBeChecked();
-        const search = screen.getByRole('searchbox'); fireEvent.change(search, { target: { value: '000349' } });
+        const search = screen.getByRole('searchbox'); fireEvent.change(search, { target: { value: '000001' } });
         const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }); fireEvent(search, event);
-        expect(event.defaultPrevented).toBe(true); await screen.findByRole('checkbox', { name: rows[349].name });
+        expect(event.defaultPrevented).toBe(true); await screen.findByRole('checkbox', { name: rows[1].name });
         expect(submit).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled(); expect(rendered.container.querySelectorAll('form')).toHaveLength(1);
         for (const button of screen.getAllByRole('button').filter(button => button.textContent !== 'Save test selection')) expect(button).toHaveAttribute('type', 'button');
         fireEvent.change(search, { target: { value: 'composing' } }); fireEvent.keyDown(search, { key: 'Enter', isComposing: true }); expect(mutateRaw).toHaveBeenCalledTimes(2);
     });
 
     it('preserves selected names across pages and search even when no longer in the current page', async () => {
+        view = systemView(101); rows = serviceRows(101);
         await open(['missing-from-inventory.service']); fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
         fireEvent.click(screen.getByRole('button', { name: 'Next service page' })); await screen.findByRole('checkbox', { name: rows[100].name });
         const selected = screen.getByRole('list', { name: 'Selected services' }); expect(selected).toHaveTextContent(rows[0].name); expect(selected).toHaveTextContent('missing-from-inventory.service');
@@ -190,6 +194,7 @@ describe('health picker inventory lifecycle', () => {
     });
 
     it('clears hidden inventory and reloads page one on return', async () => {
+        view = systemView(101); rows = serviceRows(101);
         await open(); fireEvent.click(screen.getByRole('button', { name: 'Next service page' })); await screen.findByRole('checkbox', { name: rows[100].name });
         const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); act(() => document.dispatchEvent(new Event('visibilitychange')));
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument(); expect(screen.queryByRole('textbox')).not.toBeInTheDocument();

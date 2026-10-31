@@ -19,15 +19,17 @@ beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.mocked(reque
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.restoreAllMocks(); });
 
 describe('numeric-only MetricValue contract (jsdom, not font/layout evidence)', () => {
- for (const locale of ['en', 'de'] as const) for (const compact of [false, true]) for (const precision of [0, 1] as const) for (const quality of ['healthy', 'stale', 'unknown', 'denied'] as Quality[]) {
-  it(`${locale} compact=${compact} precision=${precision} quality=${quality} preserves every value and its original metadata`, () => {
+ // Formatting/number bounds are independent of quality and compact placement.
+ // Cover every original value in both locales/precisions once, then cover the
+ // quality/compact axes below with valid and unavailable representative values.
+ for (const locale of ['en', 'de'] as const) for (const precision of [0, 1] as const) {
+  it(`${locale} precision=${precision} preserves every numeric value and bound`, () => {
    setLocale(locale, false);
    for (const [index, value] of values.entries()) {
-    const metric: Metric = { value, unit: '%', quality, source: 'Synthetic original source', collectedAt: now };
-    const { container, unmount } = render(<MetricValue metric={metric} compact={compact} precision={precision}/>);
+    const metric: Metric = { value, unit: '%', quality: 'healthy', source: 'Synthetic original source', collectedAt: now };
+    const { container, unmount } = render(<MetricValue metric={metric} precision={precision}/>);
     const root = container.querySelector('.metric')!, number = root.querySelector('.metric-value')!;
     const valid = value !== null && Number.isFinite(value);
-    expect(root.getAttribute('title')).toBe(`${labels[locale][quality]} · Synthetic original source · ${fullDate(now)}`);
     // Numeric text is the anonymous text child. Only nonnumeric spans are reset.
     expect([...number.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('')).toBe(valid ? expected[locale][precision][index] : '');
     expect([...number.children].every(child => child.tagName === 'SPAN')).toBe(true);
@@ -36,6 +38,26 @@ describe('numeric-only MetricValue contract (jsdom, not font/layout evidence)', 
     const meter = root.querySelector<HTMLElement>('.meter-track > span');
     expect(Boolean(meter)).toBe(valid);
     if (valid) expect(meter!.style.width).toBe(`${Math.max(0, Math.min(100, value!))}%`);
+    unmount();
+   }
+  });
+ }
+ for (const locale of ['en', 'de'] as const) for (const compact of [false, true]) for (const quality of ['healthy', 'stale', 'unknown', 'denied'] as Quality[]) {
+  it(`${locale} compact=${compact} quality=${quality} preserves numeric text and original metadata`, () => {
+   setLocale(locale, false);
+   for (const value of [1234.5, null]) {
+    const metric: Metric = { value, unit: '%', quality, source: 'Synthetic original source', collectedAt: now };
+    const { container, unmount } = render(<MetricValue metric={metric} compact={compact} precision={1}/>);
+    const root = container.querySelector('.metric')!, number = root.querySelector('.metric-value')!;
+    const valid = value !== null;
+    expect(root.getAttribute('title')).toBe(`${labels[locale][quality]} · Synthetic original source · ${fullDate(now)}`);
+    expect([...number.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('')).toBe(valid ? expected[locale][1][9] : '');
+    expect([...number.children].every(child => child.tagName === 'SPAN')).toBe(true);
+    expect(number.querySelector('.unavailable')?.textContent ?? null).toBe(valid ? null : '—');
+    expect(number.querySelector('span:not([class])')?.textContent ?? null).toBe(valid ? '%' : null);
+    const meter = root.querySelector<HTMLElement>('.meter-track > span');
+    expect(Boolean(meter)).toBe(valid);
+    if (valid) { expect(meter!.style.width).toBe('100%'); expect(meter!.classList.contains('muted')).toBe(quality !== 'healthy'); }
     expect(number.querySelector('.metric-quality')?.textContent ?? null).toBe(compact ? null : labels[locale][quality]);
     expect(root.querySelector('.metric-note')?.textContent ?? null).toBe(compact && quality !== 'healthy' ? labels[locale][quality] : null);
     unmount();
@@ -94,7 +116,9 @@ function overview(count: number, lan = false, investigationsAvailable = true) {
 }
 describe('summary counts retain their existing text and actions', () => {
  for (const locale of ['en', 'de'] as const) {
-  it.each([0, 1, 8, 10, 99, 100, 111, 888, 1234])(`${locale} preserves raw count %s without introducing grouping`, async count => {
+  // Zero, singular and a grouping-sized value cover this raw-text contract.
+  // Glyph-width/typography variation remains in the rendered browser gallery.
+  it.each([0, 1, 1234])(`${locale} preserves raw count %s without introducing grouping`, async count => {
    setLocale(locale, false); overview(count); const { container } = render(<App/>);
    await waitFor(() => expect(container.querySelectorAll('.summary-strip strong')).toHaveLength(4));
    expect([...container.querySelectorAll('.summary-strip strong')].map(value => value.textContent)).toEqual(Array(4).fill(String(count)));

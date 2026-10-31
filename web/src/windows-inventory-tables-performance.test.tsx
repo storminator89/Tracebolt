@@ -70,25 +70,40 @@ function mixedSnapshot() {
 const cases: { locale: Locale; kind: WindowsInventoryTableKind; sort: WindowsInventoryTableSort; query: string }[] = [];
 for (const locale of ['en', 'de'] as const) for (const kind of ['services', 'software'] as const) {
     const sorts: WindowsInventoryTableSort[] = kind === 'services' ? ['name-asc', 'name-desc', 'pid-asc', 'pid-desc', 'state-asc', 'state-desc'] : ['name-asc', 'name-desc', 'version-asc', 'version-desc', 'publisher-asc', 'publisher-desc'];
-    for (const sort of sorts) for (const query of ['', 'a', 'ß', 'not-present']) cases.push({ locale, kind, sort, query });
+    for (const sort of sorts) for (const query of ['', 'a', 'ß', 'not-present']) {
+        // Empty results never reach the comparator. Keep one empty transform
+        // per locale/kind, while every populated filter retains every sort.
+        if (query === 'not-present' && sort !== 'name-asc') continue;
+        cases.push({ locale, kind, sort, query });
+    }
 }
 const startupCases: { locale: Locale; sort: WindowsInventoryTableSort; query: string; trimmed: boolean }[] = [];
 for (const locale of ['en', 'de'] as const) for (const sort of ['name-asc', 'name-desc', 'pid-asc', 'pid-desc', 'state-asc', 'state-desc', 'startup-asc', 'startup-desc'] as const) {
-    for (const query of ['', 'automatic', 'denied', locale === 'en' ? 'partial' : 'teilweise', locale === 'en' ? 'trimmed' : 'gekürzt']) for (const trimmed of [false, true]) startupCases.push({ locale, sort, query, trimmed });
+    const trimmedQuery = locale === 'en' ? 'trimmed' : 'gekürzt';
+    for (const query of ['', 'automatic', 'denied', locale === 'en' ? 'partial' : 'teilweise', trimmedQuery]) for (const trimmed of [false, true]) {
+        // Full startup metadata has no omitted-row label to match. Sorting
+        // that empty result again adds no startup or comparator coverage.
+        if (!trimmed && query === trimmedQuery && sort !== 'name-asc') continue;
+        startupCases.push({ locale, sort, query, trimmed });
+    }
 }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('captured table collation parity', () => {
     it.each(cases)('matches the frozen comparator: $locale $kind $sort filter="$query"', ({ locale, kind, sort, query }) => {
         const snapshot = mixedSnapshot(), before = JSON.stringify(snapshot);
-        expect(capturedInventoryTableRows(snapshot, kind, query, sort, locale)).toEqual(baselineRows(snapshot, kind, query, sort, locale));
+        const actual = capturedInventoryTableRows(snapshot, kind, query, sort, locale);
+        expect(actual).toEqual(baselineRows(snapshot, kind, query, sort, locale));
+        if (query === 'not-present') expect(actual).toEqual([]);
         expect(JSON.stringify(snapshot)).toBe(before);
     });
     it.each(startupCases)('preserves all five cells with startup metadata: $locale $sort filter="$query" trimmed=$trimmed', ({ locale, sort, query, trimmed }) => {
         const snapshot = mixedSnapshot(), startup = windowsServiceStartup(snapshot);
         if (trimmed) { startup.rows = startup.rows.filter(row => row.serviceIndex % 3 === 1); startup.truncated = true; }
         const before = JSON.stringify({ snapshot, startup });
-        expect(capturedInventoryTableRows(snapshot, 'services', query, sort, locale, startup)).toEqual(baselineRows(snapshot, 'services', query, sort, locale, startup));
+        const actual = capturedInventoryTableRows(snapshot, 'services', query, sort, locale, startup);
+        expect(actual).toEqual(baselineRows(snapshot, 'services', query, sort, locale, startup));
+        if (!trimmed && query === (locale === 'en' ? 'trimmed' : 'gekürzt')) expect(actual).toEqual([]);
         expect(JSON.stringify({ snapshot, startup })).toBe(before);
     });
     it('constructs one locale-correct collator per transform rather than per comparison', () => {
