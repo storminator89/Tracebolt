@@ -320,7 +320,8 @@ impl Enrollment {
         )?;
         Ok(context)
     }
-    fn accept_snapshot(&mut self, s: &Value) -> Result<()> {
+    // Validate the original server binding without mutating retained state.
+    fn verify_snapshot_binding(&self, s: &Value) -> Result<u64> {
         let boot = self.ledger.bootstrap.as_ref().unwrap();
         let key = self.key()?;
         ensure!(
@@ -329,12 +330,14 @@ impl Enrollment {
                 && s["binding"]["origin"] == boot.enrollment_origin
                 && s["binding"]["profile"] == "tls"
                 && s["binding"]["collectionProfile"] == wire::COLLECTION
+                && s["binding"]["issuerFingerprint"] == wire::hash(&cert_der(&boot.issuer_pem)?)
                 && s["platform"] == "windows"
                 && s["invitationID"] == self.ledger.invitation_id,
             "snapshot binding mismatch"
         );
         ensure!(
             s["claim"]["claimID"] == self.ledger.claim_id
+                && s["claim"]["requestID"] == self.ledger.claim_request
                 && s["claim"]["keyFingerprint"] == wire::hash(&wire::spki(&key))
                 && s["claim"]["csrHash"] == wire::hash(&wire::decode(&self.ledger.csr)?)
                 && s["claim"]["claimHash"] == self.ledger.claim_hash,
@@ -343,8 +346,13 @@ impl Enrollment {
         let revision = s["revision"]
             .as_u64()
             .ok_or_else(|| anyhow::anyhow!("missing revision"))?;
+        ensure!(revision > 0, "invalid enrollment revision");
+        Ok(revision)
+    }
+    fn accept_snapshot(&mut self, s: &Value) -> Result<()> {
+        let revision = self.verify_snapshot_binding(s)?;
         ensure!(
-            revision >= self.ledger.revision && revision > 0,
+            revision >= self.ledger.revision,
             "enrollment revision rollback"
         );
         self.ledger.revision = revision;
@@ -572,6 +580,15 @@ impl Enrollment {
         let b = self.ledger.bootstrap.as_ref().unwrap();
         let key = self.key()?;
         ensure!(
+            valid_id(&i.manager_instance_id, "manager_")
+                && valid_id(&i.invitation_id, "invite_")
+                && valid_id(&i.claim_id, "claim_")
+                && valid_id(&i.request_id, "request_")
+                && valid_id(&i.device_id, "agent_")
+                && valid_id(&i.intent_id, "intent_"),
+            "invalid credential intent identity"
+        );
+        ensure!(
             issuer == cert_der(&b.issuer_pem)?
                 && wire::hash(issuer) == i.issuer_fingerprint
                 && wire::hash(der) == snapshot["issuance"]["certificateHash"],
@@ -591,6 +608,10 @@ impl Enrollment {
                 && i.template_version == "tracebolt.enrollment.client.v2"
                 && i.key_generation == 1
                 && i.device_id == snapshot["approval"]["deviceID"]
+                && i.key_fingerprint == snapshot["approval"]["keyFingerprint"]
+                && i.device_id == snapshot["intent"]["deviceID"]
+                && i.key_fingerprint == snapshot["intent"]["keyFingerprint"]
+                && i.template_version == snapshot["intent"]["templateVersion"]
                 && i.intent_id == snapshot["intent"]["intentID"]
                 && i.request_id == snapshot["intent"]["requestID"]
                 && i.not_before == snapshot["intent"]["notBefore"]
@@ -598,49 +619,54 @@ impl Enrollment {
                 && i.serial_hex == snapshot["intent"]["serialHex"],
             "credential intent mismatch"
         );
-        let cert = parse_cert(der)?;
-        let issuer = parse_cert(issuer)?;
-        ensure!(
-            !cert.is_ca()
-                && cert.validity().is_valid()
-                && cert.validity().not_before.timestamp() == i.not_before
-                && cert.validity().not_after.timestamp() == i.not_after
-                && i.not_after - i.not_before <= 30 * 86400
-                && cert.public_key().raw == wire::spki(&key)
-                && cert
-                    .subject()
-                    .iter_common_name()
-                    .next()
-                    .and_then(|a| a.as_str().ok())
-                    == Some(i.device_id.as_str())
-                && cert.issuer() == issuer.subject(),
-            "issued certificate mismatch"
-        );
-        ensure!(
-            cert.extended_key_usage()?
-                .is_some_and(|v| v.value.client_auth && !v.value.server_auth && !v.value.any)
-                && cert.subject_alternative_name()?.is_none(),
-            "unexpected certificate use"
-        );
-        cert.verify_signature(Some(issuer.public_key()))
-            .map_err(|_| anyhow::anyhow!("issued signature rejected"))?;
+        crate::enrollment_credential::verify(der, issuer, i, Utc::now())?;
         Ok(())
     }
     fn material(&self) -> Result<Material> {
+        // Activated is not a substitute for revalidating the original saved
+        // profile/claim/issuance on every resume. No state is repaired or adopted.
+        let activated: bool =
+            self.connection
+                .query_row("SELECT activated FROM enrollment WHERE id=1", [], |r| {
+                    r.get(0)
+                })?;
+        ensure!(
+            activated && !self.ledger.terminal,
+            "enrollment not activated"
+        );
+        let bootstrap = self
+            .ledger
+            .bootstrap
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing activated bootstrap"))?;
+        self.validate_bootstrap(bootstrap)?;
+        let snapshot = self
+            .ledger
+            .issued_snapshot
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing original issuance snapshot"))?;
+        let issuance_revision = self.verify_snapshot_binding(snapshot)?;
+        ensure!(
+            issuance_revision <= self.ledger.revision
+                && matches!(snapshot["state"].as_str(), Some("issued" | "activated")),
+            "invalid retained issuance state"
+        );
         let mut config = self.config.clone();
         let intent = self
             .ledger
             .intent
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("missing activated intent"))?;
-        config.agent_id = intent.device_id.clone();
-        config.manager_origin = self.ledger.bootstrap.as_ref().unwrap().agent_origin.clone();
-        let mut certificate = wire::pem(&wire::decode(
+        let der = wire::decode(
             self.ledger
                 .certificate
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("missing activated certificate"))?,
-        )?);
+        )?;
+        self.verify_credential(intent, &der, &cert_der(&bootstrap.issuer_pem)?, snapshot)?;
+        config.agent_id = intent.device_id.clone();
+        config.manager_origin = self.ledger.bootstrap.as_ref().unwrap().agent_origin.clone();
+        let mut certificate = wire::pem(&der);
         certificate.push_str(&self.ledger.bootstrap.as_ref().unwrap().issuer_pem);
         let key = KeyPair::try_from(wire::decode(&self.ledger.key)?.as_slice())?;
         Ok(Material {
@@ -652,5 +678,219 @@ impl Enrollment {
     }
     pub fn state_directory(&self) -> PathBuf {
         self.directory.join("state")
+    }
+}
+
+#[cfg(test)]
+mod authority_tests {
+    use super::*;
+    use crate::enrollment_credential::fixture::Fixture;
+
+    // An invented already-activated private ledger. No enrollment endpoint,
+    // native API, SCM service, host grant or production credential is used.
+    fn fixture() -> (tempfile::TempDir, Enrollment) {
+        let f = Fixture::new();
+        let directory = tempfile::tempdir().unwrap();
+        let state = directory.path().join("state");
+        std::fs::create_dir(&state).unwrap();
+        let config = Config {
+            schema_version: "tracebolt.rust-windows-basic.v1".into(),
+            manager_origin: f.intent.origin.clone(),
+            agent_id: String::new(),
+            enrollment_mode: EnrollmentMode::Auto,
+            agent_origin: String::new(),
+            basic_metrics_acknowledged: true,
+            interval_seconds: 60,
+        };
+        std::fs::write(
+            directory.path().join("config.json"),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        let bootstrap = wire::Bootstrap {
+            schema_version: "tracebolt.enrollment-bootstrap.v2".into(),
+            manager_instance_id: f.intent.manager_instance_id.clone(),
+            profile: "tls".into(),
+            enrollment_origin: f.intent.origin.clone(),
+            agent_origin: "https://agent.fixture.invalid".into(),
+            collection_profile: wire::COLLECTION.into(),
+            invitation_id: f.intent.invitation_id.clone(),
+            server_ca_pem: String::new(),
+            issuer_root_pem: f.root_pem,
+            issuer_pem: wire::pem(&f.issuer_der),
+            renewal_policy: String::new(),
+        };
+        let claim_request = format!("request_{}", "5".repeat(32));
+        let snapshot = json!({
+            "version":"tracebolt.enrollment-state.v2", "binding":{
+                "instanceID":f.intent.manager_instance_id, "origin":f.intent.origin, "profile":"tls",
+                "collectionProfile":wire::COLLECTION, "issuerFingerprint":f.intent.issuer_fingerprint
+            }, "platform":"windows", "invitationID":f.intent.invitation_id, "revision":5, "state":"issued",
+            "claim":{"claimID":f.intent.claim_id, "requestID":claim_request,
+                "keyFingerprint":f.intent.key_fingerprint, "csrHash":f.intent.csr_hash, "claimHash":f.intent.claim_hash},
+            "approval":{"deviceID":f.intent.device_id, "keyFingerprint":f.intent.key_fingerprint},
+            "intent":{"deviceID":f.intent.device_id, "keyFingerprint":f.intent.key_fingerprint,
+                "templateVersion":f.intent.template_version, "intentID":f.intent.intent_id, "requestID":f.intent.request_id,
+                "notBefore":f.intent.not_before, "notAfter":f.intent.not_after, "serialHex":f.intent.serial_hex},
+            "issuance":{"certificateHash":wire::hash(&f.der)}
+        });
+        let ledger = Ledger {
+            key: wire::encode(&f.key.serialize_der()),
+            csr: wire::encode(&f.csr),
+            invitation_id: f.intent.invitation_id.clone(),
+            claim_id: f.intent.claim_id.clone(),
+            claim_request,
+            status_request: format!("request_{}", "6".repeat(32)),
+            credential_request: format!("request_{}", "a".repeat(32)),
+            activation_request: format!("request_{}", "b".repeat(32)),
+            bootstrap: Some(bootstrap),
+            claim_hash: f.intent.claim_hash.clone(),
+            claimed: true,
+            revision: 6,
+            certificate: Some(wire::encode(&f.der)),
+            intent: Some(f.intent),
+            terminal: false,
+            issued_snapshot: Some(snapshot),
+            reconcile_claim: false,
+        };
+        let connection = Connection::open(state.join("enrollment.db")).unwrap();
+        connection.execute_batch("CREATE TABLE enrollment(id INTEGER PRIMARY KEY CHECK(id=1),binding TEXT NOT NULL,payload BLOB NOT NULL,activated INTEGER NOT NULL DEFAULT 0,sender_initialized INTEGER NOT NULL DEFAULT 0);").unwrap();
+        connection
+            .execute(
+                "INSERT INTO enrollment VALUES(1,?1,?2,1,0)",
+                params![
+                    config.binding(&[], &[]).unwrap(),
+                    serde_json::to_vec(&ledger).unwrap()
+                ],
+            )
+            .unwrap();
+        drop(connection);
+        let enrollment = Enrollment::open(directory.path(), false, None).unwrap();
+        (directory, enrollment)
+    }
+
+    fn retained(e: &Enrollment) -> (String, Vec<u8>, bool, bool) {
+        e.connection
+            .query_row(
+                "SELECT binding,payload,activated,sender_initialized FROM enrollment WHERE id=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn activated_resume_revalidates_original_binding_without_rewriting_v1_state() {
+        let (directory, mut e) = fixture();
+        let before = retained(&e);
+        let material = e.step(None).unwrap().unwrap();
+        assert_eq!(
+            material.config.schema_version,
+            "tracebolt.rust-windows-basic.v1"
+        );
+        assert_eq!(
+            material.config.manager_origin,
+            "https://agent.fixture.invalid"
+        );
+        assert!(material.config.basic_metrics_acknowledged);
+        assert_eq!(before, retained(&e));
+        drop(e);
+        let mut e = Enrollment::open(directory.path(), false, None).unwrap();
+        e.step(None).unwrap().unwrap();
+        assert_eq!(before, retained(&e));
+        assert!(!directory.path().join("state/sender.db").exists());
+    }
+
+    #[test]
+    fn saved_profile_and_local_consent_cannot_be_changed_on_resume() {
+        let (directory, e) = fixture();
+        let before = retained(&e);
+        let changes: [fn(&mut Value); 21] = [
+            |v| v["intent"]["collectionProfile"] = json!("windows-basic-metrics-v1"),
+            |v| v["intent"]["collectionProfile"] = json!("managed-operations-v3"),
+            |v| v["intent"]["profile"] = json!("http-test"),
+            |v| v["intent"]["deviceId"] = json!(format!("agent_{}", "9".repeat(32))),
+            |v| v["intent"]["requestId"] = json!("caller-selected"),
+            |v| v["intent"]["notAfter"] = json!(i64::MAX),
+            |v| v["intent"]["serialHex"] = json!("08".repeat(16)),
+            |v| v["certificate"] = json!(wire::encode(b"not a certificate")),
+            |v| v["issuedSnapshot"] = Value::Null,
+            |v| v["issuedSnapshot"]["state"] = json!("claimed_pending"),
+            |v| v["issuedSnapshot"]["revision"] = json!(7),
+            |v| {
+                v["issuedSnapshot"]["binding"]["collectionProfile"] =
+                    json!("windows-basic-metrics-v1")
+            },
+            |v| v["issuedSnapshot"]["binding"]["issuerFingerprint"] = json!("f".repeat(64)),
+            |v| v["issuedSnapshot"]["platform"] = json!("linux"),
+            |v| {
+                v["issuedSnapshot"]["claim"]["requestID"] =
+                    json!(format!("request_{}", "9".repeat(32)))
+            },
+            |v| v["issuedSnapshot"]["claim"]["claimHash"] = json!("e".repeat(64)),
+            |v| v["issuedSnapshot"]["approval"]["keyFingerprint"] = json!("d".repeat(64)),
+            |v| v["issuedSnapshot"]["intent"]["deviceID"] = json!("another-device"),
+            |v| v["issuedSnapshot"]["intent"]["templateVersion"] = json!("expanded-template"),
+            |v| v["issuedSnapshot"]["issuance"]["certificateHash"] = json!("b".repeat(64)),
+            |v| v["terminal"] = json!(true),
+        ];
+        drop(e);
+        let db = Connection::open(directory.path().join("state/enrollment.db")).unwrap();
+        for (index, change) in changes.into_iter().enumerate() {
+            let mut v: Value = serde_json::from_slice(&before.1).unwrap();
+            change(&mut v);
+            let raw = serde_json::to_vec(&v).unwrap();
+            db.execute("UPDATE enrollment SET payload=?1 WHERE id=1", [&raw])
+                .unwrap();
+            let mut e = Enrollment::open(directory.path(), false, None).unwrap();
+            let retained_before = retained(&e);
+            assert!(e.step(None).is_err(), "change {index}");
+            assert_eq!(
+                retained_before,
+                retained(&e),
+                "denial changed state {index}"
+            );
+            assert!(!directory.path().join("state/sender.db").exists());
+        }
+        // Consent is still the original Basic config; a new capability flag is
+        // not recognized, and changing consent breaks the original DB binding.
+        db.execute("UPDATE enrollment SET payload=?1 WHERE id=1", [&before.1])
+            .unwrap();
+        let path = directory.path().join("config.json");
+        let mut config: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        config["serviceInventoryAcknowledged"] = json!(true);
+        std::fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+        assert!(Enrollment::open(directory.path(), false, None).is_err());
+        config
+            .as_object_mut()
+            .unwrap()
+            .remove("serviceInventoryAcknowledged");
+        config["basicMetricsAcknowledged"] = json!(false);
+        std::fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+        assert!(Enrollment::open(directory.path(), false, None).is_err());
+    }
+
+    #[test]
+    fn resume_rejects_unactivated_missing_and_corrupt_issuance_without_state_repair() {
+        let (directory, mut e) = fixture();
+        let original = retained(&e);
+        e.connection
+            .execute("UPDATE enrollment SET activated=0 WHERE id=1", [])
+            .unwrap();
+        assert!(e.material().is_err());
+        e.connection
+            .execute("UPDATE enrollment SET activated=1 WHERE id=1", [])
+            .unwrap();
+        for mutate in [
+            |e: &mut Enrollment| e.ledger.intent = None,
+            |e: &mut Enrollment| e.ledger.bootstrap = None,
+            |e: &mut Enrollment| e.ledger.certificate = None,
+        ] {
+            e.ledger = serde_json::from_slice(&original.1).unwrap();
+            mutate(&mut e);
+            assert!(e.material().is_err());
+            assert_eq!(original, retained(&e));
+        }
+        assert!(!directory.path().join("state/sender.db").exists());
     }
 }
