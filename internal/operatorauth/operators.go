@@ -24,6 +24,7 @@ const (
 	WindowsManagedMSISchedule Capability = "windows_managed_msi_schedule"
 	ManageAlarms              Capability = "manage_alarms"
 	ManageApplicationChecks   Capability = "manage_application_checks"
+	ManageSessions            Capability = "manage_sessions"
 	MaxOperators                         = 32
 )
 
@@ -76,6 +77,8 @@ func capabilityBit(c Capability) uint16 {
 		return 4096
 	case WindowsUpdateDownload:
 		return 8192
+	case ManageSessions:
+		return 16384
 	default:
 		return 0
 	}
@@ -148,7 +151,7 @@ func (s Session) Named() bool     { return s.actor.id != "" }
 // Call BeginCapability immediately before short privileged dispatch work.
 func (s Session) Capabilities() []Capability {
 	out := make([]Capability, 0, 9)
-	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule, WindowsSoftwareInstall, WindowsManagedMSIDeliver, WindowsManagedMSIInstall, WindowsManagedMSISchedule, WindowsUpdateDownload} {
+	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule, WindowsSoftwareInstall, WindowsManagedMSIDeliver, WindowsManagedMSIInstall, WindowsManagedMSISchedule, WindowsUpdateDownload, ManageSessions} {
 		if s.actor.grants&capabilityBit(c) != 0 {
 			out = append(out, c)
 		}

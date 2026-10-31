@@ -542,6 +542,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	stopRevocation := context.AfterFunc(session.Lifetime(), cancel)
 	defer stopRevocation()
 	r = r.WithContext(context.WithValue(ctx, operatorRequestKey{}, operatorRequest{session: session, origin: h.origin, active: func() bool { _, err := h.auth.Lookup(token); return err == nil }}))
+	if r.URL.Path == "/api/auth/sessions" || r.URL.Path == "/api/auth/sessions/revoke" {
+		h.sessionsAPI(w, r, session)
+		return
+	}
 	if r.URL.Path == "/api/auth/logout" && r.Method == "POST" {
 		if !h.app.authorizeJSONMutation(w, r) {
 			return
@@ -841,7 +845,9 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, operatorauth.ErrRateLimited):
 			w.Header().Set("Retry-After", "60")
 			fail(w, 429, "login_rate_limited", "Too many sign-in attempts. Try again later.")
-		case errors.Is(err, operatorauth.ErrBusy), errors.Is(err, operatorauth.ErrCapacity):
+		case errors.Is(err, operatorauth.ErrCapacity):
+			fail(w, 429, "session_capacity", "Session limit reached. Sign out of unused sessions or wait for expiry.")
+		case errors.Is(err, operatorauth.ErrBusy):
 			fail(w, 503, "authentication_busy", "Sign-in is temporarily unavailable.")
 		default:
 			fail(w, 401, "invalid_credentials", "Sign-in failed.")

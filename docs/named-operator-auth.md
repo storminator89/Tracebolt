@@ -41,6 +41,14 @@ All operators must explicitly include `read`. There is no wildcard or admin role
 
 The existing Argon2id verifier bounds, password bounds, global/per-peer login
 rate limits, one-at-a-time hash budget and 32-session ceiling remain in effect.
+Named sessions additionally have a four-session per-account ceiling. The global
+budget reserves one first session for every configured account not yet present;
+repeat sessions cannot consume these slots. Repeat-session admission additionally
+leaves at least one global first-session slot when that dynamic reserve is empty;
+a first session may consume the reserve.
+Revoked/expired sessions with admitted work still draining count toward the
+ceiling until their barrier completes. Existing shared mode keeps its 32-session
+ceiling; it is one account, not distinguishable human actors.
 Named verifiers must use the same memory/iteration/parallelism parameters within
 a configuration. Unknown usernames use a dummy verifier with the same bounded
 work factors and receive the same credential failure as an incorrect password.
@@ -79,6 +87,9 @@ TB-06. It documents current denials, not new administration grants or migration.
 - `manage_alarms`: explicit browser alarm configuration and synthetic-test permission.
   It does not enable delivery by itself; destination/payload approval and the protected
   complete-profile manager settings are required. See [alarm delivery](alarm-delivery.md).
+- `manage_sessions`: explicit permission to list/revoke other accounts' current
+  manager sessions through the bounded [session API](manager-session-limits.md).
+  It does not change accounts, credentials, capabilities or future login rights.
 - `manage_application_checks`: explicit access to application-check destinations and
   browser configuration. Existing read, alarm, update and service grants do not imply
   it. Save persists a disabled draft; a separate enable requires current-revision
@@ -124,9 +135,11 @@ alone does not revoke an active account, rotate its verifier or change a grant.
 To remove/disable an account or change its permissions, an administrator updates
 the protected file and restarts the manager. All sessions are memory-only and
 must sign in again; old cookies cannot be looked up in the new manager. There is
-no live reload, per-account revoke endpoint or claim that editing a file affects
-an already-running process. Logout affects the current session, not other
-sessions signed in as that operator.
+no live reload or claim that editing a file affects an already-running process.
+The authenticated [session API](manager-session-limits.md) lists and revokes exact
+current sessions, scoped to the same account unless `manage_sessions` was
+explicitly configured. Logout still affects the current session only. Session
+revocation is not account disablement: valid credentials may sign in again.
 
 Typed administrative endpoints use fail-closed capability admission. Application
 check settings require the exact grant for reads as well as writes because their

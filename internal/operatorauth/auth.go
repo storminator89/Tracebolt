@@ -25,6 +25,13 @@ import (
 const CookieName = "__Host-tracebolt-session"
 const DefaultTTL = 30 * time.Minute
 
+// Limits bound retained state. Named accounts cannot consume another configured
+// account's first-session slot; one additional first-session slot is reserved
+// whenever the configured-account reserve would otherwise be empty.
+const MaxSessions = 32
+const MaxSessionsPerActor = 4
+const FirstSessionReserve = 1
+
 var (
 	ErrForbidden       = errors.New("operator capability is not granted")
 	ErrConfiguration   = errors.New("operator authentication configuration is invalid")
@@ -324,7 +331,7 @@ func (m *Manager) login(ctx context.Context, peer, username, password string, na
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.purgeLocked(now)
-	if len(m.sessions) >= 32 {
+	if !m.sessionAvailableLocked(actor.id) {
 		revoke()
 		return Session{}, ErrCapacity
 	}
