@@ -22,14 +22,17 @@ Rust package built from the same source:
 
 ```powershell
 .\tests\rustagent\Run-NativeAcceptance.ps1 `
-  -Executable .\artifacts\windows-rust\tracebolt-windows-agent.exe
+  -PackageArchive .\artifacts\windows-rust.zip
 ```
 
-This invokes the actual default tokenless installer and installs
+This rejects archives outside the exact five-file root allowlist, verifies all
+four payload hashes, and extracts the immutable ZIP into a new temporary path.
+It invokes that package's own default tokenless installer/EXE/removal script and installs
 `TraceboltRustAgent` as restricted LocalService. It checks the installer's local
 public key against the pending request before permitting fixture approval,
 waits for activated mutual-TLS telemetry with real CPU/RAM/system-volume metrics,
-stops and starts the service, requires a newer acknowledged sequence, then
+requires a durable local validated receipt, stops the service within 25 seconds,
+checks its settled receipt, starts it, requires a newer acknowledged sequence, then
 uninstalls. It refuses any existing installation and removes only the paths it
 staged after that fresh-state check. No production manager is contacted. Raw
 telemetry, private keys and enrollment ledgers are never uploaded as artifacts.
@@ -40,3 +43,27 @@ tokenless onboarding, reporting, service restart and removal. It does **not**
 prove OS reboot persistence, GUI/UAC interaction, every Windows version, native
 MSVC/LLVM equivalence, or a real Linux manager/dashboard deployment. Actual Go
 store/service/API fixture tests run separately on Linux.
+
+`Test-PackageStaging.ps1` is a separate portable PowerShell filesystem regression:
+it uses an inert synthetic EXE file, never runs an installer or SCM command, and
+checks the exact package allowlist, ZIP bytes/checksums and preservation of
+pre-existing directories/nested foreign files/archives. `Build-Package.ps1`
+refuses an existing output directory or ZIP; select a new `-OutputDirectory` for
+a repeat build rather than deleting or reusing retained files automatically.
+
+The separate `runtime_stop_fixture` Rust example uses this same disposable Go
+peer on Linux: real enrollment/issuance/activation and mutual TLS, but invented
+metrics and no Windows calls. A stop predicate flips after every enrollment
+phase, including activation/sender initialization. No collector or telemetry is
+admitted before stop; reopening the same ledger then acknowledges sequence 1
+exactly once without changing identity or enrollment payload. CI runs it with:
+
+```sh
+go build -o /tmp/tracebolt-runtime-peer ./tests/rustagent/cmd/nativefixture
+cd rust/windows-agent
+cargo run --locked --example runtime_stop_fixture -- /tmp/tracebolt-runtime-peer
+```
+
+This covers the enrollment-to-telemetry stop boundary, not native SCM shutdown
+timing or full Go parity. A phase admitted before stop (including collection
+plus send) finishes under its existing bound rather than being force-killed.

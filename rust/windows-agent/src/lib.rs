@@ -10,4 +10,6 @@ pub mod runtime;
 pub mod sender;
 #[cfg(windows)]
 pub mod service;
+#[cfg(any(windows, test))]
+mod service_lifecycle;
 pub mod state;

@@ -1,14 +1,16 @@
 #Requires -RunAsAdministrator
 # Disposable hosted Windows runner only. Installs/removes one real local service,
 # generates test-only credentials and sends native basic metrics to loopback.
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName='Package')]
 param(
-    [Parameter(Mandatory)][string]$Executable,
+    [Parameter(Mandatory,ParameterSetName='Executable')][string]$Executable,
+    [Parameter(Mandatory,ParameterSetName='Package')][string]$PackageArchive,
     [string]$ResultFile = (Join-Path $PSScriptRoot '../../artifacts/windows-rust-native.json')
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$Executable = (Resolve-Path -LiteralPath $Executable).Path
+if ($PackageArchive) { $PackageArchive = (Resolve-Path -LiteralPath $PackageArchive).Path }
+if ($Executable) { $Executable = (Resolve-Path -LiteralPath $Executable).Path }
 $ResultFile = [IO.Path]::GetFullPath($ResultFile)
 $serviceName = 'TraceboltRustAgent'
 $binaryDirectory = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Tracebolt Rust'
@@ -22,7 +24,7 @@ $fixtureDirectory = Join-Path $temporary 'peer'
 $fixtureExe = Join-Path $temporary 'nativefixture.exe'
 $fixture = $null
 $stagingAuthorized = $false
-$result = @{schemaVersion='tracebolt.rust-native-acceptance.v1'; status='failed'; platform='windows'; install=$false; activated=$false; mutualTLS=$false; nativeMetrics=$false; restart=$false; removal=$false; rebootTested=$false; productionLinuxManager=$false}
+$result = @{schemaVersion='tracebolt.rust-native-acceptance.v1'; status='failed'; platform='windows'; packagedArtifact=$false; install=$false; activated=$false; mutualTLS=$false; nativeMetrics=$false; localReceipt=$false; boundedStop=$false; stopMilliseconds=$null; restart=$false; removal=$false; rebootTested=$false; productionLinuxManager=$false}
 function Read-OptionalJson([string]$Path) {
     if (!(Test-Path -LiteralPath $Path)) { return $null }
     try { return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json } catch { return $null }
@@ -38,6 +40,33 @@ function Wait-ForJson([string]$Path, [scriptblock]$Accept, [int]$Seconds) {
     throw 'Timed out waiting for native acceptance evidence.'
 }
 try {
+    $installer = Join-Path $repo 'deploy/windows-rust/Install-Tracebolt.ps1'
+    $uninstaller = Join-Path $repo 'deploy/windows-rust/Uninstall-Tracebolt.ps1'
+    if ($PackageArchive) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $expected = @('Install-Tracebolt.ps1','README.md','SHA256SUMS.txt','Uninstall-Tracebolt.ps1','tracebolt-windows-agent.exe') | Sort-Object
+        $zip = [IO.Compression.ZipFile]::OpenRead($PackageArchive)
+        try {
+            $names = @($zip.Entries | ForEach-Object { $_.FullName } | Sort-Object)
+            if (($names -join '|') -cne ($expected -join '|')) { throw 'Package must contain only the exact five root-level entries.' }
+        } finally { $zip.Dispose() }
+        $packageDirectory = Join-Path $temporary 'package'
+        Expand-Archive -LiteralPath $PackageArchive -DestinationPath $packageDirectory
+        $lines = @(Get-Content -LiteralPath (Join-Path $packageDirectory 'SHA256SUMS.txt'))
+        $seen = @{}
+        foreach ($line in $lines) {
+            if ($line -cnotmatch '^([a-f0-9]{64})  ([^/\\]+)$') { throw 'Invalid package checksum syntax.' }
+            $name = $Matches[2]; $hash = $Matches[1]
+            if ($name -ceq 'SHA256SUMS.txt' -or $expected -cnotcontains $name -or $seen.ContainsKey($name)) { throw 'Invalid package checksum allowlist.' }
+            if ((Get-FileHash -LiteralPath (Join-Path $packageDirectory $name) -Algorithm SHA256).Hash.ToLowerInvariant() -cne $hash) { throw 'Package checksum mismatch.' }
+            $seen[$name] = $true
+        }
+        if ($seen.Count -ne 4) { throw 'Package checksums are incomplete.' }
+        $Executable = Join-Path $packageDirectory 'tracebolt-windows-agent.exe'
+        $installer = Join-Path $packageDirectory 'Install-Tracebolt.ps1'
+        $uninstaller = Join-Path $packageDirectory 'Uninstall-Tracebolt.ps1'
+        $result.packagedArtifact = $true
+    }
     Push-Location $repo
     try {
         go build -o $fixtureExe ./tests/rustagent/cmd/nativefixture
@@ -47,7 +76,7 @@ try {
     $ready = Wait-ForJson (Join-Path $fixtureDirectory 'ready.json') { param($v) $v.loopbackOnly -eq $true } 30
     if (([Uri]$ready.managerOrigin).Host -ne '127.0.0.1' -or ([Uri]$ready.agentOrigin).Host -ne '127.0.0.1') { throw 'Fixture must be loopback-only.' }
     $stagingAuthorized = $true
-    $installOutput = @(& (Join-Path $repo 'deploy/windows-rust/Install-Tracebolt.ps1') -ManagerOrigin $ready.managerOrigin -ServerCAFile $ready.serverCAFile -Executable $Executable -IntervalSeconds 30 -AcknowledgeBasicMetrics)
+    $installOutput = @(& $installer -ManagerOrigin $ready.managerOrigin -ServerCAFile $ready.serverCAFile -Executable $Executable -IntervalSeconds 30 -AcknowledgeBasicMetrics)
     $fingerprints = @($installOutput | ForEach-Object {
         try {
             $item = ([string]$_) | ConvertFrom-Json -ErrorAction Stop
@@ -67,15 +96,32 @@ try {
     $accepted = Wait-ForJson (Join-Path $fixtureDirectory 'accepted.json') { param($v) $v.accepted -eq $true -and $v.count -ge 1 } 480
     if (!$accepted.mutualTLS -or !$accepted.activated -or !$accepted.cpuAvailable -or !$accepted.memoryAvailable -or !$accepted.diskAvailable) { throw 'Native metrics, activation or mutual TLS acceptance is incomplete.' }
     $result.activated=$true; $result.mutualTLS=$true; $result.nativeMetrics=$true
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $local = (& $Executable status --directory $dataDirectory --json) | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw 'Local receipt diagnostics command failed.' }
+        if ($local.lastAcceptedReceipt.sequence -ge $accepted.sequence -and $local.lastAttemptResult -eq 'accepted') { break }
+        Start-Sleep -Milliseconds 250
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if ($local.lastAcceptedReceipt.sequence -lt $accepted.sequence -or $local.lastAttemptResult -ne 'accepted') { throw 'Validated receipt was not durably visible in local diagnostics.' }
+    $result.localReceipt=$true
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     Stop-Service $serviceName
     $controller = Get-Service $serviceName
     try { $controller.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30)) } finally { $controller.Dispose() }
+    $stopwatch.Stop()
+    $result.stopMilliseconds=$stopwatch.ElapsedMilliseconds
+    if ($stopwatch.Elapsed.TotalSeconds -ge 25) { throw 'Service stop exceeded its bounded in-flight operation budget.' }
+    $result.boundedStop=$true
+    $retained = (& $Executable status --directory $dataDirectory --json) | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $retained.lastAcceptedReceipt.sequence -lt $local.lastAcceptedReceipt.sequence) { throw 'Service stop lost or rolled back the local receipt.' }
     $before = Read-OptionalJson (Join-Path $fixtureDirectory 'accepted.json')
+    if ($retained.lastAcceptedReceipt.sequence -ne $before.sequence) { throw 'Stopped service diagnostics do not match the settled peer receipt.' }
     Start-Service $serviceName
     $restarted = Wait-ForJson (Join-Path $fixtureDirectory 'accepted.json') { param($v) $v.count -gt $before.count -and $v.sequence -gt $before.sequence } 120
     if (!$restarted.accepted) { throw 'Service restart did not resume acknowledged telemetry.' }
     $result.restart=$true
-    & (Join-Path $repo 'deploy/windows-rust/Uninstall-Tracebolt.ps1')
+    & $uninstaller
     $deadline=[DateTime]::UtcNow.AddSeconds(20)
     while ((Get-Service $serviceName -ErrorAction SilentlyContinue) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 500 }
     if (Get-Service $serviceName -ErrorAction SilentlyContinue) { throw 'Service removal did not complete.' }
@@ -100,4 +146,4 @@ try {
     New-Item -ItemType Directory -Path (Split-Path $ResultFile -Parent) -Force | Out-Null
     $result | ConvertTo-Json | Set-Content -LiteralPath $ResultFile -Encoding utf8
 }
-Write-Host 'Native Windows basic agent acceptance passed: install, exact-key approval, activation, mutual TLS telemetry, service restart and removal.'
+Write-Host 'Native Windows basic agent acceptance passed: install, exact-key approval, activation, mutual TLS telemetry, local receipt, bounded stop, service restart and removal.'
