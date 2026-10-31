@@ -57,14 +57,24 @@ Git, terminal output, screenshots, logs and support artifacts.
 
 ## Capability and existing-route mapping
 
-- `read`: existing authenticated GET/HEAD views except privileged application-check
-  settings, and the exact read-only JSON POST
-  queries for `/api/devices/{agentId}/journal/query` and
+The [method/route and actor matrix](named-administration-matrix.md) inventories
+the current enrollment, trust, customer, AI, account and export boundaries for
+TB-06. It documents current denials, not new administration grants or migration.
+
+- `read`: supported authenticated read views admitted by `namedReadRoute`, still
+  subject to route-specific restrictions. Customer catalog/Windows-assignment
+  GETs explicitly require shared administration; privileged application-check
+  settings require their separate capability. GET/HEAD classifier admission does
+  not make HEAD a supported API method. Read also admits exact read-only JSON
+  POST queries, including `/api/devices/{agentId}/journal/query` and
   `/api/devices/{agentId}/inventory/{section}/query`, where `section` is `system`,
   `overview`, `packages` or `complete-updates`. These queries still require
   the existing Origin, CSRF, profile, identity, generation and expiry checks.
-- `plan_updates`: a future explicit package planning permission. Inert now.
-- `execute_updates`: a future approved package execution permission. Inert now.
+- `plan_updates`: explicit permission for the separately configured typed Linux
+  package-update `prepare` route. It does not imply execution authority.
+- `execute_updates`: explicit permission for that workflow's exact reviewed
+  `approve` route. Existing profile, current identity, approval and replay fences
+  still apply; a capability alone does not configure or authorize a native helper.
 - `restart_service`: the separately configured, approved typed service-action permission.
 - `manage_alarms`: explicit browser alarm configuration and synthetic-test permission.
   It does not enable delivery by itself; destination/payload approval and the protected

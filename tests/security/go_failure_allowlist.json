@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "49cb78bb168aeca163890befec083b941a6332a351e8e775b593dfa60cd224c8",
+  "goSourceSha256": "473b648c059f1811caf89a982be5f667410f3ad2acd708a65847dea885016bcf",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1182,6 +1182,9 @@
       "TestManagedPreviewHTTPGuardsAndRealSample",
       "TestManagedSourcePolicyCannotBeRelabeledForAIExport",
       "TestMutationValidationAndPersistence",
+      "TestNamedAdministrationContractAnonymousDenials",
+      "TestNamedAdministrationContractDenials",
+      "TestNamedAdministrationContractReadsRemainDistinct",
       "TestNamedCapabilitySeamRequiresCSRFCurrentSessionAndServerActor",
       "TestNamedHTTPTestKeepsSeparateCookieAndPlaintextWarning",
       "TestNamedLANLoginMetadataAndLegacyCompatibility",
