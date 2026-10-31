@@ -89,6 +89,30 @@ func TestProfileValidation(t *testing.T) {
 	}
 }
 
+func TestLoadConfigReadsOnlyTheStrictConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	c := Config{SchemaVersion: SchemaVersion, Profile: TLS, OperatorListen: "127.0.0.1:8443", AgentListen: "127.0.0.1:8444", OperatorOrigin: "https://manager.invalid:8443", AgentOrigin: "https://manager.invalid:8444", TLSCertificateFile: filepath.Join(dir, "missing-cert"), TLSPrivateKeyFile: filepath.Join(dir, "missing-key"), AgentClientCAFile: filepath.Join(dir, "missing-ca"), OperatorAuthFile: filepath.Join(dir, "missing-auth"), StateDirectory: filepath.Join(dir, "missing-state"), WebDirectory: filepath.Join(dir, "missing-web")}
+	raw, _ := json.Marshal(c)
+	path := filepath.Join(dir, "lan.json")
+	if os.WriteFile(path, raw, 0600) != nil {
+		t.Fatal("fixture write")
+	}
+	parsed, err := LoadConfig(path)
+	if err != nil || parsed != c {
+		t.Fatal("configuration-only loader tried to read material")
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("runtime loader accepted missing material")
+	}
+	if _, err := LoadMaterial(c); err == nil {
+		t.Fatal("explicit material loader accepted missing material")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("loaders created state or material")
+	}
+}
+
 func TestWindowsUpdateJobsConfigurationIsSeparateDefaultOffTLSOnly(t *testing.T) {
 	base := Config{SchemaVersion: SchemaVersion, Profile: TLS, OperatorListen: "127.0.0.1:8080", AgentListen: "127.0.0.1:8081", OperatorOrigin: "https://manager.invalid:8080", AgentOrigin: "https://manager.invalid:8081", TLSCertificateFile: "/tmp/cert", TLSPrivateKeyFile: "/tmp/key", AgentClientCAFile: "/tmp/ca", OperatorAuthFile: "/tmp/auth", StateDirectory: "/tmp/state", WebDirectory: "/tmp/web", WindowsInventoryEnabled: true}
 	if base.Validate() != nil || base.WindowsUpdateJobsConfigFile != "" {

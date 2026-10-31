@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "757842fa300f10fa164b5068f1134649c0650ccc01be1b52053f344785ded9c4",
+  "goSourceSha256": "49cb78bb168aeca163890befec083b941a6332a351e8e775b593dfa60cd224c8",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -218,6 +218,9 @@
       "TestDevelopmentModeSelectsCollectionBeforeFirstSample",
       "TestHTTPWriteBudgetOutlastsAnalysis",
       "TestRealManagerReturnsDelayedFakeProviderResult"
+    ],
+    "localrmm/cmd/manager-setup": [
+      "TestHelpAndArgumentsAreStaticAndRedacted"
     ],
     "localrmm/cmd/package-guard": [],
     "localrmm/cmd/package-helper": [],
@@ -3625,6 +3628,7 @@
     "localrmm/internal/lanconfig": [
       "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
       "TestDarwinReadProtectedUsesDescriptorAndACLPolicy",
+      "TestLoadConfigReadsOnlyTheStrictConfiguration",
       "TestMacOSInventoryConfigurationDefaultOffTLSOnly",
       "TestNamedApplicationCheckCapabilityStrictLoading",
       "TestNamedAuthStrictVersionProfileAndNestedParsing",
@@ -3959,6 +3963,22 @@
       "TestSourceArchiveRejectsHeldInstallationDirectoryAlias",
       "TestSourceHashIsBoundedExactAndCancelable",
       "TestUnavailableAndInvalidRequestsNeverInspect"
+    ],
+    "localrmm/internal/managersetup": [
+      "TestAdditionalCapabilityDomainsAreNotSilentlyAccepted",
+      "TestConcurrentInitializationCreatesExactlyOnce",
+      "TestCreateOnlyInitializationPreservesEveryExistingFile",
+      "TestDoctorEntryPointUsesProtectedParserAndRedactsInputs",
+      "TestDoctorReadsWithoutCreatingStateOrChangingMaterial",
+      "TestInitializationNeverWritesIntoStateOrFrontend",
+      "TestInitializationRejectsRetainedStateAndUnprotectedDestinations",
+      "TestOverlappingAddresses",
+      "TestPathContainmentUsesComponentsNotStringPrefixes",
+      "TestPortSnapshotConflictUnknownAndOverlap",
+      "TestProtectedInputsRejectSymlinksAndHardlinks",
+      "TestReadOnlyProcListenerParser",
+      "TestStateFrontendAndCredentialTreesMustBeSeparated",
+      "TestTargetedDiagnostics"
     ],
     "localrmm/internal/model": [],
     "localrmm/internal/mutationfence": [
