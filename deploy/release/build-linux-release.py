@@ -28,6 +28,13 @@ def check_source(root, revision):
     bootstrap.require(not run(["git", "status", "--porcelain", "--untracked-files=all"], root, capture_output=True).stdout and
                       run(["git", "rev-parse", "HEAD"], root, capture_output=True, text=True).stdout.strip() == revision,
                       "Source revision or working tree changed; discard the candidate.")
+    # git status can report clean while tracked build inputs differ from HEAD
+    # under assume-unchanged or skip-worktree. Refuse such indexes, never clear
+    # their flags or rewrite the caller's files to make the check pass.
+    indexed = run(["git", "ls-files", "-v", "-z"], root, capture_output=True).stdout
+    bootstrap.require(indexed.endswith(b"\0") and
+                      all(record.startswith(b"H ") and len(record) > 2 for record in indexed[:-1].split(b"\0")),
+                      "Source index flags hide or obscure tracked inputs; discard the candidate.")
 
 
 def main():
