@@ -170,7 +170,9 @@ try {
         $namespaceCore = [Tracebolt.InstallDirectoryLease].GetMethod('CreateProtectedChildCore', [Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic)
         Assert-Relative ($null -ne $namespaceCore) 'RELATIVE_LEASE_CORE_UNAVAILABLE'
         $failureStage = 'lease-core-invoke'
-        [void]$namespaceCore.Invoke($lease, [object[]]@($child))
+        # Join-Path returns a PSObject-wrapped string; reflection's object[]
+        # binder does not unwrap it as an ordinary PowerShell method call does.
+        [void]$namespaceCore.Invoke($lease, [object[]]@([string]$child))
         $failureStage = 'lease-bound-assert'
         Assert-Relative ($lease.Covers($child) -and $lease.HasBoundChild($p)) 'RELATIVE_LEASE_CHILD_NOT_BOUND'
         $failureStage = 'lease-require-bound'
@@ -202,7 +204,7 @@ try {
     $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($p))
     try {
         $failed = $false
-        try { [void]$namespaceCore.Invoke($lease, [object[]]@($collision)) } catch { $failed = $true }
+        try { [void]$namespaceCore.Invoke($lease, [object[]]@([string]$collision)) } catch { $failed = $true }
         Assert-Relative ($failed -and !$lease.HasBoundChild($p)) 'RELATIVE_FAILED_CREATE_GAINED_PROOF'
         $failed = $false
         try { $lease.RequireBoundChild($collision) } catch { $failed = $true }
