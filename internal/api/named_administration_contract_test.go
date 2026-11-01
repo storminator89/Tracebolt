@@ -56,6 +56,7 @@ func TestNamedAdministrationContractDenials(t *testing.T) {
 		operatorauth.WindowsServiceControl, operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateDownload,
 		operatorauth.WindowsUpdateSchedule, operatorauth.WindowsSoftwareInstall,
 		operatorauth.WindowsManagedMSIDeliver, operatorauth.WindowsManagedMSIInstall, operatorauth.WindowsManagedMSISchedule,
+		operatorauth.ManageSessions,
 	}
 	operators := []operatorauth.Operator{
 		{ID: namedActorID, Username: "reader", PasswordHash: testOperatorHash(), Capabilities: []operatorauth.Capability{operatorauth.Read}},
@@ -74,6 +75,22 @@ func TestNamedAdministrationContractDenials(t *testing.T) {
 			if response.StatusCode != http.StatusOK || session["actorId"] != account.ID {
 				t.Fatal("login did not bind the actual configured actor", response.StatusCode)
 			}
+			capabilities, ok := session["capabilities"].([]any)
+			if !ok || len(capabilities) != len(account.Capabilities) {
+				t.Fatal("login did not retain every explicitly configured grant")
+			}
+			configured := make(map[operatorauth.Capability]bool, len(account.Capabilities))
+			for _, capability := range account.Capabilities {
+				configured[capability] = true
+			}
+			canManageAll := configured[operatorauth.ManageSessions]
+			for _, capability := range capabilities {
+				name, ok := capability.(string)
+				if !ok || !configured[operatorauth.Capability(name)] {
+					t.Fatal("login displayed unconfigured or duplicate authority")
+				}
+				delete(configured, operatorauth.Capability(name))
+			}
 			csrf := session["csrfToken"].(string)
 			for _, route := range namedAdministrationDeniedRoutes() {
 				t.Run(route.method+" "+route.path, func(t *testing.T) {
@@ -90,8 +107,23 @@ func TestNamedAdministrationContractDenials(t *testing.T) {
 					}
 				})
 			}
-			if response, _ := o.call(t, http.MethodPost, "/api/auth/logout", map[string]any{}, csrf, nil); response.StatusCode != http.StatusOK {
-				t.Fatal("contract fixture logout failed", response.StatusCode)
+			// Session lifecycle is a deliberate exception to the legacy-write
+			// denial: read accounts can revoke their own account's sessions, and
+			// only an explicit manage_sessions grant permits cross-account scope.
+			response, view := o.call(t, http.MethodGet, "/api/auth/sessions", nil, "", nil)
+			items, ok := view["items"].([]any)
+			if response.StatusCode != http.StatusOK || !ok || len(items) != 1 || view["canManageAll"] != canManageAll {
+				t.Fatal("session-grant exception did not retain its exact scope", response.StatusCode, view)
+			}
+			item, ok := items[0].(map[string]any)
+			if !ok || item["actorId"] != account.ID || item["current"] != true {
+				t.Fatal("session view did not bind the actual current actor")
+			}
+			if response, result := o.call(t, http.MethodPost, "/api/auth/sessions/revoke", map[string]any{"sessionId": item["id"]}, csrf, nil); response.StatusCode != http.StatusOK || result["revoked"] != true {
+				t.Fatal("named account could not revoke its current session", response.StatusCode)
+			}
+			if response, _ := o.call(t, http.MethodGet, "/api/devices", nil, "", nil); response.StatusCode != http.StatusUnauthorized {
+				t.Fatal("revoked contract fixture retained read access", response.StatusCode)
 			}
 		})
 	}
