@@ -4,6 +4,7 @@ import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
 import { CompleteUpdatesPanel } from './complete-updates';
 import { updateDevice, updatePage, updateRows, updateView } from './complete-updates-fixtures';
 import { setLocale } from './i18n';
+import { validCompleteUpdateView } from './complete-updates-types';
 import type { CompleteUpdatePage } from './complete-updates-types';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutateRaw: vi.fn() }));
 vi.mock('./auth', () => ({ useOperator: () => ({ mode: 'lan', authenticated: true, expiresAt: '2026-10-05T06:00:00Z' }) }));
@@ -12,6 +13,43 @@ async function open() { render(<CompleteUpdatesPanel deviceId={updateDevice}/>);
 beforeEach(() => { setLocale('en', false); view = updateView(); rows = updateRows(); vi.mocked(request).mockReset().mockImplementation(async () => view); vi.mocked(mutateRaw).mockReset().mockImplementation(async (_path, raw) => updatePage(view, rows, raw)); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('complete known cached update rows', () => {
+    it.each(['en', 'de'] as const)('keeps complete-cache evidence visible without disclosure or recapture in %s', async locale => {
+        setLocale(locale, false);
+        const de = locale === 'de', warning = de ? 'Nur Cache-Kandidaten; keine CVE-Bewertung und kein bestätigter Patchstand.' : 'Cached candidates only; no CVE assessment or confirmed patch status.';
+        const source = de ? 'Für den Agent sichtbare dpkg-Pakete und vorhandener lokaler APT-Cache' : 'Agent-visible dpkg packages and existing local APT cache';
+        const method = de ? 'Debian-Paketversionsvergleich; keine Metadaten-Aktualisierung.' : 'Debian package-version comparison; no metadata refresh.';
+        for (const state of ['zero', 'partial', 'unknown freshness', 'expired', 'revoked', 'missing', 'unsupported'] as const) {
+            view = updateView(0); rows = [];
+            if (state === 'partial') Object.assign(view.complete!.manifest, { checkedCount: 2, unknownCount: 1, comparisonCoverage: 'partial', comparisonReason: 'candidate_unknown' });
+            if (state === 'unknown freshness') view.complete!.manifest.metadata = { ...view.complete!.manifest.metadata, freshness: 'unknown', oldestIndexModifiedAt: '2026-10-05T03:00:00Z', ageSeconds: 3600 };
+            if (state === 'expired') { view.complete!.state = 'expired'; view.serverNow = view.complete!.retainedUntil; }
+            if (state === 'revoked') view.status = 'revoked';
+            if (state === 'missing' || state === 'unsupported') { view.status = 'awaiting'; view.complete = null; }
+            if (state === 'unsupported') view.failure = { sequence: '1', generationId: `sample_${'d'.repeat(32)}`, attemptedAt: '2026-10-05T04:00:06Z', receivedAt: '2026-10-05T04:00:07Z', reason: 'not_supported' };
+            expect(validCompleteUpdateView(view, updateDevice), state).toBe(true);
+            const original = JSON.stringify(view), rendered = render(<CompleteUpdatesPanel deviceId={updateDevice}/>);
+            await waitFor(() => expect(screen.getByRole('button', { name: de ? 'Vollständiges Updateinventar aktualisieren' : 'Refresh complete update inventory' })).toBeEnabled());
+            const reads = vi.mocked(request).mock.calls.length, queries = vi.mocked(mutateRaw).mock.calls.length;
+            const assertEvidence = () => {
+                expect(screen.getByText(warning), state).toBeVisible();
+                if (view.complete) {
+                    expect(screen.getByText(source), state).toBeVisible(); expect(screen.getByText(method), state).toBeVisible();
+                    expect(screen.getByText(view.complete.manifest.collectedAt), state).toBeVisible();
+                    expect(screen.getByText(view.complete.manifest.metadata.oldestIndexModifiedAt!), state).toBeVisible();
+                    const age = screen.getByText(de ? 'Metadatenalter bei Erfassung (Stunden)' : 'Local metadata age at capture (hours)');
+                    expect(age, state).toBeVisible(); expect(age.closest('div')!.querySelector('dd'), state).toHaveTextContent(new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(view.complete.manifest.metadata.ageSeconds! / 3600));
+                } else {
+                    expect(screen.queryByText(source), state).toBeNull(); expect(screen.queryByText(method), state).toBeNull();
+                    expect(screen.queryByText(de ? 'Ursprünglicher Erfassungszeitpunkt' : 'Original capture time'), state).toBeNull();
+                }
+            };
+            assertEvidence();
+            for (const summary of [...document.querySelectorAll('summary')]) { fireEvent.click(summary); assertEvidence(); fireEvent.click(summary); assertEvidence(); }
+            expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(queries); expect(JSON.stringify(view)).toBe(original);
+            if (['expired', 'revoked', 'missing', 'unsupported'].includes(state)) expect(screen.queryByRole('table')).toBeNull();
+            rendered.unmount();
+        }
+    });
     it('traverses all 1,213 candidates in at-most-100-row DOM pages without a preview prefix', async () => {
         render(<CompleteUpdatesPanel deviceId={updateDevice}/>); const seen: string[] = [];
         for (let page = 0; page < 13; page++) {
@@ -78,9 +116,19 @@ describe('complete known cached update rows', () => {
     it('searches past an empty 2,048-row window without claiming no matches early', async () => {
         view = updateView(2300); rows = updateRows(2300); await open(); fireEvent.change(screen.getByLabelText('Search all candidate rows'), { target: { value: 'fixture-update-002299' } }); fireEvent.click(screen.getByRole('button', { name: 'Search' })); await screen.findByText('No matches in this scan window. Continue to check remaining rows.'); expect(screen.queryByText('No matches in the complete known-candidate generation.')).not.toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Continue search' })); await screen.findByText('fixture-update-002299', { selector: 'th' }); expect(screen.getByText('2,300 / 2,300')).toBeVisible();
     });
-    it('keeps metadata stale and unknown comparisons partial despite complete known rows', async () => { view.complete!.manifest.checkedCount--; view.complete!.manifest.unknownCount = 1; view.complete!.manifest.comparisonCoverage = 'partial'; view.complete!.manifest.comparisonReason = 'candidate_unknown'; await open(); expect(screen.getByText(/metadata is stale/)).toBeVisible(); expect(screen.getByText(/lower bound/)).toBeVisible(); expect(screen.getByText('Cached candidates do not establish security or patch status.')).toBeVisible(); expect(screen.getByText(/No CVE or installability assessment/)).not.toBeVisible(); });
+    it('keeps metadata stale and unknown comparisons partial despite complete known rows', async () => { view.complete!.manifest.checkedCount--; view.complete!.manifest.unknownCount = 1; view.complete!.manifest.comparisonCoverage = 'partial'; view.complete!.manifest.comparisonReason = 'candidate_unknown'; await open(); expect(screen.getByText(/metadata is stale/)).toBeVisible(); expect(screen.getByText(/lower bound/)).toBeVisible(); expect(screen.getByText('Cached candidates only; no CVE assessment or confirmed patch status.')).toBeVisible(); expect(screen.getByText(/No CVE or installability assessment/)).not.toBeVisible(); });
     it('does not show a zero candidate claim for absent complete data', async () => { view = { ...view, status: 'awaiting', complete: null }; render(<CompleteUpdatesPanel deviceId={updateDevice}/>); await screen.findByText('Awaiting a complete update generation'); expect(mutateRaw).not.toHaveBeenCalled(); expect(screen.queryByText(/No newer candidates in/)).not.toBeInTheDocument(); expect(screen.getByText(/preview consent is insufficient/)).toBeVisible(); });
-    it('retains prior complete rows and timestamps after a failed newer capture', async () => { view.failure = { sequence: '9223372036854775807', generationId: `sample_${'d'.repeat(32)}`, attemptedAt: '2026-10-05T04:00:06Z', receivedAt: '2026-10-05T04:00:07Z', reason: 'source_missing' }; await open(); expect(screen.getByText('Latest capture failed')).toBeVisible(); expect(screen.getByText('2026-10-05T04:00:00Z')).toBeVisible(); expect(screen.getByText('fixture-update-000000', { selector: 'th' })).toBeVisible(); });
+    it.each(['en', 'de'] as const)('keeps the older generation evidence separate from a newer capture failure in %s', async locale => {
+        setLocale(locale, false); const de = locale === 'de'; view.complete!.binding.sequence = '1';
+        view.failure = { sequence: '2', generationId: `sample_${'d'.repeat(32)}`, attemptedAt: '2026-10-05T04:00:06Z', receivedAt: '2026-10-05T04:00:07Z', reason: 'source_missing' };
+        expect(validCompleteUpdateView(view, updateDevice)).toBe(true); const original = JSON.stringify(view); await open();
+        expect(screen.getByText(de ? 'Neueste Erfassung fehlgeschlagen' : 'Latest capture failed')).toBeVisible();
+        expect(screen.getByText(view.failure.attemptedAt)).toBeVisible(); expect(screen.getByText(view.complete!.manifest.collectedAt)).toBeVisible();
+        expect(screen.getByText(view.complete!.manifest.metadata.oldestIndexModifiedAt!)).toBeVisible();
+        expect(screen.getByText(de ? 'Für den Agent sichtbare dpkg-Pakete und vorhandener lokaler APT-Cache' : 'Agent-visible dpkg packages and existing local APT cache')).toBeVisible();
+        expect(screen.getByText(de ? 'Debian-Paketversionsvergleich; keine Metadaten-Aktualisierung.' : 'Debian package-version comparison; no metadata refresh.')).toBeVisible();
+        expect(screen.getByText('fixture-update-000000', { selector: 'th' })).toBeVisible(); expect(JSON.stringify(view)).toBe(original);
+    });
     it.each(['close', 'pagehide', 'blur', 'auth', 'session', 'device'] as const)('aborts and hides a delayed page after %s', async transition => {
         let finish!: (value: CompleteUpdatePage) => void, signal!: AbortSignal; const rendered = render(<CompleteUpdatesPanel deviceId={updateDevice} sessionKey="first"/>); await screen.findByRole('table');
         vi.mocked(mutateRaw).mockImplementation(async (_path, _raw, _headers, supplied) => { signal = supplied!; return new Promise<CompleteUpdatePage>(resolve => { finish = resolve; }); }); fireEvent.click(screen.getByRole('button', { name: 'Next 100 candidates' })); await waitFor(() => expect(signal).toBeDefined());

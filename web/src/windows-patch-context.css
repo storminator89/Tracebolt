@@ -4,9 +4,9 @@
 .windows-patch-details{margin-top:12px;font-size:12px;line-height:1.6}
 .windows-patch-details summary{cursor:pointer;overflow-wrap:anywhere}
 .windows-patch-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.windows-patch-sources{display:flex;flex-wrap:wrap;gap:12px 30px;margin:14px 0}
-.windows-patch-sources dt{color:var(--secondary)}
-.windows-patch-sources dd{margin:2px 0 0}
+.windows-patch-sources,.windows-patch-evidence{display:flex;flex-wrap:wrap;gap:12px 30px;margin:14px 0}
+.windows-patch-sources dt,.windows-patch-evidence dt{color:var(--secondary)}
+.windows-patch-sources dd,.windows-patch-evidence dd{margin:2px 0 0}
 .windows-patch-history-table small,.windows-patch-row-details span{display:block;margin-top:5px;font-size:11px;color:var(--secondary);overflow-wrap:anywhere}
 .windows-patch-row-details{margin-top:6px}
 .windows-patch-history-table th:first-child{width:35%}

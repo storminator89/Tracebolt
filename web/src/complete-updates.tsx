@@ -29,7 +29,8 @@ const copy = {
         package: 'Package', architecture: 'Architecture', installedVersion: 'Installed version', candidateVersion: 'Native candidate', state: 'Candidate state', candidate_only: 'Candidate only', heldState: 'Held by dpkg',
         loadError: 'The manager could not be read. Retry the request or refresh.', invalid: 'Inconsistent or unsupported update data was returned. Rows were cleared.', timeout: 'The request timed out. Retry or refresh.', session: 'Your session has ended. Sign in again.', clock: 'The time anchor is no longer reliable. Refresh before continuing.', busy: 'The manager is busy. Retry shortly.', restart: 'The selected generation or paging session expired or changed. Refresh to restart; prior pages were cleared.', searchInvalid: 'Use at most 128 printable ASCII characters.',
         summary: 'Stored candidates only. Refresh reads the manager; it does not refresh APT or install updates.',
-        securitySummary: 'Cached candidates do not establish security or patch status.',
+        securitySummary: 'Cached candidates only; no CVE assessment or confirmed patch status.',
+        source: 'Source scope', sourceValue: 'Agent-visible dpkg packages and existing local APT cache', method: 'Comparison method', comparison: 'Debian package-version comparison; no metadata refresh.',
         captureDetails: 'Capture details', transferDetails: 'Transfer details', failureDetails: 'Failure details', scopeDetails: 'Scope & limits', generationId: 'Generation ID', sequence: 'Sequence',
         retention: 'Rows expire 24 hours after their original capture. Refresh and pagination only read stored manager data; they never initiate a native query or refresh metadata.',
     },
@@ -49,7 +50,8 @@ const copy = {
         package: 'Paket', architecture: 'Architektur', installedVersion: 'Installierte Version', candidateVersion: 'Nativer Kandidat', state: 'Kandidatenstatus', candidate_only: 'Nur Kandidat', heldState: 'Von dpkg zurückgehalten',
         loadError: 'Der Manager konnte nicht gelesen werden. Anfrage wiederholen oder aktualisieren.', invalid: 'Widersprüchliche oder nicht unterstützte Updatedaten erhalten. Zeilen wurden entfernt.', timeout: 'Die Anfrage hat das Zeitlimit überschritten. Wiederholen oder aktualisieren.', session: 'Die Sitzung ist beendet. Erneut anmelden.', clock: 'Der Zeitanker ist nicht mehr verlässlich. Vor dem Fortfahren aktualisieren.', busy: 'Der Manager ist ausgelastet. Gleich erneut versuchen.', restart: 'Die ausgewählte Generation oder Seitensitzung ist abgelaufen oder geändert. Zum Neustart aktualisieren; vorherige Seiten wurden entfernt.', searchInvalid: 'Höchstens 128 druckbare ASCII-Zeichen verwenden.',
         summary: 'Gespeicherte Kandidaten. Aktualisieren liest den Manager, aktualisiert APT nicht und installiert keine Updates.',
-        securitySummary: 'Cache-Kandidaten belegen weder Sicherheit noch einen vollständigen Patchstand.',
+        securitySummary: 'Nur Cache-Kandidaten; keine CVE-Bewertung und kein bestätigter Patchstand.',
+        source: 'Quellenumfang', sourceValue: 'Für den Agent sichtbare dpkg-Pakete und vorhandener lokaler APT-Cache', method: 'Vergleichsmethode', comparison: 'Debian-Paketversionsvergleich; keine Metadaten-Aktualisierung.',
         captureDetails: 'Erfassungsdetails', transferDetails: 'Übertragungsdetails', failureDetails: 'Fehlerdetails', scopeDetails: 'Umfang & Grenzen', generationId: 'Generations-ID', sequence: 'Sequenz',
         retention: 'Zeilen laufen 24 Stunden nach ihrer ursprünglichen Erfassung ab. Aktualisieren und Blättern lesen nur gespeicherte Managerdaten und starten weder eine native Abfrage noch eine Metadaten-Aktualisierung.',
     },
@@ -81,7 +83,7 @@ function CompleteUpdates({ deviceId, cveReview, cveReviewExpired, onClearCVERevi
             {manifest && <>
                 {!visible && <p className="package-error" role="status">{view.status === 'revoked' ? labels.revoked : labels.expired}</p>}
                 <dl className="package-counts">{field(labels.candidates, number(manifest.candidateCount))}{field(labels.held, number(manifest.heldCount))}{field(labels.unknown, number(manifest.unknownCount))}</dl>
-                <dl className="package-facts">{field(labels.collected, manifest.collectedAt)}{field(labels.retained, selected!.retainedUntil)}</dl>
+                <dl className="package-facts">{field(labels.source, labels.sourceValue)}{field(labels.method, labels.comparison)}{field(labels.collected, manifest.collectedAt)}{manifest.metadata.oldestIndexModifiedAt && field(labels.sourceTime, manifest.metadata.oldestIndexModifiedAt)}{manifest.metadata.ageSeconds !== null && field(labels.sourceAge, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(manifest.metadata.ageSeconds / 3600))}{field(labels.retained, selected!.retainedUntil)}</dl>
                 <p className={manifest.metadata.freshness === 'stale' ? 'package-error' : 'package-note'}>{manifest.metadata.freshness === 'stale' ? labels.stale : labels.freshness}</p>{manifest.unknownCount > 0 && <p className="package-note">{labels.partial}</p>}
                 <details className="update-details">
                     <summary>{labels.captureDetails}</summary>
@@ -91,8 +93,6 @@ function CompleteUpdates({ deviceId, cveReview, cveReviewExpired, onClearCVERevi
                         {field(labels.installed, number(manifest.installedCount))}
                         {field(labels.checked, number(manifest.checkedCount))}
                         {field(labels.completed, selected!.completedAt)}
-                        {manifest.metadata.oldestIndexModifiedAt && field(labels.sourceTime, manifest.metadata.oldestIndexModifiedAt)}
-                        {manifest.metadata.ageSeconds !== null && field(labels.sourceAge, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(manifest.metadata.ageSeconds / 3600))}
                     </dl>
                 </details>
             </>}
