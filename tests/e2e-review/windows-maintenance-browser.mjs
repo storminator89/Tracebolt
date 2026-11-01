@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {completeAssessmentInbox,windowsIncidentInboxBrowserFixture,windowsIncidentInboxQuery} from './windows-incident-inbox-browser.mjs';
+import {completeAssessmentInbox,windowsIncidentInboxBrowserFixture,windowsIncidentInboxQuery,windowsIncidentInboxShellReadAllowed} from './windows-incident-inbox-browser.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),require=createRequire(path.join(root,'web/package.json'));
 const built=await require('esbuild').build({stdin:{contents:"export {windowsCapacityDevice} from './windows-capacity-fixture'; export {validWindowsMaintenanceView,validWindowsMaintenanceTime} from './windows-maintenance-types'; export {default as wire} from '../../tests/fixtures/windows-maintenance-view.json'; export {validWindowsNotificationView} from './windows-notifications-types'; export {default as notificationWire} from '../../tests/fixtures/windows-notifications-view.json';",resolveDir:path.join(root,'web/src'),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
 const {windowsCapacityDevice,validWindowsMaintenanceView,validWindowsMaintenanceTime,wire,validWindowsNotificationView,notificationWire}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
@@ -73,9 +73,10 @@ export async function windowsMaintenanceBrowserCase({page,expect,base,login,shot
    else{assert.equal(startCount,1);assert.equal(endCount,0);assert.equal(startReadback,1);record=windowsMaintenanceBrowserChange(record,'end',body,session.serverNow);endCount++;}
    return fulfill(route,windowsMaintenanceBrowserFixture(session.serverNow,session.expiresAt,record).view);
   }
-  const allowedRead=['/api/auth/session','/api/session','/api/enrollment','/api/windows/enrollment','/api/fleet/identities'];
   if(req.method()==='GET'&&!url.pathname.startsWith('/api/'))return route.continue();
-  if(req.method()==='GET'&&allowedRead.includes(url.pathname)&&!url.search)return route.continue();
+  // The shared-admin shell also mounts the organizational customer panels.
+  // Reuse its exact GET allowlist, without allowing bodies, queries or writes.
+  if(req.postData()===null&&windowsIncidentInboxShellReadAllowed(url,req.method()))return route.continue();
   unexpected.push('unexpected-route');return route.abort('blockedbyclient');
  };
  await page.route('**/*',route=>guardWindowsMaintenanceRoute(route,handle));
