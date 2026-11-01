@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "a36e0e690f664ba47c56fecfc4a4858e01662ccad3cfabd853673ca66d5e8a44",
+  "goSourceSha256": "906e66d7147551839b3120935a14858b1de69c50d0b636458394769c487fe9b8",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1204,6 +1204,8 @@
       "TestNamedAdministrationContractDenials",
       "TestNamedAdministrationContractReadsRemainDistinct",
       "TestNamedCapabilitySeamRequiresCSRFCurrentSessionAndServerActor",
+      "TestNamedCustomerReadRechecksRevocationAndIssuer",
+      "TestNamedCustomerReadRequiresExactGrantAndNeverWrites",
       "TestNamedHTTPTestKeepsSeparateCookieAndPlaintextWarning",
       "TestNamedLANLoginMetadataAndLegacyCompatibility",
       "TestNamedReadRouteShapeAndCapabilityExpiry",
@@ -2345,6 +2347,7 @@
       "TestManagerStatusAuthorityReadOnly",
       "TestManagerStatusDiscardReconnectPreservesSettings",
       "TestManagerStatusMacOSMaintenanceDeadlinePreservesFloorsAndContent",
+      "TestManagerStatusNearCapacityConcurrentReportsAndCachedReads",
       "TestManagerStatusReconnectPreservesActivatedCredentialBytes",
       "TestManagerStatusTerminalConsumesCapacity",
       "TestMetadataReadCohortCancellationAndCertificateWait",
@@ -3666,6 +3669,7 @@
     ],
     "localrmm/internal/lanconfig": [
       "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
+      "TestCustomerReadRequiresExplicitNamedGrant",
       "TestDarwinReadProtectedUsesDescriptorAndACLPolicy",
       "TestLoadConfigReadsOnlyTheStrictConfiguration",
       "TestMacOSInventoryConfigurationDefaultOffTLSOnly",
@@ -4130,6 +4134,7 @@
       "TestConfigurationFailClosedAndBounded",
       "TestConfiguredAbsentActorsReserveBeforeExhaustion",
       "TestCredentialFailureRateAndConcurrencyBounds",
+      "TestCustomerReadIsIndependentExplicitGrant",
       "TestExpiredAdmittedMutationRetainsActorQuotaUntilDrain",
       "TestExpiryRejectsAdmissionAndCannotReactivateOnClockRollback",
       "TestExpiryReleasesActorAndGlobalCapacityWithoutExtendingTimeout",
@@ -6395,7 +6400,8 @@
       "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
       "TestRustFrameAcceptedByManager",
-      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations"
+      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations",
+      "TestRustPackageVerificationPrecedesExecutionAndPersistentStaging"
     ],
     "localrmm/tests/rustagent/cmd/nativefixture": [
       "TestCompatibilityGETDoesNotEnterEnrollment"

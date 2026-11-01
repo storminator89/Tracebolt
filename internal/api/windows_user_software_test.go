@@ -50,7 +50,14 @@ func TestWindowsUserSoftwareProtectedOperatorFullPaging(t *testing.T) {
 	for _, named := range []bool{false, true} {
 		t.Run(fmt.Sprintf("named=%v", named), func(t *testing.T) {
 			f := newWindowsEventOperatorFixtureFor(t, named)
-			userSoftwareOperatorData(t, f, 2051)
+			// Traverse a generation larger than 2048 rows once. The named
+			// reader still crosses chunk and page boundaries and exercises every
+			// operator/cursor check without repeating the large traversal.
+			rows, laterRow := 2051, "02049"
+			if named {
+				rows, laterRow = 201, "00200"
+			}
+			userSoftwareOperatorData(t, f, rows)
 			path := "/api/devices/" + f.snap.Approval.DeviceID + "/windows-selected-user-software/query"
 			q := windowsusersoftware.Query{Sort: "name-asc", Limit: 100}
 			if r, _ := f.call(t, "POST", path, q, "", nil); r.StatusCode != 403 {
@@ -77,7 +84,7 @@ func TestWindowsUserSoftwareProtectedOperatorFullPaging(t *testing.T) {
 					t.Fatal("page too large")
 				}
 				var p windowsusersoftware.Page
-				if json.Unmarshal(raw, &p) != nil || p.Status != "ready" || p.MatchingCount != 2051 || p.Offset != total {
+				if json.Unmarshal(raw, &p) != nil || p.Status != "ready" || p.MatchingCount != rows || p.Offset != total {
 					t.Fatal("bad page", p.Status)
 				}
 				total += len(p.Rows)
@@ -89,13 +96,13 @@ func TestWindowsUserSoftwareProtectedOperatorFullPaging(t *testing.T) {
 				}
 				q.Cursor = p.NextCursor
 			}
-			if total != 2051 {
+			if total != rows {
 				t.Fatal("not complete")
 			}
 			q.Cursor = ""
-			q.Search = "02049"
+			q.Search = laterRow
 			r, v := f.call(t, "POST", path, q, f.csrf, nil)
-			if r.StatusCode != 200 || v["matchingCount"] != float64(1) || !strings.Contains(fmt.Sprint(v["rows"]), "02049") {
+			if r.StatusCode != 200 || v["matchingCount"] != float64(1) || !strings.Contains(fmt.Sprint(v["rows"]), laterRow) {
 				t.Fatal("later row not searchable", r.StatusCode)
 			}
 			q.Cursor = firstCursor

@@ -101,7 +101,7 @@ test('existing maintenance walkthrough explicitly selects preview without granti
 
 // Capture the actual route installed by this existing real-App consumer. The page
 // stub stops before viewport/UI work; no browser, listener or network is opened.
-test('installed maintenance consumer serves the v2 inbox and denies legacy, malformed and mutation fallback',async()=>{
+test('installed maintenance consumer serves the v2 inbox and bounds organizational shell reads',async()=>{
  const base='https://maintenance.invalid',stop=new Error('inert route installation complete');let handle,sessionReads=0;
  const session={authenticated:true,loginMode:'shared',serverNow:now,expiresAt:expiry};
  const page={
@@ -123,6 +123,23 @@ test('installed maintenance consumer serves the v2 inbox and denies legacy, malf
   assert.equal(sourceKind,'assessment_v1');assert.deepEqual([openingSource,lastBadSource,recoverySource,currentSource],[null,null,null,null]);return item;
  })};
  assert.deepEqual(restored,original);assert.deepEqual(route.result.reply.items.map(item=>item.key),original.items.map(item=>item.key));
+ // The real shared-admin App mounts these organizational panels on reload.
+ // Continue only their exact bodyless GETs; no mutation, alias or foreign fallback.
+ const shellReads=['/api/auth/session','/api/session','/api/enrollment','/api/windows/enrollment','/api/fleet/identities','/api/customers','/api/customer-windows-assignments'];
+ for(const target of shellReads){
+  const allowed=request(target);await handle(allowed);assert.deepEqual(allowed.result,{reply:null,continued:1,aborted:[]});
+ }
+ for(const target of ['/api/customers','/api/customer-windows-assignments']){
+  for(const method of ['POST','PUT','PATCH','DELETE','HEAD','OPTIONS']){
+   const denied=request(target,{method,body:'{}'});await handle(denied);assert.deepEqual(denied.result,{reply:null,continued:0,aborted:['blockedbyclient']});
+  }
+  for(const [alias,options] of [
+   [target,{body:'{}'}],[target+'?',{}],[target+'?offset=0',{}],[target+'/',{}],[target+'/create',{}],
+   [target.replace('/api/c','/api/%63'),{}],['https://external.invalid'+target,{}],
+  ]){
+   const denied=request(alias,options);await handle(denied);assert.deepEqual(denied.result,{reply:null,continued:0,aborted:['blockedbyclient']});
+  }
+ }
  for(const target of ['/api/fleet/windows-incidents'+windowsIncidentInboxQuery,'/api/fleet/windows-incidents/complete/acknowledge','https://external.invalid/api/fleet/windows-incidents/complete'+windowsIncidentInboxQuery]){
   const denied=request(target,target.endsWith('/acknowledge')?{method:'POST',body:'{}'}:{});await handle(denied);assert.deepEqual(denied.result,{reply:null,continued:0,aborted:['blockedbyclient']});
  }

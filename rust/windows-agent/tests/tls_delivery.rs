@@ -36,6 +36,7 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
     let client_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::new(vec![]).unwrap();
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+    params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
     let client_cert = params.signed_by(&client_key, &issuer).unwrap();
     fs::write(dir.path().join("client.pem"), client_cert.pem()).unwrap();
     fs::write(dir.path().join("client.key"), client_key.serialize_pem()).unwrap();
@@ -126,9 +127,14 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
         })
     };
     drop(Sender::open(dir.path(), true).unwrap());
-    let disabled = Runtime::open_without_health(dir.path()).unwrap();
+    let mut disabled = Runtime::open_without_health(dir.path()).unwrap();
     assert!(!disabled.health_requested());
     assert!(!disabled.health_available());
+    assert!(
+        !disabled
+            .cycle_until_stopped(|| panic!("stopped service must not collect"), || true)
+            .unwrap()
+    );
     drop(disabled);
     assert!(!dir.path().join("state/health-v1.json").exists());
     let mut sender = Runtime::open(dir.path()).unwrap();
@@ -142,6 +148,26 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
     let invalid = health::status(dir.path(), Utc::now());
     assert_eq!(invalid.state, health::Code::ReceiptInvalid);
     assert!(invalid.last_accepted_receipt.is_none());
+    drop(sender);
+    let mut sender = Runtime::open(dir.path()).unwrap();
+    // Stop may arrive after a cycle starts but before telemetry is admitted.
+    // Retain the same unacknowledged bytes, sequence, and previous receipt.
+    let checks = std::cell::Cell::new(0);
+    assert!(
+        !sender
+            .cycle_until_stopped(
+                || panic!("stop checkpoint must not recollect pending bytes"),
+                || {
+                    checks.set(checks.get() + 1);
+                    checks.get() > 1
+                },
+            )
+            .unwrap()
+    );
+    assert_eq!(checks.get(), 2);
+    let interrupted = health::status(dir.path(), Utc::now());
+    assert_eq!(interrupted.state, health::Code::AttemptInterrupted);
+    assert!(interrupted.last_accepted_receipt.is_none());
     drop(sender);
     let mut sender = Runtime::open(dir.path()).unwrap();
     assert!(sender.cycle(|| panic!("retry must not recollect")).unwrap());

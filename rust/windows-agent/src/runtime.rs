@@ -18,6 +18,13 @@ pub struct Runtime {
     health: Option<Tracker>,
     health_requested: bool,
 }
+
+enum Outcome {
+    Pending,
+    Interrupted,
+    Accepted(crate::protocol::AcceptedReceipt),
+}
+
 impl Runtime {
     pub fn open(directory: &Path) -> Result<Self> {
         Self::open_with_health(directory, true)
@@ -27,15 +34,35 @@ impl Runtime {
     }
     fn open_with_health(directory: &Path, health_requested: bool) -> Result<Self> {
         let config = Config::load(directory).context(Code::ConfigurationInvalid)?;
-        let health = if health_requested {
-            Tracker::open(directory, &config).ok()
+        let mut health = if health_requested {
+            Tracker::open_runtime(directory, &config).ok()
         } else {
             None
         };
-        let (enrollment, sender) = if config.enrollment_mode == EnrollmentMode::Preprovided {
-            (None, Some(Sender::open(directory, false)?))
+        let started_at = chrono::Utc::now();
+        let opened = if config.enrollment_mode == EnrollmentMode::Preprovided {
+            Sender::open(directory, false).map(|sender| (None, Some(sender)))
         } else {
-            (Some(Enrollment::open(directory, false, None)?), None)
+            Enrollment::open(directory, false, None).map(|enrollment| (Some(enrollment), None))
+        };
+        let (enrollment, sender) = match opened {
+            Ok(opened) => opened,
+            Err(error) => {
+                // Local-open failures with no narrower typed class mean
+                // unavailable/invalid retained state, not a network diagnosis.
+                let code = match health::classify(&error) {
+                    Code::UnclassifiedFailure => Code::StateUnavailable,
+                    code => code,
+                };
+                if let Some(tracker) = health.as_mut().filter(|_| {
+                    error
+                        .downcast_ref::<crate::state::LockUnavailable>()
+                        .is_none()
+                }) {
+                    let _ = tracker.startup_failure(code, started_at);
+                }
+                return Err(error.context(code));
+            }
         };
         Ok(Self {
             enrollment,
@@ -55,16 +82,31 @@ impl Runtime {
     }
     /// False means onboarding remains pending, not a delivered observation.
     pub fn cycle(&mut self, collect: impl FnOnce() -> Result<Sample>) -> Result<bool> {
+        self.cycle_until_stopped(collect, || false)
+    }
+    /// Cooperative SCM stop at phase boundaries: skip a cycle if already stopped
+    /// and do not append telemetry to enrollment after an observed stop. A phase
+    /// already admitted (including collection plus send) finishes normally;
+    /// no pending bytes/counters are reset or repaired.
+    pub fn cycle_until_stopped(
+        &mut self,
+        collect: impl FnOnce() -> Result<Sample>,
+        stopping: impl Fn() -> bool,
+    ) -> Result<bool> {
+        if stopping() {
+            return Ok(false);
+        }
         let at = chrono::Utc::now();
         if self.health.as_mut().is_some_and(|h| h.attempt(at).is_err()) {
             self.health = None;
         }
-        let result = self.cycle_inner(collect);
+        let result = self.cycle_inner(collect, stopping);
         let now = chrono::Utc::now();
         let jitter = uuid::Uuid::new_v4().as_bytes()[0] % 31;
         self.last_code = match &result {
-            Ok(Some(_)) => Code::Accepted,
-            Ok(None) => self
+            Ok(Outcome::Accepted(_)) => Code::Accepted,
+            Ok(Outcome::Interrupted) => Code::AttemptInterrupted,
+            Ok(Outcome::Pending) => self
                 .enrollment
                 .as_ref()
                 .and_then(|e| e.public_status().ok())
@@ -109,7 +151,10 @@ impl Runtime {
         if self.health.as_mut().is_some_and(|h| {
             h.complete(
                 self.last_code,
-                result.as_ref().ok().and_then(Clone::clone),
+                match &result {
+                    Ok(Outcome::Accepted(receipt)) => Some(receipt.clone()),
+                    _ => None,
+                },
                 now,
                 self.failures,
                 self.delay,
@@ -119,7 +164,7 @@ impl Runtime {
         }) {
             self.health = None;
         }
-        result.map(|accepted| accepted.is_some())
+        result.map(|outcome| matches!(outcome, Outcome::Accepted(_)))
     }
     pub fn health_code(&self) -> Code {
         self.last_code
@@ -133,19 +178,27 @@ impl Runtime {
     fn cycle_inner(
         &mut self,
         collect: impl FnOnce() -> Result<Sample>,
-    ) -> Result<Option<crate::protocol::AcceptedReceipt>> {
+        stopping: impl Fn() -> bool,
+    ) -> Result<Outcome> {
         if self.sender.is_none() {
             let enrollment = self.enrollment.as_mut().unwrap();
             if let Some(material) = enrollment.step(None)? {
                 self.sender = Some(Sender::enrolled(&enrollment.state_directory(), material)?);
             } else {
-                return Ok(None);
+                return Ok(if stopping() {
+                    Outcome::Interrupted
+                } else {
+                    Outcome::Pending
+                });
             }
+        }
+        if stopping() {
+            return Ok(Outcome::Interrupted);
         }
         self.sender
             .as_mut()
             .unwrap()
             .report_receipt(collect)
-            .map(Some)
+            .map(Outcome::Accepted)
     }
 }

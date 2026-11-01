@@ -39,6 +39,11 @@ export function completeAssessmentInbox(view){
  const complete={...view,schemaVersion:'tracebolt.windows-incident-inbox.v2',items:view.items.map(item=>({...item,sourceKind:'assessment_v1',openingSource:null,lastBadSource:null,recoverySource:null,currentSource:null}))};
  assert.ok(validWindowsCompleteIncidentInboxView(complete,'active','all',0));return complete;
 }
+// The shared administrator's compiled device page also mounts these bounded
+// organizational reads. This allowlist never admits their writes or query aliases.
+export function windowsIncidentInboxShellReadAllowed(url,method){
+ return method==='GET'&&!url.href.includes('?')&&['/api/auth/session','/api/session','/api/enrollment','/api/windows/enrollment','/api/fleet/identities','/api/customers','/api/customer-windows-assignments'].includes(url.pathname);
+}
 export async function windowsIncidentInboxBrowserCase({page,expect,base,login,shot}){
  stage='login';failures=0;pending=0;await login(page);
  let origin=null,acknowledgedAt=null,postCount=0,readCount=0,readbackCount=0,postKey=null,readback=null,serviceFixture=null;
@@ -64,9 +69,8 @@ export async function windowsIncidentInboxBrowserCase({page,expect,base,login,sh
    postCount++;postKey=body.key;acknowledgedAt=session.serverNow;
    const value={schemaVersion:'tracebolt.windows-incident-ack.v2',serverNow:session.serverNow,key:postKey,acknowledgedAt};assert.ok(validWindowsCompleteIncidentAcknowledgement(value,postKey));return fulfill(route,value);
   }
-  const allowedRead=['/api/auth/session','/api/session','/api/enrollment','/api/windows/enrollment','/api/fleet/identities'];
   if(req.method()==='GET'&&!url.pathname.startsWith('/api/'))return route.continue();
-  if(req.method()==='GET'&&allowedRead.includes(url.pathname)&&!url.search)return route.continue();
+  if(windowsIncidentInboxShellReadAllowed(url,req.method()))return route.continue();
   unexpected.push('unexpected-route');return route.abort('blockedbyclient');
  };
  await page.route('**/*',route=>guardWindowsIncidentInboxRoute(route,handle));

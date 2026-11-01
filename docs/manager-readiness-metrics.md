@@ -2,7 +2,8 @@
 
 This separate source candidate extends the reviewed session slice of
 [#153](https://github.com/storminator89/Tracebolt/issues/153). It does not close
-that issue or its #136/#145 dependency gates. No host was deployed, credential or
+that issue or its remaining #136 dependency gate. The independently closed #145
+does not extend the pilot limits below. No host was deployed, credential or
 endpoint grant changed, endpoint release published, or security setting relaxed.
 The LAN manager remains a Linux pilot with its existing profile and device caps.
 
@@ -168,11 +169,29 @@ reserved diagnostic files, fixed-label/privacy-negative metrics, stale/stopped
 and recovered loops, bounded blocked probes, real DB busy/FULL, corrupted
 schema/authority, unchanged authority bytes, and safe reconnect settings.
 
-Before any production claim, validate near-capacity concurrent probe/report
-latency, native filesystem exhaustion and I/O behavior, shutdown on supported
-hosts, and unchanged real endpoint/browser operation. These source probes are
-not complete runtime-write-error instrumentation for every application path.
-#136 endpoint/support status and #145 retention/load/scale evidence remain
-independent requirements. Unsupported 100/500/1000-device scale is not promoted.
+The finite `TestManagerStatusNearCapacityConcurrentReportsAndCachedReads` uses
+real SQLite at the unchanged 25-record Linux complete-profile cap: 1 activated
+identity and 23 retained canceled invitations, then the final pending slot. It
+accepts 64 synthetic primary reports without concurrent diagnostics, then 64
+with 64 background probes and 256 cached metrics reads. An increase in actual
+pool wait count proves contention; merely starting concurrent goroutines does
+not pass. It checks bounded identifier-free JSON, final recovery, byte-identical
+authority around read-only probes, restart-retained terminal records, exact
+original receipt/replay floor, and an existing report at full enrollment capacity.
+
+One Linux amd64 Go 1.27.1 race run (`GOMAXPROCS=2`) measured 2,941-byte reports,
+baseline/concurrent report p95 114/193 ms, probe p95 201 ms and cached-read p95
+171 microseconds, with 127 pool waits and all 67 sampled outcomes `ok`. Pre-restart
+DB/WAL sizes were 4,096/3,497,912 bytes. These are shared-container measurements,
+not SLOs or native collector/HTTP-ingress/browser/fleet-scale acceptance; cached
+read timing includes JSON encoding but no production HTTP/auth/network path.
+The reproducible test logs current timings and pre-restart pool counters on each
+run, rather than treating restart-reset counters as load evidence.
+
+Before any production claim, validate native filesystem exhaustion and I/O
+behavior, shutdown on supported hosts, and unchanged real endpoint/browser
+operation. These source probes are not complete runtime-write-error
+instrumentation for every application path. #136 endpoint/support status remains
+an independent requirement. Unsupported 100/500/1000-device scale is not promoted.
 #153 remains open; no release, host acceptance or complete-security-audit claim
 is made by this local candidate.

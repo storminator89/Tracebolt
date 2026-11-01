@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile, lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { captureMatrix as reviewCaptureMatrix } from './windows-complete-service-review-contract.mjs';
 export const root = fileURLToPath(new URL('../../', import.meta.url));
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const disclosure = 'Invented Go-exported health and complete-service data. Real UI components and hooks with protected request code, not the whole App; every request intercepted. No native Windows observation, real endpoint, policy write, external delivery or deployment.';
@@ -21,6 +22,7 @@ assert.deepEqual(contract.viewports, ['en', 'de'].flatMap(locale => [1440, 390].
 export const sceneManifestSHA256 = sha256(raw);
 // Preserve the original capture's locale, viewport, then scene order and filenames.
 export const captureMatrix = contract.viewports.flatMap(view => contract.scenes.map(scene => ({ scene, ...view, file: `complete-service-${scene}-${view.locale}-${view.width}.png` })));
+const reviewImages = new Set(reviewCaptureMatrix.map(row => row.file));
 export const evidenceSummary = () => ({ sceneManifestSHA256, scenes: contract.scenes.length, screenshots: captureMatrix.length, browserExecuted: true, appMounted: false, nativeAcceptance: false, actualMutationRequests: 0, disclosure });
 // Called only by the hosted runner/checker, never by the inert fixture tests.
 export async function assertHostedSource(sourceSha, inputs = []) {
@@ -48,13 +50,14 @@ export async function validateManifest(output, sourceSha, manifest) {
         assert.deepEqual(Object.keys(input).sort(), ['file', 'sha256']); assert(/^web\/(src|scripts)\/[a-zA-Z0-9_./-]+$/.test(input.file) && !input.file.split('/').includes('..'));
         assert(!files.has(input.file)); files.add(input.file); assert.equal(input.sha256, sha256(await regular(path.join(root, input.file), 4 << 20)));
     }
-    for (const file of ['web/src/windows-service-health-complete.tsx', 'web/src/windows-service-health-complete-resource.ts', 'web/src/fleet-group-service-checks-complete.tsx', 'web/src/windows-full-services-fixtures.ts', 'web/scripts/windows-complete-service-health-scenes.json', 'web/scripts/windows-complete-service-health-contract.mjs', 'web/scripts/capture-windows-complete-service-health.mjs']) assert(files.has(file));
+    for (const file of ['web/src/windows-service-health-complete.tsx', 'web/src/windows-service-health-complete-resource.ts', 'web/src/fleet-group-service-checks-complete.tsx', 'web/src/windows-full-services-fixtures.ts', 'web/scripts/windows-complete-service-health-scenes.json', 'web/scripts/windows-complete-service-health-contract.mjs', 'web/scripts/capture-windows-complete-service-health.mjs', 'web/scripts/windows-complete-service-review-scenes.json', 'web/scripts/windows-complete-service-review-contract.mjs']) assert(files.has(file));
     canonicalInputs ??= import('./capture-windows-complete-service-health.mjs').then(module => module.compile()).then(value => value.sourceInputs);
     assert.deepEqual(manifest.sourceInputs, await canonicalInputs, 'Capture must bind the complete canonical compiled-source inventory');
     assert.equal(manifest.sourceDigest, sha256(JSON.stringify(manifest.sourceInputs)));
     assert(Array.isArray(manifest.captures)); assert.equal(manifest.captures.length, captureMatrix.length);
-    // Uploaders include this namespace; every matching image must be canonical.
-    const uploadedImages = (await readdir(output)).filter(file => file.startsWith('complete-service-') && file.endsWith('.png')).sort();
+    // The shared runner later adds separately validated review captures. Exempt
+    // only their exact canonical filenames, never the entire review prefix.
+    const uploadedImages = (await readdir(output)).filter(file => file.startsWith('complete-service-') && file.endsWith('.png') && !reviewImages.has(file)).sort();
     assert.deepEqual(uploadedImages, captureMatrix.map(row => row.file).sort());
     for (let index = 0; index < captureMatrix.length; index++) {
         const expected = captureMatrix[index], row = manifest.captures[index];

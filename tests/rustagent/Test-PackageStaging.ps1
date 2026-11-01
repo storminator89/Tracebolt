@@ -1,0 +1,119 @@
+# Portable filesystem regression only. No native executable or installer is run.
+[CmdletBinding()]
+param()
+$ErrorActionPreference = 'Stop'
+$package = Join-Path $PSScriptRoot '../../deploy/windows-rust/Write-Package.ps1'
+$builder = Join-Path $PSScriptRoot '../../deploy/windows-rust/Build-Package.ps1'
+$temporary = Join-Path ([IO.Path]::GetTempPath()) ('tracebolt-package-test-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $temporary | Out-Null
+function Assert([bool]$Condition, [string]$Message) {
+    if (!$Condition) { throw $Message }
+}
+try {
+    # Parse only the three pure evidence functions; never execute the administrator-
+    # only acceptance script, installer, a binary, SCM or any native operation.
+    $evidenceSource = Join-Path $PSScriptRoot 'Run-NativeAcceptance.ps1'
+    $tokens = $null; $errors = $null
+    $evidenceAst = [Management.Automation.Language.Parser]::ParseFile($evidenceSource, [ref]$tokens, [ref]$errors)
+    Assert ($errors.Count -eq 0) 'Native evidence source did not parse.'
+    $pureFunctions = @($evidenceAst.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -cin @('ConvertTo-NativeEvidenceHealthCode','Get-NativeReceiptEvidence','ConvertTo-NativeHealthFileOutcome')
+    }, $false))
+    Assert ($pureFunctions.Count -eq 3) 'Expected exact pure native-evidence helpers.'
+    foreach ($function in $pureFunctions) { . ([scriptblock]::Create($function.Extent.Text)) }
+    $peer = [pscustomobject]@{ sequence = 7 }
+    foreach ($case in @(@($null,'accepted',$false,$false,$true), @(6,'accepted',$true,$false,$true),
+        @(7,'attempt-in-progress',$true,$true,$false), @(8,'accepted',$true,$true,$true))) {
+        $receipt = if ($null -ne $case[0]) { [pscustomobject]@{sequence=$case[0]; agentId='never-export-private-id'} } else { $null }
+        $local = [pscustomobject]@{state='health-unavailable'; lastAttemptResult=$case[1]; lastAcceptedReceipt=$receipt}
+        $observed = Get-NativeReceiptEvidence $local $peer
+        Assert ($observed.localReceiptPresent -eq $case[2] -and $observed.localReceiptAtLeastPeerSequence -eq $case[3] -and
+            $observed.localAttemptAccepted -eq $case[4]) 'Native receipt OR-branch evidence changed.'
+        Assert ($observed.localDiagnosticState -ceq 'health-unavailable' -and $observed.localAttemptResult -ceq $case[1]) 'Known diagnostic code was not preserved.'
+        Assert ((@($observed.Keys | Sort-Object) -join '|') -ceq 'localAttemptAccepted|localAttemptResult|localDiagnosticState|localReceiptAtLeastPeerSequence|localReceiptPresent') 'Native evidence exported an unreviewed field.'
+        foreach ($field in @('localReceiptPresent','localReceiptAtLeastPeerSequence','localAttemptAccepted')) {
+            Assert ($observed[$field] -is [bool]) 'Native receipt evidence must use literal Booleans.'
+        }
+        Assert (!(($observed | ConvertTo-Json -Compress).Contains('never-export-private-id'))) 'Native evidence leaked private receipt data.'
+    }
+    foreach ($unknown in @($null, 7, @{secret='never-export-private-prose'}, 'never-export-private-prose','ACCEPTED')) {
+        Assert ((ConvertTo-NativeEvidenceHealthCode $unknown) -ceq 'unrecognized') 'Unknown diagnostic input escaped finite vocabulary.'
+    }
+    foreach ($case in @(
+        @([IO.FileAttributes]::Normal,$null,'ordinary-file'), @([IO.FileAttributes]::Directory,$null,'not-file'),
+        @(([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory),$null,'reparse'),
+        @($null,[IO.FileNotFoundException]::new('never-export-private-path'),'missing'),
+        @($null,[IO.DirectoryNotFoundException]::new('never-export-private-path'),'missing'),
+        @($null,[UnauthorizedAccessException]::new('never-export-private-path'),'denied'),
+        @($null,[ComponentModel.Win32Exception]::new(5,'never-export-private-path'),'denied'),
+        @($null,[ComponentModel.Win32Exception]::new(2,'never-export-private-path'),'missing'),
+        @($null,[IO.IOException]::new('never-export-private-path'),'unavailable'), @($null,$null,'unavailable')
+    )) {
+        Assert ((ConvertTo-NativeHealthFileOutcome $case[0] $case[1]) -ceq $case[2]) 'Metadata probe lost its finite, fail-closed outcome.'
+    }
+    Write-Host 'NATIVE_RECEIPT_FINITE_EVIDENCE_OR_BRANCHES_PASS'
+    foreach ($leaf in @('Install-Tracebolt.ps1','Uninstall-Tracebolt.ps1','Package-Preflight.ps1','Write-Package.ps1','Build-Package.ps1')) {
+        $tokens = $null; $errors = $null
+        $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Split-Path $package -Parent) $leaf), [ref]$tokens, [ref]$errors)
+        Assert ($errors.Count -eq 0) "PowerShell source parse failed: $leaf"
+    }
+    $executable = Join-Path $temporary 'synthetic-input.exe'
+    [IO.File]::WriteAllText($executable, 'inert packaging fixture, not an executable')
+    $existing = Join-Path $temporary 'existing'
+    New-Item -ItemType Directory -Path (Join-Path $existing 'nested') -Force | Out-Null
+    $foreign = Join-Path $existing 'nested/foreign.txt'
+    [IO.File]::WriteAllText($foreign, 'preserve unrelated file')
+    $rejected = $false
+    try { & $package -Executable $executable -OutputDirectory $existing } catch { $rejected = $true }
+    Assert $rejected 'Existing output directory was accepted.'
+    Assert ([IO.File]::ReadAllText($foreign) -eq 'preserve unrelated file') 'Existing output was changed.'
+    Assert (!(Test-Path -LiteralPath "$existing.zip")) 'Rejected directory produced an archive.'
+    $message = ''
+    try { & $builder -OutputDirectory $existing } catch { $message = $_.Exception.Message }
+    Assert ($message -like 'Package output already exists.*') 'Builder did not reject reused output before running Cargo.'
+    Assert ([IO.File]::ReadAllText($foreign) -eq 'preserve unrelated file') 'Builder changed existing output.'
+
+    $output = Join-Path $temporary 'fresh'
+    & $package -Executable $executable -OutputDirectory $output
+    $expected = @('Install-Tracebolt.ps1','Package-Preflight.ps1','README.md','SHA256SUMS.txt','Uninstall-Tracebolt.ps1','tracebolt-windows-agent.exe') | Sort-Object
+    $actual = @(Get-ChildItem -LiteralPath $output -Recurse -File | ForEach-Object { $_.Name } | Sort-Object)
+    Assert (($actual -join '|') -ceq ($expected -join '|')) 'Staging did not contain the exact allowlist.'
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead("$output.zip")
+    try {
+        $names = @($zip.Entries | ForEach-Object { $_.FullName } | Sort-Object)
+        Assert (($names -join '|') -ceq ($expected -join '|')) 'ZIP contains unexpected, nested or missing entries.'
+        foreach ($entry in $zip.Entries) {
+            $stream = $entry.Open()
+            $memory = New-Object IO.MemoryStream
+            try {
+                $stream.CopyTo($memory)
+                $actualBytes = $memory.ToArray()
+                $expectedBytes = [IO.File]::ReadAllBytes((Join-Path $output $entry.FullName))
+                Assert ([Convert]::ToBase64String($actualBytes) -ceq [Convert]::ToBase64String($expectedBytes)) 'ZIP bytes differ from staging.'
+            } finally { $stream.Dispose(); $memory.Dispose() }
+        }
+    } finally { $zip.Dispose() }
+    $lines = @(Get-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt'))
+    Assert ($lines.Count -eq 5) 'Each allowlisted payload needs exactly one checksum.'
+    foreach ($line in $lines) {
+        Assert ($line -cmatch '^([a-f0-9]{64})  ([^/\\]+)$') 'Invalid checksum row.'
+        $hash = (Get-FileHash -LiteralPath (Join-Path $output $Matches[2]) -Algorithm SHA256).Hash.ToLowerInvariant()
+        Assert ($hash -ceq $Matches[1]) 'Checksum does not bind the packaged bytes.'
+    }
+
+    $archiveOnly = Join-Path $temporary 'archive-only'
+    [IO.File]::WriteAllText("$archiveOnly.zip", 'preserve existing archive')
+    $rejected = $false
+    try { & $package -Executable $executable -OutputDirectory $archiveOnly } catch { $rejected = $true }
+    Assert $rejected 'Existing archive was replaced.'
+    Assert ([IO.File]::ReadAllText("$archiveOnly.zip") -eq 'preserve existing archive') 'Existing archive bytes changed.'
+    Assert (!(Test-Path -LiteralPath $archiveOnly)) 'Rejected archive produced a directory.'
+    Assert (@(Get-ChildItem -LiteralPath $temporary -Force | Where-Object Name -Like '.tracebolt-rust-package-*').Count -eq 0) 'Temporary staging leaked.'
+} finally {
+    Remove-Item -LiteralPath $temporary -Recurse -Force
+}
+Write-Host 'Filesystem-only package staging and checksum regression passed.'
+& (Join-Path $PSScriptRoot 'Test-InstallerPackagePreflight.ps1')
+& (Join-Path $PSScriptRoot 'Test-RelativeDirectoryCreation.ps1')
