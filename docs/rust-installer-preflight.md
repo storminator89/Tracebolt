@@ -59,8 +59,10 @@ bit-`2` subset. This is not general parent/path trust. A sealed native directory
 lease must already own live, ordinary no-follow read handles for the exact
 canonical directory and every ancestor, denying data-write/delete sharing. The
 installer acquires both complete target-parent chains before reading ACLs and
-retains them through startup; it immediately extends coverage to freshly created
-binary/data/state directories before dependent work. A pre-existing incompatible
+retains the parent chains and binary/data directories through startup; it
+immediately extends coverage to each freshly created directory before dependent
+work. The state leaf remains pinned through initialization, then requires the
+specific final-protection handoff below before the first service cycle. A pre-existing incompatible
 writer, wrong path, missing/disposed lease or sharing conflict fails closed.
 Owner/DACL inspection reads **each actual retained handle** with `GetSecurityInfo`,
 not a racy `Get-Acl(path)` result. The actual KnownFolder path and leased object
@@ -89,6 +91,40 @@ no Boolean bypass, ACL repair, unlock-and-retry or pathname creation fallback.
 These handles address installation-time namespace operations, not arbitrary
 future ACL changes, every filesystem mechanism or a compromised administrator.
 The permanent service/binary/state ACLs and all runtime authority remain as before.
+
+### Bound state handoff before service startup
+
+A retained read/share-read-only state-directory handle conflicts with a full-path
+atomic health rename: resolving the rename destination requests `FILE_ADD_FILE`
+on that directory. The own-TEMP causal fixture on exact head `2c20f728` observed
+`MoveFileExW(REPLACE_EXISTING)` error `32` while that state lease was held,
+unchanged synthetic source bytes/names, and successful rename after its release.
+A separate control kept the data parent and every ancestor strictly pinned and
+confirmed rename succeeds with a permissive fixture-only state handle
+([native job](https://github.com/storminator89/Tracebolt/actions/runs/41331313678/job/124921834582)).
+That head still failed the real local-receipt gate; this was not full acceptance.
+
+Immediately before enabling and starting the service, after copying, protected
+configuration and initialization, one no-argument transition may release **only** the exact privately
+bound `state` leaf. It first rechecks binary/data/state identities and the ordinary
+retained ancestors. It reads the actual retained data/state descriptors and requires
+Administrators ownership, protected present non-NULL three-ACE DACLs, exact OI/CI
+allow entries for SYSTEM/Administrators FullControl and the internally resolved
+fixed `NT SERVICE\TraceboltRustAgent` SID. That SID must have exactly
+ReadAndExecute on data and Modify on state, including the normal synchronize bit.
+Unexpected paths, unbound/disposed leases, owners, SIDs, ACLs or uncertain identity
+reject before releasing any handle or enabling this fresh disabled service.
+No caller-supplied path/SID/role authorizes it.
+
+The released state entry is removed from coverage/binding; the same lease cannot
+re-pin its path, case alias or subtree. Binary/data/ancestor handles, the verified
+EXE and package remain pinned through startup. The protected data parent prevents
+ordinary users from replacing the state entry. State is deliberately writable by
+its specific service SID, not immutable against that service's own code. This is
+not general share-write permission, an unlock-and-retry, a health-TMP cleanup or a
+state-recovery/upgrade path. No ACL/account/privilege is broadened. Negative
+handoff fixtures and full installed-service receipt/stop/restart acceptance must
+still pass on the exact integrated head before a native-success claim.
 
 ### Handle-relative protected creation candidate
 
@@ -131,11 +167,13 @@ the relative primitive's positive, identity/ACL, collision, lease, prechanged-pa
 deterministic native-edge and bounded data/attribute-only junction fixtures on
 hosted Windows Server 2025/NTFS, with no artifact in an own redirection target
 ([native job](https://github.com/storminator89/Tracebolt/actions/runs/41315623739/job/124874921439)).
-Those source/native primitive results motivate this stricter relative-only
-integration; they did **not** establish an installed agent (that head deliberately
-retained the old `274` rejection). The integrated controller's negative/synthetic
-classification, real-handle eligibility and full unchanged-ACL installed-service
-acceptance must still run on its exact new head. No Windows 10/11, PowerShell 5.1,
+Those source/native primitive results motivated the relative-only integration;
+they did **not** establish an installed agent (that head deliberately retained
+the old `274` rejection). Subsequent head `2c20f728` passed the integrated
+negative/synthetic classification, real-handle eligibility and primitive fixtures,
+installed the service and reached activation/mTLS/basic metrics, but failed the
+local-receipt gate described above. The handoff candidate's full unchanged-ACL
+installed-service acceptance remains pending. No Windows 10/11, PowerShell 5.1,
 arbitrary-filter, complete race matrix, full parity or user-host acceptance follows.
 
 An unsafe allow ACE reports `INSTALL_PARENT_ACL_UNSAFE` with only a fixed parent

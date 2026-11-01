@@ -123,6 +123,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Optional invitation claim failed. Service remains disabled; state retained. Retry the claim-invitation command with hidden local input.' }
     }
     Invoke-SC -Arguments @('failure',$name,'reset=','86400','actions=','restart/60000/restart/60000/restart/60000')
+    # A full-path atomic health rename needs FILE_ADD_FILE on its destination
+    # directory. Hand off only the exact, finally protected state leaf before
+    # enabling the first service cycle; all other pins remain held. A failed
+    # protection check must leave this fresh service disabled, not auto-startable.
+    $targetLease.HandoffRuntimeStateForServiceStart()
     Invoke-SC -Arguments @('config',$name,'start=','delayed-auto')
     Start-Service -Name $name
     Write-Host 'Service started. Automatic onboarding needs no token. Review the new device and its public key fingerprint in the manager; after approval reporting starts automatically. Confirm a fresh accepted report, not only service uptime.'

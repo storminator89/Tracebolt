@@ -9,6 +9,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 namespace Tracebolt {
@@ -188,6 +189,7 @@ namespace Tracebolt {
         private readonly object gate = new object();
         private readonly Dictionary<string, SafeFileHandle> handles = new Dictionary<string, SafeFileHandle>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> createdChildren = new Dictionary<string, string>(StringComparer.Ordinal);
+        private string handedOffState;
         private bool disposed;
         private InstallDirectoryLease() { }
         private static string Canonical(string path) {
@@ -266,8 +268,12 @@ namespace Tracebolt {
         public void Pin(string path) {
             lock (gate) {
             if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+            string requested = Canonical(path);
+            if (handedOffState != null && (string.Equals(requested, handedOffState, StringComparison.OrdinalIgnoreCase) ||
+                requested.StartsWith(handedOffState + "\\", StringComparison.OrdinalIgnoreCase)))
+                throw new IOException("RUNTIME_STATE_ALREADY_HANDED_OFF");
             var chain = new List<string>();
-            var current = new DirectoryInfo(Canonical(path));
+            var current = new DirectoryInfo(requested);
             while (current != null) { chain.Insert(0, Canonical(current.FullName)); current = current.Parent; }
             foreach (string ancestor in chain) {
                 SafeFileHandle handle;
@@ -358,6 +364,67 @@ namespace Tracebolt {
                         RustInstallerPath.FinalDirectoryPath(handles[full]) != RustInstallerPath.FinalDirectoryPath(actual))
                         throw new IOException("BOUND_CHILD_PATH_MISMATCH");
                 }
+            }
+        }
+        private static void RequireServiceDirectoryProtection(byte[] bytes, string serviceSid, uint serviceMask) {
+            if (bytes == null || bytes.Length == 0 || bytes.Length > 65536)
+                throw new IOException("RUNTIME_DIRECTORY_PROTECTION_REQUIRED");
+            var security = new RawSecurityDescriptor(bytes, 0);
+            if (security.Owner == null || security.Owner.Value != "S-1-5-32-544" || security.DiscretionaryAcl == null ||
+                (security.ControlFlags & (ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected)) !=
+                    (ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected) || security.DiscretionaryAcl.Count != 3)
+                throw new IOException("RUNTIME_DIRECTORY_PROTECTION_REQUIRED");
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GenericAce entry in security.DiscretionaryAcl) {
+                var ace = entry as CommonAce;
+                if (ace == null || ace.IsCallback || ace.AceQualifier != AceQualifier.AccessAllowed ||
+                    ace.AceFlags != (AceFlags.ObjectInherit | AceFlags.ContainerInherit))
+                    throw new IOException("RUNTIME_DIRECTORY_PROTECTION_REQUIRED");
+                string sid = ace.SecurityIdentifier.Value;
+                uint expected;
+                if (sid == "S-1-5-18" || sid == "S-1-5-32-544") expected = 0x001f01ffu;
+                else if (sid == serviceSid) expected = serviceMask;
+                else throw new IOException("RUNTIME_DIRECTORY_PROTECTION_REQUIRED");
+                if (unchecked((uint)ace.AccessMask) != expected || !seen.Add(sid))
+                    throw new IOException("RUNTIME_DIRECTORY_PROTECTION_REQUIRED");
+            }
+            if (!seen.Contains(serviceSid)) throw new IOException("RUNTIME_DIRECTORY_PROTECTION_REQUIRED");
+        }
+        public void HandoffRuntimeStateForServiceStart() {
+            lock (gate) {
+                if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+                if (handedOffState != null) throw new IOException("RUNTIME_STATE_ALREADY_HANDED_OFF");
+                // No caller-supplied path, SID or role can authorize this transition.
+                string data = Canonical(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "TraceboltRust"));
+                string bin = Canonical(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Tracebolt Rust"));
+                string state = Canonical(Path.Combine(data, "state"));
+                RequireBoundChild(bin);
+                RequireBoundChild(data);
+                RequireBoundChild(state);
+                ReviewForCreation(bin);
+                ReviewForCreation(data);
+                string serviceSid = ((SecurityIdentifier)new NTAccount("NT SERVICE\\TraceboltRustAgent").Translate(typeof(SecurityIdentifier))).Value;
+                // Read the actual retained objects after final installer ACL setup.
+                RequireServiceDirectoryProtection(RustInstallerPath.DirectorySecurityBytes(handles[data]), serviceSid, 0x001200a9u);
+                RequireServiceDirectoryProtection(RustInstallerPath.DirectorySecurityBytes(handles[state]), serviceSid, 0x001301bfu);
+                ReleaseBoundStateCore(data, state);
+            }
+        }
+        private void ReleaseBoundStateCore(string dataPath, string statePath) {
+            lock (gate) {
+                if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+                if (handedOffState != null) throw new IOException("RUNTIME_STATE_ALREADY_HANDED_OFF");
+                string data = Canonical(dataPath), state = Canonical(statePath);
+                var parent = new DirectoryInfo(state).Parent;
+                if (parent == null || Canonical(parent.FullName) != data || Path.GetFileName(state) != "state" || !Covers(data))
+                    throw new IOException("BOUND_RUNTIME_STATE_REQUIRED");
+                RequireBoundChild(state);
+                SafeFileHandle leaf = handles[state];
+                handles.Remove(state);
+                createdChildren.Remove(data);
+                handedOffState = state;
+                // Only this leaf is released. Data/binary/ancestor handles stay pinned.
+                leaf.Dispose();
             }
         }
         public void Dispose() {

@@ -374,6 +374,125 @@ try {
             else { Write-Host 'RELATIVE_BOUNDED_ATTRIBUTE_FLIP_SAMPLING_ORIGINAL_ROOT_OR_REFUSAL_PASS' }
         } else { Write-Host 'RELATIVE_ATTRIBUTE_REPARSE_UNSUPPORTED_NOT_TESTED' }
     }
+    # State-only handoff bookkeeping in owned TEMP. Private namespace/release
+    # cores deliberately isolate mechanics from production KnownFolder/ACL gates.
+    $failureStage = 'state-handoff-fixture'
+    $p = New-RelativeParent; $stateParent = Join-Path $p 'state'
+    $releaseCore = [Tracebolt.InstallDirectoryLease].GetMethod('ReleaseBoundStateCore',
+        [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Instance,
+        $null, [type[]]@([string], [string]), $null)
+    Assert-Relative ($null -ne $releaseCore) 'RELATIVE_HANDOFF_CORE_MISSING'
+    $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($p))
+    try {
+        [void]$namespaceCore.Invoke($lease, [object[]]@([string]$stateParent))
+        $subtree = Join-Path $stateParent 'owned-child'
+        [IO.Directory]::CreateDirectory($subtree) | Out-Null
+        $sourceLeaf = Join-Path $stateParent 'health-v1.tmp'; $targetLeaf = Join-Path $stateParent 'health-v1.json'
+        [IO.File]::WriteAllBytes($sourceLeaf, $inertBytes)
+        $rejected = $false
+        try { $lease.HandoffRuntimeStateForServiceStart() } catch { $rejected = $true }
+        Assert-Relative ($rejected -and $lease.Covers($p) -and $lease.Covers($stateParent) -and $lease.HasBoundChild($p)) 'RELATIVE_UNRELATED_HANDOFF_DROPPED_PROOF'
+        foreach ($badPair in @(@($p, (Join-Path $p 'TraceboltRust')), @($root, $stateParent), @($p, $subtree))) {
+            $rejected = $false
+            try { [void]$releaseCore.Invoke($lease, [object[]]@([string]$badPair[0], [string]$badPair[1])) } catch { $rejected = $true }
+            Assert-Relative ($rejected -and $lease.Covers($stateParent) -and $lease.HasBoundChild($p)) 'RELATIVE_HANDOFF_INVALID_CORE_DROPPED_PROOF'
+        }
+        Assert-Relative ([Tracebolt.RelativeDirectoryFixture]::TryRenameOwnedFixture($sourceLeaf,$targetLeaf) -eq 32) 'RELATIVE_HANDOFF_PRECONDITION_RENAME_NOT_BLOCKED'
+        [void]$releaseCore.Invoke($lease, [object[]]@([string]$p, [string]$stateParent))
+        Assert-Relative ($lease.Covers($p) -and !$lease.Covers($stateParent) -and !$lease.HasBoundChild($p)) 'RELATIVE_HANDOFF_STATE_ONLY_RELEASE_FAILED'
+        $rejected = $false
+        try { $lease.RequireBoundChild($stateParent) } catch { $rejected = $true }
+        Assert-Relative $rejected 'RELATIVE_HANDOFF_RETAINED_STATE_AUTHORITY'
+        $renamed = $false
+        try { [IO.Directory]::Move($p, ($p + '-renamed')); $renamed = $true } catch { }
+        Assert-Relative (!$renamed -and [IO.Directory]::Exists($p)) 'RELATIVE_HANDOFF_PARENT_NOT_PINNED'
+        Assert-Relative ([Tracebolt.RelativeDirectoryFixture]::TryRenameOwnedFixture($sourceLeaf,$targetLeaf) -eq 0) 'RELATIVE_HANDOFF_HEALTH_RENAME_FAILED'
+        Assert-Relative (![IO.File]::Exists($sourceLeaf) -and [IO.File]::Exists($targetLeaf)) 'RELATIVE_HANDOFF_HEALTH_NAMES_CHANGED'
+        Assert-Relative ([Convert]::ToBase64String([IO.File]::ReadAllBytes($targetLeaf)) -ceq [Convert]::ToBase64String($inertBytes)) 'RELATIVE_HANDOFF_HEALTH_BYTES_CHANGED'
+        foreach ($repin in @($stateParent, (Join-Path $p 'STATE'), $subtree)) {
+            $rejected = $false
+            try { $lease.Pin($repin) } catch { $rejected = $true }
+            Assert-Relative ($rejected -and !$lease.Covers($stateParent)) 'RELATIVE_HANDOFF_STATE_REPIN_ACCEPTED'
+        }
+        $rejected = $false
+        try { [void]$releaseCore.Invoke($lease, [object[]]@([string]$p, [string]$stateParent)) } catch { $rejected = $true }
+        Assert-Relative $rejected 'RELATIVE_HANDOFF_REPEAT_RELEASE_ACCEPTED'
+    } finally { $lease.Dispose() }
+    $rejected = $false
+    try { $lease.HandoffRuntimeStateForServiceStart() } catch { $rejected = $true }
+    Assert-Relative $rejected 'RELATIVE_DISPOSED_HANDOFF_ACCEPTED'
+    $rejected = $false
+    try { [void]$releaseCore.Invoke($lease, [object[]]@([string]$p, [string]$stateParent)) } catch { $rejected = $true }
+    Assert-Relative $rejected 'RELATIVE_DISPOSED_HANDOFF_CORE_ACCEPTED'
+    Write-Host 'RELATIVE_STATE_ONLY_HANDOFF_PARENT_PINNED_RENAME_AND_NO_REPIN_PASS'
+    $unboundParent = New-RelativeParent; $unboundState = Join-Path $unboundParent 'state'
+    [IO.Directory]::CreateDirectory($unboundState) | Out-Null
+    $unboundLease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($unboundParent))
+    try {
+        $rejected = $false
+        try { [void]$releaseCore.Invoke($unboundLease, [object[]]@([string]$unboundParent, [string]$unboundState)) } catch { $rejected = $true }
+        Assert-Relative ($rejected -and $unboundLease.Covers($unboundParent) -and !$unboundLease.Covers($unboundState) -and !$unboundLease.HasBoundChild($unboundParent)) 'RELATIVE_UNBOUND_EXACT_STATE_HANDOFF_ACCEPTED'
+        Assert-Relative ([IO.Directory]::Exists($unboundState) -and @([IO.Directory]::EnumerateFileSystemEntries($unboundState)).Count -eq 0) 'RELATIVE_UNBOUND_EXACT_STATE_CHANGED'
+    } finally { $unboundLease.Dispose() }
+    Write-Host 'RELATIVE_UNBOUND_EXACT_STATE_HANDOFF_REJECTED_PASS'
+
+
+    # Pure descriptor fixtures: no Set-Acl, real service lookup or ACL writes.
+    $failureStage = 'state-handoff-descriptor-fixture'
+    $protectionCore = [Tracebolt.InstallDirectoryLease].GetMethod('RequireServiceDirectoryProtection',
+        [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Static,
+        $null, [type[]]@([byte[]], [string], [uint32]), $null)
+    Assert-Relative ($null -ne $protectionCore) 'RELATIVE_SERVICE_PROTECTION_CORE_MISSING'
+    $fixtureServiceSid = 'S-1-5-80-1-2-3-4-5'
+    function Assert-ServiceProtectionFixture($Descriptor, [uint32]$Mask, [bool]$Expected) {
+        $bytes = New-Object byte[] $Descriptor.BinaryLength
+        $Descriptor.GetBinaryForm($bytes, 0)
+        $accepted = $true
+        try { [void]$protectionCore.Invoke($null, [object[]]@([byte[]]$bytes, [string]$fixtureServiceSid, [uint32]$Mask)) }
+        catch { $accepted = $false }
+        Assert-Relative ($accepted -eq $Expected) 'RELATIVE_SERVICE_PROTECTION_CLASSIFICATION_MISMATCH'
+    }
+    foreach ($mask in @([uint32]0x1200a9, [uint32]0x1301bf)) {
+        $maskText = '0x{0:x}' -f $mask
+        $baseAces = '(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+        $serviceAce = "(A;OICI;$maskText;;;$fixtureServiceSid)"
+        $validSddl = 'O:BAG:BAD:P' + $baseAces + $serviceAce
+        Assert-ServiceProtectionFixture ([Security.AccessControl.RawSecurityDescriptor]::new($validSddl)) $mask $true
+        $negativeSddl = @(
+            ('O:SYG:BAD:P' + $baseAces + $serviceAce),
+            'O:BAG:BAD:NO_ACCESS_CONTROL',
+            ('O:BAG:BAD:' + $baseAces + $serviceAce),
+            ('O:BAG:BAD:P' + $baseAces),
+            ($validSddl + '(A;OICI;FR;;;BU)'),
+            ('O:BAG:BAD:P' + $baseAces + "(A;OICI;$maskText;;;S-1-5-80-5-4-3-2-1)"),
+            ('O:BAG:BAD:P' + $baseAces + "(A;OICI;FA;;;$fixtureServiceSid)"),
+            ('O:BAG:BAD:P' + $baseAces + "(A;CI;$maskText;;;$fixtureServiceSid)"),
+            ('O:BAG:BAD:P' + $baseAces + "(A;OICIIO;$maskText;;;$fixtureServiceSid)"),
+            ('O:BAG:BAD:P' + $baseAces + "(D;OICI;$maskText;;;$fixtureServiceSid)"),
+            ('O:BAG:BAD:P' + $baseAces + '(A;OICI;FA;;;BA)')
+        )
+        foreach ($sddl in $negativeSddl) {
+            Assert-ServiceProtectionFixture ([Security.AccessControl.RawSecurityDescriptor]::new($sddl)) $mask $false
+        }
+        foreach ($form in @('callback', 'object')) {
+            $descriptor = [Security.AccessControl.RawSecurityDescriptor]::new($validSddl)
+            $sid = [Security.Principal.SecurityIdentifier]::new($fixtureServiceSid)
+            $flags = [Security.AccessControl.AceFlags]::ObjectInherit -bor [Security.AccessControl.AceFlags]::ContainerInherit
+            if ($form -eq 'callback') {
+                $ace = [Security.AccessControl.CommonAce]::new($flags,
+                    [Security.AccessControl.AceQualifier]::AccessAllowed, [int]$mask, $sid, $true, [byte[]]@())
+            } else {
+                $ace = [Security.AccessControl.ObjectAce]::new($flags,
+                    [Security.AccessControl.AceQualifier]::AccessAllowed, [int]$mask, $sid,
+                    [Security.AccessControl.ObjectAceFlags]::None, [Guid]::Empty, [Guid]::Empty, $false, [byte[]]@())
+            }
+            $acl = [Security.AccessControl.RawAcl]::new(4, 3)
+            $acl.InsertAce(0, $descriptor.DiscretionaryAcl[0]); $acl.InsertAce(1, $descriptor.DiscretionaryAcl[1]); $acl.InsertAce(2, $ace)
+            $descriptor.DiscretionaryAcl = $acl
+            Assert-ServiceProtectionFixture $descriptor $mask $false
+        }
+    }
+    Write-Host 'RELATIVE_SERVICE_HANDOFF_DESCRIPTOR_ONLY_POLICY_PASS'
 } catch {
     # Avoid emitting raw exception paths, ACLs, IDs, or OS diagnostic details.
     $cause = $_.Exception.GetBaseException()
