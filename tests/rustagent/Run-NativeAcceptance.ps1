@@ -25,6 +25,75 @@ $fixtureExe = Join-Path $temporary 'nativefixture.exe'
 $fixture = $null
 $stagingAuthorized = $false
 $result = @{schemaVersion='tracebolt.rust-native-acceptance.v1'; status='failed'; platform='windows'; packagedArtifact=$false; install=$false; activated=$false; mutualTLS=$false; nativeMetrics=$false; localReceipt=$false; boundedStop=$false; stopMilliseconds=$null; restart=$false; removal=$false; rebootTested=$false; productionLinuxManager=$false}
+$result.localDiagnosticState = 'not-observed'; $result.localAttemptResult = 'not-observed'
+$result.localReceiptPresent = $false; $result.localReceiptAtLeastPeerSequence = $false; $result.localAttemptAccepted = $false
+$result.healthLockFile = 'not-probed'; $result.healthSnapshotFile = 'not-probed'; $result.healthTemporaryFile = 'not-probed'
+$result.healthFileProbeComplete = $false
+function ConvertTo-NativeEvidenceHealthCode([object]$Value) {
+    # Return only source-fixed vocabulary, never an unknown status value/prose.
+    foreach ($code in @(
+        'not-observed','attempt-in-progress','attempt-interrupted','registration-pending','pending-approval','accepted',
+        'receipt-stale','certificate-expiring','configuration-invalid','state-unavailable','state-corrupt','clock-invalid',
+        'collection-failed','transport-timeout','transport-dns-failed','transport-tls-failed','transport-connection-refused',
+        'transport-unreachable','transport-unclassified','authentication-rejected','manager-rejected','protocol-unavailable',
+        'receipt-invalid','certificate-expired','certificate-not-yet-valid','enrollment-expired','enrollment-revoked',
+        'enrollment-terminated','unclassified-failure','health-unavailable'
+    )) {
+        if ($Value -is [string] -and $Value -ceq $code) { return $code }
+    }
+    return 'unrecognized'
+}
+function Get-NativeReceiptEvidence([object]$Local, [object]$Accepted) {
+    # Observations only. The original acceptance assertions below stay unchanged.
+    # Neither receipt identity/sequence/time nor raw status JSON is exported.
+    return @{
+        localDiagnosticState = ConvertTo-NativeEvidenceHealthCode $Local.state
+        localAttemptResult = ConvertTo-NativeEvidenceHealthCode $Local.lastAttemptResult
+        localReceiptPresent = [bool]($null -ne $Local.lastAcceptedReceipt)
+        localReceiptAtLeastPeerSequence = [bool]($Local.lastAcceptedReceipt.sequence -ge $Accepted.sequence)
+        localAttemptAccepted = [bool]($Local.lastAttemptResult -eq 'accepted')
+    }
+}
+function ConvertTo-NativeHealthFileOutcome([object]$Attributes, [Exception]$Failure = $null) {
+    if ($null -ne $Failure) {
+        $cause = $Failure.GetBaseException()
+        if ($cause -is [IO.FileNotFoundException] -or $cause -is [IO.DirectoryNotFoundException]) { return 'missing' }
+        if ($cause -is [UnauthorizedAccessException]) { return 'denied' }
+        if ($cause -is [ComponentModel.Win32Exception]) {
+            if ($cause.NativeErrorCode -in @(2,3)) { return 'missing' }
+            if ($cause.NativeErrorCode -eq 5) { return 'denied' }
+        }
+        return 'unavailable'
+    }
+    if ($Attributes -isnot [IO.FileAttributes]) { return 'unavailable' }
+    if ($Attributes -band [IO.FileAttributes]::ReparsePoint) { return 'reparse' }
+    if ($Attributes -band [IO.FileAttributes]::Directory) { return 'not-file' }
+    return 'ordinary-file'
+}
+function Get-NativeHealthFileEvidence([string]$DataDirectory) {
+    $observed = @{healthLockFile='unavailable'; healthSnapshotFile='unavailable'; healthTemporaryFile='unavailable'; healthFileProbeComplete=$false}
+    $lease = $null
+    try {
+        # This caller has already installed into paths confirmed absent on this
+        # disposable runner. Retain ordinary no-follow ancestors during these
+        # metadata-only leaf queries; never traverse a reparse parent or read bytes.
+        $state = Join-Path $DataDirectory 'state'
+        $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($state))
+        foreach ($pair in @(@('healthLockFile','health-v1.lock'), @('healthSnapshotFile','health-v1.json'), @('healthTemporaryFile','health-v1.tmp'))) {
+            try {
+                $attributes = [IO.File]::GetAttributes((Join-Path $state $pair[1]))
+                $observed[$pair[0]] = ConvertTo-NativeHealthFileOutcome $attributes
+            } catch { $observed[$pair[0]] = ConvertTo-NativeHealthFileOutcome $null $_.Exception }
+        }
+        $observed.healthFileProbeComplete = @($observed.healthLockFile,$observed.healthSnapshotFile,$observed.healthTemporaryFile |
+            Where-Object { $_ -cnotin @('ordinary-file','missing') }).Count -eq 0
+    } catch {
+        # Parent/lease failure is not proof that any leaf is absent.
+        $parent = ConvertTo-NativeHealthFileOutcome $null $_.Exception
+        if ($parent -ceq 'denied') { foreach ($field in @('healthLockFile','healthSnapshotFile','healthTemporaryFile')) { $observed[$field] = 'denied' } }
+    } finally { if ($null -ne $lease) { $lease.Dispose() } }
+    return $observed
+}
 function Read-OptionalJson([string]$Path) {
     if (!(Test-Path -LiteralPath $Path)) { return $null }
     try { return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json } catch { return $null }
@@ -42,13 +111,20 @@ function Wait-ForJson([string]$Path, [scriptblock]$Accept, [int]$Seconds) {
 try {
     $installer = Join-Path $repo 'deploy/windows-rust/Install-Tracebolt.ps1'
     $uninstaller = Join-Path $repo 'deploy/windows-rust/Uninstall-Tracebolt.ps1'
+    if ($Executable) {
+        # The executable-only developer entry point must also use a fresh exact
+        # package, never bypass the installer's manifest/namespace validation.
+        $prepared = Join-Path $temporary 'developer-package'
+        & (Join-Path $repo 'deploy/windows-rust/Write-Package.ps1') -Executable $Executable -OutputDirectory $prepared
+        $PackageArchive = "$prepared.zip"
+    }
     if ($PackageArchive) {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $expected = @('Install-Tracebolt.ps1','README.md','SHA256SUMS.txt','Uninstall-Tracebolt.ps1','tracebolt-windows-agent.exe') | Sort-Object
+        $expected = @('Install-Tracebolt.ps1','Package-Preflight.ps1','README.md','SHA256SUMS.txt','Uninstall-Tracebolt.ps1','tracebolt-windows-agent.exe') | Sort-Object
         $zip = [IO.Compression.ZipFile]::OpenRead($PackageArchive)
         try {
             $names = @($zip.Entries | ForEach-Object { $_.FullName } | Sort-Object)
-            if (($names -join '|') -cne ($expected -join '|')) { throw 'Package must contain only the exact five root-level entries.' }
+            if (($names -join '|') -cne ($expected -join '|')) { throw 'Package must contain only the exact six root-level entries.' }
         } finally { $zip.Dispose() }
         $packageDirectory = Join-Path $temporary 'package'
         Expand-Archive -LiteralPath $PackageArchive -DestinationPath $packageDirectory
@@ -61,7 +137,7 @@ try {
             if ((Get-FileHash -LiteralPath (Join-Path $packageDirectory $name) -Algorithm SHA256).Hash.ToLowerInvariant() -cne $hash) { throw 'Package checksum mismatch.' }
             $seen[$name] = $true
         }
-        if ($seen.Count -ne 4) { throw 'Package checksums are incomplete.' }
+        if ($seen.Count -ne 5) { throw 'Package checksums are incomplete.' }
         $Executable = Join-Path $packageDirectory 'tracebolt-windows-agent.exe'
         $installer = Join-Path $packageDirectory 'Install-Tracebolt.ps1'
         $uninstaller = Join-Path $packageDirectory 'Uninstall-Tracebolt.ps1'
@@ -100,6 +176,8 @@ try {
     do {
         $local = (& $Executable status --directory $dataDirectory --json) | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0) { throw 'Local receipt diagnostics command failed.' }
+        $receiptEvidence = Get-NativeReceiptEvidence $local $accepted
+        foreach ($field in $receiptEvidence.Keys) { $result[$field] = $receiptEvidence[$field] }
         if ($local.lastAcceptedReceipt.sequence -ge $accepted.sequence -and $local.lastAttemptResult -eq 'accepted') { break }
         Start-Sleep -Milliseconds 250
     } while ([DateTime]::UtcNow -lt $deadline)
@@ -127,6 +205,14 @@ try {
     if (Get-Service $serviceName -ErrorAction SilentlyContinue) { throw 'Service removal did not complete.' }
     $result.removal=$true; $result.status='passed'
 } finally {
+    # Observe only our freshly installed CI paths, before the existing cleanup.
+    # A probe failure must neither become "missing" nor skip that cleanup.
+    if ($result.install) {
+        try {
+            $healthFiles = Get-NativeHealthFileEvidence $dataDirectory
+            foreach ($field in $healthFiles.Keys) { $result[$field] = $healthFiles[$field] }
+        } catch { $result.healthFileProbeComplete = $false }
+    }
     if ($stagingAuthorized) {
         $service = Get-Service $serviceName -ErrorAction SilentlyContinue
         if ($service) {

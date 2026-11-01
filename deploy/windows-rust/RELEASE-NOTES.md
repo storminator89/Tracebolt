@@ -11,7 +11,13 @@ Download and extract **windows-rust.zip**. Run its `Install-Tracebolt.ps1` as
 administrator with `-ManagerOrigin <operator HTTPS origin> -AcknowledgeBasicMetrics`.
 For a private server CA, also provide `-ServerCAFile <protected CA PEM>`.
 Read the included README before installation. The standalone EXE is provided too;
-the ZIP includes the installation scripts.
+the ZIP includes the installation scripts. The installer now requires all six
+package files together, including `Package-Preflight.ps1` and `SHA256SUMS.txt`,
+and checks hashes/AMD64 PE format before invoking the EXE. Keep separately
+protected CA/bootstrap/credential inputs outside the package directory.
+Unsigned matching checksums do not authenticate the publisher or establish code
+safety; independently verify/review the selected release first. Package/path
+checks do not claim the full native negative-installation matrix is accepted.
 
 Download **manager-linux-amd64.tar.gz** from this same release for the matching Linux manager and frontend. Extract it, review its included `docs/installation.md`, and start the manager from the extracted directory with approved protected configuration. The manager is not configured or started automatically. Set the protected LAN configuration's `webDirectory` to the absolute path of the extracted `web` directory; use the actual CLI flags documented in the included runbook.
 

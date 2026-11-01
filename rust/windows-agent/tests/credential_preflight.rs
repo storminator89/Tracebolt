@@ -446,8 +446,8 @@ fn preprovided_inputs_precede_installer_and_sender_mutations() {
             "if ($mode -eq 'preprovided') { $validationArguments += '--credential-directory',$CredentialDirectory }",
             "& $Executable @validationArguments",
             "if ($LASTEXITCODE -ne 0)",
+            "New-TraceboltProtectedDirectory $bin",
             "New-Service -Name",
-            "New-Item -ItemType Directory",
         ],
     );
     let main = include_str!("../src/main.rs");
