@@ -147,6 +147,49 @@ The attestation binds this manifest to the specific build workflow. It does not
 prove that two independent builds are byte-identical, and it does not substitute
 for reviewing the source, dependencies, workflow or actual runtime behavior.
 
+### Deterministic candidate SBOM review evidence (source increment)
+
+The standalone `deploy/release/build-candidate-evidence.py` can be run manually
+against the exact assets of an existing locally built candidate. Its separate
+output directory contains eight per-binary [CycloneDX 1.6 JSON](https://cyclonedx.org/docs/1.6/json/)
+SBOMs and `candidate-evidence.json`. The report binds the source SHA, existing
+manifest SHA256, all nine candidate byte hashes/sizes, source-archive `go.mod` and
+`go.sum` hashes, and every SBOM hash/size. Repeating inspection of the same bytes
+produces identical documents: no timestamps, absolute paths or random identifiers
+are included. This is deterministic evidence generation, not proof of reproducible
+binary builds.
+
+```sh
+python3 -I -B deploy/release/build-candidate-evidence.py \
+  --candidate "$CANDIDATE_DIRECTORY" --version "$CANDIDATE_VERSION" \
+  --source-commit "$CANDIDATE_SOURCE_COMMIT" --output "$NEW_EVIDENCE_DIRECTORY"
+```
+
+Both directory paths must be absolute; the output must be new and outside the
+candidate directory. Select the full source SHA and version of that actual
+candidate. The script creates no candidate build, signature or release.
+
+The inspector uses [`go version -m -json`](https://pkg.go.dev/cmd/go#hdr-Print_Go_version)
+to read, **not execute**, each binary. It rejects mismatched source/toolchain,
+dirty VCS metadata, wrong target/CGO/trimpath settings, replaced or duplicate
+modules, and module checksums absent from the archived `go.sum`. Only two fixed
+regular archive members are read in memory; no source paths are extracted. Go
+`h1` module sums are recorded as properties, never mislabeled as archive SHA256.
+SBOMs identify embedded Go modules and the compiler version; they explicitly
+mark completeness as incomplete and do not invent module dependency edges,
+standard-library package inventories, licenses or vulnerability verdicts.
+
+This output is **unsigned review evidence**, not authenticated public-release
+provenance. No workflow, CI gate or automatic evidence upload is added; the
+existing candidate build, keyless manifest verification and publication contract
+remain unchanged. Keep the output outside the exact publication input: the
+strict publisher intentionally rejects extra files. The bootstrap, historical
+rc.1/rc.2/rc.3 bytes, runtime targets and dashboard pins are unchanged. No SBOMs
+have been added to existing public releases. Release-wide
+signed SBOM publication/readback, the other platform artifacts, mandatory-job
+matrix and actual separately authorized repository rulesets remain open work in
+[#152](https://github.com/storminator89/Tracebolt/issues/152).
+
 The rc.3 manifest contains all nine program/source assets plus three public
 bootstrap/provenance files. The combined read-admin path selects the separate
 helper explicitly; an ordinary install or upgrade does not grant that scope.
