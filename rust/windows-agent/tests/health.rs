@@ -483,6 +483,7 @@ fn extreme_strict_schema_times_fail_closed_without_panicking_or_repairing() {
 #[test]
 fn typed_transport_results_round_trip_without_refreshing_receipts_or_exporting_causes() {
     for code in [
+        Code::TransportDnsFailed,
         Code::TransportTlsFailed,
         Code::TransportConnectionRefused,
         Code::TransportUnreachable,
@@ -528,5 +529,49 @@ fn typed_transport_results_round_trip_without_refreshing_receipts_or_exporting_c
         ] {
             assert!(!bundle.contains(private));
         }
+    }
+}
+
+#[test]
+fn expired_retained_certificate_does_not_hide_current_failure_or_its_next_action() {
+    for code in [
+        Code::StateCorrupt,
+        Code::StateUnavailable,
+        Code::ConfigurationInvalid,
+        Code::EnrollmentRevoked,
+        Code::EnrollmentExpired,
+        Code::TransportDnsFailed,
+        Code::TransportTlsFailed,
+        Code::TransportTimeout,
+        Code::ProtocolUnavailable,
+        Code::AuthenticationRejected,
+        Code::ReceiptInvalid,
+    ] {
+        let root = fixture();
+        let mut tracker = open_tracker(root.path());
+        tracker.attempt(now()).unwrap();
+        tracker
+            .complete(
+                Code::Accepted,
+                Some(accepted()),
+                now(),
+                0,
+                Duration::from_secs(60),
+                Some(now() + ChronoDuration::minutes(1)),
+            )
+            .unwrap();
+        let original = encoded(root.path(), now());
+        let later = now() + ChronoDuration::minutes(2);
+        tracker.startup_failure(code, later).unwrap();
+        let failed = encoded(root.path(), later);
+        assert_eq!(failed["state"], code.as_str());
+        assert_eq!(failed["lastAttemptResult"], code.as_str());
+        assert_eq!(failed["nextAction"], code.next_action());
+        assert_eq!(failed["certificateStatus"], "expired");
+        assert_eq!(
+            failed["lastAcceptedReceipt"],
+            original["lastAcceptedReceipt"]
+        );
+        assert_eq!(failed["receiptObservedAt"], original["receiptObservedAt"]);
     }
 }

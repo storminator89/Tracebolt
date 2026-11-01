@@ -34,15 +34,35 @@ impl Runtime {
     }
     fn open_with_health(directory: &Path, health_requested: bool) -> Result<Self> {
         let config = Config::load(directory).context(Code::ConfigurationInvalid)?;
-        let health = if health_requested {
-            Tracker::open(directory, &config).ok()
+        let mut health = if health_requested {
+            Tracker::open_runtime(directory, &config).ok()
         } else {
             None
         };
-        let (enrollment, sender) = if config.enrollment_mode == EnrollmentMode::Preprovided {
-            (None, Some(Sender::open(directory, false)?))
+        let started_at = chrono::Utc::now();
+        let opened = if config.enrollment_mode == EnrollmentMode::Preprovided {
+            Sender::open(directory, false).map(|sender| (None, Some(sender)))
         } else {
-            (Some(Enrollment::open(directory, false, None)?), None)
+            Enrollment::open(directory, false, None).map(|enrollment| (Some(enrollment), None))
+        };
+        let (enrollment, sender) = match opened {
+            Ok(opened) => opened,
+            Err(error) => {
+                // Local-open failures with no narrower typed class mean
+                // unavailable/invalid retained state, not a network diagnosis.
+                let code = match health::classify(&error) {
+                    Code::UnclassifiedFailure => Code::StateUnavailable,
+                    code => code,
+                };
+                if let Some(tracker) = health.as_mut().filter(|_| {
+                    error
+                        .downcast_ref::<crate::state::LockUnavailable>()
+                        .is_none()
+                }) {
+                    let _ = tracker.startup_failure(code, started_at);
+                }
+                return Err(error.context(code));
+            }
         };
         Ok(Self {
             enrollment,
