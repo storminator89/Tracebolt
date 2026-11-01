@@ -5,6 +5,10 @@ Reconciled with main `1dd1c4fed3f3368a8b968af1305bca054f012514` after
 #166/#167. The added public Rust compatibility route is included below;
 operator grants and the shared-only administration rows remain unchanged.
 The test inventory is derived from the combined Go tree.
+Session/capability inventory revalidated at main
+`9e72704895c218f3ab63b016532ec74cbcd952d4` (2026-11-01): the explicit
+`manage_sessions` grant and the existing account-scoped session API are included
+below. This correction changes no runtime grants or routes.
 This is the first slice of [TB-06 / #133](https://github.com/storminator89/Tracebolt/issues/133):
 an inventory and regression contract, **not implementation or acceptance of
 personal-account administration**. No permission, role, account, stored record,
@@ -20,7 +24,7 @@ dependency; its work is neither included nor published by this slice.
   of the displayed `read` capability; that display is not a complete grant list.
 - **Named/read** means an authenticated v2 named session with its required,
   explicitly configured `read` grant. **Denied** also applies to a named account
-  holding *all fourteen* currently defined capabilities. There is no admin,
+  holding *all fifteen* currently defined capabilities. There is no admin,
   wildcard, role inheritance or shared-password fallback.
 - **Allowed** is route admission only, not guaranteed success. Correct profile,
   current device/issuer authority, feature configuration, revision, typed body,
@@ -37,24 +41,28 @@ dependency; its work is neither included nor published by this slice.
 
 The LAN boundary in `internal/api/operator.go` first checks actual transport
 (TLS 1.3, or separately configured HTTP-test), exact Host/Origin, canonical paths,
-framing and session expiry/revocation. Except separately capability-gated typed
-action/alarm/application-check endpoints, it then denies named non-read requests
-with `403 operator_capability_required`. The `namedReadRoute` classifier admits
+framing and session expiry/revocation. Except the separately scoped session API
+and capability-gated typed action/alarm/application-check endpoints, it then
+denies named non-read requests with `403 operator_capability_required`. The
+`namedReadRoute` classifier admits
 GET/HEAD and a finite list of read-only POST queries; **classifier admission does
 not make HEAD supported**. The routes below implement GET, not HEAD, and must
 not be described as GET/HEAD APIs. Unsupported methods/paths do not acquire rights.
 JSON writes retain same-origin, CSRF and bounded strict-body requirements.
 
 The current capability inventory is `read`, `plan_updates`, `execute_updates`,
-`restart_service`, `manage_alarms`, `manage_application_checks`,
+`restart_service`, `manage_alarms`, `manage_application_checks`, `manage_sessions`,
 `windows_service_control`, `windows_update_install`, `windows_update_download`,
 `windows_update_schedule`, `windows_software_install`,
 `windows_managed_msi_deliver`, `windows_managed_msi_install` and
-`windows_managed_msi_schedule` (`internal/operatorauth/operators.go`). Only
-`read` admits the named reads below. The other thirteen grants are for separate
-typed maintenance/alarm/application-check routes, **not** any shared-only row
-in this matrix. In particular, composing all thirteen does not confer account,
-customer, enrollment, trust, AI or export administration.
+`windows_managed_msi_schedule` (`internal/operatorauth/operators.go`). The required
+`read` admits the ordinary named reads below, including the caller's account-scoped
+session view/revocation. `manage_sessions` separately permits listing/revoking
+other accounts' current sessions; it never changes credentials or future login
+rights. The other thirteen grants are for separate typed
+maintenance/alarm/application-check routes, **not** any shared-only row in this
+matrix. In particular, composing all fourteen non-read grants does not confer
+account provisioning, customer, enrollment, trust, AI or export administration.
 
 ## 1. Enrollment administration (four independent domains)
 
@@ -200,15 +208,21 @@ the 38-route baseline count below deliberately excludes it.
 | `GET /api/auth/session` | R | Anonymous or current session view | Same | Anonymous discloses no names/grants; authenticated named actor comes from immutable server configuration |
 | `POST /api/auth/login` | W/session | Password-only in v1 | Exact username/password in v2 | Strict schema cannot supply actor, role or capabilities; named login never falls back to shared |
 | `POST /api/auth/logout` | W/session | Allowed | Allowed | Current actual session only; Origin/CSRF, revocation and admitted-work drain; does not revoke other sessions |
+| `GET /api/auth/sessions` | R/session | Own shared account | Own named account; all accounts only with explicit `manage_sessions` | Server-held actor scopes the bounded redacted view; actual current session is marked; no credential or username is returned |
+| `POST /api/auth/sessions/revoke` | W/session | Own shared account | Own named account; other accounts only with explicit `manage_sessions` | Exact opaque session selector, current Origin/CSRF and requester admission; missing/inaccessible targets share `revoked:false`; success drains the target admission barrier, with no new durable human audit record |
 | Protected `operatorAuthFile` provisioning/replacement + manager restart | W/account | Local explicitly authorized administration, **not HTTP** | Same | v1/v2 mutually exclusive; static grants; restart invalidates old memory sessions |
-| Account listing/create/update/delete, password reset, grant edit, live reload, per-account session revocation, shared-to-named migration API/UI | W/account | **Absent** | **Absent** | No route or capability exists; do not invent a path or imply availability |
+| Account listing/create/update/delete, password reset, grant edit, live reload, account disablement, shared-to-named migration API/UI | W/account | **Absent** | **Absent** | No route or capability exists; do not invent a path or imply availability |
 
 Evidence: `operator.go`, `internal/operatorauth/{auth,operators}.go`,
 `internal/lanconfig/operators.go`, [named authentication](named-operator-auth.md).
 Account configuration is read from the protected file; loaders do not provision
 users, rewrite credentials or edit host permissions. Actual server-derived actor
 identity is available for named sessions, but session metadata is not an audit
-trail for every success.
+trail for every success. Session listing/revocation is not account provisioning
+or disablement: valid configured credentials may sign in again. There is no
+session-management UI in this source slice. See
+[session fairness and revocation](manager-session-limits.md) for the exact
+limits, static-restart policy and concurrent-drain contract.
 
 ## 6. Local file exports (distinct from external AI transmission)
 
@@ -246,6 +260,8 @@ appropriate. Reject request-supplied identity and recheck current authority at
 dispatch; preserve logout, expiry, revision, replay, revocation and original
 approval floors. Define static-restart and standing-job revocation behavior and
 version any necessary records without adopting/relabeling older authority.
+The existing `manage_sessions` capability is not a precedent for implicit
+customer reads or account/grant editing; those product decisions remain open.
 
 TB-06 remains open until **two separately named administrators plus a restricted
 user** actually administer the reviewed surface without a common password,
@@ -263,17 +279,29 @@ settings/invocation routes. They cover anonymous requests, read-only identity,
 and two distinct identities holding all current grants; forged body authority
 cannot turn a denial into body/feature handling. Positive existing read admission,
 missing-feature truth, actual login actor and unsupported HEAD are separate.
+The contract also verifies exact configured login-grant metadata, the separate
+account-scoped/explicit-all session view, current-actor binding, self-revocation
+and subsequent read denial. The session API regression tests separately cover
+cross-account visibility/revocation, non-disclosure and concurrent admission.
 The fixtures configure no real provider, endpoint, enrollment issuer or customer
 source and grant nothing on a host.
 
 Recorded source-fixture verification on 2026-10-31: the focused command below
 passed with the official Go `1.27.1 linux/amd64` toolchain and race detector
 (`ok localrmm/internal/api 2.553s`). `gofmt`, diff whitespace, static parity of
-all 38 documented denial rows and all 14 source-defined capabilities, and local
-documentation links were checked. No full suite, real provider, installed
+all 38 documented denial rows and the then-recorded 14-capability inventory, and
+local documentation links were checked. No full suite, real provider, installed
 endpoint, browser E2E or production acceptance was run in that local check.
 Automatic PR CI is separate exact-head evidence; a passing source fixture does
 not waive failed UI/browser gates or establish native acceptance.
+
+The 2026-11-01 inventory correction passed the focused contract/session API
+tests and the full `internal/operatorauth` and `internal/lanconfig` test packages
+with the same Go version, linux/amd64 and race detector. Static source/test
+parity confirmed all 15 current capability constants in the all-grants fixture;
+`gofmt`, diff whitespace and the session-documentation links were checked. No
+runtime permission changed and no full repository suite, browser E2E, live
+account configuration, customer disclosure or native acceptance was performed.
 
 Focused check:
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "28a1ef08c5557ac9a8c47d5f50487f145c4e128c7ec969b5e72746d2b480324e",
+  "goSourceSha256": "65656c94f1090b3f5f9df41790e78a506ec8e81bbe048fec4e3c85917dc960eb",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
