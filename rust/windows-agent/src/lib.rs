@@ -1,5 +1,6 @@
 pub mod compatibility;
 pub mod config;
+pub mod credentials;
 pub mod enrollment;
 pub mod enrollment_wire;
 pub mod health;

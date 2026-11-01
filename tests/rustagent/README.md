@@ -7,6 +7,11 @@ source-order contracts only, not PowerShell/SCM execution. Portable Rust
 `tests/installer_preflight.rs` checks bounded public bootstrap semantics and
 rejection before enrollment state/key creation using disposable local inputs;
 see [the bounded preflight contract](../../docs/rust-installer-preflight.md).
+Portable Rust `tests/credential_preflight.rs` similarly checks local preprovided
+certificate/key semantics and exact preservation before CLI/library sender-state
+creation. Its source-order regression checks credential validation placement in
+the installer/CLI/library without executing PowerShell or Windows SCM. It does
+not establish chain approval or native installation acceptance.
 
 `cmd/nativefixture` is a **test-only loopback protocol peer**, not a production
 manager. It uses the production Go enrollment cryptography, issuer, state engine

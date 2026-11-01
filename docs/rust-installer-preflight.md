@@ -1,6 +1,6 @@
-# Rust Windows installer: bounded invitation preflight
+# Rust Windows installer: bounded input preflight
 
-This source candidate addresses the missing invitation-bootstrap portion of
+This source candidate addresses the invitation-bootstrap and local preprovided-input portions of
 [TB-07 / #134](https://github.com/storminator89/Tracebolt/issues/134). It is not a
 claim that every installer or native acceptance criterion is complete.
 
@@ -37,6 +37,35 @@ never reset or promoted.
 
 ## Offline validation is not offline installation
 
+### Preprovided local material
+
+Preprovided `validate-config` now requires `--credential-directory` with the
+existing approved `client.pem` and `client.key`; other modes reject that option.
+The installer forwards it before SCM/directory staging. The bounded read-only
+validator rejects missing/oversized/malformed material, extra key blocks or
+noncertificate data, expired/future certificates, a CA leaf, and a leaf lacking
+digital-signature usage or dedicated client-auth EKU. It accepts at most eight
+certificate blocks, leaf first, with current CA certificates thereafter, and
+rejects duplicate extension OIDs or any extension the parser marks malformed. It
+builds the sender's actual TLS client, so malformed/unsupported or mismatched
+private keys fail locally without sending any request. No file bytes or private
+key are printed. Direct fresh `init` and library sender initialization repeat
+the material checks and TLS construction before opening sender state.
+
+For example, a local-only material check is:
+
+```powershell
+.\tracebolt-windows-agent.exe validate-config --manager-origin 'https://telemetry.example:9444' --mode preprovided --agent-id '<approved-id>' --credential-directory 'C:\Protected\fresh-identity'
+```
+
+Use `--server-ca-file` for separately selected private server trust. Certificate
+chain input is not adopted as server trust. The configured approved ID is not
+derived from a certificate CN/SAN. This bounded check does not verify client
+chain trust, signatures/revocation or the manager's independent exact-certificate
+approval, establish that the identity has never been used, or add a manager
+compatibility claim. Existing runtime opens keep their certificate-expiry
+diagnostics and ledger behavior; no existing identity or state is promoted/reset.
+
 Without `--check-manager`, `validate-config` performs local-only validation.
 Preprovided mode still requires its explicit fresh approved identity and does
 not gain an enrollment-compatibility claim. Automatic/invitation installation
@@ -55,10 +84,21 @@ initialization/reinitialization protection using disposable loopback TLS.
 Go source-order contracts verify installer/CLI/library placement only. These
 tests do not execute PowerShell or Windows SCM and are not native acceptance.
 
+Portable preprovided regressions additionally cover repeated offline validation,
+valid leaf/CA-chain input, wrong mode/missing directory, invalid key/certificate
+shapes, validity, role and pair mismatches, and rejection before CLI/library
+initialization with exact foreign-file/directory preservation. Their additional
+source-order contract checks credential validation before installer/sender
+mutations without executing PowerShell or SCM. Boundary fixtures cover eight
+versus nine certificates and invalid middle-CA validity/extensions. A retained
+expired sender fixture reopens with the same expiry diagnostic, advanced sequence
+and exact pending bytes; stricter fresh checks never reset/adopt that state. The existing
+real loopback mutual-TLS retry/restart test still exercises sender construction.
+
 TB-07 remains open. Native negative tests on an explicitly approved disposable
 Windows target are still required for the complete input matrix and unchanged
 service/directory/key/foreign-file evidence. Strong executable/manifest hash
 binding, reparse-point/parent/ACL/target checks and complete preprovided
-credential semantics are outside this bounded change. There is no new claim
+chain/approval semantics are outside these bounded changes. There is no new claim
 that those broader requirements are complete. No real Windows installation,
 credential/trust change or external device action is authorized by source tests.

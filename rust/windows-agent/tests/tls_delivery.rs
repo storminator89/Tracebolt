@@ -36,6 +36,7 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
     let client_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::new(vec![]).unwrap();
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+    params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
     let client_cert = params.signed_by(&client_key, &issuer).unwrap();
     fs::write(dir.path().join("client.pem"), client_cert.pem()).unwrap();
     fs::write(dir.path().join("client.key"), client_key.serialize_pem()).unwrap();
