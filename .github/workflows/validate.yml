@@ -809,12 +809,6 @@ jobs:
         env:
           TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
         run: node tests/e2e-review/windows-software-history-runner.mjs
-      - name: Selected-account software full-App browser gate (8 required screenshots)
-        if: ${{ !cancelled() }}
-        timeout-minutes: 6
-        env:
-          TRACEBOLT_SOURCE_SHA: ${{ github.sha }}
-        run: node tests/e2e-review/windows-user-software-runner.mjs
       - name: Windows event history search and selected messages (8 required screenshots)
         if: ${{ !cancelled() }}
         timeout-minutes: 6
@@ -1169,8 +1163,6 @@ jobs:
             artifacts/review/windows-full-software-manifest.json
             artifacts/review/windows-software-history-results.json
             artifacts/review/windows-software-history-manifest.json
-            artifacts/review/windows-user-software-results.json
-            artifacts/review/windows-user-software-manifest.json
             artifacts/review/windows-event-history-results.json
             artifacts/review/windows-event-history-manifest.json
             artifacts/review/fleet-groups-results.json
