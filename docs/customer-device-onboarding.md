@@ -8,7 +8,8 @@ invitation-based workflow and native acceptance limits, see
 [installation.md](installation.md), [windows-status.md](windows-status.md) and
 [windows-read-admin-setup.md](windows-read-admin-setup.md).
 
-The current source has a shared-administrator customer catalog and a separate
+The current source has a shared-administrator-writable customer catalog
+(with optional [explicit named reads](named-customer-read.md)) and a separate
 organizational assignment for an **already activated** Windows identity. Its
 existing Windows approval list shows invitation claims without a verified
 customer. See [customer-records.md](customer-records.md). Guided enrollment v2

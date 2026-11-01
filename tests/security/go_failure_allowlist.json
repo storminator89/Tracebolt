@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "3f30f03fe98265b22e7d31e2226cc8409894bfbabec69f13bd00e5b166d36790",
+  "goSourceSha256": "190b6751e3c8975da4bebd44e4445bedc52d3913e646916729020abeb28115df",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -1196,6 +1196,8 @@
       "TestNamedAdministrationContractDenials",
       "TestNamedAdministrationContractReadsRemainDistinct",
       "TestNamedCapabilitySeamRequiresCSRFCurrentSessionAndServerActor",
+      "TestNamedCustomerReadRechecksRevocationAndIssuer",
+      "TestNamedCustomerReadRequiresExactGrantAndNeverWrites",
       "TestNamedHTTPTestKeepsSeparateCookieAndPlaintextWarning",
       "TestNamedLANLoginMetadataAndLegacyCompatibility",
       "TestNamedReadRouteShapeAndCapabilityExpiry",
@@ -3650,6 +3652,7 @@
     ],
     "localrmm/internal/lanconfig": [
       "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
+      "TestCustomerReadRequiresExplicitNamedGrant",
       "TestDarwinReadProtectedUsesDescriptorAndACLPolicy",
       "TestLoadConfigReadsOnlyTheStrictConfiguration",
       "TestMacOSInventoryConfigurationDefaultOffTLSOnly",
@@ -4082,6 +4085,7 @@
       "TestConfigurationFailClosedAndBounded",
       "TestConfiguredAbsentActorsReserveBeforeExhaustion",
       "TestCredentialFailureRateAndConcurrencyBounds",
+      "TestCustomerReadIsIndependentExplicitGrant",
       "TestExpiredAdmittedMutationRetainsActorQuotaUntilDrain",
       "TestExpiryRejectsAdmissionAndCannotReactivateOnClockRollback",
       "TestExpiryReleasesActorAndGlobalCapacityWithoutExtendingTimeout",
