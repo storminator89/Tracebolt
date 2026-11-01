@@ -4,8 +4,10 @@
 This harness is the next bounded acceptance step for the opt-in frontend in
 [`rust/windows-setup`](../../rust/windows-setup/README.md). It is not an installer,
 an enrollment workaround, a release or proof of Rust-agent feature parity.
-No workflow/pipeline is added or changed. Native execution requires separate
-coordination on a selected Windows machine; nothing here authorizes host grants.
+The separately authorized PR201-only CI draft below adds **one inert TLS GUI
+test** to the existing Setup build workflow. It has not been run on Windows.
+Other native execution still requires separate coordination on a selected
+Windows machine; nothing here authorizes host grants.
 
 ## Two different gates
 
@@ -22,7 +24,7 @@ The displayed version explicitly says `INERT_GUI_FIXTURE_NO_HOST_ACTION`.
 There is no production flag, test environment switch or alternate coordinator
 in the released/setup entry. Both extra build tags and an explicit runtime
 fixture acknowledgement are required; ordinary tests/imports are inert. The
-manual driver rejects CI, non-Windows, dirty/mismatched source and an unpinned
+manual driver still rejects CI, non-Windows, dirty/mismatched source and an unpinned
 image. It requires Python isolated/no-bytecode mode and loads its fixed helper
 source directly, never a cached repository `.pyc`.
 
@@ -83,6 +85,77 @@ offered**: normal `WM_WINDOWPOSCHANGING`/minimum-tracking behavior may clamp it,
 so requesting that size would not prove the unavailable-layout path. That path
 remains portable-source coverage only. No production constraint, display setting
 or window procedure is bypassed to manufacture a native pass.
+
+### Separately authorized PR201-only CI source draft (not executed)
+
+The `rust-gui-tls` job in `windows-setup-build.yml` is restricted to this
+repository's **pull request 201** and `pull_request` events. It does not run on
+push, another PR, dispatch, `pull_request_target` or a reusable workflow. The
+existing build job remains unchanged. Contents-read permissions and pinned
+checkout/Go/Python actions remain; no secrets, signing, release, service or
+identity permission is added. No EXE or raw window/child output is uploaded.
+
+`build_ci.py` and `run_ci.py` require a distinct explicit inert-CI acknowledgement,
+the exact repository/workflow path/job/ref, a GitHub-hosted Windows X64 runner
+and matching GitHub source context. CI variables stay present in the child.
+These are configuration guards, **not cryptographic authentication**; the
+reviewed PR-only workflow and exact immutable checkout are the authority.
+The original `run.py` and `TestRustNativeGUIFixture` retain their CI refusal.
+The separate `TestRustNativeGUITLSCI` exists only with the additional
+`tracebolt_setup_gui_ci_fixture` test-build tag; no production entry selects it.
+TLS is hard-coded; there is no CI case or arbitrary test/command selector.
+
+Source means the synthetic PR merge commit (`github.sha`), not the PR head.
+Depth-two checkout, exact HEAD and its ordered base/head parents, clean source,
+tracked compilation/driver input hashes and unchanged source after the run are
+required. The job uses the runner image's existing MinGW compiler only after
+checking its x64 GNU target. Official pinned Rust 1.99.1 plus its GNU target,
+Cargo/Go caches and all build outputs are isolated under `RUNNER_TEMP`; no host
+package installer, shell-profile/global-toolchain change or security setting is
+used. Missing tools or unavailable official downloads fail; no mirror, compiler
+fallback or policy bypass is provided.
+
+The official runner's [toolset](https://raw.githubusercontent.com/actions/runner-images/main/images/windows/toolsets/toolset-2025.json)
+and [MinGW installer](https://raw.githubusercontent.com/actions/runner-images/main/images/windows/scripts/build/Install-Mingw64.ps1)
+select GCC15/UCRT, unlike the local GCC14/MSVCRT cross-build. The finite DLL
+allowlist therefore includes only the specifically evidenced additional Windows
+OS component `ucrtbase.dll` ([MinGW import definition](https://raw.githubusercontent.com/mingw-w64/mingw-w64/master/mingw-w64-crt/lib-common/ucrtbase.def.in),
+[Microsoft UCRT deployment](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170)).
+It does not accept wildcard API sets or libgcc/libwinpthread/libstdc++ runtimes.
+The target triplet and local link do not prove the hosted CRT/import set or
+runtime compatibility; the first native CI build/run still has to establish that.
+
+Before one launch, the builder requires locked dependencies, exact Go 1.27.1,
+repeat Rust archives and test EXEs, actual AMD64/console/zero-timestamp/unsigned
+PE headers, a strict system-DLL-only import list, exact three Go test tags,
+Windows/Cgo target and exact project dependency roots. A closed manifest binds
+source/tree/input, tool-binary/archive/image hashes and repeat-build equality.
+The driver independently rechecks source, manifest, image bytes, PE, tool hash
+and actual Go build-info before the original held-file image leases and PID/
+control/consent/cleanup guards admit the child.
+
+Go `-trimpath` intentionally suppresses recorded linker flags; build-info does
+**not** prove source binding. The reviewed build recipe injects the exact source
+into this test-only image; the driver checks its presence, and the child then
+independently checks/acknowledges that compiled value against its CI context.
+The extra tag changes the EXE: no old manual-fixture digest is accepted by fiat.
+
+This job runs exactly the existing **TLS** unchecked-consent/Back/single-attempt
+memory-hook case. No TLS connection, invitation, persistent key, service, SCM,
+provider read or installer operation exists in that fixture. The interactive
+desktop check remains mandatory: unavailable desktop is `not_accepted` and job
+failure, never a skip/pass. There is no auto-login, session/desktop switch,
+global input, resolution/DPI change or UAC/protection relaxation. Only the own
+inert child can be terminated, under the original bounded cleanup contract.
+One successful future run would prove only that TLS inert-control subset on
+that hosted image. Every original false coverage field, including real Setup,
+hidden console, pixel visibility, enrollment and full Rust-agent parity, stays
+false. Native CI execution and this workflow draft remain unverified here.
+
+Runner/tool/context references: [official Windows 2025 image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md),
+[GitHub default-variable semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/variables),
+and the pinned Go source's `cmd/go/internal/load/pkg.go` build-info handling
+([Go issue 52372](https://go.dev/issue/52372)).
 
 ### B. Actual packaged Setup and matching manager
 

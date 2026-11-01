@@ -29,7 +29,7 @@ func TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations(t *testi
 	order(read("deploy/windows-rust/Install-Tracebolt.ps1"),
 		"if ($mode -eq 'invitation') { $validationArguments += '--bootstrap',$InvitationBootstrap }",
 		"& $Executable @validationArguments", "if ($LASTEXITCODE -ne 0)",
-		"New-Service -Name", "New-Item -ItemType Directory")
+		"New-TraceboltProtectedDirectory $bin", "New-Service -Name")
 	source := read("rust/windows-agent/src/main.rs")
 	start := strings.Index(source, "Command::ValidateConfig {")
 	order(source[start:], "config.validate()?;", "read_bounded(&p, 65536)",

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "249c83921017ba94cff566a13a49855ad403e3bf63701286a9f84ce4051be7cb",
+  "goSourceSha256": "f80ca8da49813311eda8a1c9524ce31b416f988388fffdc2f779704f44503e66",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -5857,7 +5857,9 @@
       "TestRustFrontendProtectedSelectionErrorsDoNotRenderPrivateInput",
       "TestRustFrontendReviewUsesOriginalExactPresentation",
       "TestRustFrontendUninstallNeedsIndependentConfirmationAndRender",
+      "TestRustGUICIContextRequiresEveryHostedPR201TLSBinding",
       "TestRustNativeGUIFixture",
+      "TestRustNativeGUITLSCI",
       "TestSelectedInputAndTrustAreFrozen",
       "TestSuccessAndFailureNeverRetry",
       "TestTrustMustBePublicHTTPSAndFullDigests",
@@ -6355,7 +6357,8 @@
       "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
       "TestRustFrameAcceptedByManager",
-      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations"
+      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations",
+      "TestRustPackageVerificationPrecedesExecutionAndPersistentStaging"
     ],
     "localrmm/tests/rustagent/cmd/nativefixture": [
       "TestCompatibilityGETDoesNotEnterEnrollment"

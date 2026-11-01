@@ -125,6 +125,13 @@ func TestRustNativeGUIFixture(t *testing.T) {
 		}
 	}
 	which := os.Getenv("TRACEBOLT_RUST_GUI_FIXTURE_CASE")
+	runRustNativeGUIFixture(t, which)
+}
+
+// Shared memory-only implementation. The manual entry above keeps its original
+// CI refusal; the separately build-tagged CI entry admits one fixed TLS case.
+func runRustNativeGUIFixture(t *testing.T, which string) {
+	t.Helper()
 	allowed := map[string]bool{"tls": true, "http": true, "renewal": true, "cancel": true, "failure": true, "uninstall": true, "modal-resize": true, "close-input": true}
 	if !allowed[which] || !rustFrontendEnabled() {
 		t.Fatal("unsupported synthetic GUI fixture configuration")

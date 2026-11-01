@@ -5,8 +5,9 @@ on:
     branches: [main]
   pull_request:
 
-# Compile and upload review artifacts only. No OIDC, signing, release-write,
-# native service install, trust approval, or user-machine access is requested.
+# Existing build job compiles/uploads only. The separately authorized PR201-only
+# job adds one inert TLS GUI test. No Setup/service image is executed; no OIDC,
+# signing, release-write, host grant, keys, services or user-machine access.
 permissions:
   contents: read
 
@@ -71,3 +72,37 @@ jobs:
           path: ${{ runner.temp }}/tracebolt-windows-setup/
           if-no-files-found: error
           retention-days: 7
+
+  rust-gui-tls:
+    name: PR201 single inert Rust GUI TLS case (no installer actions)
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 201 && github.repository == 'storminator89/Tracebolt' }}
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      GOTOOLCHAIN: local
+      PYTHONDONTWRITEBYTECODE: '1'
+      TRACEBOLT_RUST_GUI_CI: github-actions-pr201-tls-only-v1
+      TRACEBOLT_RUST_GUI_CI_SOURCE: ${{ github.sha }}
+      TRACEBOLT_RUST_GUI_CI_HEAD: ${{ github.event.pull_request.head.sha }}
+      TRACEBOLT_RUST_GUI_CI_BASE: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Build exact inert test image twice and verify finite provenance
+        shell: pwsh
+        run: python -I -B tests/windows_setup_rust_gui/build_ci.py --build-inert-github-tls-fixture --source "$env:GITHUB_SHA"
+      - name: Run exactly one TLS fake-hook GUI case; fail if desktop unavailable
+        shell: pwsh
+        run: python -I -B tests/windows_setup_rust_gui/run_ci.py --execute-github-tls-fixture --source "$env:GITHUB_SHA"

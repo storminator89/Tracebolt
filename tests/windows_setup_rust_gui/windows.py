@@ -125,7 +125,7 @@ class Session:
             self._lease_image()
             env = dict(os.environ)
             env.update(TRACEBOLT_RUST_GUI_FIXTURE_EXECUTE="synthetic-window-only-v1", TRACEBOLT_RUST_GUI_FIXTURE_CASE=self.which)
-            self.process = subprocess.Popen([self.image, "-test.run=^TestRustNativeGUIFixture$", "-test.count=1", "-test.timeout=80s"],
+            self.process = subprocess.Popen(self._command(),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, shell=False)
             for i, stream in enumerate((self.process.stdout, self.process.stderr)):
                 def drain(index=i, source=stream):
@@ -139,6 +139,9 @@ class Session:
         except Exception:
             self.__exit__(None, None, None)
             raise
+
+    def _command(self):
+        return [self.image, "-test.run=^TestRustNativeGUIFixture$", "-test.count=1", "-test.timeout=80s"]
 
     def __exit__(self, *_):
         settled = True

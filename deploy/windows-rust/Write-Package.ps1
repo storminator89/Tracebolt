@@ -15,6 +15,7 @@ $sources = [ordered]@{
     'tracebolt-windows-agent.exe' = $Executable
     'Install-Tracebolt.ps1' = (Join-Path $PSScriptRoot 'Install-Tracebolt.ps1')
     'Uninstall-Tracebolt.ps1' = (Join-Path $PSScriptRoot 'Uninstall-Tracebolt.ps1')
+    'Package-Preflight.ps1' = (Join-Path $PSScriptRoot 'Package-Preflight.ps1')
     'README.md' = (Join-Path $PSScriptRoot '../../rust/windows-agent/README.md')
 }
 foreach ($source in $sources.Values) {
