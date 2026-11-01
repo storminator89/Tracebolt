@@ -243,7 +243,9 @@ public static class TraceboltDirectoryLeaseProbe {
                     $script:FixtureAcl | Add-Member -MemberType ScriptMethod -Name GetSecurityDescriptorBinaryForm -Value { return ,$script:NullAclBytes }
                 }
                 $rejected = $false; $message = ''
-                try { Assert-TraceboltInstallParent $root } catch { $rejected = $true; $message = $_.Exception.Message }
+                # PowerShell wraps the C# IOException in MethodInvocationException;
+                # compare the unchanged finite cause, not the invocation envelope.
+                try { Assert-TraceboltInstallParent $root } catch { $rejected = $true; $message = $_.Exception.GetBaseException().Message }
                 Assert ($rejected -eq (@('trusted','creator') -notcontains $case)) "Unexpected in-memory parent-ACL result: $case"
                 if (@('write','attributes','extended','delete','children','dacl','take') -contains $case) {
                     $mask = switch ($case) { 'write' { 2 }; 'attributes' { 256 }; 'extended' { 16 }; 'delete' { 65536 }; 'children' { 64 }; 'dacl' { 262144 }; 'take' { 524288 } }
@@ -269,7 +271,7 @@ public static class TraceboltDirectoryLeaseProbe {
                 $rawRule = @($script:FixtureAcl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]) | Where-Object { $_.IdentityReference.Value -ceq $sid })[0]
                 Assert ((([long][int]$rawRule.FileSystemRights -band 0xffffffff) -band $case[2]) -eq $case[2]) 'Generic fixture lost its intended raw rights.'
                 $rejected = $false; $message = ''
-                try { Assert-TraceboltInstallParent $root } catch { $rejected = $true; $message = $_.Exception.Message }
+                try { Assert-TraceboltInstallParent $root } catch { $rejected = $true; $message = $_.Exception.GetBaseException().Message }
                 Assert ($rejected -eq $case[3]) "Generic ACE decision changed: $($case[0])/$($case[1])"
                 if ($case[3]) { Assert ($message -match "forbiddenMask=$($case[2]) ") 'Rejected generic rights were hidden by diagnostics.' }
             }
