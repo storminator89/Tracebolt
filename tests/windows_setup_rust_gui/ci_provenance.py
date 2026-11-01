@@ -21,6 +21,8 @@ MAX_IMAGE = 128 * 1024 * 1024
 MAX_BUILD_INFO = 64 * 1024
 _SOURCE = re.compile(r"[0-9a-f]{40}\Z")
 _SETTING = re.compile(r"[A-Za-z0-9_.-]{1,64}\Z")
+PE_CHECKS = ("pe-headers", "pe-sections", "pe-import-directory", "pe-import-descriptors", "pe-import-name", "pe-import-allowlist")
+GO_INFO_CHECKS = ("go-info-input", "go-info-rows", "go-info-path", "go-info-required", "go-info-source-claim")
 
 
 def _need(value):
@@ -28,8 +30,10 @@ def _need(value):
         raise ValueError("provenance")
 
 
-def inspect_pe(raw):
+def inspect_pe(raw, checkpoint=None):
     """Inspect actual AMD64 console PE/import bytes; never invoke a loader."""
+    if checkpoint is not None:
+        checkpoint("pe-headers")
     _need(type(raw) is bytes and 512 <= len(raw) <= MAX_IMAGE and raw[:2] == b"MZ")
 
     def unpack(fmt, offset):
@@ -59,6 +63,8 @@ def inspect_pe(raw):
     _need(directory(4) == (0, 0) and directory(11) == (0, 0) and directory(13) == (0, 0))
     if directories > 14:
         _need(directory(14) == (0, 0))  # No managed executable/runtime route.
+    if checkpoint is not None:
+        checkpoint("pe-sections")
     sections, virtual_ranges, file_ranges = [], [], []
     for index in range(count):
         row = unpack("<8sIIIIIIHHI", optional + opt_size + index * 40)
@@ -82,6 +88,8 @@ def inspect_pe(raw):
         return matches[0]
 
     def dll_name(rva):
+        if checkpoint is not None:
+            checkpoint("pe-import-name")
         # The complete bounded NUL-terminated name must occupy one unique,
         # file-backed section; virtual zero-fill is not a valid import name.
         for length in range(1, 82):
@@ -90,15 +98,21 @@ def inspect_pe(raw):
                 name = raw[at:at + length - 1]
                 _need(name and name.isascii())
                 value = name.decode("ascii").lower()
+                if checkpoint is not None:
+                    checkpoint("pe-import-allowlist")
                 _need(value in SYSTEM_DLLS)
                 return value
         raise ValueError("provenance")
 
+    if checkpoint is not None:
+        checkpoint("pe-import-directory")
     imports_rva, imports_size = directory(1)
     _need(40 <= imports_size <= 1024 * 1024)
     imports_at = map_rva(imports_rva, imports_size)
     imported = set()
     for index in range(33):  # At most 32 descriptors plus a mandatory terminator.
+        if checkpoint is not None:
+            checkpoint("pe-import-descriptors")
         _need((index + 1) * 20 <= imports_size)
         original, timestamp, forwarder, name_rva, first = unpack("<IIIII", imports_at + index * 20)
         if not (original or timestamp or forwarder or name_rva or first):
@@ -113,8 +127,10 @@ def inspect_pe(raw):
     raise ValueError("provenance")
 
 
-def inspect_go_build_info(raw, source):
+def inspect_go_build_info(raw, source, checkpoint=None):
     """Project finite settings from `go version -m`; never echo its image path."""
+    if checkpoint is not None:
+        checkpoint("go-info-input")
     _need(type(raw) is bytes and 0 < len(raw) <= MAX_BUILD_INFO
           and type(source) is str and _SOURCE.fullmatch(source) is not None)
     try:
@@ -127,6 +143,8 @@ def inspect_go_build_info(raw, source):
     _need(2 <= len(lines) <= 512 and 14 < len(lines[0]) <= 4096
           and lines[0].endswith(": go1.27.1")
           and all(ord(char) >= 32 for char in lines[0]))
+    if checkpoint is not None:
+        checkpoint("go-info-rows")
     path, settings = None, {}
     for line in lines[1:]:
         _need(line.startswith("\t") and len(line) <= 8192
@@ -146,14 +164,20 @@ def inspect_go_build_info(raw, source):
             # Module/dependency rows are not a source-authority claim. The
             # builder independently checks the exact project dependency roots.
             _need(kind in {"mod", "dep", "=>"} and 3 <= len(fields) <= 5)
+    if checkpoint is not None:
+        checkpoint("go-info-path")
     _need(path == "localrmm/internal/windowssetupui.test")
     required = {"-tags": TAGS, "-trimpath": "true", "GOOS": "windows",
                 "GOARCH": "amd64", "CGO_ENABLED": "1"}
+    if checkpoint is not None:
+        checkpoint("go-info-required")
     _need(all(settings.get(key) == value for key, value in required.items()))
     # Go deliberately omits ldflags with -trimpath (cmd/go/internal/load/pkg.go,
     # go.dev/issue/52372). Do not invent a source-binding claim from build info.
     # The reviewed source build, image hash and child's separate acknowledgement
     # must establish that binding; a plain tag match is not enough to launch.
+    if checkpoint is not None:
+        checkpoint("go-info-source-claim")
     _need("-ldflags" not in settings)
     return {"goVersion": "go1.27.1", "path": path, "tags": TAGS.split(","),
             "goos": "windows", "goarch": "amd64", "cgo": True, "embeddedSourceProven": False}

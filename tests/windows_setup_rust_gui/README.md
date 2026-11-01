@@ -152,6 +152,16 @@ that hosted image. Every original false coverage field, including real Setup,
 hidden console, pixel visibility, enrollment and full Rust-agent parity, stays
 false. Native CI execution and this workflow draft remain unverified here.
 
+The first published CI attempt reached `not_built / provenance`; its GUI step
+was skipped. That is **not** a native GUI pass and does not identify the failing
+subcheck. A diagnostic-only follow-up keeps every guard and adds fixed `phase`
+and `check` labels to failure reports, including failures during tool discovery.
+Labels distinguish tool/version checks, Rust/EXE repeat equality, PE structure
+and import allowlisting, Go build-info, dependencies and source rechecks. They
+never include DLL names, commands, paths, exceptions, output bytes or other raw
+values. Success manifests/acceptance rules are unchanged; no guard is loosened
+and no failed native attempt is relabelled as accepted.
+
 Runner/tool/context references: [official Windows 2025 image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md),
 [GitHub default-variable semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/variables),
 and the pinned Go source's `cmd/go/internal/load/pkg.go` build-info handling
