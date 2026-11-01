@@ -11,6 +11,12 @@ use tracebolt_windows_agent::{
     state::State,
 };
 
+// A concurrently forked CLI child can temporarily inherit another test's flock
+// until exec closes CLOEXEC descriptors. Keep process launches disjoint from
+// the retained-state test's immediate close/reopen assertions; never retry or
+// relax the production exclusive-lock check.
+static CLI_OR_STATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn config() -> Config {
     Config {
         schema_version: "tracebolt.rust-windows-basic.v1".into(),
@@ -138,6 +144,7 @@ fn snapshot(directory: &Path) -> Vec<(std::path::PathBuf, Option<Vec<u8>>)> {
 }
 
 fn validate(directory: &Path, mode: &str, credentials: bool) -> std::process::Output {
+    let _launch = CLI_OR_STATE.lock().unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_tracebolt-windows-agent"));
     command.args([
         "validate-config",
@@ -224,11 +231,14 @@ fn invalid_preprovided_material_fails_before_cli_or_library_sender_state() {
             "{case}"
         );
         assert!(Sender::open(dir.path(), true).is_err(), "{case}");
-        let result = Command::new(env!("CARGO_BIN_EXE_tracebolt-windows-agent"))
-            .args(["init", "--directory"])
-            .arg(dir.path())
-            .output()
-            .unwrap();
+        let result = {
+            let _launch = CLI_OR_STATE.lock().unwrap();
+            Command::new(env!("CARGO_BIN_EXE_tracebolt-windows-agent"))
+                .args(["init", "--directory"])
+                .arg(dir.path())
+                .output()
+                .unwrap()
+        };
         assert!(!result.status.success(), "{case}");
         assert_eq!(before, snapshot(dir.path()), "{case}");
         for secret in ["PRIVATE KEY", "BEGIN CERTIFICATE", "preserve exact bytes"] {
@@ -386,6 +396,7 @@ fn certificate_chain_count_and_each_ca_entry_are_checked_without_writes() {
 
 #[test]
 fn existing_expired_sender_keeps_its_diagnostic_and_exact_pending_state() {
+    let _state = CLI_OR_STATE.lock().unwrap();
     let dir = input("expired");
     let binding = config()
         .binding(&fs::read(dir.path().join("client.pem")).unwrap(), &[])
