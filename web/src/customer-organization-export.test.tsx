@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
-import { abortProtectedRequests } from './api';
+import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { setLocale } from './i18n';
 import type { Overview } from './types';
 import { windowsCapacityDevice, windowsCapacitySession } from './windows-capacity-fixture';
@@ -38,6 +38,40 @@ beforeEach(() => {
 afterEach(() => {
     cleanup(); abortProtectedRequests(); vi.useRealTimers();
     vi.unstubAllGlobals(); vi.restoreAllMocks();
+});
+
+it.each([
+    ['en', false], ['en', true], ['de', false], ['de', true],
+] as const)('mounts customer data in the actual named App only with explicit read permission (%s, granted=%s)', async (locale, granted) => {
+    const fetch = vi.fn(async (path: string, init?: RequestInit) => {
+        expect(init?.method ?? 'GET').toBe('GET');
+        if (path === '/api/auth/session') return json({ ...session, loginMode:'named', actorId:`operator_${'4'.repeat(32)}`, capabilities:granted ? ['read','read_customers'] : ['read','manage_sessions','restart_service'] });
+        if (path === '/api/overview') return json(overview);
+        if (path === '/api/customers') return json({ schemaVersion:'tracebolt.customers.v1', customers });
+        if (path === '/api/customer-windows-assignments') return json({ schemaVersion:'tracebolt.customer-windows-assignments.v1', serverNow:windowsNow, validUntil:'2026-10-07T12:00:40Z', customers, unavailableAssignments:0, devices:devices.map((device,index) => ({deviceId:device.id, identity:identities[index], customerId:customers[index].id})) });
+        return json({},503);
+    });
+    vi.stubGlobal('fetch',fetch);
+    setLocale(locale,false); render(<App/>); await flush();
+    const title = locale === 'de' ? 'Windows-Kundenzuordnungen' : 'Customer Windows assignments';
+    const panel = screen.queryByRole('region',{name:title});
+    if (!granted) {
+        expect(panel).not.toBeInTheDocument();
+        expect(screen.queryByText(customers[0].name)).not.toBeInTheDocument();
+        expect(fetch.mock.calls.some(([path]) => path === '/api/customers' || path === '/api/customer-windows-assignments')).toBe(false);
+        return;
+    }
+    expect(panel).toBeVisible();
+    for (const customer of customers) expect(within(panel!).getByText(customer.name)).toBeVisible();
+    expect(within(panel!).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(panel!).queryByRole('checkbox')).not.toBeInTheDocument();
+    const catalog = screen.getByRole('region',{name:locale === 'de' ? 'Kunden' : 'Customers'});
+    expect(within(catalog).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(within(catalog).getAllByRole('button')).toHaveLength(1);
+    expect(fetch.mock.calls.every(([,init]) => (init?.method ?? 'GET') === 'GET')).toBe(true);
+    await act(async () => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+    expect(screen.queryByText(customers[0].name)).not.toBeInTheDocument();
+    expect(screen.queryByRole('region',{name:title})).not.toBeInTheDocument();
 });
 
 it.each(['en', 'de'] as const)('keeps actual CSV read/export scope unchanged by customer selection and acknowledged assignment (%s)', async locale => {

@@ -56,7 +56,7 @@ func TestNamedAdministrationContractDenials(t *testing.T) {
 		operatorauth.WindowsServiceControl, operatorauth.WindowsUpdateInstall, operatorauth.WindowsUpdateDownload,
 		operatorauth.WindowsUpdateSchedule, operatorauth.WindowsSoftwareInstall,
 		operatorauth.WindowsManagedMSIDeliver, operatorauth.WindowsManagedMSIInstall, operatorauth.WindowsManagedMSISchedule,
-		operatorauth.ManageSessions,
+		operatorauth.ManageSessions, operatorauth.ReadCustomers,
 	}
 	operators := []operatorauth.Operator{
 		{ID: namedActorID, Username: "reader", PasswordHash: testOperatorHash(), Capabilities: []operatorauth.Capability{operatorauth.Read}},
@@ -84,6 +84,7 @@ func TestNamedAdministrationContractDenials(t *testing.T) {
 				configured[capability] = true
 			}
 			canManageAll := configured[operatorauth.ManageSessions]
+			canReadCustomers := configured[operatorauth.ReadCustomers]
 			for _, capability := range capabilities {
 				name, ok := capability.(string)
 				if !ok || !configured[operatorauth.Capability(name)] {
@@ -93,6 +94,11 @@ func TestNamedAdministrationContractDenials(t *testing.T) {
 			}
 			csrf := session["csrfToken"].(string)
 			for _, route := range namedAdministrationDeniedRoutes() {
+				// The separately approved customer-read grant admits only these
+				// two GETs; positive source/identity checks live in customer_read_test.
+				if canReadCustomers && route.method == http.MethodGet && (route.path == "/api/customers" || route.path == "/api/customer-windows-assignments") {
+					continue
+				}
 				t.Run(route.method+" "+route.path, func(t *testing.T) {
 					// Supplied authority is deliberately invalid. Denial must come
 					// from server-held route authority, not body validation or UI.

@@ -1,4 +1,4 @@
-# Named-administration route and actor matrix (TB-06, inventory slice)
+# Named-administration route and actor matrix (TB-06)
 
 Source baseline: `f70de9291803dd7e26f8907c11de821244e307b8` (2026-10-31).
 Reconciled with main `1dd1c4fed3f3368a8b968af1305bca054f012514` after
@@ -9,11 +9,14 @@ Session/capability inventory revalidated at main
 `9e72704895c218f3ab63b016532ec74cbcd952d4` (2026-11-01): the explicit
 `manage_sessions` grant and the existing account-scoped session API are included
 below. This correction changes no runtime grants or routes.
-This is the first slice of [TB-06 / #133](https://github.com/storminator89/Tracebolt/issues/133):
-an inventory and regression contract, **not implementation or acceptance of
-personal-account administration**. No permission, role, account, stored record,
-session policy or endpoint grant is changed. TB-02 / #129 remains a separate
-dependency; its work is neither included nor published by this slice.
+The initial [TB-06 / #133](https://github.com/storminator89/Tracebolt/issues/133)
+slice was an inventory and regression contract. The separately approved
+[customer-read follow-on](named-customer-read.md) now adds only optional explicit
+`read_customers` admission to the two existing customer GET projections below.
+It is **not full personal-account administration or acceptance of #133**. No
+account, existing configured grant, stored record, session policy or endpoint
+scope is changed. TB-02 / #129 remains a separate dependency; its work is neither
+included nor published by this slice.
 
 ## Reading the matrix
 
@@ -24,7 +27,8 @@ dependency; its work is neither included nor published by this slice.
   of the displayed `read` capability; that display is not a complete grant list.
 - **Named/read** means an authenticated v2 named session with its required,
   explicitly configured `read` grant. **Denied** also applies to a named account
-  holding *all fifteen* currently defined capabilities. There is no admin,
+  holding *all sixteen* currently defined capabilities, except where a row
+  explicitly names the separate customer-read grant. There is no admin,
   wildcard, role inheritance or shared-password fallback.
 - **Allowed** is route admission only, not guaranteed success. Correct profile,
   current device/issuer authority, feature configuration, revision, typed body,
@@ -44,25 +48,26 @@ The LAN boundary in `internal/api/operator.go` first checks actual transport
 framing and session expiry/revocation. Except the separately scoped session API
 and capability-gated typed action/alarm/application-check endpoints, it then
 denies named non-read requests with `403 operator_capability_required`. The
-`namedReadRoute` classifier admits
-GET/HEAD and a finite list of read-only POST queries; **classifier admission does
+`namedReadRoute` classifier admits GET/HEAD and a finite list of read-only POST queries; **classifier admission does
 not make HEAD supported**. The routes below implement GET, not HEAD, and must
 not be described as GET/HEAD APIs. Unsupported methods/paths do not acquire rights.
 JSON writes retain same-origin, CSRF and bounded strict-body requirements.
 
 The current capability inventory is `read`, `plan_updates`, `execute_updates`,
 `restart_service`, `manage_alarms`, `manage_application_checks`, `manage_sessions`,
-`windows_service_control`, `windows_update_install`, `windows_update_download`,
+`read_customers`, `windows_service_control`, `windows_update_install`, `windows_update_download`,
 `windows_update_schedule`, `windows_software_install`,
 `windows_managed_msi_deliver`, `windows_managed_msi_install` and
 `windows_managed_msi_schedule` (`internal/operatorauth/operators.go`). The required
 `read` admits the ordinary named reads below, including the caller's account-scoped
-session view/revocation. `manage_sessions` separately permits listing/revoking
+session view/revocation. `read_customers` independently admits only the two
+customer GETs below; no existing grant implies it. `manage_sessions` separately
+permits listing/revoking
 other accounts' current sessions; it never changes credentials or future login
 rights. The other thirteen grants are for separate typed
 maintenance/alarm/application-check routes, **not** any shared-only row in this
-matrix. In particular, composing all fourteen non-read grants does not confer
-account provisioning, customer, enrollment, trust, AI or export administration.
+matrix. In particular, composing all fifteen non-read grants does not confer
+account provisioning, customer writes, enrollment, trust, AI or export administration.
 
 ## 1. Enrollment administration (four independent domains)
 
@@ -146,14 +151,15 @@ identity, times and revocation, not a human actor. Evidence:
 
 | Method and route | R/W | Shared | Named/read | Actor binding / effect |
 | --- | --- | --- | --- | --- |
-| `GET /api/customers` | R | Allowed | **Denied** | Shared-only catalog, no per-read actor audit |
+| `GET /api/customers` | R | Allowed | Denied without explicit `read_customers` | N/S with that grant; whole-manager catalog, no per-read actor audit |
 | `POST /api/customers` | W | Allowed | Denied | S/no actor; create with expected revision zero |
 | `POST /api/customers/{customer}` | W | Allowed | Denied | S/no actor; rename with exact positive expected revision |
-| `GET /api/customer-windows-assignments` | R | Allowed | **Denied** | Shared-only current identity/customer projection |
+| `GET /api/customer-windows-assignments` | R | Allowed | Denied without explicit `read_customers` | N/S with that grant; whole-manager current identity/customer projection |
 | `POST /api/customer-windows-assignments` | W | Allowed | Denied | S/no actor; create-only exact activated Windows identity/customer association |
 
-Both handlers explicitly reject named sessions even on GET; the broad read
-classifier is not sufficient. There is no GET customer-detail, delete, move or
+Both handlers explicitly require `read_customers` for named GETs; the broad
+read classifier and all other grants are not sufficient. Named non-GETs remain
+denied even with every capability. There is no GET customer-detail, delete, move or
 tenant-authorization API here. Customer metadata/membership grants no tenant
 isolation, enrollment, endpoint scope or account access. Revision, manager,
 identity, issuer and transaction leases remain authoritative. Evidence:
@@ -246,13 +252,14 @@ downloads), `internal/api/fleet_endpoint_identity.go`, `bootstrap_download.go`.
 
 ## Next-slice decisions and acceptance gates
 
-This document deliberately assigns **no new capability names or bit positions**.
-A reviewed follow-on must explicitly choose independent read/write grants for
-enrollment, trust, customer catalog/associations, provider settings, each AI
+The original inventory assigned no new grants. The separately approved
+customer-read decision is now implemented only as `read_customers`; customer
+writes remain shared-only. Reviewed follow-ons must explicitly choose independent
+grants for enrollment, trust, customer writes, provider settings, each AI
 execution/standing-export scope, accounts and any server export. Existing
-maintenance/alarm/application-check capabilities must not imply any of them.
-Customer reads and AI destination/settings reads need explicit product decisions;
-the current legacy/read asymmetries above are facts, not permission proposals.
+maintenance/alarm/application-check/customer-read capabilities must not imply
+any of them. AI destination/settings reads and the remaining administration
+surfaces still need their own product decisions.
 
 Before granting a new route, bind the immutable server `ActorID()` through
 admission, approval, downstream service/store, durable audit and response where
@@ -260,8 +267,8 @@ appropriate. Reject request-supplied identity and recheck current authority at
 dispatch; preserve logout, expiry, revision, replay, revocation and original
 approval floors. Define static-restart and standing-job revocation behavior and
 version any necessary records without adopting/relabeling older authority.
-The existing `manage_sessions` capability is not a precedent for implicit
-customer reads or account/grant editing; those product decisions remain open.
+Neither `manage_sessions` nor `read_customers` is a precedent for implicit
+account/grant editing or any customer write; those decisions remain open.
 
 TB-06 remains open until **two separately named administrators plus a restricted
 user** actually administer the reviewed surface without a common password,
@@ -273,18 +280,23 @@ fixture logins that are all denied administration do not meet that criterion.
 ## Verification scope
 
 `internal/api/named_administration_contract_test.go` adds direct real-TLS-listener
-contracts for 38 method/route denials: twenty enrollment writes across four
+contracts for 38 method/route restrictions: twenty enrollment writes across four
 domains, two manual-trust writes, five customer reads/writes and eleven AI
-settings/invocation routes. They cover anonymous requests, read-only identity,
-and two distinct identities holding all current grants; forged body authority
+settings/invocation routes. The two customer GETs remain denied without their
+exact grant; the other 36 routes are denied even with all 16 capabilities. They
+cover anonymous requests, read-only identity and two distinct all-grant identities;
+forged body authority
 cannot turn a denial into body/feature handling. Positive existing read admission,
 missing-feature truth, actual login actor and unsupported HEAD are separate.
 The contract also verifies exact configured login-grant metadata, the separate
 account-scoped/explicit-all session view, current-actor binding, self-revocation
 and subsequent read denial. The session API regression tests separately cover
 cross-account visibility/revocation, non-disclosure and concurrent admission.
-The fixtures configure no real provider, endpoint, enrollment issuer or customer
-source and grant nothing on a host.
+The inventory fixtures configure no real provider, endpoint, enrollment issuer
+or customer source and grant nothing on a host. Separate `customer_read_test.go`
+fixtures configure synthetic sources to verify positive named customer reads,
+missing-grant denial even with all prior grants, no write authority, issuer
+expiry and mid-read revocation.
 
 Recorded source-fixture verification on 2026-10-31: the focused command below
 passed with the official Go `1.27.1 linux/amd64` toolchain and race detector
@@ -298,7 +310,7 @@ not waive failed UI/browser gates or establish native acceptance.
 The 2026-11-01 inventory correction passed the focused contract/session API
 tests and the full `internal/operatorauth` and `internal/lanconfig` test packages
 with the same Go version, linux/amd64 and race detector. Static source/test
-parity confirmed all 15 current capability constants in the all-grants fixture;
+parity confirmed the then-current 15 capability constants in the all-grants fixture;
 `gofmt`, diff whitespace and the session-documentation links were checked. No
 runtime permission changed and no full repository suite, browser E2E, live
 account configuration, customer disclosure or native acceptance was performed.

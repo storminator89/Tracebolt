@@ -22,6 +22,12 @@ describe('explicit access contract',()=>{
   it('shows LAN sign-in and keeps app data absent',async()=>{vi.mocked(request).mockResolvedValue(anonymous);render(<AuthBoundary><PrivateApp/></AuthBoundary>);await screen.findByLabelText('Operator-Passwort');expect(screen.queryByLabelText('Operator-Benutzername')).not.toBeInTheDocument();expect(screen.queryByText('Geschützte Geräte')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Anmelden'})).toBeDisabled();});
 });
 describe('named operator display contract',()=>{
+  it('recognizes only explicit customer-read metadata and all sixteen independent grants',()=>{
+    expect(validOperatorSession({...namedAuthenticated,capabilities:['read','read_customers']})).toBe(true);
+    expect(validOperatorSession({...namedAuthenticated,capabilities:['read','plan_updates','execute_updates','restart_service','manage_alarms','manage_application_checks','manage_sessions','read_customers','windows_service_control','windows_update_install','windows_update_download','windows_update_schedule','windows_software_install','windows_managed_msi_deliver','windows_managed_msi_install','windows_managed_msi_schedule']})).toBe(true);
+    for(const capabilities of [['read_customers'],['read','read_customers','read_customers'],['read','Read_customers']]) expect(validOperatorSession({...namedAuthenticated,capabilities})).toBe(false);
+    expect(validOperatorSession({...authenticated,loginMode:'shared',actorId:null,capabilities:['read','read_customers']})).toBe(false);
+  });
   it('recognizes only explicit bounded session-management metadata',()=>{
     expect(validOperatorSession({...namedAuthenticated,capabilities:['read','manage_sessions']})).toBe(true);
     expect(validOperatorSession({...namedAuthenticated,capabilities:['read','manage_sessions','manage_sessions']})).toBe(false);
