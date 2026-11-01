@@ -1,17 +1,64 @@
 # Rust Windows installer: bounded input preflight
 
-This source candidate addresses the invitation-bootstrap and local preprovided-input portions of
+This source candidate addresses the package/path, invitation-bootstrap and local preprovided-input portions of
 [TB-07 / #134](https://github.com/storminator89/Tracebolt/issues/134). It is not a
 claim that every installer or native acceptance criterion is complete.
 
 ## Order and boundaries
 
 `Install-Tracebolt.ps1` already selects one mode, checks fresh paths/service
-absence, required files and x64 execution, then invokes the actual Rust
-`validate-config` parser before `New-Service` / `New-Item`. The existing
+absence, required files and native x64 execution. Before invoking any candidate it
+also checks package checksums, PE architecture and installation parents as
+described below. It then invokes the actual Rust
+`validate-config` parser before directory/SCM staging. The existing
 [manager compatibility check](rust-manager-compatibility.md) is unchanged:
 automatic/invitation installation requires a matching manager; preprovided
 identities retain their legacy offline/destination behavior.
+
+### Package and path boundary
+
+Use the whole independently selected/reviewed ZIP, not a standalone EXE. The
+installer requires its exact sibling `tracebolt-windows-agent.exe`, the new
+`Package-Preflight.ps1` helper, scripts, README and bounded ASCII `SHA256SUMS.txt`.
+The directory must contain exactly these six regular files; the manifest must
+contain exactly five canonical lowercase-SHA256 records. Missing, duplicate,
+unknown, malformed, mismatching or oversized inputs fail before any candidate
+invocation or target staging. The EXE is inspected only as data for bounded PE
+headers, AMD64/PE32+ and executable/not-DLL characteristics before its first
+invocation. This is not complete Windows loader validation or a safety verdict.
+
+On Windows the helper opens package directory ancestry root-to-leaf and all
+manifest/payload leaves with no-follow native handles, checks object types and
+reparse attributes by handle, and retains actual read-access/read-only-sharing
+handles through preflight, copy and initialization. Sharing conflicts fail
+closed. This is intended to prevent leaf/ancestor replacement during use rather
+than assuming a leaf handle also pins its pathname. Windows sharing/namespace
+behavior requires its own native evidence. The target EXE is created without
+overwrite, copied from the verified handle, checked against the original digest
+and held read-only through startup.
+
+Input/package path chains reject reparse points. Installation parents and their
+ancestors must be ordinary directories owned by SYSTEM, Administrators or
+TrustedInstaller, have a non-NULL DACL, and have no applicable allow ACE granting
+other principals file writes, deletion/child deletion, permission changes or
+ownership takeover. Inherit-only ACEs do not apply to the parent itself. This
+conservative allow-ACE check is not a complete Windows effective-access
+calculation and never repairs an existing parent or changes its ACL.
+`CreateDirectories` alone can remain on a parent: new target directories are
+created exclusively with an initial protected SYSTEM/admin DACL; competing
+existing leaves are never adopted. Only after configuration preflight and those
+new directories does disabled SCM staging begin. Existing LocalService and
+restricted service-SID rights are unchanged.
+
+**Unsigned checksums are consistency bindings, not publisher authentication.**
+A changed EXE plus changed manifest can still agree; independently verify and
+review the selected release/source before elevating its scripts. The helper is
+part of that script trust, not a boundary against malicious installer code.
+Package directory handles do not prohibit all child creation; use an independently
+trusted package location, without other processes writing into it. The exact
+entry check is a snapshot, not a DLL-search/code-integrity guarantee. No signer,
+anti-malware, Authenticode or release-acceptance claim follows, and this is not
+a boundary against administrators or a compromised elevated session.
 
 For invitation mode the installer now passes `--bootstrap` to that read-only
 command. The public file is bounded to 64 KiB and strictly deserialized (unknown
@@ -71,7 +118,7 @@ Preprovided mode still requires its explicit fresh approved identity and does
 not gain an enrollment-compatibility claim. Automatic/invitation installation
 continues to require the existing online check. A valid bootstrap does not
 prove invitation liveness, manager approval, accepted telemetry or future
-network availability. Input files and the target can change after a check;
+network availability. Non-package input files can change after a check;
 post-preflight failure still retains disabled staging for inspection.
 
 ## Evidence and remaining gates
@@ -95,10 +142,19 @@ expired sender fixture reopens with the same expiry diagnostic, advanced sequenc
 and exact pending bytes; stricter fresh checks never reset/adopt that state. The existing
 real loopback mutual-TLS retry/restart test still exercises sender construction.
 
-TB-07 remains open. Native negative tests on an explicitly approved disposable
+Data-only PowerShell fixtures are added to `Test-PackageStaging.ps1`: package
+allowlist/manifest failures, wrong PE architecture/shape despite a matching hash,
+repeatability, exact foreign-file preservation, links and lock cleanup. Windows
+branches additionally check blocked writers/renames and in-memory parent ACL
+descriptors without executing the fixture EXE, installer, SCM or ACL mutator.
+These tests must actually run on the selected Windows revision before claiming
+their results. The Go package/path test is a source-order contract only.
+
+TB-07 remains open. Native negative installation tests on an explicitly approved disposable
 Windows target are still required for the complete input matrix and unchanged
-service/directory/key/foreign-file evidence. Strong executable/manifest hash
-binding, reparse-point/parent/ACL/target checks and complete preprovided
-chain/approval semantics are outside these bounded changes. There is no new claim
+service/directory/key/foreign-file evidence. Publisher authentication, complete
+loader/code-integrity/DLL-search guarantees, all filesystem/race combinations,
+and complete preprovided chain/approval semantics are outside these bounded
+changes. There is no new claim
 that those broader requirements are complete. No real Windows installation,
 credential/trust change or external device action is authorized by source tests.
