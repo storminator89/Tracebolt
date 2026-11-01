@@ -327,8 +327,11 @@ public static class TraceboltDirectoryLeaseProbe {
                         [Security.AccessControl.AceQualifier]::AccessAllowed, 274, $sid,
                         [Security.AccessControl.ObjectAceFlags]::None, [Guid]::Empty, [Guid]::Empty, $false, [byte[]]@())
                 } else {
+                    # Preserve an intentionally unknown wire value as data;
+                    # PowerShell's direct enum cast rejects it before the test.
+                    $unknownType = [Enum]::ToObject([Security.AccessControl.AceType], [byte]66)
                     $ace = [Security.AccessControl.CustomAce]::new(
-                        [Security.AccessControl.AceType]66, [Security.AccessControl.AceFlags]::None, [byte[]]@(0,0,0,0))
+                        $unknownType, [Security.AccessControl.AceFlags]::None, [byte[]]@(0,0,0,0))
                 }
                 $acl = [Security.AccessControl.RawAcl]::new(4, 2)
                 $acl.InsertAce(0, $descriptor.DiscretionaryAcl[0]); $acl.InsertAce(1, $ace)
