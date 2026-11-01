@@ -11,6 +11,8 @@ const copy = {
         title: 'Updates · APT preview', refresh: 'Refresh stored update report', loading: 'Reading stored update report…', recovering: 'Storage is busy. Retrying the read once in 2 seconds.',
         intro: 'Debian 13 / Ubuntu 24.04 cached candidates, including held packages. Dependencies, phased rollout, download availability and installability are unchecked.',
         scope: 'Only the agent-visible package namespace and existing local cache are read. No metadata refresh, package installation or CVE assessment. Zero candidates does not mean the device is secure or fully patched.',
+        securitySummary: 'Cached candidates only; no CVE assessment or confirmed patch status.',
+        source: 'Source scope', sourceValue: 'Agent-visible dpkg packages and existing local APT cache', method: 'Comparison method', comparison: 'Debian package-version comparison; no metadata refresh.', notCompared: 'No successful cached-candidate comparison.',
         permission: 'Off by default. A local administrator must explicitly enable this extension for the existing device identity. The manager cannot verify whether local collection is currently enabled.',
         fresh: 'Recent observation', stale: 'Historical observation', expired: 'Observation or identity expired', revoked: 'Device identity revoked', unknown: 'No eligible observation', not_collected: 'No accepted cached-update report', hidden: 'Update counts are unknown in this state.',
         complete: 'Installed package scope checked', partial: 'Partial result / bounded preview', unavailable: 'Cached-update collection unavailable',
@@ -27,6 +29,8 @@ const copy = {
         title: 'Updates · APT-Vorschau', refresh: 'Gespeicherten Updatebericht aktualisieren', loading: 'Gespeicherter Updatebericht wird gelesen…', recovering: 'Der Speicher ist ausgelastet. Ein weiterer Leseversuch folgt in 2 Sekunden.',
         intro: 'Cache-Kandidaten für Debian 13 / Ubuntu 24.04, einschließlich zurückgehaltener Pakete. Abhängigkeiten, gestaffelte Freigabe, Download und Installierbarkeit ungeprüft.',
         scope: 'Gelesen werden nur der für den Agent sichtbare Paketnamensraum und der vorhandene lokale Cache. Keine Metadaten-Aktualisierung, Paketinstallation oder CVE-Bewertung. Null Kandidaten bedeutet weder sicher noch vollständig gepatcht.',
+        securitySummary: 'Nur Cache-Kandidaten; keine CVE-Bewertung und kein bestätigter Patchstand.',
+        source: 'Quellenumfang', sourceValue: 'Für den Agent sichtbare dpkg-Pakete und vorhandener lokaler APT-Cache', method: 'Vergleichsmethode', comparison: 'Debian-Paketversionsvergleich; keine Metadaten-Aktualisierung.', notCompared: 'Kein erfolgreicher Cache-Kandidatenvergleich.',
         permission: 'Standardmäßig aus. Ein lokaler Administrator muss diese Erweiterung für die bestehende Geräteidentität ausdrücklich aktivieren. Der Manager kann den aktuellen lokalen Freigabestatus nicht bestätigen.',
         fresh: 'Aktuelle Beobachtung', stale: 'Historische Beobachtung', expired: 'Beobachtung oder Identität abgelaufen', revoked: 'Geräteidentität widerrufen', unknown: 'Keine berechtigte Beobachtung', not_collected: 'Kein akzeptierter Cache-Updatebericht', hidden: 'Die Updateanzahl ist in diesem Zustand unbekannt.',
         complete: 'Installierter Paketumfang geprüft', partial: 'Teilergebnis / begrenzte Vorschau', unavailable: 'Cache-Updateerfassung nicht verfügbar',
@@ -62,9 +66,10 @@ export function CachedUpdatesPanel({ resource }: { resource: CachedUpdatesResour
             {snapshot.unknownCount !== null && snapshot.unknownCount > 0 && <p className="package-note">{labels.unknownHint}</p>}
             {snapshot.truncated && <p className="package-note">{labels.truncated}</p>}
             <p className={snapshot.metadata.freshness === 'stale' ? 'package-error' : 'package-note'}>{snapshot.metadata.freshness === 'stale' ? labels.metadataStale : labels.metadataUnknown}</p>
-            <dl className="package-facts">{field(labels.observed, snapshot.collectedAt)}{snapshot.metadata.oldestIndexModifiedAt && field(labels.sourceTime, snapshot.metadata.oldestIndexModifiedAt)}{snapshot.metadata.ageSeconds !== null && field(labels.age, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(snapshot.metadata.ageSeconds / 3600))}</dl>
+            <dl className="package-facts">{field(labels.source, labels.sourceValue)}{field(labels.method, snapshot.coverage === 'unavailable' ? labels.notCompared : labels.comparison)}{field(labels.observed, snapshot.collectedAt)}{snapshot.metadata.oldestIndexModifiedAt && field(labels.sourceTime, snapshot.metadata.oldestIndexModifiedAt)}{snapshot.metadata.ageSeconds !== null && field(labels.age, new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(snapshot.metadata.ageSeconds / 3600))}</dl>
             {snapshot.items.length > 0 && <div className="package-table-scroll" role="region" aria-label={labels.title} tabIndex={0}><table><caption className="sr-only">{labels.title}</caption><thead><tr><PackageUpdateSelectionHeader/>{[labels.package, labels.architecture, labels.installedVersion, labels.candidateVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{snapshot.items.map(row => <tr key={`${row.name}:${row.architecture}`}><PackageUpdateSelectionCell name={row.name} architecture={row.architecture} held={row.state === 'held'}/><th scope="row">{row.name}</th><td>{row.architecture}</td><td>{row.installedVersion}</td><td>{row.candidateVersion}</td><td>{row.state === 'held' ? labels.heldState : labels.candidate_only}</td></tr>)}</tbody></table></div>}
         </>}
+        <p className="package-note">{labels.securitySummary}</p>
         <details><summary><Info size={14}/>{labels.details}</summary><p>{labels.scope}</p><p>{labels.permission}</p><p>{labels.retention}</p></details>
     </section>;
 }
