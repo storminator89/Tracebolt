@@ -29,10 +29,11 @@ test('screenshots require exact source-bound EN/DE desktop/mobile capture and un
 test('route assertion failure is counted and cannot disappear in detached callbacks',async()=>{
  const before=windowsUserSoftwareRouteState();await guardWindowsUserSoftwareRoute({abort:async()=>{}},async()=>{throw new Error('inert failure')});assert.deepEqual(windowsUserSoftwareRouteState(),{failures:before.failures+1,pending:0});
 });
-test('hosted gate is registered once and imports stay inert with full-App and access-loss checks',()=>{
+test('inert contracts remain in CI while the manual browser flow is not executed',()=>{
  const flow=read('./windows-user-software-browser.mjs'),runner=read('./windows-user-software-runner.mjs'),workflow=read('../../.github/workflows/validate.yml'),manifest=JSON.parse(read('./inert-suites.json'));
  assert.equal(manifest.entries.filter(name=>name==='windows-user-software-fixtures.test.mjs').length,1);
- for(const name of ['windows-user-software-runner.mjs','windows-user-software-fixtures.test.mjs','windows-user-software-results.json','windows-user-software-manifest.json'])assert.equal(workflow.split(name).length-1,1);
+ assert.equal(workflow.split('windows-user-software-fixtures.test.mjs').length-1,1);
+ for(const name of ['windows-user-software-runner.mjs','windows-user-software-results.json','windows-user-software-manifest.json'])assert.equal(workflow.split(name).length-1,0);
  assert.match(flow,/getByRole\('combobox',\{name:locale==='de'\?'Konto':'Account'/);assert.match(flow,/toHaveCount\(0\);await page.goto\(base\+'\/#\/devices\/'\+deviceId\)/);
  for(const name of ['account','paging','source','search','unavailable','access-loss'])assert.ok(flow.includes(`stage='${name}'`));
  assert.match(flow,/currentToken\(page,base,request\)/);assert.match(flow,/for\(const locale of \['en','de'\]\)for\(const width of \[1440,390\]\)/);assert.match(flow,/queries.length\).toBe\(count\+1\)/);assert.match(runner,/requireWindowsUserSoftwareEvidence\(screenshots,sourceSha\)/);assert.match(runner,/routeFailureCount:routes.failures/);assert.match(runner,/process.exitCode=passed\?0:1/);
