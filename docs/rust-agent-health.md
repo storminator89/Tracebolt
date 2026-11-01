@@ -55,7 +55,12 @@ binding is checked internally and omitted from public status/bundle output.
 - `receiptFreshness` uses the original local receipt-observation time, with a
   bounded expected interval. Later failed attempts, rereads, support export and
   restart do not refresh that time. A stale accepted receipt produces
-  `receipt-stale`, not a healthy/live claim. Future time uncertainty is explicit.
+  `receipt-stale`, not a healthy/live claim. If either the last local attempt or
+  local receipt-observation time is over 30 seconds ahead of diagnostic UTC,
+  status is `clock-invalid`, including pending/failed attempts with no receipt.
+  Any retained receipt then has `clock-unknown` freshness; its original times and
+  last attempt result are preserved, not refreshed or repaired. A scheduled
+  `nextAttemptAt` is not an observation and does not trigger this clock check.
 - Recorded certificate expiry becomes `certificate-expired`; expiry within 24
   hours is `expiring` and, when otherwise accepted, `certificate-expiring`.
   This is a public-certificate lifetime check, not renewal authority or a guarantee
