@@ -74,8 +74,12 @@ prompt. Tokens never go in command arguments, environment variables or files.
 Existing server invitation workflows remain supported. Advanced provisioning
 can instead use `-CredentialDirectory`, `-AgentId` and `-FreshApprovedIdentity`
 with a fresh, approved, never-used TLS identity; it is not the default and its
-distinct legacy telemetry-origin semantics are outside the new compatibility
-preflight. Do not treat that unchanged advanced mode as newly verified.
+distinct legacy telemetry-origin semantics remain outside the new compatibility
+preflight. Before staging, local preflight now checks bounded certificate/key
+syntax, current dedicated client-auth use and the sender's actual TLS key-pair
+construction. Direct fresh initialization repeats these checks before state.
+This does not prove chain trust/revocation, exact manager approval or never-used
+identity status; it is not native preprovided-installation acceptance.
 
 For a local-only, nonmutating invitation-input check (no manager request), use
 `tracebolt-windows-agent.exe validate-config --manager-origin <HTTPS-origin>

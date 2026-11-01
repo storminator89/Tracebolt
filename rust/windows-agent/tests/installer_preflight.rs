@@ -145,10 +145,11 @@ fn valid_invitation_offline_preflight_is_repeatable_and_never_adopts_trust_or_st
                 .status
                 .success()
         );
-        assert!(
+        assert_eq!(
             validate(directory.path(), origin, mode, None)
                 .status
-                .success()
+                .success(),
+            mode == "auto"
         );
         assert_eq!(before, snapshot(directory.path()));
     }

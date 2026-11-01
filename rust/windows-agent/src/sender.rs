@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{Context, Result, ensure};
 use chrono::Utc;
-use reqwest::{Identity, blocking::Client};
+use reqwest::blocking::Client;
 use std::{io::Read, path::Path, time::Duration};
 
 pub struct Sender {
@@ -26,6 +26,9 @@ impl Sender {
         let certificate = read_bounded(&directory.join("client.pem"), 32768)?;
         let ca = crate::config::read_ca(directory)?;
         let private_key = read_bounded(&directory.join("client.key"), 16384)?;
+        if initialize {
+            crate::credentials::validate_material(&certificate, &private_key)?;
+        }
         Self::from_material(
             &directory.join("state"),
             crate::enrollment::Material {
@@ -64,13 +67,7 @@ impl Sender {
             chrono::DateTime::<Utc>::from_timestamp(leaf.validity().not_after.timestamp(), 0)
                 .ok_or(Code::ConfigurationInvalid)?;
         let binding = config.binding(&certificate, &ca)?;
-        let mut identity = certificate;
-        identity.push(b'\n');
-        identity.extend(private_key);
-        let client = crate::config::tls_builder(&ca)?
-            .identity(Identity::from_pem(&identity)?)
-            .timeout(Duration::from_secs(15))
-            .build()?;
+        let client = crate::credentials::client(&certificate, &private_key, &ca)?;
         let state = if enrolled {
             State::enrolled(directory, &binding).context(Code::StateUnavailable)?
         } else {

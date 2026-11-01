@@ -47,6 +47,7 @@ if ($AgentOrigin) { $validationArguments += '--agent-origin',$AgentOrigin }
 if ($AgentId) { $validationArguments += '--agent-id',$AgentId }
 if ($ServerCAFile) { $validationArguments += '--server-ca-file',$ServerCAFile }
 if ($mode -eq 'invitation') { $validationArguments += '--bootstrap',$InvitationBootstrap }
+if ($mode -eq 'preprovided') { $validationArguments += '--credential-directory',$CredentialDirectory }
 & $Executable @validationArguments
 if ($LASTEXITCODE -ne 0) { throw 'Preflight rejected configuration, CA or manager compatibility. No service, directory or identity was created. Follow the safe diagnostic code above; use matching manager/frontend and Rust basic packages.' }
 function Invoke-SC([string[]]$Arguments) {
