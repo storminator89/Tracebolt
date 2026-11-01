@@ -71,6 +71,49 @@ These handles address installation-time namespace operations, not arbitrary
 future ACL changes, every filesystem mechanism or a compromised administrator.
 The permanent service/binary/state ACLs and all runtime authority remain as before.
 
+### Handle-relative protected creation candidate
+
+Fresh directories now require a live native lease and a single fixed child
+component. `NtCreateFile` receives the already-open parent as `RootDirectory`,
+exclusive `FILE_CREATE`, `OBJ_DONT_REPARSE`, directory/no-follow/synchronous
+options and the initial protected creation descriptor. There is no pathname-based
+creation fallback, adoption, write-handle/privilege fallback or state relocation.
+The returned read/no-delete child handle is retained without a reopen gap. The
+initializer verifies successful fresh creation, ordinary parent/child objects,
+the exact SYSTEM/admin creation ACL, volume/file IDs and normalized volume-GUID
+paths. Before copy/init/SCM, a verification-only full-path open must identify the
+same child. The first implementation supports only the local NTFS contract;
+unsupported metadata, flags, collisions or uncertain identity fail closed and
+retain any already-created protected staging without retry.
+
+`OBJ_DONT_REPARSE` alone is not an immutable-root guarantee. The new native
+fixture must establish original-held-parent creation or refusal, with no child
+created in the redirection target, even when its own TEMP parent is changed to
+a junction before/during creation. Fixture targets are exclusively new random
+siblings inside one owned TEMP root. No existing ACL, service, trust, account,
+network or host setting is modified. Native tests create only their own children
+with the initial protected ACL, compare collision bytes/ACLs, join their bounded
+worker before cleanup and restore owned junctions before recursive removal.
+Attribute-only mutation that the selected platform refuses is reported as
+not-tested, not as adversarial coverage. Bounded race sampling is not an
+exhaustive race/OS/filesystem proof.
+
+The public creation entry point always supplies no callback. To cover the
+critical edge deterministically, the own-TEMP fixture reflects the same private
+core and changes its own parent immediately after all prechecks and immediately
+before `NtCreateFile`. It requires confirmed checkpoint entry/mutation and still
+rejects any artifact in its redirection target even when the primitive refuses.
+This is a test-only in-process checkpoint, not a manager, CLI or public callback
+route, and not a proof of every interleaving or platform.
+
+The observed ProgramData/BUILTIN Users mask `274` also includes attribute and EA
+writes. The current guard still rejects it: attribute access is not excluded by
+read sharing, and the reparse specification accepts write-attributes as well as
+write-data. No `274` exception follows from introducing this primitive or from
+portable compilation. A stronger independently reviewed binding/invariant and
+native negative/positive proof must precede any such integration or installation
+success claim.
+
 An unsafe allow ACE reports `INSTALL_PARENT_ACL_UNSAFE` with only a fixed parent
 class, well-known-principal category (all unknown SIDs map to `other-principal`),
 the matched forbidden-bit mask and inherited/not-inherited flag. Its value has no

@@ -42,7 +42,7 @@ func TestRustPackageVerificationPrecedesExecutionAndPersistentStaging(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, marker := range []string{"OPEN_REPARSE_POINT", "$ancestors.Insert(0, $current.FullName)", "GetFileInformationByHandle", "Assert-TraceboltAmd64Image $stream", "$null -eq $descriptor.DiscretionaryAcl", "CreateDirectoryW(path, ref attributes)"} {
+	for _, marker := range []string{"OPEN_REPARSE_POINT", "$ancestors.Insert(0, $current.FullName)", "GetFileInformationByHandle", "Assert-TraceboltAmd64Image $stream", "$null -eq $descriptor.DiscretionaryAcl", "RootDirectory=parent.DangerousGetHandle()", "NtCreateFile(out rawChild", "$DirectoryLease.CreateProtectedChild($Path)"} {
 		if !strings.Contains(string(raw), marker) {
 			t.Fatalf("bounded native preflight guard missing: %q", marker)
 		}

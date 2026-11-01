@@ -8,27 +8,156 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 namespace Tracebolt {
     public static class RustInstallerPath {
-        [StructLayout(LayoutKind.Sequential)]
-        private struct SecurityAttributes { public int Length; public IntPtr Descriptor; public int Inherit; }
         [StructLayout(LayoutKind.Sequential)]
         private struct FileInformation {
             public uint Attributes;
             public System.Runtime.InteropServices.ComTypes.FILETIME Creation, Access, Write;
             public uint Volume, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
         }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct UnicodeName { public ushort Length, MaximumLength; public IntPtr Buffer; }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ObjectAttributes {
+            public uint Length; public IntPtr RootDirectory, ObjectName;
+            public uint Attributes; public IntPtr SecurityDescriptor, SecurityQualityOfService;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct IoStatusBlock { public IntPtr Status; public UIntPtr Information; }
         [DllImport("advapi32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
         private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptorW(string text, uint revision, out IntPtr descriptor, out uint size);
-        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
-        private static extern bool CreateDirectoryW(string path, ref SecurityAttributes attributes);
+        [DllImport("advapi32.dll", ExactSpelling=true)]
+        private static extern uint GetSecurityInfo(SafeFileHandle handle, uint type, uint information, out IntPtr owner, out IntPtr group,
+            out IntPtr dacl, out IntPtr sacl, out IntPtr descriptor);
+        [DllImport("advapi32.dll", ExactSpelling=true)]
+        private static extern uint GetSecurityDescriptorLength(IntPtr descriptor);
         [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
         private static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
         [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)]
         private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileInformation information);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+        private static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder path, uint size, uint flags);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+        private static extern bool GetVolumeInformationByHandleW(SafeFileHandle handle, StringBuilder volumeName, uint volumeNameSize,
+            out uint serial, out uint maximumComponentLength, out uint flags, StringBuilder fileSystemName, uint fileSystemNameSize);
+        [DllImport("ntdll.dll", ExactSpelling=true)]
+        private static extern int NtCreateFile(out IntPtr handle, uint access, ref ObjectAttributes attributes, out IoStatusBlock status,
+            IntPtr allocationSize, uint fileAttributes, uint shareAccess, uint disposition, uint options, IntPtr eaBuffer, uint eaLength);
+        [DllImport("ntdll.dll", ExactSpelling=true)]
+        private static extern uint RtlNtStatusToDosError(int status);
         [DllImport("kernel32.dll", ExactSpelling=true)]
         private static extern IntPtr LocalFree(IntPtr memory);
+        private static FileInformation DirectoryInformation(SafeFileHandle handle) {
+            FileInformation information;
+            if (handle.IsInvalid || handle.IsClosed || !GetFileInformationByHandle(handle, out information))
+                throw new IOException("Directory identity is unavailable.");
+            if ((information.Attributes & 0x400) != 0 || (information.Attributes & 0x10) == 0)
+                throw new IOException("Directory is not an ordinary no-follow object.");
+            return information;
+        }
+        public static string FinalDirectoryPath(SafeFileHandle handle) {
+            DirectoryInformation(handle);
+            var buffer = new StringBuilder(4096);
+            uint length = GetFinalPathNameByHandleW(handle, buffer, 4096, 1); // normalized, volume-GUID qualified
+            if (length == 0 || length >= 4096) throw new IOException("Directory final-path identity is unavailable.");
+            return buffer.ToString().TrimEnd('\\');
+        }
+        public static bool SameDirectoryObject(SafeFileHandle left, SafeFileHandle right) {
+            var a = DirectoryInformation(left); var b = DirectoryInformation(right);
+            return a.Volume == b.Volume && a.IndexHigh == b.IndexHigh && a.IndexLow == b.IndexLow;
+        }
+        private static void RequireNtfs(SafeFileHandle parent) {
+            var name = new StringBuilder(32);
+            uint serial, maximumComponentLength, flags;
+            if (!GetVolumeInformationByHandleW(parent, null, 0, out serial, out maximumComponentLength, out flags, name, 32) ||
+                !string.Equals(name.ToString(), "NTFS", StringComparison.Ordinal))
+                throw new IOException("Relative protected creation requires the reviewed local NTFS contract.");
+        }
+        private static void RequireFreshProtection(SafeFileHandle child) {
+            IntPtr owner, group, dacl, sacl, descriptor;
+            uint result = GetSecurityInfo(child, 1, 5, out owner, out group, out dacl, out sacl, out descriptor);
+            if (result != 0 || descriptor == IntPtr.Zero) throw new IOException("Fresh directory protection is unavailable.");
+            try {
+                uint length = GetSecurityDescriptorLength(descriptor);
+                if (length == 0 || length > 65536) throw new IOException("Fresh directory descriptor is unsupported.");
+                var bytes = new byte[(int)length];
+                Marshal.Copy(descriptor, bytes, 0, bytes.Length);
+                var security = new RawSecurityDescriptor(bytes, 0);
+                if (security.Owner == null || security.Owner.Value != "S-1-5-32-544" || security.DiscretionaryAcl == null ||
+                    (security.ControlFlags & (ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected)) !=
+                        (ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected) || security.DiscretionaryAcl.Count != 2)
+                    throw new IOException("Fresh directory owner or protected ACL mismatch.");
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (GenericAce entry in security.DiscretionaryAcl) {
+                    var ace = entry as CommonAce;
+                    if (ace == null || ace.IsCallback || ace.AceQualifier != AceQualifier.AccessAllowed || ace.AccessMask != 0x001f01ff ||
+                        ace.AceFlags != (AceFlags.ContainerInherit | AceFlags.ObjectInherit) ||
+                        (ace.SecurityIdentifier.Value != "S-1-5-18" && ace.SecurityIdentifier.Value != "S-1-5-32-544") ||
+                        !seen.Add(ace.SecurityIdentifier.Value))
+                        throw new IOException("Fresh directory ACL is not the exact protected creation policy.");
+                }
+            } finally { if (descriptor != IntPtr.Zero) LocalFree(descriptor); }
+        }
+        public static SafeFileHandle CreateRelativeDirectory(SafeFileHandle parent, string leaf) {
+            return CreateRelativeDirectoryCore(parent, leaf, null);
+        }
+        // No public callback route. The owned TEMP fixture reflects this private
+        // core only to place a reparse change at the last pre-NtCreateFile edge.
+        private static SafeFileHandle CreateRelativeDirectoryCore(SafeFileHandle parent, string leaf, Action beforeNative) {
+            // No paths, ADS, dot components, arbitrary installer input or fallback.
+            if (leaf != "state" && leaf != "TraceboltRust" && leaf != "Tracebolt Rust")
+                throw new IOException("Only a fixed installation child component is supported.");
+            bool parentReference = false;
+            IntPtr descriptor = IntPtr.Zero, nameBuffer = IntPtr.Zero, namePointer = IntPtr.Zero;
+            SafeFileHandle child = null;
+            try {
+                parent.DangerousAddRef(ref parentReference);
+                var before = DirectoryInformation(parent);
+                RequireNtfs(parent);
+                string parentPath = FinalDirectoryPath(parent);
+                uint descriptorSize;
+                if (!ConvertStringSecurityDescriptorToSecurityDescriptorW("O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)", 1, out descriptor, out descriptorSize))
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                nameBuffer = Marshal.StringToHGlobalUni(leaf);
+                var name = new UnicodeName { Length=(ushort)(leaf.Length * 2), MaximumLength=(ushort)(leaf.Length * 2 + 2), Buffer=nameBuffer };
+                namePointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(UnicodeName)));
+                Marshal.StructureToPtr(name, namePointer, false);
+                var attributes = new ObjectAttributes {
+                    Length=(uint)Marshal.SizeOf(typeof(ObjectAttributes)), RootDirectory=parent.DangerousGetHandle(),
+                    ObjectName=namePointer, Attributes=0x1000, SecurityDescriptor=descriptor, SecurityQualityOfService=IntPtr.Zero
+                }; // OBJ_DONT_REPARSE; never OBJ_OPENIF or inherited handles.
+                IoStatusBlock status;
+                IntPtr rawChild;
+                if (beforeNative != null) beforeNative(); // deterministic isolated fixture checkpoint only
+                int result = NtCreateFile(out rawChild, 0x00120089, ref attributes, out status, IntPtr.Zero,
+                    0x10, 1, 2, 0x00200021, IntPtr.Zero, 0);
+                // FILE_GENERIC_READ; share-read only; FILE_CREATE;
+                // DIRECTORY_FILE | SYNCHRONOUS_IO_NONALERT | OPEN_REPARSE_POINT.
+                if (rawChild != IntPtr.Zero && rawChild != new IntPtr(-1)) child = new SafeFileHandle(rawChild, true);
+                if (result != 0) throw new Win32Exception((int)RtlNtStatusToDosError(result));
+                if (child == null || status.Information.ToUInt64() != 2)
+                    throw new IOException("Fresh directory creation was not confirmed."); // FILE_CREATED, never adoption.
+                DirectoryInformation(child);
+                RequireFreshProtection(child);
+                var after = DirectoryInformation(parent);
+                if (before.Volume != after.Volume || before.IndexHigh != after.IndexHigh || before.IndexLow != after.IndexLow ||
+                    !string.Equals(parentPath, FinalDirectoryPath(parent), StringComparison.Ordinal) ||
+                    !string.Equals(parentPath + "\\" + leaf, FinalDirectoryPath(child), StringComparison.Ordinal))
+                    throw new IOException("Relative directory identity or containment is uncertain; staging retained.");
+                // The returned handle is retained without any reopen gap.
+                return child;
+            } catch { if (child != null) child.Dispose(); throw; }
+            finally {
+                if (namePointer != IntPtr.Zero) Marshal.FreeHGlobal(namePointer);
+                if (nameBuffer != IntPtr.Zero) Marshal.FreeHGlobal(nameBuffer);
+                if (descriptor != IntPtr.Zero) LocalFree(descriptor);
+                if (parentReference) parent.DangerousRelease();
+            }
+        }
         public static bool IsOrdinaryDirectory(SafeFileHandle handle) {
             FileInformation information;
             return !handle.IsInvalid && !handle.IsClosed && GetFileInformationByHandle(handle, out information) &&
@@ -36,7 +165,7 @@ namespace Tracebolt {
         }
         public static SafeFileHandle Open(string path, bool directory) {
             // OPEN_REPARSE_POINT inspects the selected object, not a link target.
-            // Share-read only denies existing/future write/delete handles.
+            // Share-read denies data-write/delete handles, not attribute/EA access.
             // Actual read access is required for share accounting; an access=0
             // metadata-only directory open is not a namespace lock.
             var handle = CreateFileW(path, 0x80000000u, 1, IntPtr.Zero, 3, 0x00200000u | (directory ? 0x02000000u : 0u), IntPtr.Zero);
@@ -49,20 +178,12 @@ namespace Tracebolt {
                 return handle;
             } catch { handle.Dispose(); throw; }
         }
-        public static void CreateDirectory(string path) {
-            IntPtr descriptor;
-            uint size;
-            if (!ConvertStringSecurityDescriptorToSecurityDescriptorW("O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)", 1, out descriptor, out size))
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-            try {
-                var attributes = new SecurityAttributes { Length=Marshal.SizeOf(typeof(SecurityAttributes)), Descriptor=descriptor, Inherit=0 };
-                if (!CreateDirectoryW(path, ref attributes)) throw new Win32Exception(Marshal.GetLastWin32Error());
-            } finally { LocalFree(descriptor); }
-        }
     }
     // Own actual handles, not a caller-supplied "checked" flag or path roster.
     public sealed class InstallDirectoryLease : IDisposable {
+        private readonly object gate = new object();
         private readonly Dictionary<string, SafeFileHandle> handles = new Dictionary<string, SafeFileHandle>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> createdChildren = new Dictionary<string, string>(StringComparer.Ordinal);
         private bool disposed;
         private InstallDirectoryLease() { }
         private static string Canonical(string path) {
@@ -78,6 +199,7 @@ namespace Tracebolt {
             catch { lease.Dispose(); throw; }
         }
         public void Pin(string path) {
+            lock (gate) {
             if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
             var chain = new List<string>();
             var current = new DirectoryInfo(Canonical(path));
@@ -91,16 +213,55 @@ namespace Tracebolt {
                     handles.Add(ancestor, handle);
                 }
             }
+            }
         }
         public bool Covers(string path) {
+            lock (gate) {
             if (disposed) return false;
             SafeFileHandle handle;
             return handles.TryGetValue(Canonical(path), out handle) && RustInstallerPath.IsOrdinaryDirectory(handle);
+            }
+        }
+        public void CreateProtectedChild(string path) {
+            lock (gate) {
+                if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+                string full = Canonical(path);
+                var parentDirectory = new DirectoryInfo(full).Parent;
+                if (parentDirectory == null) throw new IOException("A fixed child needs a leased parent.");
+                string parent = Canonical(parentDirectory.FullName);
+                if (!Covers(parent) || handles.ContainsKey(full)) throw new IOException("Exact fresh child admission is unavailable.");
+                SafeFileHandle child = RustInstallerPath.CreateRelativeDirectory(handles[parent], Path.GetFileName(full));
+                try {
+                    // This path lookup is verification only, never creation.
+                    // Before any copy/init/SCM operation it must name the exact
+                    // object returned by the handle-relative exclusive create.
+                    using (var actual = RustInstallerPath.Open(full, true)) {
+                        if (!RustInstallerPath.SameDirectoryObject(child, actual) ||
+                            !string.Equals(RustInstallerPath.FinalDirectoryPath(child), RustInstallerPath.FinalDirectoryPath(actual), StringComparison.Ordinal))
+                            throw new IOException("Created child does not match the intended full-path object; staging retained.");
+                    }
+                    if (!Covers(parent)) throw new IOException("Parent changed during protected creation; staging retained.");
+                    handles.Add(full, child);
+                    createdChildren[parent] = full;
+                    child = null;
+                } finally { if (child != null) child.Dispose(); }
+            }
+        }
+        public bool HasBoundChild(string parentPath) {
+            lock (gate) {
+                if (disposed) return false;
+                string parent = Canonical(parentPath), child;
+                return createdChildren.TryGetValue(parent, out child) && Covers(parent) && Covers(child) &&
+                    string.Equals(RustInstallerPath.FinalDirectoryPath(handles[parent]) + "\\" + Path.GetFileName(child),
+                        RustInstallerPath.FinalDirectoryPath(handles[child]), StringComparison.Ordinal);
+            }
         }
         public void Dispose() {
+            lock (gate) {
             if (disposed) return;
             disposed = true;
             foreach (SafeFileHandle handle in handles.Values) handle.Dispose();
+            }
         }
     }
 }
@@ -314,7 +475,8 @@ function New-TraceboltProtectedDirectory([string]$Path, [object]$DirectoryLease 
     # leaf, even if another process wins the race after absence preflight. The
     # initial protected ACL is applied atomically, before SCM or file staging.
     Initialize-TraceboltInstallerType
-    if ($DirectoryLease -is [Tracebolt.InstallDirectoryLease]) { $DirectoryLease.Pin((Split-Path -Parent $Path)) }
+    if ($DirectoryLease -isnot [Tracebolt.InstallDirectoryLease]) { throw 'Protected creation requires an actual native directory lease.' }
+    $DirectoryLease.Pin((Split-Path -Parent $Path))
     Assert-TraceboltInstallParent (Split-Path -Parent $Path) $DirectoryLease
-    [Tracebolt.RustInstallerPath]::CreateDirectory($Path)
+    $DirectoryLease.CreateProtectedChild($Path)
 }

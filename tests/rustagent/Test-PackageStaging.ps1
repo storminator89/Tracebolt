@@ -73,3 +73,4 @@ try {
 }
 Write-Host 'Filesystem-only package staging and checksum regression passed.'
 & (Join-Path $PSScriptRoot 'Test-InstallerPackagePreflight.ps1')
+& (Join-Path $PSScriptRoot 'Test-RelativeDirectoryCreation.ps1')
