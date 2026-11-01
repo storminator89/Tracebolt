@@ -176,6 +176,158 @@ fn certificate_expiry_and_clock_uncertainty_never_turn_old_acceptance_fresh() {
 }
 
 #[test]
+fn future_local_attempts_report_clock_uncertainty_without_changing_retained_state() {
+    for completed in [false, true] {
+        let root = fixture();
+        let future = now() + ChronoDuration::seconds(31);
+        let mut tracker = open_tracker(root.path());
+        tracker.attempt(future).unwrap();
+        if completed {
+            tracker
+                .complete(
+                    Code::PendingApproval,
+                    None,
+                    future,
+                    0,
+                    Duration::from_secs(30),
+                    None,
+                )
+                .unwrap();
+        }
+        drop(tracker);
+        let path = root.path().join("state/health-v1.json");
+        let original = fs::read(&path).unwrap();
+        let status = encoded(root.path(), now());
+        assert_eq!(status["state"], "clock-invalid");
+        assert_eq!(status["lastAttemptAt"], json!(future));
+        assert_eq!(
+            status["lastAttemptResult"],
+            if completed {
+                "pending-approval"
+            } else {
+                "attempt-in-progress"
+            }
+        );
+        assert_eq!(status["receiptFreshness"], "no-accepted-receipt-recorded");
+        assert!(status["lastAcceptedReceipt"].is_null());
+        let bundle: Value =
+            serde_json::from_slice(&health::support_bundle(root.path(), now()).unwrap()).unwrap();
+        assert_eq!(bundle["diagnostic"]["state"], "clock-invalid");
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+}
+
+#[test]
+fn later_impossible_attempt_does_not_keep_an_older_receipt_recent() {
+    let root = fixture();
+    let mut tracker = open_tracker(root.path());
+    tracker.attempt(now()).unwrap();
+    tracker
+        .complete(
+            Code::Accepted,
+            Some(accepted()),
+            now(),
+            0,
+            Duration::from_secs(60),
+            None,
+        )
+        .unwrap();
+    let accepted = encoded(root.path(), now());
+    let future = now() + ChronoDuration::seconds(31);
+    tracker.attempt(future).unwrap();
+    tracker
+        .complete(
+            Code::TransportTimeout,
+            None,
+            future,
+            1,
+            Duration::from_secs(60),
+            None,
+        )
+        .unwrap();
+    drop(tracker);
+    let status = encoded(root.path(), now());
+    assert_eq!(status["state"], "clock-invalid");
+    assert_eq!(status["receiptFreshness"], "clock-unknown");
+    assert_eq!(status["lastAttemptResult"], "transport-timeout");
+    assert_eq!(
+        status["lastAcceptedReceipt"],
+        accepted["lastAcceptedReceipt"]
+    );
+    assert_eq!(status["receiptObservedAt"], accepted["receiptObservedAt"]);
+}
+
+#[test]
+fn clock_allowance_is_exact_and_scheduled_retry_is_not_a_future_observation() {
+    let root = fixture();
+    let mut tracker = open_tracker(root.path());
+    let allowance = now() + ChronoDuration::seconds(30);
+    tracker.attempt(allowance).unwrap();
+    assert_eq!(encoded(root.path(), now())["state"], "attempt-in-progress");
+    tracker
+        .attempt(allowance + ChronoDuration::nanoseconds(1))
+        .unwrap();
+    assert_eq!(encoded(root.path(), now())["state"], "clock-invalid");
+    tracker.attempt(now()).unwrap();
+    tracker
+        .complete(
+            Code::TransportTimeout,
+            None,
+            now(),
+            1,
+            Duration::from_secs(3600),
+            None,
+        )
+        .unwrap();
+    let status = encoded(root.path(), now());
+    assert_eq!(status["state"], "transport-timeout");
+    assert_eq!(
+        status["nextAttemptAt"],
+        json!(now() + ChronoDuration::hours(1))
+    );
+}
+
+#[test]
+fn readonly_cli_reports_future_attempt_clock_uncertainty_without_a_receipt() {
+    let root = fixture();
+    let future = Utc::now() + ChronoDuration::minutes(5);
+    let mut tracker = open_tracker(root.path());
+    tracker.attempt(future).unwrap();
+    drop(tracker);
+    let path = root.path().join("state/health-v1.json");
+    let original = fs::read(&path).unwrap();
+    let binary = env!("CARGO_BIN_EXE_tracebolt-windows-agent");
+    for command in ["status", "support-bundle"] {
+        let mut cli = std::process::Command::new(binary);
+        cli.args([command, "--directory"]).arg(root.path());
+        if command == "status" {
+            cli.arg("--json");
+        }
+        let output = cli.output().unwrap();
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let status = if command == "status" {
+            &value
+        } else {
+            &value["diagnostic"]
+        };
+        assert_eq!(status["state"], "clock-invalid");
+        assert_eq!(status["lastAttemptResult"], "attempt-in-progress");
+        assert!(status["lastAcceptedReceipt"].is_null());
+        let text = String::from_utf8(output.stdout).unwrap();
+        for private in [
+            "private-host-sentinel",
+            "private-identity-sentinel",
+            root.path().to_str().unwrap(),
+        ] {
+            assert!(!text.contains(private));
+        }
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+}
+
+#[test]
 fn finite_error_classes_do_not_classify_secrets_by_text_or_equate_401_with_revocation() {
     let raw = anyhow::anyhow!("private-token-sentinel: DNS TLS revoked corruption body");
     assert_eq!(health::classify(&raw), Code::UnclassifiedFailure);

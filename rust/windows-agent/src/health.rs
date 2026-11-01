@@ -343,6 +343,14 @@ fn view(snapshot: Snapshot, now: DateTime<Utc>, interval: u64) -> Status {
     let clock_allowance = now
         .checked_add_signed(chrono::Duration::seconds(30))
         .unwrap_or(DateTime::<Utc>::MAX_UTC);
+    // Both timestamps are local observations. A clock rollback can follow a
+    // pending/failed attempt even when there has never been an accepted receipt.
+    // next_attempt_at is a future scheduling hint, not an observation.
+    let clock_invalid = !valid_time(now)
+        || [snapshot.last_attempt_at, snapshot.receipt_observed_at]
+            .into_iter()
+            .flatten()
+            .any(|at| at > clock_allowance);
     let certificate_status = match snapshot.certificate_not_after {
         Some(at) if at <= now => {
             state = Code::CertificateExpired;
@@ -353,10 +361,7 @@ fn view(snapshot: Snapshot, now: DateTime<Utc>, interval: u64) -> Status {
         None => "unknown",
     };
     let receipt_freshness = match snapshot.receipt_observed_at {
-        Some(at) if at > clock_allowance => {
-            state = Code::ClockInvalid;
-            "clock-unknown"
-        }
+        Some(_) if clock_invalid => "clock-unknown",
         Some(at)
             if now.signed_duration_since(at).num_seconds()
                 <= (interval.saturating_mul(3).clamp(120, 7200)) as i64 =>
@@ -366,7 +371,7 @@ fn view(snapshot: Snapshot, now: DateTime<Utc>, interval: u64) -> Status {
         Some(_) => "stale-validated-receipt",
         None => "no-accepted-receipt-recorded",
     };
-    if !valid_time(now) {
+    if clock_invalid {
         state = Code::ClockInvalid;
     }
     if state == Code::Accepted {
