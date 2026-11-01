@@ -10,6 +10,37 @@ function Assert([bool]$Condition, [string]$Message) {
     if (!$Condition) { throw $Message }
 }
 try {
+    # Parse only the two pure evidence functions; never execute the administrator-
+    # only acceptance script, installer, a binary, SCM or any native operation.
+    $evidenceSource = Join-Path $PSScriptRoot 'Run-NativeAcceptance.ps1'
+    $tokens = $null; $errors = $null
+    $evidenceAst = [Management.Automation.Language.Parser]::ParseFile($evidenceSource, [ref]$tokens, [ref]$errors)
+    Assert ($errors.Count -eq 0) 'Native evidence source did not parse.'
+    $pureFunctions = @($evidenceAst.FindAll({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -cin @('ConvertTo-NativeEvidenceHealthCode','Get-NativeReceiptEvidence')
+    }, $false))
+    Assert ($pureFunctions.Count -eq 2) 'Expected exact pure native-evidence helpers.'
+    foreach ($function in $pureFunctions) { . ([scriptblock]::Create($function.Extent.Text)) }
+    $peer = [pscustomobject]@{ sequence = 7 }
+    foreach ($case in @(@($null,'accepted',$false,$false,$true), @(6,'accepted',$true,$false,$true),
+        @(7,'attempt-in-progress',$true,$true,$false), @(8,'accepted',$true,$true,$true))) {
+        $receipt = if ($null -ne $case[0]) { [pscustomobject]@{sequence=$case[0]; agentId='never-export-private-id'} } else { $null }
+        $local = [pscustomobject]@{state='health-unavailable'; lastAttemptResult=$case[1]; lastAcceptedReceipt=$receipt}
+        $observed = Get-NativeReceiptEvidence $local $peer
+        Assert ($observed.localReceiptPresent -eq $case[2] -and $observed.localReceiptAtLeastPeerSequence -eq $case[3] -and
+            $observed.localAttemptAccepted -eq $case[4]) 'Native receipt OR-branch evidence changed.'
+        Assert ($observed.localDiagnosticState -ceq 'health-unavailable' -and $observed.localAttemptResult -ceq $case[1]) 'Known diagnostic code was not preserved.'
+        Assert ((@($observed.Keys | Sort-Object) -join '|') -ceq 'localAttemptAccepted|localAttemptResult|localDiagnosticState|localReceiptAtLeastPeerSequence|localReceiptPresent') 'Native evidence exported an unreviewed field.'
+        foreach ($field in @('localReceiptPresent','localReceiptAtLeastPeerSequence','localAttemptAccepted')) {
+            Assert ($observed[$field] -is [bool]) 'Native receipt evidence must use literal Booleans.'
+        }
+        Assert (!(($observed | ConvertTo-Json -Compress).Contains('never-export-private-id'))) 'Native evidence leaked private receipt data.'
+    }
+    foreach ($unknown in @($null, 7, @{secret='never-export-private-prose'}, 'never-export-private-prose','ACCEPTED')) {
+        Assert ((ConvertTo-NativeEvidenceHealthCode $unknown) -ceq 'unrecognized') 'Unknown diagnostic input escaped finite vocabulary.'
+    }
+    Write-Host 'NATIVE_RECEIPT_FINITE_EVIDENCE_OR_BRANCHES_PASS'
     foreach ($leaf in @('Install-Tracebolt.ps1','Uninstall-Tracebolt.ps1','Package-Preflight.ps1','Write-Package.ps1','Build-Package.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Split-Path $package -Parent) $leaf), [ref]$tokens, [ref]$errors)

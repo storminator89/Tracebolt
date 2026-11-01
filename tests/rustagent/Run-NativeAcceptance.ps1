@@ -25,6 +25,33 @@ $fixtureExe = Join-Path $temporary 'nativefixture.exe'
 $fixture = $null
 $stagingAuthorized = $false
 $result = @{schemaVersion='tracebolt.rust-native-acceptance.v1'; status='failed'; platform='windows'; packagedArtifact=$false; install=$false; activated=$false; mutualTLS=$false; nativeMetrics=$false; localReceipt=$false; boundedStop=$false; stopMilliseconds=$null; restart=$false; removal=$false; rebootTested=$false; productionLinuxManager=$false}
+$result.localDiagnosticState = 'not-observed'; $result.localAttemptResult = 'not-observed'
+$result.localReceiptPresent = $false; $result.localReceiptAtLeastPeerSequence = $false; $result.localAttemptAccepted = $false
+function ConvertTo-NativeEvidenceHealthCode([object]$Value) {
+    # Return only source-fixed vocabulary, never an unknown status value/prose.
+    foreach ($code in @(
+        'not-observed','attempt-in-progress','attempt-interrupted','registration-pending','pending-approval','accepted',
+        'receipt-stale','certificate-expiring','configuration-invalid','state-unavailable','state-corrupt','clock-invalid',
+        'collection-failed','transport-timeout','transport-dns-failed','transport-tls-failed','transport-connection-refused',
+        'transport-unreachable','transport-unclassified','authentication-rejected','manager-rejected','protocol-unavailable',
+        'receipt-invalid','certificate-expired','certificate-not-yet-valid','enrollment-expired','enrollment-revoked',
+        'enrollment-terminated','unclassified-failure','health-unavailable'
+    )) {
+        if ($Value -is [string] -and $Value -ceq $code) { return $code }
+    }
+    return 'unrecognized'
+}
+function Get-NativeReceiptEvidence([object]$Local, [object]$Accepted) {
+    # Observations only. The original acceptance assertions below stay unchanged.
+    # Neither receipt identity/sequence/time nor raw status JSON is exported.
+    return @{
+        localDiagnosticState = ConvertTo-NativeEvidenceHealthCode $Local.state
+        localAttemptResult = ConvertTo-NativeEvidenceHealthCode $Local.lastAttemptResult
+        localReceiptPresent = [bool]($null -ne $Local.lastAcceptedReceipt)
+        localReceiptAtLeastPeerSequence = [bool]($Local.lastAcceptedReceipt.sequence -ge $Accepted.sequence)
+        localAttemptAccepted = [bool]($Local.lastAttemptResult -eq 'accepted')
+    }
+}
 function Read-OptionalJson([string]$Path) {
     if (!(Test-Path -LiteralPath $Path)) { return $null }
     try { return Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json } catch { return $null }
@@ -107,6 +134,8 @@ try {
     do {
         $local = (& $Executable status --directory $dataDirectory --json) | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0) { throw 'Local receipt diagnostics command failed.' }
+        $receiptEvidence = Get-NativeReceiptEvidence $local $accepted
+        foreach ($field in $receiptEvidence.Keys) { $result[$field] = $receiptEvidence[$field] }
         if ($local.lastAcceptedReceipt.sequence -ge $accepted.sequence -and $local.lastAttemptResult -eq 'accepted') { break }
         Start-Sleep -Milliseconds 250
     } while ([DateTime]::UtcNow -lt $deadline)
