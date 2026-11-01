@@ -21,7 +21,9 @@ MAX_IMAGE = 128 * 1024 * 1024
 MAX_BUILD_INFO = 64 * 1024
 _SOURCE = re.compile(r"[0-9a-f]{40}\Z")
 _SETTING = re.compile(r"[A-Za-z0-9_.-]{1,64}\Z")
-PE_CHECKS = ("pe-headers", "pe-sections", "pe-import-directory", "pe-import-descriptors", "pe-import-name", "pe-import-allowlist")
+PE_CHECKS = ("pe-headers", "pe-sections", "pe-import-directory", "pe-import-descriptors", "pe-import-name", "pe-import-allowlist",
+    "pe-import-rejected-known-crt-contract", "pe-import-rejected-declared-system-link",
+    "pe-import-rejected-compiler-runtime-shaped", "pe-import-rejected-api-set-shaped", "pe-import-rejected-other")
 GO_INFO_CHECKS = ("go-info-input", "go-info-rows", "go-info-path", "go-info-required", "go-info-source-claim")
 
 
@@ -100,6 +102,24 @@ def inspect_pe(raw, checkpoint=None):
                 value = name.decode("ascii").lower()
                 if checkpoint is not None:
                     checkpoint("pe-import-allowlist")
+                    if value not in SYSTEM_DLLS:
+                        # Diagnostic only. These public source-defined names or
+                        # syntactic shapes do not attest availability/identity
+                        # and never enter the admission set. Stop at this first
+                        # rejected import; never export its name or a hash.
+                        crt_families = ("conio", "convert", "environment", "filesystem", "heap", "locale", "math",
+                            "multibyte", "private", "process", "runtime", "stdio", "string", "time", "utility")
+                        if value in {"api-ms-win-crt-" + family + "-l1-1-0.dll" for family in crt_families}:
+                            checkpoint("pe-import-rejected-known-crt-contract")
+                        elif value in {"comdlg32.dll", "bcrypt.dll"}:
+                            checkpoint("pe-import-rejected-declared-system-link")
+                        elif value in {"libgcc_s_seh-1.dll", "libgcc_s_dw2-1.dll", "libgcc_s_sjlj-1.dll", "libwinpthread-1.dll",
+                                       "libstdc++-6.dll", "libssp-0.dll", "libgomp-1.dll", "libatomic-1.dll"}:
+                            checkpoint("pe-import-rejected-compiler-runtime-shaped")
+                        elif re.fullmatch(r"(?:api|ext)-[a-z0-9-]{1,64}-l[0-9]+-[0-9]+-[0-9]+\.dll", value):
+                            checkpoint("pe-import-rejected-api-set-shaped")
+                        else:
+                            checkpoint("pe-import-rejected-other")
                 _need(value in SYSTEM_DLLS)
                 return value
         raise ValueError("provenance")

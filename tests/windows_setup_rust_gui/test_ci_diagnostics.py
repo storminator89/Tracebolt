@@ -87,13 +87,13 @@ class DiagnosticTests(unittest.TestCase):
         assert b.provenance.inspect_pe(raw)==b.provenance.inspect_pe(raw,checkpoint=note)
         assert b.provenance.inspect_go_build_info(f.info_fixture(),'a'*40)==b.provenance.inspect_go_build_info(f.info_fixture(),'a'*40,checkpoint=note)
         assert p.projection()['check']=='go-info-source-claim'
-        for name in [b'libgcc_s_seh-1.dll',b'invented-private-marker.dll']:
+        for name,check in [(b'libgcc_s_seh-1.dll','pe-import-rejected-compiler-runtime-shaped'),(b'invented-private-marker.dll','pe-import-rejected-other')]:
             raw=bytes(f.pe_fixture((name,)))
             for callback in [None,note]:
                 try: b.provenance.inspect_pe(raw,checkpoint=callback)
                 except ValueError as error: assert str(error)=='provenance'
                 else: raise AssertionError('foreign runtime admitted')
-            assert p.projection()=={'phase':'provenance','check':'pe-import-allowlist'}
+            assert p.projection()=={'phase':'provenance','check':check}
             assert name.decode() not in json.dumps(p.projection())
         for raw,check in [(f.info_fixture().replace(b'GOOS=windows',b'GOOS=linux'),'go-info-required'),(f.info_fixture(flags=f.FLAGS),'go-info-source-claim')]:
             for callback in [None,note]:

@@ -67,6 +67,40 @@ class PEProvenanceTests(unittest.TestCase):
         for name in [b"api-ms-win-crt-private-l1-1-0.dll", b"libgcc_s_seh-1.dll", b"libwinpthread-1.dll", b"libstdc++-6.dll"]:
             self.reject(bytes(pe_fixture((name,))))
 
+    def test_rejected_import_categories_never_admit_or_export_a_name(self):
+        crt = [b"api-ms-win-crt-" + family.encode() + b"-l1-1-0.dll" for family in
+               ("conio", "convert", "environment", "filesystem", "heap", "locale", "math", "multibyte",
+                "private", "process", "runtime", "stdio", "string", "time", "utility")]
+        groups = [(crt, "pe-import-rejected-known-crt-contract"),
+            ([b"bcrypt.dll", b"comdlg32.dll"], "pe-import-rejected-declared-system-link"),
+            ([b"libgcc_s_seh-1.dll", b"libwinpthread-1.dll", b"libstdc++-6.dll", b"libssp-0.dll"], "pe-import-rejected-compiler-runtime-shaped"),
+            ([b"api-ms-win-example-l1-1-0.dll", b"ext-ms-example-l9-9-9.dll"], "pe-import-rejected-api-set-shaped"),
+            ([b"invented-private-marker.dll", b"C:\\invented-private-marker.dll", b"libgcc_private_marker.dll"], "pe-import-rejected-other")]
+        for names, check in groups:
+            for name in names:
+                raw = bytes(pe_fixture((name,)))
+                self.reject(raw)
+                seen = []
+                with self.assertRaisesRegex(ValueError, "^provenance$"):
+                    p.inspect_pe(raw, checkpoint=seen.append)
+                self.assertEqual(seen[-1], check)
+                self.assertTrue(set(seen) <= set(p.PE_CHECKS))
+                self.assertNotIn(name.decode(), json.dumps(seen))
+
+    def test_first_rejected_import_ends_scan_without_a_fingerprint(self):
+        seen = []
+        raw = bytes(pe_fixture((b"api-ms-win-crt-stdio-l1-1-0.dll", b"libwinpthread-1.dll")))
+        with self.assertRaisesRegex(ValueError, "^provenance$"):
+            p.inspect_pe(raw, checkpoint=seen.append)
+        self.assertEqual(seen[-1], "pe-import-rejected-known-crt-contract")
+        self.assertNotIn("pe-import-rejected-compiler-runtime-shaped", seen)
+
+    def test_allowed_imports_do_not_generate_rejection_categories(self):
+        seen = []
+        raw = bytes(pe_fixture((b"kernel32.dll", b"ucrtbase.dll")))
+        self.assertEqual(p.inspect_pe(raw), p.inspect_pe(raw, checkpoint=seen.append))
+        self.assertFalse(any(label.startswith("pe-import-rejected-") for label in seen))
+
     def test_machine_timestamp_signature_and_subsystem_cannot_be_promoted(self):
         for offset, fmt, value in [(0x84, "<H", 0xAA64), (0x88, "<I", 1),
                 (0x98, "<H", 0x10B), (0x98 + 68, "<H", 2),

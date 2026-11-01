@@ -162,6 +162,24 @@ never include DLL names, commands, paths, exceptions, output bytes or other raw
 values. Success manifests/acceptance rules are unchanged; no guard is loosened
 and no failed native attempt is relabelled as accepted.
 
+The next finite report localized the first rejected import to the PE allowlist;
+the actual name remains private/unknown. Local GCC14 evidence has nine allowed
+system imports, while official MinGW13's [CRT configuration](https://raw.githubusercontent.com/mingw-w64/mingw-w64/v13.0.0/mingw-w64-crt/configure.ac)
+and [library recipe](https://raw.githubusercontent.com/mingw-w64/mingw-w64/v13.0.0/mingw-w64-crt/Makefile.am)
+build the UCRT import library from fifteen fixed API-set contract families,
+separately from the direct UCRT-base import library. The existing Cgo recipe
+also explicitly names two system link libraries not in this test's allowlist.
+Neither fact proves which import failed, nor that it may safely be admitted.
+
+The follow-up reports only one of five fixed rejection categories: a public
+source-defined CRT contract, an already-declared system link, a conventional
+compiler-runtime name, API-set-shaped text, or other. Shape/category is not OS
+availability or trusted-module proof. All unlisted imports still fail the exact
+same membership guard, including every categorized CRT/API-set/runtime import.
+Only the first rejection is classified; no DLL name, substring, path, hash or
+multi-import fingerprint is exported. No allowlist, linker recipe or runtime
+guard changes follow from this diagnostic.
+
 Runner/tool/context references: [official Windows 2025 image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md),
 [GitHub default-variable semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/variables),
 and the pinned Go source's `cmd/go/internal/load/pkg.go` build-info handling
