@@ -23,9 +23,11 @@ impl Sender {
             config.enrollment_mode == crate::config::EnrollmentMode::Preprovided,
             "identity requires enrollment"
         );
-        let certificate = read_bounded(&directory.join("client.pem"), 32768)?;
-        let ca = crate::config::read_ca(directory)?;
-        let private_key = read_bounded(&directory.join("client.key"), 16384)?;
+        let certificate = read_bounded(&directory.join("client.pem"), 32768)
+            .context(Code::ConfigurationInvalid)?;
+        let ca = crate::config::read_ca(directory).context(Code::ConfigurationInvalid)?;
+        let private_key = read_bounded(&directory.join("client.key"), 16384)
+            .context(Code::ConfigurationInvalid)?;
         if initialize {
             crate::credentials::validate_material(&certificate, &private_key)?;
         }
@@ -67,7 +69,8 @@ impl Sender {
             chrono::DateTime::<Utc>::from_timestamp(leaf.validity().not_after.timestamp(), 0)
                 .ok_or(Code::ConfigurationInvalid)?;
         let binding = config.binding(&certificate, &ca)?;
-        let client = crate::credentials::client(&certificate, &private_key, &ca)?;
+        let client = crate::credentials::client(&certificate, &private_key, &ca)
+            .context(Code::ConfigurationInvalid)?;
         let state = if enrolled {
             State::enrolled(directory, &binding).context(Code::StateUnavailable)?
         } else {
