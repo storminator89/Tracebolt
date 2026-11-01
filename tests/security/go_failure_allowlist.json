@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "22e4b4b19557755ff9e2fd02e1b97058f8951fa23b3a0c5e314440f82f4f6b28",
+  "goSourceSha256": "28a1ef08c5557ac9a8c47d5f50487f145c4e128c7ec969b5e72746d2b480324e",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -5853,6 +5853,7 @@
       "TestRustFrontendProtectedSelectionErrorsDoNotRenderPrivateInput",
       "TestRustFrontendReviewUsesOriginalExactPresentation",
       "TestRustFrontendUninstallNeedsIndependentConfirmationAndRender",
+      "TestRustNativeGUIFixture",
       "TestSelectedInputAndTrustAreFrozen",
       "TestSuccessAndFailureNeverRetry",
       "TestTrustMustBePublicHTTPSAndFullDigests",
