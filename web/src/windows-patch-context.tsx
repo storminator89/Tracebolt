@@ -47,7 +47,7 @@ export function WindowsPatchContextPanel({ resource }: { resource: WindowsInvent
         <p className="windows-patch-os">{os.edition.quality === 'observed' ? display(os.edition) : `${c.edition} ${display(os.edition)}`} · {c.release} {display(os.release)} · {c.build} {display(os.build)}{os.build.quality === 'observed' && os.revision.quality === 'observed' ? `.${os.revision.value}` : ` · ${c.revision} ${display(os.revision)}`}</p>
         <p className="windows-patch-reboot">{c.reboot}: <strong>{rebootState === 'clear' ? c.clearSummary : c[rebootState]}</strong></p>
         {resource.patchContextStale && <p role="status" className="windows-inventory-caution">{c.stale}</p>}
-        <dl className="windows-patch-sources"><div><dt>{c.source}</dt><dd>{c.sourceValue}</dd></div><div><dt>{c.method}</dt><dd>{historyMethod}</dd></div></dl>
+        <dl className="windows-patch-evidence"><div><dt>{c.source}</dt><dd>{c.sourceValue}</dd></div><div><dt>{c.method}</dt><dd>{historyMethod}</dd></div></dl>
         <p className="windows-inventory-exclusions">{c.note}</p>
         {history.reason && <p className="windows-inventory-caution">{c.reasons[history.reason]}</p>}
         {history.truncated && <p className="windows-inventory-caution">{c.omitted}</p>}

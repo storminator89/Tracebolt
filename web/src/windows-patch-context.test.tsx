@@ -44,6 +44,8 @@ describe('Compact patch context in the existing Updates tab', () => {
             const region = screen.getByRole('region', { name: de ? 'Patch-Kontext' : 'Patch context' }), reads = vi.mocked(request).mock.calls.length;
             const assertEvidence = () => {
                 expect(within(region).getByText(source), state).toBeVisible();
+                // The existing browser contract reserves this selector for the three reboot sources.
+                expect(region.querySelectorAll('.windows-patch-sources dd'), state).toHaveLength(3);
                 expect(within(region).getByText(de ? /kein aktueller Installationsbestand/ : /not current installed inventory/), state).toBeVisible();
                 expect(within(region).getByText(de ? /Keine CVE-Bewertung/ : /No CVE assessment/), state).toBeVisible();
                 expect(region.querySelector(`time[datetime="${v.patchContext.collectedAt}"]`), state).toBeVisible();
