@@ -39,9 +39,7 @@ func (h *operatorHandler) customerWindowsAssignmentsAPI(w http.ResponseWriter, r
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	r = r.WithContext(ctx)
-	op, ok := operatorContext(r)
-	if !ok || op.session.Named() {
-		fail(w, 403, "operator_capability_required", "A shared administrator is required.")
+	if !authorizeCustomerAccess(w, r) {
 		return
 	}
 	if r.URL.RawQuery != "" || r.URL.ForceQuery {
