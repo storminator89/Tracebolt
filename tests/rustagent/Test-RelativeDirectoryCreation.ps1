@@ -126,6 +126,7 @@ function Get-FixtureAcl([string]$Path) {
 }
 $root = Join-Path ([IO.Path]::GetTempPath()) ('tracebolt-relative-' + [Guid]::NewGuid().ToString('N'))
 $cleanupSafe = $true
+$failureStage = 'setup'
 [IO.Directory]::CreateDirectory($root) | Out-Null
 function New-RelativeParent {
     $p = Join-Path $root ([Guid]::NewGuid().ToString('N'))
@@ -157,6 +158,7 @@ try {
     } finally { $h.Dispose() }
     Write-Host 'RELATIVE_POSITIVE_AND_FIXED_LEAF_PASS'
 
+    $failureStage = 'lease-acquire'
     $p = New-RelativeParent; $unrelated = New-RelativeParent
     $child = Join-Path $p 'state'; $otherChild = Join-Path $unrelated 'state'
     $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($p))
@@ -164,19 +166,26 @@ try {
         # Namespace-only unit proof under our user-owned TEMP ancestry. The
         # production public method additionally requires real owner/DACL review;
         # a TEMP fixture is not relabeled as a production-trusted ancestor.
+        $failureStage = 'lease-core-lookup'
         $namespaceCore = [Tracebolt.InstallDirectoryLease].GetMethod('CreateProtectedChildCore', [Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic)
         Assert-Relative ($null -ne $namespaceCore) 'RELATIVE_LEASE_CORE_UNAVAILABLE'
+        $failureStage = 'lease-core-invoke'
         [void]$namespaceCore.Invoke($lease, [object[]]@($child))
+        $failureStage = 'lease-bound-assert'
         Assert-Relative ($lease.Covers($child) -and $lease.HasBoundChild($p)) 'RELATIVE_LEASE_CHILD_NOT_BOUND'
+        $failureStage = 'lease-require-bound'
         $lease.RequireBoundChild($child)
+        $failureStage = 'lease-rename'
         $renamed = $false
         try { [IO.Directory]::Move($child, (Join-Path $p 'renamed')); $renamed = $true } catch { }
         Assert-Relative (!$renamed -and [IO.Directory]::Exists($child)) 'RELATIVE_LEASE_RENAME_NOT_BLOCKED'
+        $failureStage = 'lease-unrelated-parent'
         $accepted = $false
         try { $lease.CreateProtectedChild($otherChild); $accepted = $true } catch { }
         Assert-Relative (!$accepted -and ![IO.Directory]::Exists($otherChild)) 'RELATIVE_UNRELATED_PARENT_ACCEPTED'
         Assert-Relative (@([IO.Directory]::EnumerateFileSystemEntries($unrelated)).Count -eq 0) 'RELATIVE_UNRELATED_PARENT_CHANGED'
     } finally { $lease.Dispose() }
+    $failureStage = 'lease-disposal'
     Assert-Relative (!$lease.Covers($p) -and !$lease.Covers($child) -and !$lease.HasBoundChild($p)) 'RELATIVE_DISPOSED_LEASE_COVERS'
     $disposedChild = Join-Path $p 'TraceboltRust'; $accepted = $false
     try { $lease.CreateProtectedChild($disposedChild); $accepted = $true } catch { }
@@ -186,6 +195,7 @@ try {
     Assert-Relative (!(Invoke-RelativeAttempt $h)) 'RELATIVE_DISPOSED_PARENT_ACCEPTED'
     Assert-Relative (@([IO.Directory]::EnumerateFileSystemEntries($p)).Count -eq 0) 'RELATIVE_DISPOSED_PARENT_CHANGED'
     Write-Host 'RELATIVE_LEASE_BINDING_RENAME_AND_DISPOSAL_PASS'
+    $failureStage = 'post-lease-fixtures'
 
     $p = New-RelativeParent; $collision = Join-Path $p 'state'
     [IO.File]::WriteAllText($collision, 'preserve collision; no bound-child authority')
@@ -314,8 +324,12 @@ try {
     }
 } catch {
     # Avoid emitting raw exception paths, ACLs, IDs, or OS diagnostic details.
-    $category = $_.Exception.Message
+    $cause = $_.Exception.GetBaseException()
+    $category = $cause.Message
     if ($category -cmatch '^RELATIVE_[A-Z_]+$') { throw $category }
+    # Only a source-fixed stage and bounded numeric error codes, never raw text.
+    $nativeCode = if ($cause -is [ComponentModel.Win32Exception]) { [int]$cause.NativeErrorCode } else { 0 }
+    Write-Host ('RELATIVE_FAILURE stage={0} hresult={1} native={2}' -f $failureStage, [int]$cause.HResult, $nativeCode)
     throw 'RELATIVE_DIRECTORY_FIXTURE_FAILED'
 } finally {
     if ($cleanupSafe) { Remove-Item -LiteralPath $root -Recurse -Force }
