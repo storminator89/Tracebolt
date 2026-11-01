@@ -104,7 +104,7 @@ describe('customer catalog', () => {
         const panel = await screen.findByRole('region', { name: 'Kunden' });
         expect(within(panel).getByText(/ordnen weder Geräte noch Installer zu/)).toBeVisible();
         expect(within(panel).getByText('Organisation, keine Mandantentrennung')).toBeVisible();
-        fireEvent.change(within(panel).getByLabelText('Kundenname'), { target: { value: '  ' } });
+        fireEvent.change(await within(panel).findByLabelText('Kundenname'), { target: { value: '  ' } });
         expect(within(panel).getByRole('button', { name: 'Kunde erstellen' })).toBeDisabled();
     });
     it('hides prior values on an invalid catalog response', async () => {
