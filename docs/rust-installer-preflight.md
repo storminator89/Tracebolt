@@ -40,8 +40,10 @@ and held read-only through startup.
 Input/package path chains reject reparse points. Installation parents and their
 ancestors must be ordinary directories owned by SYSTEM, Administrators or
 TrustedInstaller, have a non-NULL DACL, and have no applicable allow ACE granting
-other principals file writes, deletion/child deletion, permission changes or
-ownership takeover. Inherit-only ACEs do not apply to the parent itself. This
+other principals file/attribute/extended-attribute writes, deletion/child
+deletion, permission changes or ownership takeover. Unmapped generic-write/all
+ACE bits also reject; they are not lost in an enum cast or a zero diagnostic.
+Inherit-only ACEs do not apply to the parent itself. This
 conservative allow-ACE check is not a complete Windows effective-access
 calculation and never repairs an existing parent or changes its ACL.
 `CreateDirectories` alone can remain on a parent: new target directories are
@@ -49,6 +51,25 @@ created exclusively with an initial protected SYSTEM/admin DACL; competing
 existing leaves are never adopted. Only after configuration preflight and those
 new directories does disabled SCM staging begin. Existing LocalService and
 restricted service-SID rights are unchanged.
+
+There is one narrowly bound creation-only exception for the observed native
+`ProgramData` / BUILTIN Users / bit `2` allow ACE. A sealed native directory
+lease must already own live, ordinary no-follow read handles for the exact
+canonical directory and every ancestor, denying write/delete sharing. The
+installer acquires both complete target-parent chains before reading ACLs and
+retains them through startup; it immediately extends coverage to freshly created
+binary/data/state directories before dependent work. A pre-existing incompatible
+writer, wrong path, missing/disposed lease or sharing conflict fails closed.
+Only bit `2` as the sole otherwise-forbidden right on that exact parent/principal
+is admitted with live coverage;
+deletion, ownership, DACL, generic or attribute-write authority never takes this
+exception. Other ancestors/principals remain strict. The ordinary guard without
+this actual native lease is unchanged for bit `2`; there is no Boolean bypass,
+ACL repair, unlock-and-retry or fallback to unprotected creation.
+
+These handles address installation-time namespace operations, not arbitrary
+future ACL changes, every filesystem mechanism or a compromised administrator.
+The permanent service/binary/state ACLs and all runtime authority remain as before.
 
 An unsafe allow ACE reports `INSTALL_PARENT_ACL_UNSAFE` with only a fixed parent
 class, well-known-principal category (all unknown SIDs map to `other-principal`),

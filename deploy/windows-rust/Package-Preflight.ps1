@@ -4,6 +4,7 @@ function Initialize-TraceboltInstallerType {
     if (!('Tracebolt.RustInstallerPath' -as [type])) {
         Add-Type -TypeDefinition @'
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -28,6 +29,11 @@ namespace Tracebolt {
         private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileInformation information);
         [DllImport("kernel32.dll", ExactSpelling=true)]
         private static extern IntPtr LocalFree(IntPtr memory);
+        public static bool IsOrdinaryDirectory(SafeFileHandle handle) {
+            FileInformation information;
+            return !handle.IsInvalid && !handle.IsClosed && GetFileInformationByHandle(handle, out information) &&
+                (information.Attributes & 0x400) == 0 && (information.Attributes & 0x10) != 0;
+        }
         public static SafeFileHandle Open(string path, bool directory) {
             // OPEN_REPARSE_POINT inspects the selected object, not a link target.
             // Share-read only denies existing/future write/delete handles.
@@ -52,6 +58,49 @@ namespace Tracebolt {
                 var attributes = new SecurityAttributes { Length=Marshal.SizeOf(typeof(SecurityAttributes)), Descriptor=descriptor, Inherit=0 };
                 if (!CreateDirectoryW(path, ref attributes)) throw new Win32Exception(Marshal.GetLastWin32Error());
             } finally { LocalFree(descriptor); }
+        }
+    }
+    // Own actual handles, not a caller-supplied "checked" flag or path roster.
+    public sealed class InstallDirectoryLease : IDisposable {
+        private readonly Dictionary<string, SafeFileHandle> handles = new Dictionary<string, SafeFileHandle>(StringComparer.Ordinal);
+        private bool disposed;
+        private InstallDirectoryLease() { }
+        private static string Canonical(string path) {
+            string full = Path.GetFullPath(path);
+            if (full.Length < 3 || !char.IsLetter(full[0]) || full[1] != ':' || full[2] != '\\' || full.IndexOf(':', 2) >= 0)
+                throw new IOException("Only local drive directories are supported.");
+            string root = Path.GetPathRoot(full);
+            return full.Length == root.Length ? full : full.TrimEnd('\\', '/');
+        }
+        public static InstallDirectoryLease Acquire(string[] paths) {
+            var lease = new InstallDirectoryLease();
+            try { foreach (string path in paths) lease.Pin(path); return lease; }
+            catch { lease.Dispose(); throw; }
+        }
+        public void Pin(string path) {
+            if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+            var chain = new List<string>();
+            var current = new DirectoryInfo(Canonical(path));
+            while (current != null) { chain.Insert(0, Canonical(current.FullName)); current = current.Parent; }
+            foreach (string ancestor in chain) {
+                SafeFileHandle handle;
+                if (handles.TryGetValue(ancestor, out handle)) {
+                    if (!RustInstallerPath.IsOrdinaryDirectory(handle)) throw new IOException("Directory lease is unavailable.");
+                } else {
+                    handle = RustInstallerPath.Open(ancestor, true);
+                    handles.Add(ancestor, handle);
+                }
+            }
+        }
+        public bool Covers(string path) {
+            if (disposed) return false;
+            SafeFileHandle handle;
+            return handles.TryGetValue(Canonical(path), out handle) && RustInstallerPath.IsOrdinaryDirectory(handle);
+        }
+        public void Dispose() {
+            if (disposed) return;
+            disposed = true;
+            foreach (SafeFileHandle handle in handles.Values) handle.Dispose();
         }
     }
 }
@@ -186,7 +235,9 @@ function Open-TraceboltPackage([string]$Executable, [string]$PackageDirectory) {
                 $executableHash = $digest
             }
         }
-        return @{ Streams = $streams; ExecutableStream = $executableStream; ExecutablePath = $actualExecutable; SHA256 = $executableHash }
+        # Invoke the literal path actually opened/hashed, not a caller's
+        # case-folded spelling in a potentially case-sensitive namespace.
+        return @{ Streams = $streams; ExecutableStream = $executableStream; ExecutablePath = $expectedExecutable; SHA256 = $executableHash }
     } catch {
         foreach ($stream in $streams) { $stream.Dispose() }
         throw
@@ -208,21 +259,22 @@ function Format-TraceboltParentAclDiagnostic(
         'S-1-15-2-2' { 'restricted-app-packages' }
         default { 'other-principal' }
     }
-    # Same five forbidden bits as the existing guard. This changes diagnostics,
-    # not admission: WriteData aliases CreateFiles for a directory and must not
-    # be silently reinterpreted as safe based on this diagnostic alone.
+    # Include explicit generic write/all bits and concrete attribute writes.
+    # Never hide a rejected generic ACE behind a misleading zero mask.
     return ('INSTALL_PARENT_ACL_UNSAFE parent={0} principal={1} forbiddenMask={2} inherited={3}' -f
-        $ParentClass, $principal, ($ForbiddenMask -band 0x000d0042), [int]$Inherited)
+        $ParentClass, $principal, ($ForbiddenMask -band 0x500d0152), [int]$Inherited)
 }
 
-function Assert-TraceboltInstallParent([string]$Path) {
+function Assert-TraceboltInstallParent([string]$Path, [object]$DirectoryLease = $null) {
     $full = Assert-TraceboltPlainPath $Path -Directory
     $trusted = @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
     $dangerous = [Security.AccessControl.FileSystemRights]::WriteData -bor
+        [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+        [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
         [Security.AccessControl.FileSystemRights]::Delete -bor
         [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
         [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
-        [Security.AccessControl.FileSystemRights]::TakeOwnership
+        [Security.AccessControl.FileSystemRights]::TakeOwnership -bor 0x50000000
     $current = Get-Item -LiteralPath $full -Force
     while ($null -ne $current) {
         $acl = Get-Acl -LiteralPath $current.FullName
@@ -236,22 +288,33 @@ function Assert-TraceboltInstallParent([string]$Path) {
         foreach ($rule in $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
             if ($rule.AccessControlType -eq 'Allow' -and !($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
                 ($rule.FileSystemRights -band $dangerous) -and $trusted -notcontains $rule.IdentityReference.Value) {
+                $matched = [int]($rule.FileSystemRights -band $dangerous)
+                # Exactly the observed ProgramData / BUILTIN Users / CreateFiles
+                # case, and only while THIS directory is pinned by live native
+                # no-follow handles denying write/delete opens. No Boolean
+                # acknowledgement, standalone relaxation or unprotected retry.
+                if ($matched -eq 2 -and $rule.IdentityReference.Value -ceq 'S-1-5-32-545' -and
+                    [string]::Equals($current.FullName, [Environment]::GetFolderPath('CommonApplicationData'), [StringComparison]::Ordinal) -and
+                    $DirectoryLease -is [Tracebolt.InstallDirectoryLease] -and $DirectoryLease.Covers($current.FullName)) {
+                    continue
+                }
                 $class = 'other-ancestor'
                 if ([string]::Equals($current.FullName, [IO.Path]::GetPathRoot($full), [StringComparison]::OrdinalIgnoreCase)) { $class = 'drive-root' }
                 elseif ([string]::Equals($current.FullName, [Environment]::GetFolderPath('ProgramFiles'), [StringComparison]::OrdinalIgnoreCase)) { $class = 'program-files' }
                 elseif ([string]::Equals($current.FullName, [Environment]::GetFolderPath('CommonApplicationData'), [StringComparison]::OrdinalIgnoreCase)) { $class = 'program-data' }
-                throw (Format-TraceboltParentAclDiagnostic $class $rule.IdentityReference.Value ([int]($rule.FileSystemRights -band $dangerous)) $rule.IsInherited)
+                throw (Format-TraceboltParentAclDiagnostic $class $rule.IdentityReference.Value $matched $rule.IsInherited)
             }
         }
         $current = $current.Parent
     }
 }
 
-function New-TraceboltProtectedDirectory([string]$Path) {
+function New-TraceboltProtectedDirectory([string]$Path, [object]$DirectoryLease = $null) {
     # Unlike New-Item/Directory.CreateDirectory, this never accepts an existing
     # leaf, even if another process wins the race after absence preflight. The
     # initial protected ACL is applied atomically, before SCM or file staging.
     Initialize-TraceboltInstallerType
-    Assert-TraceboltInstallParent (Split-Path -Parent $Path)
+    if ($DirectoryLease -is [Tracebolt.InstallDirectoryLease]) { $DirectoryLease.Pin((Split-Path -Parent $Path)) }
+    Assert-TraceboltInstallParent (Split-Path -Parent $Path) $DirectoryLease
     [Tracebolt.RustInstallerPath]::CreateDirectory($Path)
 }

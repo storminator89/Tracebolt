@@ -43,13 +43,17 @@ foreach ($file in $required) {
 if (![Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
     throw 'This package supports native Windows x64 only.'
 }
-Assert-TraceboltInstallParent (Split-Path -Parent $bin)
-Assert-TraceboltInstallParent (Split-Path -Parent $data)
-# Do not invoke a candidate before strict package/hash and PE architecture checks.
-# Keep all package files open against Windows write/delete replacement until done.
-$package = Open-TraceboltPackage -Executable $Executable -PackageDirectory $PSScriptRoot
+$package = $null
 $targetLock = $null
+Initialize-TraceboltInstallerType
+# Pin every existing target ancestor before reading its ACL. These are real
+# native read/no-follow handles, retained until startup or failure completes.
+$targetLease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@((Split-Path -Parent $bin), (Split-Path -Parent $data)))
 try {
+    Assert-TraceboltInstallParent (Split-Path -Parent $bin) $targetLease
+    Assert-TraceboltInstallParent (Split-Path -Parent $data) $targetLease
+    # Do not invoke a candidate before strict package/hash and PE checks.
+    $package = Open-TraceboltPackage -Executable $Executable -PackageDirectory $PSScriptRoot
     $Executable = $package.ExecutablePath
     $validationArguments = @('validate-config','--manager-origin',$ManagerOrigin,'--mode',$mode,'--interval-seconds',"$IntervalSeconds")
     if ($mode -ne 'preprovided') { $validationArguments += '--check-manager' }
@@ -79,15 +83,18 @@ try {
     }
     # Stage disabled. Automatic enrollment generates its own key; no invitation token is requested.
     $target = Join-Path $bin 'tracebolt-windows-agent.exe'
-    New-TraceboltProtectedDirectory $bin
-    New-TraceboltProtectedDirectory $data
+    New-TraceboltProtectedDirectory $bin $targetLease
+    $targetLease.Pin($bin)
+    New-TraceboltProtectedDirectory $data $targetLease
+    $targetLease.Pin($data)
     New-Service -Name $name -BinaryPathName ('"{0}" service --directory "{1}"' -f $target,$data) -DisplayName 'Tracebolt Rust basic agent' -StartupType Disabled | Out-Null
     Invoke-SC -Arguments @('config',$name,'obj=','NT AUTHORITY\LocalService')
     Invoke-SC -Arguments @('sidtype',$name,'restricted')
     Protect-Directory $bin 'ReadAndExecute'
     Protect-Directory $data 'ReadAndExecute'
     $state = Join-Path $data 'state'
-    New-TraceboltProtectedDirectory $state
+    New-TraceboltProtectedDirectory $state $targetLease
+    $targetLease.Pin($state)
     Protect-Directory $state 'Modify'
     # Copy from the exact verified, still-locked handle, never reopen the input path.
     $output = [IO.File]::Open($target, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -121,5 +128,6 @@ try {
     Write-Host 'Service started. Automatic onboarding needs no token. Review the new device and its public key fingerprint in the manager; after approval reporting starts automatically. Confirm a fresh accepted report, not only service uptime.'
 } finally {
     if ($null -ne $targetLock) { $targetLock.Dispose() }
-    foreach ($stream in $package.Streams) { $stream.Dispose() }
+    if ($null -ne $package) { foreach ($stream in $package.Streams) { $stream.Dispose() } }
+    $targetLease.Dispose()
 }
