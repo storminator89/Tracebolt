@@ -17,6 +17,11 @@ const InventoryMaintenanceInterval = time.Second
 // decision is cached across ticks. Busy/failing steps preserve data and retry on
 // later rounds. A bounded warning callback never receives source content.
 func (s *Service) RunInventoryMaintenance(ctx context.Context, warn func()) error {
+	return s.RunInventoryMaintenanceObserved(ctx, warn, MaintenanceObserver{})
+}
+
+// RunInventoryMaintenanceObserved adds bounded, content-free actual step evidence.
+func (s *Service) RunInventoryMaintenanceObserved(ctx context.Context, warn func(), observer MaintenanceObserver) error {
 	if s == nil || s.serviceState == nil || s.store == nil || ctx == nil || s.binding.CollectionProfile != enrollmentcrypto.CollectionProfileComplete {
 		return ErrConfiguration
 	}
@@ -31,8 +36,10 @@ func (s *Service) RunInventoryMaintenance(ctx context.Context, warn func()) erro
 		case <-ticker.C:
 			now := s.Now().UTC()
 			step, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			observer.start()
 			_, e := s.store.MaintainInventoryStep(step, slot, now)
 			cancel()
+			observer.complete(e)
 			slot++
 			if ctx.Err() != nil {
 				return nil

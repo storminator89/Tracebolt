@@ -46,6 +46,15 @@ No actual credentials are generated or entered by this implementation work. `sig
 
 Only latest observations are retained. Staleness degrades quality without fabricating a fresh sample, agent process liveness, or healthy host verdict. There is no collector fallback, synthetic fleet, history retention, update/CVE integration or automatic remediation in this LAN runtime yet. Native `lan-agent --foreground` schedules bounded reports; the manager does not initiate collection or establish that an OS service is installed. Existing rules are explicitly synthetic-demo rules and do not generate real LAN incidents. Current AI configuration also still rejects private LAN model origins; trusted private model support needs its separate transport policy.
 
+## Manager operational status
+
+The separate [manager readiness/metrics source candidate](manager-readiness-metrics.md)
+adds minimal process liveness and authenticated, cached manager-only operational
+status. It never substitutes process uptime or device Health for DB/issuer/
+maintenance readiness. Its exact filesystem-write and SQL-admission proof limits,
+private API, bounded labels and remaining #153/#136/#145 gates are documented there.
+It does not authorize a host deployment, external monitor or endpoint scope.
+
 ## Verification
 
 `go test -race ./cmd/lan-manager ./internal/lanconfig ./internal/lanstore ./internal/operatorauth ./internal/lantrust ./internal/signedhttp ./internal/api ./tests/security` exercises protected profile files, auth/session ordering, strict telemetry/replay, and real loopback HTTP/HTTPS listeners. TLS clients use explicit ephemeral CA pools with normal verification, never `InsecureSkipVerify`. The runtime profile test logs in, approves a public certificate, collects a bounded Linux sample, ingests it, retries without refreshing receipt age, revokes the agent and logs out. Tests print no raw sample values, secrets or certificates. Container execution is a separate opt-in gate; building the image or compiling skipped tests is not runtime evidence.
