@@ -107,6 +107,45 @@ class Builder:
         contract.need(len(raw) <= 65536, "provenance")
         return raw
 
+    def crt_diagnostic(self, image, image_hash):
+        # Evidence only after the original guard rejects a known CRT contract.
+        # Any uncertainty discards both vectors; the caller always re-raises.
+        evidence = runner.manual.source_only("rust_gui_crt_evidence", "ci_crt_evidence.py")
+        result = evidence.unavailable()
+        try:
+            contract.need(self.context.get("IMAGEOS") == "win25" and provenance.SYSTEM_DLLS == evidence.BASELINE, "provenance")
+            contract.need(policy.source_state(self.root, self.source, self.context) == self.state, "source")
+            tool = Path(self.gcc).with_name("objdump.exe")
+            contract.need(tool.is_absolute() and not tool.resolve().is_relative_to(self.root.resolve())
+                          and not tool.resolve().is_relative_to(self.output.resolve()), "provenance")
+            tool_hash, gcc_hash = hash_file(tool), hash_file(self.gcc)
+            native = evidence.Native()
+            # Retain all read-only ancestor/file leases across independent inspection,
+            # schema query and final source verification; no write/delete sharing.
+            with native.lease(image, image_hash[0]), native.lease(tool, tool_hash[0]), native.lease(self.gcc, gcc_hash[0]):
+                left = self.end - time.monotonic()
+                contract.need(left > 0, "deadline")
+                raw = evidence.run_bounded([str(tool), "-p", str(image)], self.root, self.env, limit=min(left, 20))
+                required = evidence.inspect_objdump(raw, image)
+                available = native.schema()
+                contract.need(hash_file(image) == image_hash and hash_file(tool) == tool_hash
+                              and hash_file(self.gcc) == gcc_hash, "provenance")
+                contract.need(policy.source_state(self.root, self.source, self.context) == self.state, "source")
+                observed = evidence.projection(required, available)
+            # Cleanup must also succeed before any observation can be exported.
+            result = {**observed, **self.state, "imageSHA256": image_hash[0], "imageSize": image_hash[1]}
+        except Exception:
+            pass  # No paths, raw tool output, import names or exception text.
+        return result
+
+    def inspect_image(self, raw, image, image_hash):
+        try:
+            return provenance.inspect_pe(raw, checkpoint=self.check)
+        except ValueError:
+            if self.progress.projection() == {"phase": "provenance", "check": "pe-import-rejected-known-crt-contract"}:
+                self.crt_evidence = self.crt_diagnostic(image, image_hash)
+            raise  # Diagnostic evidence never changes the original admission decision.
+
     def build(self):
         self.check("go-version")
         contract.need(self.run([self.go, "env", "GOVERSION"], capture=True).strip() == b"go1.27.1", "provenance")
@@ -155,7 +194,7 @@ class Builder:
         self.stage = "provenance"
         self.check("image-read")
         raw = image.read_bytes()
-        pe = provenance.inspect_pe(raw, checkpoint=self.check)
+        pe = self.inspect_image(raw, image, image_hash)
         self.check("compiled-source-presence")
         contract.need(self.source.encode() in raw, "provenance")
         self.check("go-build-info-read")
@@ -208,7 +247,14 @@ def main(argv=None):
         stage = builder.stage if builder is not None else stage
     if type(stage) is not str or stage not in PHASES and stage not in contract.STAGES:
         stage = "unexpected"
-    print(json.dumps({"schema": "tracebolt.rust-gui-ci-build-result.v1", "status": "not_built", "stage": stage,
+    diagnostic = {}
+    if builder is not None and getattr(builder, "crt_evidence", None) is not None:
+        try:
+            evidence = runner.manual.source_only("rust_gui_crt_evidence", "ci_crt_evidence.py")
+            diagnostic["crtEvidence"] = evidence.public_report(builder.crt_evidence)
+        except Exception:
+            pass  # A diagnostic-loader failure must not export a traceback/path.
+    print(json.dumps({"schema": "tracebolt.rust-gui-ci-build-result.v1", "status": "not_built", "stage": stage, **diagnostic,
                       **progress.projection(), "nativeExecution": False, "installerHostActionsAttempted": False}, sort_keys=True))
     return 2
 

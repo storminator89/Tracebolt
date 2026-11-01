@@ -180,6 +180,49 @@ Only the first rejection is classified; no DLL name, substring, path, hash or
 multi-import fingerprint is exported. No allowlist, linker recipe or runtime
 guard changes follow from this diagnostic.
 
+The subsequent first-rejection category was `known-crt-contract`; the GUI step
+still did not execute. A separate **read-only evidence producer** now runs only
+after that exact original rejection on the Windows 2025 job. It never admits an
+import or resumes building/running the fixture. It uses the existing GCC bin
+folder's GNU `objdump.exe -p` to independently inspect the same hash-bound own
+image while retaining the original reviewed read-only ancestor/file leases for
+the image, tool and compiler. The private tool output has an 8 MiB bound per
+stream, a 20-second execution limit, own-child-only cleanup, no shell, and no raw
+output export. Source, image and tool bindings are rechecked; failed cleanup,
+source/hash/lease/tool/query uncertainty, malformed output, or any import outside
+the original eleven plus this fixed catalogue discards **both** vectors.
+
+The only new import information is a fixed fifteen-Boolean `requiredCRT` vector,
+in this public order: **conio, convert, environment, filesystem, heap, locale,
+math, multibyte, private, process, runtime, stdio, string, time, utility**. Each
+entry denotes exactly `api-ms-win-crt-<family>-l1-1-0.dll`; no other name, prefix,
+version, hash of a rejected name, or arbitrary multi-import fingerprint is
+exported. The independent producer recognizes these names **for evidence only**;
+the original PE parser/eleven-DLL membership guard stays byte-identical and
+continues to reject every one of them.
+
+The second fifteen-Boolean `schemaPresent` vector queries those same constant
+contract stems **without `.dll`**, using Microsoft's documented
+[`IsApiSetImplemented`](https://learn.microsoft.com/en-us/windows/win32/api/apiquery2/nf-apiquery2-isapisetimplemented).
+Bindings are exclusively fixed `kernel32.dll` (read-only file APIs) and
+`api-ms-win-core-apiquery-l2-1-0.dll` (the documented system query API), with
+[`LOAD_LIBRARY_SEARCH_SYSTEM32`](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw).
+No candidate/import-derived library is loaded, no candidate/test EXE is started,
+no guessed KernelBase export or fallback is used, and no host setting changes.
+The query means only **availability in the running composed API-set schema**,
+not a physical file, particular export, trusted-module proof or successful future
+call. False results remain false; unsupported binding is unavailable, never a
+positive default. `ImageOS=win25` is an additional expected job marker, not OS
+attestation. Positive observations carry the already-approved source/image
+hash bindings; unavailable observations contain no partial vectors.
+
+This evidence producer has portable fake/negative coverage only. Actual hosted
+fifteen-contract observations, the GUI run, installer acceptance and full Rust
+agent parity remain outstanding. The outer result remains `not_built`,
+`nativeExecution=false`, `installerHostActionsAttempted=false`; no `build.json`
+or GUI execution follows from diagnostic success. Any eventual admission change
+requires separate concrete evidence and review, not this diagnostic.
+
 Runner/tool/context references: [official Windows 2025 image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md),
 [GitHub default-variable semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/variables),
 and the pinned Go source's `cmd/go/internal/load/pkg.go` build-info handling
