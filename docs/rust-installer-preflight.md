@@ -52,20 +52,39 @@ existing leaves are never adopted. Only after configuration preflight and those
 new directories does disabled SCM staging begin. Existing LocalService and
 restricted service-SID rights are unchanged.
 
-There is one narrowly bound creation-only exception for the observed native
-`ProgramData` / BUILTIN Users / bit `2` allow ACE. A sealed native directory
+There is one narrowly bound **relative-creation eligibility** classification for
+the observed native `ProgramData` / BUILTIN Users / concrete matched mask `274`
+(`WriteData`, `WriteAttributes`, `WriteExtendedAttributes`), or its earlier
+bit-`2` subset. This is not general parent/path trust. A sealed native directory
 lease must already own live, ordinary no-follow read handles for the exact
-canonical directory and every ancestor, denying write/delete sharing. The
+canonical directory and every ancestor, denying data-write/delete sharing. The
 installer acquires both complete target-parent chains before reading ACLs and
 retains them through startup; it immediately extends coverage to freshly created
 binary/data/state directories before dependent work. A pre-existing incompatible
 writer, wrong path, missing/disposed lease or sharing conflict fails closed.
-Only bit `2` as the sole otherwise-forbidden right on that exact parent/principal
-is admitted with live coverage;
-deletion, ownership, DACL, generic or attribute-write authority never takes this
-exception. Other ancestors/principals remain strict. The ordinary guard without
-this actual native lease is unchanged for bit `2`; there is no Boolean bypass,
-ACL repair, unlock-and-retry or fallback to unprotected creation.
+Owner/DACL inspection reads **each actual retained handle** with `GetSecurityInfo`,
+not a racy `Get-Acl(path)` result. The actual KnownFolder path and leased object
+determine the role; callers cannot supply a role label. Each qualifying applicable
+BUILTIN Users ACE must individually match mask `2` or `274` on that parent to
+require the relative transition. Separate grants are not aggregated into the tuple. Deletion,
+child deletion, ownership, DACL, generic/additional dangerous rights, standalone
+attribute/EA writes, unsupported applicable allow ACEs, unknown rights, bad owners
+and NULL DACLs still reject. Deny and inherit-only entries never cancel an unsafe
+allow. Other ancestors/principals remain strict.
+
+Review eligibility permits **only** mandatory protected handle-relative creation.
+It does not mark an existing child as bound or satisfy a pathname-operation gate.
+The public create method repeats the real-handle ancestor review, then must retain
+the successfully created child and verify its object/full-path binding before it
+returns. Therefore `New-TraceboltProtectedDirectory` cannot return before the
+bound-child transition. The bound binary/data directories precede disabled SCM
+staging; the bound `state` child follows that staging, before Copy/Init. A failure
+while preparing `state` can still leave the disabled service for inspection;
+this does not add rollback or a claim that every failure leaves no service. The privately retained,
+nondeletable entry also keeps its parent nonempty. A pure fixture evaluator returns
+classification only; it cannot create native lease state. Missing, unrelated,
+forged or disposed leases and failed creation cannot grant a bound child. There is
+no Boolean bypass, ACL repair, unlock-and-retry or pathname creation fallback.
 
 These handles address installation-time namespace operations, not arbitrary
 future ACL changes, every filesystem mechanism or a compromised administrator.
@@ -106,13 +125,18 @@ rejects any artifact in its redirection target even when the primitive refuses.
 This is a test-only in-process checkpoint, not a manager, CLI or public callback
 route, and not a proof of every interleaving or platform.
 
-The observed ProgramData/BUILTIN Users mask `274` also includes attribute and EA
-writes. The current guard still rejects it: attribute access is not excluded by
-read sharing, and the reparse specification accepts write-attributes as well as
-write-data. No `274` exception follows from introducing this primitive or from
-portable compilation. A stronger independently reviewed binding/invariant and
-native negative/positive proof must precede any such integration or installation
-success claim.
+Attribute/EA access is not excluded by read sharing; the reparse specification
+accepts write-attributes as well as write-data. The exact head `5aaef008` passed
+the relative primitive's positive, identity/ACL, collision, lease, prechanged-parent,
+deterministic native-edge and bounded data/attribute-only junction fixtures on
+hosted Windows Server 2025/NTFS, with no artifact in an own redirection target
+([native job](https://github.com/storminator89/Tracebolt/actions/runs/41315623739/job/124874921439)).
+Those source/native primitive results motivate this stricter relative-only
+integration; they did **not** establish an installed agent (that head deliberately
+retained the old `274` rejection). The integrated controller's negative/synthetic
+classification, real-handle eligibility and full unchanged-ACL installed-service
+acceptance must still run on its exact new head. No Windows 10/11, PowerShell 5.1,
+arbitrary-filter, complete race matrix, full parity or user-host acceptance follows.
 
 An unsafe allow ACE reports `INSTALL_PARENT_ACL_UNSAFE` with only a fixed parent
 class, well-known-principal category (all unknown SIDs map to `other-principal`),

@@ -161,8 +161,14 @@ try {
     $child = Join-Path $p 'state'; $otherChild = Join-Path $unrelated 'state'
     $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($p))
     try {
-        $lease.CreateProtectedChild($child)
+        # Namespace-only unit proof under our user-owned TEMP ancestry. The
+        # production public method additionally requires real owner/DACL review;
+        # a TEMP fixture is not relabeled as a production-trusted ancestor.
+        $namespaceCore = [Tracebolt.InstallDirectoryLease].GetMethod('CreateProtectedChildCore', [Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic)
+        Assert-Relative ($null -ne $namespaceCore) 'RELATIVE_LEASE_CORE_UNAVAILABLE'
+        [void]$namespaceCore.Invoke($lease, [object[]]@($child))
         Assert-Relative ($lease.Covers($child) -and $lease.HasBoundChild($p)) 'RELATIVE_LEASE_CHILD_NOT_BOUND'
+        $lease.RequireBoundChild($child)
         $renamed = $false
         try { [IO.Directory]::Move($child, (Join-Path $p 'renamed')); $renamed = $true } catch { }
         Assert-Relative (!$renamed -and [IO.Directory]::Exists($child)) 'RELATIVE_LEASE_RENAME_NOT_BLOCKED'
@@ -180,6 +186,20 @@ try {
     Assert-Relative (!(Invoke-RelativeAttempt $h)) 'RELATIVE_DISPOSED_PARENT_ACCEPTED'
     Assert-Relative (@([IO.Directory]::EnumerateFileSystemEntries($p)).Count -eq 0) 'RELATIVE_DISPOSED_PARENT_CHANGED'
     Write-Host 'RELATIVE_LEASE_BINDING_RENAME_AND_DISPOSAL_PASS'
+
+    $p = New-RelativeParent; $collision = Join-Path $p 'state'
+    [IO.File]::WriteAllText($collision, 'preserve collision; no bound-child authority')
+    $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($p))
+    try {
+        $failed = $false
+        try { [void]$namespaceCore.Invoke($lease, [object[]]@($collision)) } catch { $failed = $true }
+        Assert-Relative ($failed -and !$lease.HasBoundChild($p)) 'RELATIVE_FAILED_CREATE_GAINED_PROOF'
+        $failed = $false
+        try { $lease.RequireBoundChild($collision) } catch { $failed = $true }
+        Assert-Relative $failed 'RELATIVE_FAILED_CREATE_PATH_GATE_ACCEPTED'
+        Assert-Relative ([IO.File]::ReadAllText($collision) -ceq 'preserve collision; no bound-child authority') 'RELATIVE_FAILED_CREATE_CHANGED_COLLISION'
+    } finally { $lease.Dispose() }
+    Write-Host 'RELATIVE_FAILED_CREATE_HAS_NO_BOUND_AUTHORITY_PASS'
 
     foreach ($kind in @('file', 'directory')) {
         $p = New-RelativeParent; $child = Join-Path $p 'state'

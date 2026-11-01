@@ -77,16 +77,21 @@ namespace Tracebolt {
                 !string.Equals(name.ToString(), "NTFS", StringComparison.Ordinal))
                 throw new IOException("Relative protected creation requires the reviewed local NTFS contract.");
         }
-        private static void RequireFreshProtection(SafeFileHandle child) {
+        public static byte[] DirectorySecurityBytes(SafeFileHandle child) {
+            DirectoryInformation(child);
             IntPtr owner, group, dacl, sacl, descriptor;
             uint result = GetSecurityInfo(child, 1, 5, out owner, out group, out dacl, out sacl, out descriptor);
-            if (result != 0 || descriptor == IntPtr.Zero) throw new IOException("Fresh directory protection is unavailable.");
+            if (result != 0 || descriptor == IntPtr.Zero) throw new IOException("Directory security metadata is unavailable.");
             try {
                 uint length = GetSecurityDescriptorLength(descriptor);
-                if (length == 0 || length > 65536) throw new IOException("Fresh directory descriptor is unsupported.");
+                if (length == 0 || length > 65536) throw new IOException("Directory security descriptor is unsupported.");
                 var bytes = new byte[(int)length];
                 Marshal.Copy(descriptor, bytes, 0, bytes.Length);
-                var security = new RawSecurityDescriptor(bytes, 0);
+                return bytes;
+            } finally { if (descriptor != IntPtr.Zero) LocalFree(descriptor); }
+        }
+        private static void RequireFreshProtection(SafeFileHandle child) {
+                var security = new RawSecurityDescriptor(DirectorySecurityBytes(child), 0);
                 if (security.Owner == null || security.Owner.Value != "S-1-5-32-544" || security.DiscretionaryAcl == null ||
                     (security.ControlFlags & (ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected)) !=
                         (ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected) || security.DiscretionaryAcl.Count != 2)
@@ -100,7 +105,6 @@ namespace Tracebolt {
                         !seen.Add(ace.SecurityIdentifier.Value))
                         throw new IOException("Fresh directory ACL is not the exact protected creation policy.");
                 }
-            } finally { if (descriptor != IntPtr.Zero) LocalFree(descriptor); }
         }
         public static SafeFileHandle CreateRelativeDirectory(SafeFileHandle parent, string leaf) {
             return CreateRelativeDirectoryCore(parent, leaf, null);
@@ -193,6 +197,67 @@ namespace Tracebolt {
             string root = Path.GetPathRoot(full);
             return full.Length == root.Length ? full : full.TrimEnd('\\', '/');
         }
+        private static string ParentClass(string path) {
+            if (path == Canonical(Path.GetPathRoot(path))) return "drive-root";
+            if (path == Canonical(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles))) return "program-files";
+            if (path == Canonical(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData))) return "program-data";
+            return "other-ancestor";
+        }
+        private static string PrincipalClass(string sid) {
+            switch (sid) {
+                case "S-1-1-0": return "everyone";
+                case "S-1-5-11": return "authenticated-users";
+                case "S-1-5-32-545": return "builtin-users";
+                case "S-1-3-0": return "creator-owner";
+                case "S-1-15-2-1": return "all-app-packages";
+                case "S-1-15-2-2": return "restricted-app-packages";
+                default: return "other-principal";
+            }
+        }
+        private static bool TrustedSid(string sid) {
+            return sid == "S-1-5-18" || sid == "S-1-5-32-544" ||
+                sid == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
+        }
+        private static string EvaluateParentAcl(byte[] bytes, string path) {
+            if (bytes == null || bytes.Length == 0 || bytes.Length > 65536) throw new IOException("INSTALL_PARENT_SECURITY_UNAVAILABLE");
+            RawSecurityDescriptor security;
+            try { security = new RawSecurityDescriptor(bytes, 0); }
+            catch { throw new IOException("INSTALL_PARENT_SECURITY_UNAVAILABLE"); }
+            if (security.Owner == null || !TrustedSid(security.Owner.Value)) throw new IOException("INSTALL_PARENT_OWNER_UNTRUSTED");
+            if (security.DiscretionaryAcl == null || (security.ControlFlags & ControlFlags.DiscretionaryAclPresent) == 0)
+                throw new IOException("INSTALL_PARENT_DACL_REQUIRED");
+            bool relativeRequired = false;
+            foreach (GenericAce entry in security.DiscretionaryAcl) {
+                if ((entry.AceFlags & AceFlags.InheritOnly) != 0) continue;
+                var qualified = entry as QualifiedAce;
+                if (qualified != null && qualified.AceQualifier == AceQualifier.AccessDenied) continue;
+                var ace = entry as CommonAce;
+                if (ace == null || ace.IsCallback || ace.AceQualifier != AceQualifier.AccessAllowed)
+                    throw new IOException("INSTALL_PARENT_ACE_UNSUPPORTED");
+                uint mask = unchecked((uint)ace.AccessMask);
+                if ((mask & ~0xf01f01ffu) != 0) throw new IOException("INSTALL_PARENT_RIGHTS_UNSUPPORTED");
+                if (TrustedSid(ace.SecurityIdentifier.Value)) continue;
+                uint forbidden = mask & 0x500d0152u;
+                if (forbidden == 0) continue;
+                if ((forbidden == 2 || forbidden == 274) && ace.SecurityIdentifier.Value == "S-1-5-32-545" &&
+                    path == Canonical(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData))) {
+                    // Classification only: permits no pathname mutation or trust.
+                    // All creation must use the native relative transition; its
+                    // retained bound child is required before dependent work.
+                    relativeRequired = true;
+                    continue;
+                }
+                throw new IOException("INSTALL_PARENT_ACL_UNSAFE parent=" + ParentClass(path) + " principal=" +
+                    PrincipalClass(ace.SecurityIdentifier.Value) + " forbiddenMask=" + forbidden.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                    " inherited=" + (((ace.AceFlags & AceFlags.Inherited) != 0) ? "1" : "0"));
+            }
+            return relativeRequired ? "relative-child-required" : "strict";
+        }
+        // Pure fixture vocabulary only. A classification cannot mark a lease,
+        // create a bound child, or authorize a production pathname operation.
+        public static string EvaluateAclForFixture(byte[] bytes, string path) {
+            return EvaluateParentAcl(bytes, Canonical(path));
+        }
         public static InstallDirectoryLease Acquire(string[] paths) {
             var lease = new InstallDirectoryLease();
             try { foreach (string path in paths) lease.Pin(path); return lease; }
@@ -222,7 +287,28 @@ namespace Tracebolt {
             return handles.TryGetValue(Canonical(path), out handle) && RustInstallerPath.IsOrdinaryDirectory(handle);
             }
         }
+        public void ReviewForCreation(string path) {
+            lock (gate) {
+                if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+                var current = new DirectoryInfo(Canonical(path));
+                while (current != null) {
+                    string full = Canonical(current.FullName);
+                    if (!Covers(full)) throw new IOException("INSTALL_PARENT_LIVE_LEASE_REQUIRED");
+                    // Capture the actual leased object, never a racy Get-Acl(path).
+                    EvaluateParentAcl(RustInstallerPath.DirectorySecurityBytes(handles[full]), full);
+                    current = current.Parent;
+                }
+            }
+        }
         public void CreateProtectedChild(string path) {
+            string full = Canonical(path);
+            var parent = new DirectoryInfo(full).Parent;
+            if (parent == null) throw new IOException("A fixed child needs a leased parent.");
+            ReviewForCreation(parent.FullName);
+            CreateProtectedChildCore(full);
+            RequireBoundChild(full);
+        }
+        private void CreateProtectedChildCore(string path) {
             lock (gate) {
                 if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
                 string full = Canonical(path);
@@ -254,6 +340,24 @@ namespace Tracebolt {
                 return createdChildren.TryGetValue(parent, out child) && Covers(parent) && Covers(child) &&
                     string.Equals(RustInstallerPath.FinalDirectoryPath(handles[parent]) + "\\" + Path.GetFileName(child),
                         RustInstallerPath.FinalDirectoryPath(handles[child]), StringComparison.Ordinal);
+            }
+        }
+        public void RequireBoundChild(string path) {
+            lock (gate) {
+                if (disposed) throw new ObjectDisposedException("InstallDirectoryLease");
+                string full = Canonical(path);
+                var parentDirectory = new DirectoryInfo(full).Parent;
+                if (parentDirectory == null) throw new IOException("BOUND_CHILD_REQUIRED");
+                string parent = Canonical(parentDirectory.FullName), recorded;
+                if (!createdChildren.TryGetValue(parent, out recorded) || recorded != full || !HasBoundChild(parent))
+                    throw new IOException("BOUND_CHILD_REQUIRED");
+                // Verification-only lookup: no subsequent pathname work may
+                // proceed unless this still names the exact retained child.
+                using (var actual = RustInstallerPath.Open(full, true)) {
+                    if (!RustInstallerPath.SameDirectoryObject(handles[full], actual) ||
+                        RustInstallerPath.FinalDirectoryPath(handles[full]) != RustInstallerPath.FinalDirectoryPath(actual))
+                        throw new IOException("BOUND_CHILD_PATH_MISMATCH");
+                }
             }
         }
         public void Dispose() {
@@ -428,44 +532,20 @@ function Format-TraceboltParentAclDiagnostic(
 
 function Assert-TraceboltInstallParent([string]$Path, [object]$DirectoryLease = $null) {
     $full = Assert-TraceboltPlainPath $Path -Directory
-    $trusted = @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
-    $dangerous = [Security.AccessControl.FileSystemRights]::WriteData -bor
-        [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
-        [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
-        [Security.AccessControl.FileSystemRights]::Delete -bor
-        [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
-        [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
-        [Security.AccessControl.FileSystemRights]::TakeOwnership -bor 0x50000000
+    Initialize-TraceboltInstallerType
+    if ($DirectoryLease -is [Tracebolt.InstallDirectoryLease]) {
+        # Eligibility for mandatory relative creation only. GetSecurityInfo reads
+        # each actual retained object, never a mutable pathname's ACL.
+        $DirectoryLease.ReviewForCreation($full)
+        return
+    }
+    # Read-only standalone review cannot turn a classification into authority.
+    # All actual creation requires the native lease and bound-child transition.
     $current = Get-Item -LiteralPath $full -Force
     while ($null -ne $current) {
         $acl = Get-Acl -LiteralPath $current.FullName
-        $descriptor = [Security.AccessControl.RawSecurityDescriptor]::new($acl.GetSecurityDescriptorBinaryForm(), 0)
-        if ($null -eq $descriptor.DiscretionaryAcl -or !($descriptor.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclPresent)) {
-            throw 'Installation parent must have an explicit discretionary ACL.'
-        }
-        if ($trusted -notcontains $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value) {
-            throw 'Installation parents must be owned by SYSTEM, Administrators or TrustedInstaller.'
-        }
-        foreach ($rule in $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
-            if ($rule.AccessControlType -eq 'Allow' -and !($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
-                ($rule.FileSystemRights -band $dangerous) -and $trusted -notcontains $rule.IdentityReference.Value) {
-                $matched = [int]($rule.FileSystemRights -band $dangerous)
-                # Exactly the observed ProgramData / BUILTIN Users / CreateFiles
-                # case, and only while THIS directory is pinned by live native
-                # no-follow handles denying write/delete opens. No Boolean
-                # acknowledgement, standalone relaxation or unprotected retry.
-                if ($matched -eq 2 -and $rule.IdentityReference.Value -ceq 'S-1-5-32-545' -and
-                    [string]::Equals($current.FullName, [Environment]::GetFolderPath('CommonApplicationData'), [StringComparison]::Ordinal) -and
-                    $DirectoryLease -is [Tracebolt.InstallDirectoryLease] -and $DirectoryLease.Covers($current.FullName)) {
-                    continue
-                }
-                $class = 'other-ancestor'
-                if ([string]::Equals($current.FullName, [IO.Path]::GetPathRoot($full), [StringComparison]::OrdinalIgnoreCase)) { $class = 'drive-root' }
-                elseif ([string]::Equals($current.FullName, [Environment]::GetFolderPath('ProgramFiles'), [StringComparison]::OrdinalIgnoreCase)) { $class = 'program-files' }
-                elseif ([string]::Equals($current.FullName, [Environment]::GetFolderPath('CommonApplicationData'), [StringComparison]::OrdinalIgnoreCase)) { $class = 'program-data' }
-                throw (Format-TraceboltParentAclDiagnostic $class $rule.IdentityReference.Value $matched $rule.IsInherited)
-            }
-        }
+        $kind = [Tracebolt.InstallDirectoryLease]::EvaluateAclForFixture($acl.GetSecurityDescriptorBinaryForm(), $current.FullName)
+        if ($kind -cne 'strict') { throw 'INSTALL_PARENT_LIVE_LEASE_REQUIRED' }
         $current = $current.Parent
     }
 }

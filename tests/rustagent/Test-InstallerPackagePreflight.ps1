@@ -205,6 +205,7 @@ public static class TraceboltDirectoryLeaseProbe {
             New-Item -ItemType Directory -Path $child | Out-Null
             $lease.Pin($child)
             Assert ($lease.Covers($child)) 'Lease was not extended to a fresh child.'
+            Assert (!$lease.HasBoundChild($leaseRoot)) 'Pin/Covers alone incorrectly established relative-create binding.'
             [IO.File]::WriteAllText((Join-Path $child 'foreign.txt'), 'ordinary child creation remains possible; preserve data')
         } finally { $lease.Dispose() }
         Assert (!$lease.Covers($leaseRoot)) 'Released handles still grant target admission.'
@@ -272,52 +273,104 @@ public static class TraceboltDirectoryLeaseProbe {
                 Assert ($rejected -eq $case[3]) "Generic ACE decision changed: $($case[0])/$($case[1])"
                 if ($case[3]) { Assert ($message -match "forbiddenMask=$($case[2]) ") 'Rejected generic rights were hidden by diagnostics.' }
             }
-            # The exception is limited to the actual ProgramData + Users + bit2
-            # tuple, with exact live coverage. All ACLs below remain in memory.
+            # Pure descriptor classification only: synthetic bytes cannot grant
+            # native lease state, path trust, or permission to stage a child.
             $programData = [Environment]::GetFolderPath('CommonApplicationData')
-            $script:FixtureAclTarget = $programData
-            $script:AncestorAcl = [Security.AccessControl.DirectorySecurity]::new()
-            $script:AncestorAcl.SetSecurityDescriptorSddlForm('O:SYG:SYD:P(A;;FA;;;SY)')
-            $script:FixtureAcl = [Security.AccessControl.DirectorySecurity]::new()
-            $script:FixtureAcl.SetSecurityDescriptorSddlForm('O:SYG:SYD:P(A;;FA;;;SY)(A;;0x2;;;BU)')
-            $lease = $null; $unrelated = $null
-            try {
-                $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($programData))
-                $unrelated = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($root))
-                Assert ($lease.Covers($programData)) 'Live target lease lacks exact coverage.'
-                Assert (!$unrelated.Covers($programData)) 'Unrelated lease claims target coverage.'
-                Assert-TraceboltInstallParent $programData $lease
-                foreach ($invalid in @($null, $unrelated, @{Covers=$true})) {
-                    $rejected = $false
-                    try { Assert-TraceboltInstallParent $programData $invalid } catch { $rejected = $true }
-                    Assert $rejected 'Creation-only ACE was admitted without actual exact live handles.'
+            function Assert-AclClassification([string]$Sddl, [string]$Path, [string]$Expected) {
+                $descriptor = [Security.AccessControl.RawSecurityDescriptor]::new($Sddl)
+                $bytes = New-Object byte[] $descriptor.BinaryLength
+                $descriptor.GetBinaryForm($bytes, 0)
+                $rejected = $false; $result = $null
+                try { $result = [Tracebolt.InstallDirectoryLease]::EvaluateAclForFixture($bytes, $Path) }
+                catch { $rejected = $true }
+                if ($Expected -ceq 'reject') {
+                    Assert $rejected 'Synthetic descriptor classification unexpectedly admitted an unsafe ACL.'
+                } else {
+                    Assert (!$rejected -and $result -ceq $Expected) 'Synthetic descriptor classification mismatch.'
                 }
-                foreach ($rights in @('0x10002','0x42','0x40002','0x80002','0x102','0x12','GA','GW')) {
-                    $script:FixtureAcl.SetSecurityDescriptorSddlForm("O:SYG:SYD:P(A;;FA;;;SY)(A;;$rights;;;BU)")
-                    $rejected = $false
-                    try { Assert-TraceboltInstallParent $programData $lease } catch { $rejected = $true }
-                    Assert $rejected 'Live lease bypassed non-creation-only rights.'
-                }
-                $script:FixtureAcl.SetSecurityDescriptorSddlForm('O:SYG:SYD:P(A;;FA;;;SY)(A;;0x2;;;AU)')
-                $rejected = $false
-                try { Assert-TraceboltInstallParent $programData $lease } catch { $rejected = $true }
-                Assert $rejected 'Creation-only exception widened to another principal.'
-                $script:FixtureAcl.SetSecurityDescriptorSddlForm('O:SYG:SYD:P(A;;FA;;;SY)(A;;0x2;;;BU)')
-                $lease.Dispose()
-                Assert (!$lease.Covers($programData)) 'Disposed target lease retained admission.'
-                $rejected = $false
-                try { Assert-TraceboltInstallParent $programData $lease } catch { $rejected = $true }
-                Assert $rejected 'Disposed lease bypassed the ACL guard.'
-                $script:FixtureAclTarget = $root
-                $rejected = $false
-                try { Assert-TraceboltInstallParent $root $unrelated } catch { $rejected = $true }
-                Assert $rejected 'Creation-only exception widened beyond ProgramData.'
-            } finally {
-                if ($null -ne $lease) { $lease.Dispose() }
-                if ($null -ne $unrelated) { $unrelated.Dispose() }
-                $script:FixtureAclTarget = $null
             }
+            $prefix = 'O:SYG:SYD:P(A;;FA;;;SY)'
+            Assert-AclClassification $prefix $programData 'strict'
+            foreach ($rights in @('0x2','0x112')) {
+                Assert-AclClassification ($prefix + "(A;;$rights;;;BU)") $programData 'relative-child-required'
+                Assert-AclClassification ($prefix + "(A;;$rights;;;BU)") $root 'reject'
+                Assert-AclClassification ($prefix + "(A;;$rights;;;AU)") $programData 'reject'
+            }
+            foreach ($rights in @('0x10002','0x42','0x40002','0x80002','0x102','0x12','0x100','0x10','0x110','GA','GW',
+                '0x10112','0x152','0x40112','0x80112','0x10000112','0x40000112','0x02000112','0x02000000')) {
+                Assert-AclClassification ($prefix + "(A;;$rights;;;BU)") $programData 'reject'
+            }
+            Assert-AclClassification 'O:S-1-5-21-1-2-3-1000G:SYD:P(A;;0x112;;;BU)' $programData 'reject'
+            Assert-AclClassification 'O:SYG:SYD:NO_ACCESS_CONTROL' $programData 'reject'
+            # No combining separate grants into the reviewed exact ACE tuple.
+            Assert-AclClassification ($prefix + '(A;;0x2;;;BU)(A;;0x110;;;BU)') $programData 'reject'
+            Assert-AclClassification ($prefix + '(A;;0x2;;;BU)(A;;0x112;;;BU)') $programData 'relative-child-required'
+            # Deny and inherit-only entries grant nothing, but never cancel an
+            # independently unsafe applicable allow ACE.
+            Assert-AclClassification ($prefix + '(D;;GA;;;BU)') $programData 'strict'
+            Assert-AclClassification ($prefix + '(A;CIIO;GA;;;BU)') $programData 'strict'
+            Assert-AclClassification ($prefix + '(D;;GA;;;BU)(A;;0x112;;;BU)') $programData 'relative-child-required'
+            Assert-AclClassification ($prefix + '(D;;GA;;;BU)(A;;0x100;;;BU)') $programData 'reject'
+            Assert-AclClassification ($prefix + '(A;CIIO;GA;;;BU)(A;;0x100;;;BU)') $programData 'reject'
+            foreach ($form in @('callback','object','unknown')) {
+                $descriptor = [Security.AccessControl.RawSecurityDescriptor]::new($prefix)
+                $sid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-545')
+                if ($form -ceq 'callback') {
+                    $ace = [Security.AccessControl.CommonAce]::new(
+                        [Security.AccessControl.AceFlags]::None,
+                        [Security.AccessControl.AceQualifier]::AccessAllowed, 274, $sid, $true, [byte[]]@())
+                } elseif ($form -ceq 'object') {
+                    $ace = [Security.AccessControl.ObjectAce]::new(
+                        [Security.AccessControl.AceFlags]::None,
+                        [Security.AccessControl.AceQualifier]::AccessAllowed, 274, $sid,
+                        [Security.AccessControl.ObjectAceFlags]::None, [Guid]::Empty, [Guid]::Empty, $false, [byte[]]@())
+                } else {
+                    $ace = [Security.AccessControl.CustomAce]::new(
+                        [Security.AccessControl.AceType]66, [Security.AccessControl.AceFlags]::None, [byte[]]@(0,0,0,0))
+                }
+                $acl = [Security.AccessControl.RawAcl]::new(4, 2)
+                $acl.InsertAce(0, $descriptor.DiscretionaryAcl[0]); $acl.InsertAce(1, $ace)
+                $descriptor.DiscretionaryAcl = $acl
+                $bytes = New-Object byte[] $descriptor.BinaryLength
+                $descriptor.GetBinaryForm($bytes, 0)
+                $rejected = $false
+                try { $null = [Tracebolt.InstallDirectoryLease]::EvaluateAclForFixture($bytes, $programData) }
+                catch { $rejected = $true }
+                Assert $rejected 'Nonstandard applicable allow ACE was classified as eligible.'
+            }
+            Write-Host 'INSTALL_PARENT_SYNTHETIC_CLASSIFICATION_ONLY_PASS'
         } finally { Remove-Item Function:\Get-Acl }
+        # Real owner/DACL review uses held handles, with no mocked Get-Acl. This
+        # only establishes eligibility; no native child, ACL, or host setting changes.
+        $lease = $null; $unrelated = $null
+        try {
+            $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($programData))
+            $unrelated = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($root))
+            Assert ($lease.Covers($programData)) 'Live target lease lacks exact handle coverage.'
+            Assert (!$unrelated.Covers($programData)) 'Unrelated lease claims target handle coverage.'
+            Assert-TraceboltInstallParent $programData $lease
+            Assert (!$lease.HasBoundChild($programData)) 'Eligibility review was confused with bound-child proof.'
+            $rejected = $false
+            try { $lease.RequireBoundChild((Join-Path $programData 'TraceboltRust')) } catch { $rejected = $true }
+            Assert $rejected 'Eligibility review granted an uncreated child path gate.'
+            $rejected = $false
+            try { Assert-TraceboltInstallParent $programData $unrelated } catch { $rejected = $true }
+            Assert $rejected 'Real ProgramData review admitted an unrelated native lease.'
+            foreach ($invalid in @($null, @{Covers=$true})) {
+                $rejected = $false; $neverCreated = Join-Path $temporary 'must-require-native-lease'
+                try { New-TraceboltProtectedDirectory $neverCreated $invalid } catch { $rejected = $true }
+                Assert ($rejected -and !(Test-Path -LiteralPath $neverCreated)) 'Missing or forged lease reached protected creation.'
+            }
+            $lease.Dispose()
+            Assert (!$lease.Covers($programData) -and !$lease.HasBoundChild($programData)) 'Disposed lease retained native proof.'
+            $rejected = $false
+            try { Assert-TraceboltInstallParent $programData $lease } catch { $rejected = $true }
+            Assert $rejected 'Disposed lease admitted real ProgramData review.'
+            Write-Host 'INSTALL_PARENT_NATIVE_READONLY_ELIGIBILITY_ONLY_PASS'
+        } finally {
+            if ($null -ne $lease) { $lease.Dispose() }
+            if ($null -ne $unrelated) { $unrelated.Dispose() }
+        }
     }
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
