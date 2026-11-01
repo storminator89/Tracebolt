@@ -22,6 +22,12 @@ namespace Tracebolt {
         [DllImport("kernel32.dll", SetLastError=true)]
         static extern bool DeviceIoControl(SafeFileHandle h, uint code, byte[] input,
             uint length, IntPtr output, uint outputLength, out uint returned, IntPtr overlapped);
+        [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+        static extern bool MoveFileExW(string source, string target, uint flags);
+        public static int TryRenameOwnedFixture(string source, string target) {
+            // Same-volume ordinary rename only. Never delayed reboot or copy fallback.
+            return MoveFileExW(source, target, 1) ? 0 : Marshal.GetLastWin32Error();
+        }
         public static SafeFileHandle Open(string path, uint access) {
             SafeFileHandle h = CreateFileW(path, access, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);
             if (h.IsInvalid) { h.Dispose(); return null; }
@@ -157,6 +163,50 @@ try {
         }
     } finally { $h.Dispose() }
     Write-Host 'RELATIVE_POSITIVE_AND_FIXED_LEAF_PASS'
+
+    $failureStage = 'health-rename-sharing'
+    # Synthetic bytes in new random TEMP objects only, never the installed agent's
+    # actual health files. Isolate destination-parent sharing without ACL changes.
+    $p = New-RelativeParent; $stateParent = Join-Path $p 'state'
+    [IO.Directory]::CreateDirectory($stateParent) | Out-Null
+    $inertBytes = [byte[]]@(83,72,65,82,69)
+    $sourceLeaf = Join-Path $stateParent 'health-v1.tmp'; $targetLeaf = Join-Path $stateParent 'health-v1.json'
+    $file = [IO.File]::Open($sourceLeaf, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $file.Write($inertBytes,0,$inertBytes.Length); $file.Flush($true) } finally { $file.Dispose() }
+    $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($stateParent))
+    try {
+        $renameError = [Tracebolt.RelativeDirectoryFixture]::TryRenameOwnedFixture($sourceLeaf,$targetLeaf)
+        Write-Host ('RELATIVE_HEALTH_STRICT_STATE_RENAME_CODE={0}' -f $renameError)
+        Assert-Relative ($renameError -eq 32) 'RELATIVE_HEALTH_RENAME_NOT_SHARING_VIOLATION'
+        Assert-Relative ([IO.File]::Exists($sourceLeaf) -and ![IO.File]::Exists($targetLeaf)) 'RELATIVE_HEALTH_BLOCKED_RENAME_CHANGED_NAMES'
+        Assert-Relative ([Convert]::ToBase64String([IO.File]::ReadAllBytes($sourceLeaf)) -ceq [Convert]::ToBase64String($inertBytes)) 'RELATIVE_HEALTH_BLOCKED_RENAME_CHANGED_BYTES'
+    } finally { $lease.Dispose() }
+    Assert-Relative ([Tracebolt.RelativeDirectoryFixture]::TryRenameOwnedFixture($sourceLeaf,$targetLeaf) -eq 0) 'RELATIVE_HEALTH_RELEASED_RENAME_FAILED'
+    Assert-Relative (![IO.File]::Exists($sourceLeaf) -and [IO.File]::Exists($targetLeaf)) 'RELATIVE_HEALTH_RELEASED_RENAME_MISSING'
+    Assert-Relative ([Convert]::ToBase64String([IO.File]::ReadAllBytes($targetLeaf)) -ceq [Convert]::ToBase64String($inertBytes)) 'RELATIVE_HEALTH_RELEASED_RENAME_CHANGED_BYTES'
+    Write-Host 'RELATIVE_HEALTH_STRICT_STATE_LEASE_BLOCKED_32_AND_RELEASED_RENAME_PASS'
+
+    $p = New-RelativeParent; $stateParent = Join-Path $p 'state'
+    [IO.Directory]::CreateDirectory($stateParent) | Out-Null
+    $sourceLeaf = Join-Path $stateParent 'health-v1.tmp'; $targetLeaf = Join-Path $stateParent 'health-v1.json'
+    $file = [IO.File]::Open($sourceLeaf, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $file.Write($inertBytes,0,$inertBytes.Length); $file.Flush($true) } finally { $file.Dispose() }
+    $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($p))
+    $permissiveState = $null
+    try {
+        # Control: all ancestors including the data parent remain strict. This
+        # fixture-only ordinary state handle shares read/write/delete; production
+        # lease behavior is unchanged and no handoff is implemented here.
+        $permissiveState = [Tracebolt.RelativeDirectoryFixture]::Open($stateParent,[uint32]2147483648)
+        Assert-Relative ($null -ne $permissiveState) 'RELATIVE_HEALTH_CONTROL_STATE_OPEN_FAILED'
+        Assert-Relative ([Tracebolt.RelativeDirectoryFixture]::TryRenameOwnedFixture($sourceLeaf,$targetLeaf) -eq 0) 'RELATIVE_HEALTH_PINNED_PARENT_CONTROL_RENAME_FAILED'
+        Assert-Relative (![IO.File]::Exists($sourceLeaf) -and [IO.File]::Exists($targetLeaf)) 'RELATIVE_HEALTH_PINNED_PARENT_CONTROL_MISSING'
+        Assert-Relative ([Convert]::ToBase64String([IO.File]::ReadAllBytes($targetLeaf)) -ceq [Convert]::ToBase64String($inertBytes)) 'RELATIVE_HEALTH_PINNED_PARENT_CONTROL_CHANGED_BYTES'
+    } finally {
+        if ($null -ne $permissiveState) { $permissiveState.Dispose() }
+        $lease.Dispose()
+    }
+    Write-Host 'RELATIVE_HEALTH_PINNED_DATA_PARENT_PERMISSIVE_STATE_CONTROL_PASS'
 
     $failureStage = 'lease-acquire'
     $p = New-RelativeParent; $unrelated = New-RelativeParent
