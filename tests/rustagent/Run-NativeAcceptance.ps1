@@ -27,6 +27,8 @@ $stagingAuthorized = $false
 $result = @{schemaVersion='tracebolt.rust-native-acceptance.v1'; status='failed'; platform='windows'; packagedArtifact=$false; install=$false; activated=$false; mutualTLS=$false; nativeMetrics=$false; localReceipt=$false; boundedStop=$false; stopMilliseconds=$null; restart=$false; removal=$false; rebootTested=$false; productionLinuxManager=$false}
 $result.localDiagnosticState = 'not-observed'; $result.localAttemptResult = 'not-observed'
 $result.localReceiptPresent = $false; $result.localReceiptAtLeastPeerSequence = $false; $result.localAttemptAccepted = $false
+$result.healthLockFile = 'not-probed'; $result.healthSnapshotFile = 'not-probed'; $result.healthTemporaryFile = 'not-probed'
+$result.healthFileProbeComplete = $false
 function ConvertTo-NativeEvidenceHealthCode([object]$Value) {
     # Return only source-fixed vocabulary, never an unknown status value/prose.
     foreach ($code in @(
@@ -51,6 +53,46 @@ function Get-NativeReceiptEvidence([object]$Local, [object]$Accepted) {
         localReceiptAtLeastPeerSequence = [bool]($Local.lastAcceptedReceipt.sequence -ge $Accepted.sequence)
         localAttemptAccepted = [bool]($Local.lastAttemptResult -eq 'accepted')
     }
+}
+function ConvertTo-NativeHealthFileOutcome([object]$Attributes, [Exception]$Failure = $null) {
+    if ($null -ne $Failure) {
+        $cause = $Failure.GetBaseException()
+        if ($cause -is [IO.FileNotFoundException] -or $cause -is [IO.DirectoryNotFoundException]) { return 'missing' }
+        if ($cause -is [UnauthorizedAccessException]) { return 'denied' }
+        if ($cause -is [ComponentModel.Win32Exception]) {
+            if ($cause.NativeErrorCode -in @(2,3)) { return 'missing' }
+            if ($cause.NativeErrorCode -eq 5) { return 'denied' }
+        }
+        return 'unavailable'
+    }
+    if ($Attributes -isnot [IO.FileAttributes]) { return 'unavailable' }
+    if ($Attributes -band [IO.FileAttributes]::ReparsePoint) { return 'reparse' }
+    if ($Attributes -band [IO.FileAttributes]::Directory) { return 'not-file' }
+    return 'ordinary-file'
+}
+function Get-NativeHealthFileEvidence([string]$DataDirectory) {
+    $observed = @{healthLockFile='unavailable'; healthSnapshotFile='unavailable'; healthTemporaryFile='unavailable'; healthFileProbeComplete=$false}
+    $lease = $null
+    try {
+        # This caller has already installed into paths confirmed absent on this
+        # disposable runner. Retain ordinary no-follow ancestors during these
+        # metadata-only leaf queries; never traverse a reparse parent or read bytes.
+        $state = Join-Path $DataDirectory 'state'
+        $lease = [Tracebolt.InstallDirectoryLease]::Acquire([string[]]@($state))
+        foreach ($pair in @(@('healthLockFile','health-v1.lock'), @('healthSnapshotFile','health-v1.json'), @('healthTemporaryFile','health-v1.tmp'))) {
+            try {
+                $attributes = [IO.File]::GetAttributes((Join-Path $state $pair[1]))
+                $observed[$pair[0]] = ConvertTo-NativeHealthFileOutcome $attributes
+            } catch { $observed[$pair[0]] = ConvertTo-NativeHealthFileOutcome $null $_.Exception }
+        }
+        $observed.healthFileProbeComplete = @($observed.healthLockFile,$observed.healthSnapshotFile,$observed.healthTemporaryFile |
+            Where-Object { $_ -cnotin @('ordinary-file','missing') }).Count -eq 0
+    } catch {
+        # Parent/lease failure is not proof that any leaf is absent.
+        $parent = ConvertTo-NativeHealthFileOutcome $null $_.Exception
+        if ($parent -ceq 'denied') { foreach ($field in @('healthLockFile','healthSnapshotFile','healthTemporaryFile')) { $observed[$field] = 'denied' } }
+    } finally { if ($null -ne $lease) { $lease.Dispose() } }
+    return $observed
 }
 function Read-OptionalJson([string]$Path) {
     if (!(Test-Path -LiteralPath $Path)) { return $null }
@@ -163,6 +205,14 @@ try {
     if (Get-Service $serviceName -ErrorAction SilentlyContinue) { throw 'Service removal did not complete.' }
     $result.removal=$true; $result.status='passed'
 } finally {
+    # Observe only our freshly installed CI paths, before the existing cleanup.
+    # A probe failure must neither become "missing" nor skip that cleanup.
+    if ($result.install) {
+        try {
+            $healthFiles = Get-NativeHealthFileEvidence $dataDirectory
+            foreach ($field in $healthFiles.Keys) { $result[$field] = $healthFiles[$field] }
+        } catch { $result.healthFileProbeComplete = $false }
+    }
     if ($stagingAuthorized) {
         $service = Get-Service $serviceName -ErrorAction SilentlyContinue
         if ($service) {

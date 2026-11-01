@@ -10,7 +10,7 @@ function Assert([bool]$Condition, [string]$Message) {
     if (!$Condition) { throw $Message }
 }
 try {
-    # Parse only the two pure evidence functions; never execute the administrator-
+    # Parse only the three pure evidence functions; never execute the administrator-
     # only acceptance script, installer, a binary, SCM or any native operation.
     $evidenceSource = Join-Path $PSScriptRoot 'Run-NativeAcceptance.ps1'
     $tokens = $null; $errors = $null
@@ -18,9 +18,9 @@ try {
     Assert ($errors.Count -eq 0) 'Native evidence source did not parse.'
     $pureFunctions = @($evidenceAst.FindAll({ param($node)
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-        $node.Name -cin @('ConvertTo-NativeEvidenceHealthCode','Get-NativeReceiptEvidence')
+        $node.Name -cin @('ConvertTo-NativeEvidenceHealthCode','Get-NativeReceiptEvidence','ConvertTo-NativeHealthFileOutcome')
     }, $false))
-    Assert ($pureFunctions.Count -eq 2) 'Expected exact pure native-evidence helpers.'
+    Assert ($pureFunctions.Count -eq 3) 'Expected exact pure native-evidence helpers.'
     foreach ($function in $pureFunctions) { . ([scriptblock]::Create($function.Extent.Text)) }
     $peer = [pscustomobject]@{ sequence = 7 }
     foreach ($case in @(@($null,'accepted',$false,$false,$true), @(6,'accepted',$true,$false,$true),
@@ -39,6 +39,18 @@ try {
     }
     foreach ($unknown in @($null, 7, @{secret='never-export-private-prose'}, 'never-export-private-prose','ACCEPTED')) {
         Assert ((ConvertTo-NativeEvidenceHealthCode $unknown) -ceq 'unrecognized') 'Unknown diagnostic input escaped finite vocabulary.'
+    }
+    foreach ($case in @(
+        @([IO.FileAttributes]::Normal,$null,'ordinary-file'), @([IO.FileAttributes]::Directory,$null,'not-file'),
+        @(([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory),$null,'reparse'),
+        @($null,[IO.FileNotFoundException]::new('never-export-private-path'),'missing'),
+        @($null,[IO.DirectoryNotFoundException]::new('never-export-private-path'),'missing'),
+        @($null,[UnauthorizedAccessException]::new('never-export-private-path'),'denied'),
+        @($null,[ComponentModel.Win32Exception]::new(5,'never-export-private-path'),'denied'),
+        @($null,[ComponentModel.Win32Exception]::new(2,'never-export-private-path'),'missing'),
+        @($null,[IO.IOException]::new('never-export-private-path'),'unavailable'), @($null,$null,'unavailable')
+    )) {
+        Assert ((ConvertTo-NativeHealthFileOutcome $case[0] $case[1]) -ceq $case[2]) 'Metadata probe lost its finite, fail-closed outcome.'
     }
     Write-Host 'NATIVE_RECEIPT_FINITE_EVIDENCE_OR_BRANCHES_PASS'
     foreach ($leaf in @('Install-Tracebolt.ps1','Uninstall-Tracebolt.ps1','Package-Preflight.ps1','Write-Package.ps1','Build-Package.ps1')) {
