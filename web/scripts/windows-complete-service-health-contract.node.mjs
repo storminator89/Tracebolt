@@ -1,7 +1,7 @@
 /** Inert source/artifact contracts. Generated test PNGs are not browser evidence. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -18,7 +18,7 @@ test('one canonical matrix preserves the eight original component scene filename
     assert.deepEqual(captureMatrix.map(row => row.file), ['en', 'de'].flatMap(locale => [1440, 390].flatMap(width => ['single-beyond-preview', 'group-exact-review'].map(scene => `complete-service-${scene}-${locale}-${width}.png`))));
     assert.match(disclosure, /Real UI components and hooks/); assert.match(disclosure, /not the whole App/);
 });
-test('canonical evidence fails closed on missing, stale, duplicate, foreign or unsafe artifacts', async () => {
+test('canonical evidence coexists with exact review captures and rejects missing, stale, duplicate, foreign or unsafe artifacts', async () => {
     const output = await mkdtemp(path.join(os.tmpdir(), 'complete-service-contract-')), sourceSha = 'a'.repeat(40), compiled = await compile();
     const report = { sourceSha, status: 'PASS', browserAcceptance: true, runtimeErrorCount: 0, requestsToRealAPI: 0, nativeAcceptance: false, secretsExported: false, realTelemetryExported: false, completeServiceHealth: evidenceSummary() };
     const captures = [];
@@ -27,9 +27,15 @@ test('canonical evidence fails closed on missing, stale, duplicate, foreign or u
         const manifest = { sourceSha, sourceDigest: compiled.sourceDigest, sourceInputs: compiled.sourceInputs, sceneManifestSHA256, captures, browserExecuted: true, appMounted: false, actualMutationRequests: 0, nativeAcceptance: false, disclosure };
         const write = async (summary = report, value = manifest) => { await writeFile(path.join(output, 'windows-service-actions-results.json'), JSON.stringify(summary)); await writeFile(path.join(output, 'windows-complete-service-health-manifest.json'), JSON.stringify(value)); };
         await write(); await validateEvidence(output, sourceSha);
-        const foreign = path.join(output, 'complete-service-foreign.png');
-        await writeFile(foreign, png(390, 844)); await assert.rejects(validateEvidence(output, sourceSha));
-        await rm(foreign); await validateEvidence(output, sourceSha);
+        // Health validates before review capture, then again after the shared runner.
+        // Only exact sibling filenames may coexist, including a partial capture on failure.
+        assert.equal(new Set([...captureMatrix, ...reviewCaptureMatrix].map(row => row.file)).size, captureMatrix.length + reviewCaptureMatrix.length);
+        for (const row of reviewCaptureMatrix) { await writeFile(path.join(output, row.file), png(row.width, row.height)); await validateEvidence(output, sourceSha); }
+        for (const name of ['complete-service-foreign.png', 'complete-service-review-foreign.png', 'complete-service-review-matched-read-fr-390.png', reviewCaptureMatrix[0].file.replace('.png', '-extra.png')]) {
+            const foreign = path.join(output, name);
+            await writeFile(foreign, png(390, 844)); await assert.rejects(validateEvidence(output, sourceSha));
+            await rm(foreign); await validateEvidence(output, sourceSha);
+        }
         for (const [key, value] of [['sourceSha', 'b'.repeat(40)], ['status', 'FAIL'], ['browserAcceptance', false], ['runtimeErrorCount', 1], ['requestsToRealAPI', 1], ['nativeAcceptance', true], ['secretsExported', true], ['realTelemetryExported', true], ['completeServiceHealth', null]]) { await write({ ...report, [key]: value }); await assert.rejects(validateEvidence(output, sourceSha)); }
         for (const [key, value] of [['screenshots', 7], ['screenshots', true], ['scenes', 1], ['sceneManifestSHA256', '0'.repeat(64)], ['appMounted', true], ['browserExecuted', false], ['actualMutationRequests', 1]]) { await write({ ...report, completeServiceHealth: { ...report.completeServiceHealth, [key]: value } }); await assert.rejects(validateEvidence(output, sourceSha)); }
         for (const value of [
@@ -42,7 +48,9 @@ test('canonical evidence fails closed on missing, stale, duplicate, foreign or u
         ]) { await write(report, value); await assert.rejects(validateEvidence(output, sourceSha)); }
         await write(); const first = captures[0], file = path.join(output, first.file), bytes = await readFile(file);
         await rm(file); await assert.rejects(validateEvidence(output, sourceSha));
+        const target = path.join(output, 'inert-foreign-target.png'); await writeFile(target, bytes); await symlink(target, file); await assert.rejects(validateEvidence(output, sourceSha)); await rm(file); await rm(target);
         await writeFile(file, png(390, 844)); await assert.rejects(validateEvidence(output, sourceSha));
+        for (const index of [0, 12, bytes.length - 1]) { const altered = Buffer.from(bytes); altered[index] ^= 1; await writeFile(file, altered); await assert.rejects(validateEvidence(output, sourceSha)); }
         await writeFile(file, bytes); await validateEvidence(output, sourceSha);
     } finally { await rm(output, { recursive: true, force: true }); }
 });
