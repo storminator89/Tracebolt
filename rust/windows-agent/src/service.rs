@@ -1,6 +1,7 @@
 use crate::{
     native,
     runtime::Runtime,
+    service_diagnostics::{Diagnostics, Stage},
     service_lifecycle::{Lifecycle, Phase},
 };
 use std::{
@@ -107,6 +108,7 @@ fn service_main(_: Vec<OsString>) {
         reporter.report(Phase::Stopped, 13);
         return;
     }
+    let mut diagnostics = Diagnostics::new(*HEALTH_ENABLED.get().unwrap_or(&true));
     // SCM arguments contain only the fixed protected configuration directory.
     let result = DIRECTORY
         .get()
@@ -122,12 +124,12 @@ fn service_main(_: Vec<OsString>) {
         Ok(sender) => sender,
         Err(error) => {
             let code = crate::health::classify(&error);
+            diagnostics.record(Stage::StartupFailure, code);
             eprintln!("Tracebolt startup: {}. {}", code, code.next_action());
             reporter.report(Phase::Stopped, 13);
             return;
         }
     };
-    let mut previous_diagnostic = None;
     if !reporter.report(Phase::Running, 0) {
         reporter.report(Phase::Stopped, if reporter.stopping() { 0 } else { 13 });
         return;
@@ -139,17 +141,18 @@ fn service_main(_: Vec<OsString>) {
         // Errors never log payloads, private keys, server bodies or identities.
         // Both success and failure wait, so a disconnected endpoint cannot spin.
         let outcome = sender.cycle_until_stopped(native::collect, || reporter.stopping());
-        let diagnostic = (sender.health_code(), sender.health_available());
-        if previous_diagnostic != Some(diagnostic) {
-            if outcome.is_err() || (sender.health_requested() && !diagnostic.1) {
-                let code = if !sender.health_requested() || diagnostic.1 {
-                    diagnostic.0
-                } else {
-                    crate::health::Code::HealthUnavailable
-                };
-                eprintln!("Tracebolt diagnostic: {}. {}", code, code.next_action());
-            }
-            previous_diagnostic = Some(diagnostic);
+        let unavailable = sender.health_requested() && !sender.health_available();
+        let code = if unavailable {
+            crate::health::Code::HealthUnavailable
+        } else {
+            sender.health_code()
+        };
+        // Record finite transitions including pending and recovery. This never
+        // waits for Event Log, and never claims SCM Running is acceptance.
+        if diagnostics.record_cycle(code, reporter.stopping(), &outcome)
+            && (outcome.is_err() || unavailable)
+        {
+            eprintln!("Tracebolt diagnostic: {}. {}", code, code.next_action());
         }
         if !matches!(
             receive.recv_timeout(sender.interval()),

@@ -60,6 +60,15 @@ function Assert-RejectedUnchanged([string]$Directory, [string]$Executable) {
 try {
     # Compile only our reviewed interop source; no Win32 method is called here.
     Initialize-TraceboltInstallerType
+    foreach ($case in @(
+        @('S-1-1-0','everyone'), @('S-1-5-11','authenticated-users'), @('S-1-5-32-545','builtin-users'),
+        @('S-1-3-0','creator-owner'), @('S-1-15-2-1','all-app-packages'), @('S-1-15-2-2','restricted-app-packages'),
+        @('private-looking-account-token-path','other-principal')
+    )) {
+        $diagnostic = Format-TraceboltParentAclDiagnostic 'drive-root' $case[0] 2147483647 $true
+        Assert ($diagnostic -ceq "INSTALL_PARENT_ACL_UNSAFE parent=drive-root principal=$($case[1]) forbiddenMask=852034 inherited=1") 'ACL diagnostic escaped its finite vocabulary.'
+        Assert (!$diagnostic.Contains($case[0])) 'ACL diagnostic disclosed a raw principal.'
+    }
     $root = New-FixturePackage
     $before = Get-Snapshot $root
     for ($i = 0; $i -lt 2; $i++) {
@@ -165,9 +174,14 @@ try {
                     $script:FixtureAcl = [pscustomobject]@{}
                     $script:FixtureAcl | Add-Member -MemberType ScriptMethod -Name GetSecurityDescriptorBinaryForm -Value { return ,$script:NullAclBytes }
                 }
-                $rejected = $false
-                try { Assert-TraceboltInstallParent $root } catch { $rejected = $true }
+                $rejected = $false; $message = ''
+                try { Assert-TraceboltInstallParent $root } catch { $rejected = $true; $message = $_.Exception.Message }
                 Assert ($rejected -eq (@('trusted','creator') -notcontains $case)) "Unexpected in-memory parent-ACL result: $case"
+                if (@('write','delete','children','dacl','take') -contains $case) {
+                    $mask = switch ($case) { 'write' { 2 }; 'delete' { 65536 }; 'children' { 64 }; 'dacl' { 262144 }; 'take' { 524288 } }
+                    Assert ($message -ceq "INSTALL_PARENT_ACL_UNSAFE parent=other-ancestor principal=authenticated-users forbiddenMask=$mask inherited=0") 'Unsafe ACL diagnostic did not preserve the exact finite cause.'
+                    Assert (!$message.Contains($root)) 'ACL diagnostic disclosed a private path.'
+                }
             }
         } finally { Remove-Item Function:\Get-Acl }
     }

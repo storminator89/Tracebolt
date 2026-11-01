@@ -193,6 +193,28 @@ function Open-TraceboltPackage([string]$Executable, [string]$PackageDirectory) {
     }
 }
 
+function Format-TraceboltParentAclDiagnostic(
+    [ValidateSet('drive-root','program-files','program-data','other-ancestor')][string]$ParentClass,
+    [string]$PrincipalSid, [int]$ForbiddenMask, [bool]$Inherited
+) {
+    # Finite, non-sensitive evidence only: never paths, account names, arbitrary
+    # SIDs, full SDDL, error prose or values supplied by the package/manager.
+    $principal = switch -CaseSensitive ($PrincipalSid) {
+        'S-1-1-0' { 'everyone' }
+        'S-1-5-11' { 'authenticated-users' }
+        'S-1-5-32-545' { 'builtin-users' }
+        'S-1-3-0' { 'creator-owner' }
+        'S-1-15-2-1' { 'all-app-packages' }
+        'S-1-15-2-2' { 'restricted-app-packages' }
+        default { 'other-principal' }
+    }
+    # Same five forbidden bits as the existing guard. This changes diagnostics,
+    # not admission: WriteData aliases CreateFiles for a directory and must not
+    # be silently reinterpreted as safe based on this diagnostic alone.
+    return ('INSTALL_PARENT_ACL_UNSAFE parent={0} principal={1} forbiddenMask={2} inherited={3}' -f
+        $ParentClass, $principal, ($ForbiddenMask -band 0x000d0042), [int]$Inherited)
+}
+
 function Assert-TraceboltInstallParent([string]$Path) {
     $full = Assert-TraceboltPlainPath $Path -Directory
     $trusted = @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
@@ -214,7 +236,11 @@ function Assert-TraceboltInstallParent([string]$Path) {
         foreach ($rule in $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
             if ($rule.AccessControlType -eq 'Allow' -and !($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
                 ($rule.FileSystemRights -band $dangerous) -and $trusted -notcontains $rule.IdentityReference.Value) {
-                throw 'Installation parent allows non-administrative replacement or writes.'
+                $class = 'other-ancestor'
+                if ([string]::Equals($current.FullName, [IO.Path]::GetPathRoot($full), [StringComparison]::OrdinalIgnoreCase)) { $class = 'drive-root' }
+                elseif ([string]::Equals($current.FullName, [Environment]::GetFolderPath('ProgramFiles'), [StringComparison]::OrdinalIgnoreCase)) { $class = 'program-files' }
+                elseif ([string]::Equals($current.FullName, [Environment]::GetFolderPath('CommonApplicationData'), [StringComparison]::OrdinalIgnoreCase)) { $class = 'program-data' }
+                throw (Format-TraceboltParentAclDiagnostic $class $rule.IdentityReference.Value ([int]($rule.FileSystemRights -band $dangerous)) $rule.IsInherited)
             }
         }
         $current = $current.Parent

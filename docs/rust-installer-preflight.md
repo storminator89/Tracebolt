@@ -50,6 +50,14 @@ existing leaves are never adopted. Only after configuration preflight and those
 new directories does disabled SCM staging begin. Existing LocalService and
 restricted service-SID rights are unchanged.
 
+An unsafe allow ACE reports `INSTALL_PARENT_ACL_UNSAFE` with only a fixed parent
+class, well-known-principal category (all unknown SIDs map to `other-principal`),
+the matched forbidden-bit mask and inherited/not-inherited flag. Its value has no
+parent path, account, raw SID or SDDL; normal PowerShell error rendering can still
+show the script source location. This is cause evidence, not permission to weaken the
+guard or repair an existing ACL. In particular, directory `WriteData` aliases
+`CreateFiles`; its appearance alone does not prove it safe to admit.
+
 **Unsigned checksums are consistency bindings, not publisher authentication.**
 A changed EXE plus changed manifest can still agree; independently verify and
 review the selected release/source before elevating its scripts. The helper is

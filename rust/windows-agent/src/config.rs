@@ -51,6 +51,7 @@ pub fn read_ca(directory: &Path) -> Result<Vec<u8>> {
 pub fn tls_builder(ca: &[u8]) -> Result<reqwest::blocking::ClientBuilder> {
     let mut builder = reqwest::blocking::Client::builder()
         .use_rustls_tls()
+        .dns_resolver(std::sync::Arc::new(crate::dns::SystemResolver))
         .https_only(true)
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
