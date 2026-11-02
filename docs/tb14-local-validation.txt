@@ -173,3 +173,21 @@ Exit status: 0
 Same-policy real password rotation and fresh login after reset/restart are covered.
 Rejected policy changes preserve revision/audit/session state without fencing.
 Previously documented SQLite/protected-path/frontend/PR209 gates remain open.
+
+Additional review-requested source after 01624269ac3c74a631feb75162ce9935acf4606d:
+cmd/operator-account-init/initialize_linux_test.go
+internal/api/operator_account_lifecycle_test.go
+These are real public-file fixtures, not memory-store substitutes or skip-only tests.
+Protected ancestor ownership remains unchanged. Permission-negative cases modify
+only newly-created temporary fixture files/directories; no host/ancestor changes.
+Initializer short-write injection is subprocess-local RLIMIT_FSIZE, not power loss.
+API uncertainty fixture changes only its new temporary journal's size, not fsync.
+
+Offline setup attempts in this executor:
+$ go test -race ./cmd/operator-account-init -run TestInitialize -count=1
+BLOCKED before compilation: modernc.org/sqlite v1.60.1 missing; GOPROXY=off.
+$ go test -race ./internal/api -run TestAccountLifecycle -count=1
+BLOCKED before compilation: modernc.org/sqlite v1.60.1 missing; GOPROXY=off.
+gofmt and git diff --check passed. No new fixture is claimed executed or green.
+MFA reset remains an explicit unresolved acceptance criterion; session reset is
+not factor reset. No additional MFA/#140 feature was introduced.

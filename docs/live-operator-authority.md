@@ -149,6 +149,13 @@ separate protected-material operation, not an HTTP capability. `resetSessions`
 is a session reset; this candidate does not implement an MFA factor store or
 claim an actual factor-credential reset.
 
+This is an unresolved acceptance-scope conflict in #141: its MFA-reset wording
+is not satisfied by session invalidation. There is no MFA factor store or factor
+reset operation in this candidate, and no #140 product feature has been added.
+The MFA-specific criterion must remain open; neither these password tests nor
+a session-reset test establishes it. Closure requires an explicit resolution
+of that acceptance scope, not an inferred equivalence.
+
 ## Acceptance matrix and remaining evidence
 
 | TB-14 boundary | Source mechanism | Remaining acceptance evidence |
@@ -228,3 +235,15 @@ cover small responses and larger buffered tails, socket errors, wrapper-generate
 write/short-write/flush errors, write-deadline expiry before abort under the
 lease, HTTP/2 rejection, static compatibility and flush-wrapper support. This
 is real HTTP helper evidence, not a SQLite-backed six-family ingress acceptance.
+
+Additional Linux fixture source now exercises the public initializer's create-only
+success, existing/partial state rejection, second writer, symlink and file-mode
+rejection, protected path separation and a subprocess-only short-write failure
+after marker creation. The latter is not a power-loss/fsync crash proof. API
+fixture source uses public journal constructors and a real private proposal file,
+password/session/epoch rejection after reset and restart, unrelated-account
+availability, stale proposals and an actual temporary-journal size-integrity
+failure. It does not claim to simulate fsync failure. No test skips the protected
+ancestor gate or changes host/ancestor ownership. These new files have not compiled
+in this executor because its SQLite source cache is absent; the separately
+verified existing offline executor must run them on the published revision.
