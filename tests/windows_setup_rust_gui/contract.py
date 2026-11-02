@@ -7,7 +7,7 @@ CASES = frozenset({"tls", "http", "renewal", "cancel", "failure", "uninstall",
                    "modal-resize", "close-input"})
 STAGES = frozenset({"approval", "platform", "ci", "source", "desktop", "image-path", "image-lease",
     "image-digest", "launch", "window-identity", "control-identity", "message", "window",
-    "provenance", "layout", "font", "consent", "back", "operation", "cancel", "uninstall",
+    "provenance", "thread-dpi", "layout", "font", "consent", "back", "operation", "cancel", "uninstall",
     "privacy", "cleanup", "fixture-report", "deadline", "unexpected"})
 COVERAGE = {k: False for k in ("installation", "secretConsole", "uac", "realManager",
     "telemetry", "physicalKeyboard", "pixelVisibility", "publicFileChooser", "realBootstrapParser",

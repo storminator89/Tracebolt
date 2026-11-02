@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 def source(name):
@@ -176,6 +177,19 @@ class NativeAdapterSourceTests(unittest.TestCase):
         self.assertEqual(w.path_chain(r"C:\fixture\gui.test.exe"), ["C:\\", r"C:\fixture", r"C:\fixture\gui.test.exe"])
         for path in [r"\\server\share\a.exe", r"\\?\C:\a.exe", r"C:\a\..\b.exe", r"C:\a.exe:stream", r"C:\NUL.exe", r"C:\a.\b.exe", "C:/a.exe", r"C:\a.dll"]:
             with self.subTest(path=path), self.assertRaises(c.Failure): w.path_chain(path)
+    def test_null_thread_dpi_is_distinct_and_refuses_before_child_start(self):
+        calls = []
+        session = object.__new__(w.Session)
+        session.process, session.threads, session.handles, session.previous_dpi = None, [], [], None
+        session.u = type("U", (), {"SetThreadDpiAwarenessContext": lambda self, context: calls.append("dpi")})()
+        with patch.object(w.subprocess, "Popen") as launch:
+            with self.assertRaisesRegex(c.Failure, "^thread-dpi$"):
+                session.__enter__()
+        launch.assert_not_called()
+        self.assertEqual(calls, ["dpi"])
+        self.assertIsNone(session.process)
+        self.assertIsNone(session.previous_dpi)
+
     def test_foreign_pid_is_rejected_before_class_read_or_action(self):
         session = object.__new__(w.Session)
         session.process = type("Process", (), {"pid": 7, "poll": lambda self: None})()

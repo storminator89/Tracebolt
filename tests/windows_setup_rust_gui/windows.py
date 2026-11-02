@@ -114,7 +114,7 @@ class Session:
     def __enter__(self):
         try:
             self.previous_dpi = self.u.SetThreadDpiAwarenessContext(C.c_void_p(-4))
-            need(self.previous_dpi, "layout")
+            need(self.previous_dpi, "thread-dpi")
             flags, required = UserObjectFlags(), U32()
             station = self.u.GetProcessWindowStation()
             need(station and self.u.GetUserObjectInformationW(station, 1, C.byref(flags), C.sizeof(flags), C.byref(required))
