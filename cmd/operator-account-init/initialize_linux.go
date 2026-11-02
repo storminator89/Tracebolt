@@ -114,6 +114,12 @@ func initialize(o options) string {
 	if lease.Check() != nil {
 		return "manager_writer"
 	}
+	// Establish/validate the same profile binding used by normal manager startup
+	// before any authority artifact makes an empty directory nonempty. Never
+	// adopt an unmarked nonempty state or an incompatible existing profile.
+	if err = lanstore.PrepareProfileDirectory(c.StateDirectory, c.Profile); err != nil {
+		return "profile_state"
+	}
 	var id [16]byte
 	if _, err = rand.Read(id[:]); err != nil {
 		return "authority_identity"
@@ -131,7 +137,8 @@ func initialize(o options) string {
 	for i, op := range ops {
 		initial.Accounts[i] = operatorauth.AccountRecord{Operator: op, Revision: 1}
 	}
-	// The permanent fence is durable FIRST. Any subsequent failure blocks both
+	// After profile admission, the permanent authority fence is durable FIRST.
+	// Any subsequent failure blocks both
 	// silent v2 fallback and blind reseeding. Nothing is deleted on any failure.
 	if lease.Check() != nil {
 		return "manager_writer"

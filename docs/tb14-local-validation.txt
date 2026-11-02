@@ -191,3 +191,27 @@ BLOCKED before compilation: modernc.org/sqlite v1.60.1 missing; GOPROXY=off.
 gofmt and git diff --check passed. No new fixture is claimed executed or green.
 MFA reset remains an explicit unresolved acceptance criterion; session reset is
 not factor reset. No additional MFA/#140 feature was introduced.
+
+Profile-admission review correction after 47711d99b368220220ad8a5fd3aa969ba3f9009c:
+Parent's independent real Go overlay reproduced both regressions before fix:
+TestReviewInitializerProducesStartupCompatibleProfile
+TestReviewInitializerRejectsIncompatibleExistingProfile
+Both tests are now included in the normal initializer suite, together with
+compatible-profile preservation and unmarked-nonempty/malformed-state rejection.
+The initializer calls normal PrepareProfileDirectory under the writer lease and
+before the first authority artifact; no production path checks are weakened.
+Here the initializer race suite remains blocked before compilation by missing
+SQLite with GOPROXY=off. gofmt and git diff --check pass. No local full-manager
+prepare execution after initializer is claimed. Parent separately reported API
+proposal/journal-restart tests green at 47711d9 (5.060s); that is external review
+evidence, not a test run in this executor.
+
+Additional full startup regression source:
+cmd/lan-manager/live_account_startup_test.go
+TestLiveAccountPublicInitializationPrepareAndRestart uses equivalent public
+profile/marker/journal/reference setup, Load(v3), normal prepare, password reset,
+disable/re-enable, persisted old-epoch rejection, a second normal prepare and
+v1/v2 fallback denial. It exercises actual prepared HTTP handlers with fixture
+TLS request metadata; it does not run a host service, browser or initializer CLI.
+$ go test -race ./cmd/lan-manager -run TestLiveAccountPublicInitializationPrepareAndRestart -count=1
+BLOCKED before compilation in this executor: missing SQLite; GOPROXY=off.

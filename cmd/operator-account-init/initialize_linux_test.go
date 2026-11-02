@@ -344,3 +344,87 @@ func TestInitializeRefusesServedOrStateOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestReviewInitializerProducesStartupCompatibleProfile(t *testing.T) {
+	f := newInitFixture(t)
+	if got := initialize(f.o); got != "created" {
+		t.Fatal("initialize", got)
+	}
+	if err := lanstore.PrepareProfileDirectory(f.c.StateDirectory, lanconfig.TLS); err != nil {
+		t.Fatal("normal startup profile admission failed", err)
+	}
+	profile := filepath.Join(f.c.StateDirectory, "profile")
+	raw, err := os.ReadFile(profile)
+	if err != nil || !bytes.Equal(raw, []byte("tracebolt.lan-state.v1\ntls\n")) {
+		t.Fatal("missing exact TLS state binding")
+	}
+}
+
+func TestReviewInitializerRejectsIncompatibleExistingProfile(t *testing.T) {
+	f := newInitFixture(t)
+	if err := lanstore.PrepareProfileDirectory(f.c.StateDirectory, lanconfig.HTTPTest); err != nil {
+		t.Fatal(err)
+	}
+	profile := filepath.Join(f.c.StateDirectory, "profile")
+	before, err := os.ReadFile(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := initialize(f.o); got != "profile_state" {
+		t.Fatal("incompatible profile admitted", got)
+	}
+	assertAbsent(t, f.paths()...)
+	after, err := os.ReadFile(profile)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("incompatible profile changed")
+	}
+	entries, err := os.ReadDir(f.c.StateDirectory)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("rejected state mutated")
+	}
+}
+
+func TestInitializePreservesExistingTLSProfile(t *testing.T) {
+	f := newInitFixture(t)
+	if err := lanstore.PrepareProfileDirectory(f.c.StateDirectory, lanconfig.TLS); err != nil {
+		t.Fatal(err)
+	}
+	profile := filepath.Join(f.c.StateDirectory, "profile")
+	before, err := os.Stat(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := initialize(f.o); got != "created" {
+		t.Fatal("compatible profile rejected", got)
+	}
+	after, err := os.Stat(profile)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("existing profile replaced")
+	}
+	if err := lanstore.PrepareProfileDirectory(f.c.StateDirectory, lanconfig.TLS); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInitializeRejectsUnmarkedNonemptyAndMalformedProfile(t *testing.T) {
+	for _, name := range []string{"unmarked-state", "profile"} {
+		t.Run(name, func(t *testing.T) {
+			f := newInitFixture(t)
+			path := filepath.Join(f.c.StateDirectory, name)
+			before := []byte("synthetic existing state must not be adopted")
+			writeFixture(t, path, before)
+			if got := initialize(f.o); got != "profile_state" {
+				t.Fatal("invalid existing state admitted", got)
+			}
+			assertAbsent(t, f.paths()...)
+			after, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatal("existing state changed")
+			}
+			entries, err := os.ReadDir(f.c.StateDirectory)
+			if err != nil || len(entries) != 1 {
+				t.Fatal("failed profile admission mutated state")
+			}
+		})
+	}
+}

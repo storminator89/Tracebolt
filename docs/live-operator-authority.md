@@ -40,7 +40,13 @@ retained. `manage_accounts` occupies the new uint32 bit 65536; existing capabili
 bits, including `read_customers` at 32768, are unchanged.
 
 The initializer takes the manager's exclusive writer lease and requires all
-three destinations to be absent. It creates, in order:
+three authority destinations to be absent. Before its first authority write it
+uses the same profile admission as normal manager startup: an empty state receives
+a durable TLS `profile`; an existing exact TLS profile is preserved. An HTTP
+profile, malformed profile or unmarked nonempty state is rejected without any
+authority artifact. Profile-admission failure may leave a partial profile and
+requires inspection; no cleanup or overwrite follows. A valid profile remains
+if a subsequent step fails. It then creates, in order:
 
 1. `StateDirectory/operator-authority-used.json`, pinning the v3 authority ID,
    TLS profile and exact journal path.
@@ -247,3 +253,20 @@ failure. It does not claim to simulate fsync failure. No test skips the protecte
 ancestor gate or changes host/ancestor ownership. These new files have not compiled
 in this executor because its SQLite source cache is absent; the separately
 verified existing offline executor must run them on the published revision.
+
+Profile-ordering review correction: initializer tests now assert that a successful
+fresh initialization passes normal `lanstore.PrepareProfileDirectory` startup
+admission, an existing HTTP-test profile is rejected unchanged before authority
+writes, a compatible TLS profile is preserved, and unmarked nonempty/malformed
+state is never adopted. This directly covers the reproduced profile-admission
+defects; it is not a claim that a full manager `prepare` after initialization
+was executed in this executor.
+
+The separate `cmd/lan-manager/live_account_startup_test.go` now supplies full
+`prepare`/restart fixture source using the existing protected TLS material and
+equivalent public setup steps. It covers live password reset, disable/re-enable,
+old epochs and cookies, retained password changes, independent administrators
+and v1/v2 downgrade refusal. It is an in-process Go HTTP-handler fixture with
+TLS request metadata, not initializer CLI execution, a real TLS handshake or a
+host-service deployment. Its local compilation remains SQLite-blocked pending
+execution in the separately authorized cached environment.
