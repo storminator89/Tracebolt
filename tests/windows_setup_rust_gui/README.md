@@ -212,9 +212,16 @@ no guessed KernelBase export or fallback is used, and no host setting changes.
 The query means only **availability in the running composed API-set schema**,
 not a physical file, particular export, trusted-module proof or successful future
 call. False results remain false; unsupported binding is unavailable, never a
-positive default. `ImageOS=win25` is an additional expected job marker, not OS
-attestation. Positive observations carry the already-approved source/image
-hash bindings; unavailable observations contain no partial vectors.
+positive default. The read-only diagnostic recognizes exactly `ImageOS=win25`
+and `ImageOS=win25-vs2026`, matching the two official Windows 2025 variants in
+[the runner image mapping](https://raw.githubusercontent.com/actions/runner-images/main/helpers/GenerateResourcesAndImage.ps1)
+and [environment configuration](https://raw.githubusercontent.com/actions/runner-images/main/images/windows/scripts/build/Configure-SystemEnvironment.ps1).
+These are expected job markers, not OS attestation; missing/unknown markers
+remain unavailable. Supporting the documented VS2026 marker corrects only this
+extra diagnostic precondition, not DLL membership or fixture admission. It does
+not establish that this was the only cause of prior unavailable evidence.
+Positive observations carry the already-approved source/image hash bindings;
+unavailable observations contain no partial vectors.
 
 This evidence producer has portable fake/negative coverage only. Actual hosted
 fifteen-contract observations, the GUI run, installer acceptance and full Rust

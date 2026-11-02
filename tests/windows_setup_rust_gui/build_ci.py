@@ -113,7 +113,7 @@ class Builder:
         evidence = runner.manual.source_only("rust_gui_crt_evidence", "ci_crt_evidence.py")
         result = evidence.unavailable()
         try:
-            contract.need(self.context.get("IMAGEOS") == "win25" and provenance.SYSTEM_DLLS == evidence.BASELINE, "provenance")
+            contract.need(self.context.get("IMAGEOS") in {"win25", "win25-vs2026"} and provenance.SYSTEM_DLLS == evidence.BASELINE, "provenance")
             contract.need(policy.source_state(self.root, self.source, self.context) == self.state, "source")
             tool = Path(self.gcc).with_name("objdump.exe")
             contract.need(tool.is_absolute() and not tool.resolve().is_relative_to(self.root.resolve())

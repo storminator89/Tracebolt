@@ -122,6 +122,17 @@ class CRTOrchestrationTests(unittest.TestCase):
             assert x.crt_diagnostic.call_count==0
         ''')
 
+    def test_unknown_image_markers_refuse_before_source_tools_or_native_calls(self):
+        self.check('''
+        e=b.runner.manual.source_only('diagnostic_fixture','ci_crt_evidence.py')
+        for marker in [None,'','win22','WIN25','Win25-vs2026','win25-vs2026-extra',
+                       'windows-2025-vs2026',True,['win25'],{'win25':True}]:
+            x=object.__new__(b.Builder);x.context={} if marker is None else {'IMAGEOS':marker}
+            with patch.object(b.runner.manual,'source_only',return_value=e),patch.object(b.policy,'source_state') as source,patch.object(b,'hash_file') as hashes,patch.object(e,'Native') as native:
+                assert x.crt_diagnostic('not-executed',('a'*64,512))==e.unavailable()
+            source.assert_not_called();hashes.assert_not_called();native.assert_not_called()
+        ''')
+
     def test_same_hash_source_lease_tool_query_and_cleanup_required(self):
         self.check('''
         from unittest.mock import Mock
@@ -129,7 +140,7 @@ class CRTOrchestrationTests(unittest.TestCase):
         state={'sourceCommit':'a'*40,'sourceTree':'b'*40,'sourceInputsSHA256':'c'*64}
         image=Path('/approved/output/own.test.exe'); image_hash=('d'*64,512)
         tool=Path('/approved/tools/objdump.exe'); gcc=Path('/approved/tools/gcc.exe')
-        for fault in [None,'image-os','baseline','source-before','source-after','image-hash','tool-hash','gcc-hash','lease','tool','query','cleanup']:
+        for fault in [None,'image-os-vs2026','image-os','baseline','source-before','source-after','image-hash','tool-hash','gcc-hash','lease','tool','query','cleanup']:
             x=object.__new__(b.Builder);x.context={'IMAGEOS':'win25'};x.root=Path('/approved/source')
             x.output=image.parent;x.source='a'*40;x.state=state;x.gcc=str(gcc);x.env={};x.end=b.time.monotonic()+60
             events=[];counts={};source_calls=[]
@@ -165,11 +176,12 @@ class CRTOrchestrationTests(unittest.TestCase):
                 spec=importlib.util.spec_from_file_location('crt_text_fixture',b.HERE/'test_ci_crt_evidence.py')
                 fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
                 return fixture.output((e.NAMES[0],)).replace(fixture.IMAGE.encode(),str(image).encode())
+            if fault=='image-os-vs2026': x.context['IMAGEOS']='win25-vs2026'
             if fault=='image-os': x.context['IMAGEOS']='not-accepted'
             baseline=e.BASELINE if fault!='baseline' else frozenset()
             with patch.object(b.runner.manual,'source_only',return_value=e),patch.object(b.policy,'source_state',side_effect=source),patch.object(b,'hash_file',side_effect=hashes),patch.object(e,'Native',Native),patch.object(e,'run_bounded',side_effect=run),patch.object(b.provenance,'SYSTEM_DLLS',baseline):
                 result=x.crt_diagnostic(image,image_hash)
-            if fault is None:
+            if fault in [None,'image-os-vs2026']:
                 assert result=={**e.projection([True]+[False]*14,[True]*15),**state,'imageSHA256':'d'*64,'imageSize':512}
                 assert len(source_calls)==2
                 assert [event[1] for event in events if event[0]=='open']==[image,tool,gcc]
