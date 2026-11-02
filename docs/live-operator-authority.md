@@ -135,6 +135,13 @@ fields, reordered/noncanonical encodings and trailing values are rejected):
 5. `passwordHash`: an accepted Argon2id verifier
 
 No real proposal or verifier belongs in this document or command arguments.
+Live password rotation must preserve the original Argon2 memory, iteration and
+parallelism policy, including a one-account roster. The immutable unknown-user
+dummy workload therefore remains equal to every current account workload.
+Changes are rejected before session fencing, and journal transition/replay
+validation also preserves this policy. Work-factor migration is not supported
+by this reset API or by a restart.
+
 The proposal is read only after administrator admission, then the update
 rechecks current authority and revision. Successful use leaves the proposal in
 place, but its old revision prevents reuse. Custodian replacement/cleanup is a

@@ -123,7 +123,7 @@ func namedPrincipals(operators []Operator) (map[string]principal, error) {
 		}
 		// Match work factors so an unknown username receives the same bounded
 		// password-hash workload as any configured account.
-		if i > 0 && (v.memory != work.memory || v.iterations != work.iterations || v.parallelism != work.parallelism) {
+		if i > 0 && (!sameWorkFactors(v, work)) {
 			return nil, ErrConfiguration
 		}
 		work = v

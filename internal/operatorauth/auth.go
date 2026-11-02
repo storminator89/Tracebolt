@@ -50,6 +50,11 @@ type verifier struct {
 	hash        []byte
 }
 
+// sameWorkFactors preserves equal bounded work for known and unknown logins.
+func sameWorkFactors(a, b verifier) bool {
+	return a.memory == b.memory && a.iterations == b.iterations && a.parallelism == b.parallelism
+}
+
 func parseHash(encoded string) (verifier, error) {
 	bad := func() (verifier, error) { return verifier{}, ErrConfiguration }
 	if len(encoded) > 256 || strings.TrimSpace(encoded) != encoded {

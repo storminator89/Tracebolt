@@ -98,6 +98,11 @@ func validTransition(before AccountSnapshot, t AccountTransition) bool {
 			if next.Operator.ID != old.Operator.ID || next.Operator.Username != old.Operator.Username || a.Previous != old.Revision || a.Current != next.Revision || next.RevocationFloor != old.Revision {
 				return false
 			}
+			previousVerifier, previousErr := parseHash(old.Operator.PasswordHash)
+			nextVerifier, nextErr := parseHash(next.Operator.PasswordHash)
+			if previousErr != nil || nextErr != nil || !sameWorkFactors(previousVerifier, nextVerifier) {
+				return false
+			}
 			if next.Operator.PasswordHash != old.Operator.PasswordHash && a.Operation != "credential_reset" {
 				return false
 			}

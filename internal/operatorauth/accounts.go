@@ -292,6 +292,13 @@ func (m *Manager) ChangeAccount(ctx context.Context, requester Session, change A
 	if err != nil {
 		return err
 	}
+	// The unknown-user dummy verifier is immutable startup policy. Preserve its
+	// work factors even for a single-account roster, before fencing any session.
+	for _, principal := range principals {
+		if !sameWorkFactors(principal.verifier, m.verifier) {
+			return ErrConfiguration
+		}
+	}
 	// Publish the deny fence before waiting. No fresh login, session admission or
 	// actor lease can enter while an older admitted operation drains.
 	m.mu.Lock()

@@ -143,3 +143,33 @@ internal/windowsupdatejob/reusable_manager.go
 internal/windowsupdatejob/schedule.go
 internal/windowsupdatejob/transactional.go
 web/src/auth.tsx
+
+Review correction after af87c0482ea96a78c89fb78c91ecfe852a01fac6:
+Immutable live Argon2 work-factor policy, including single-account reset and
+journal commit/replay. New paths:
+internal/operatorauth/work_policy_test.go
+internal/operatorauth/work_policy_linux_test.go
+
+Deterministic before-fix regression (same offline environment):
+$ go test -race ./internal/operatorauth -run '^TestSingleLiveAccountCannotChangeWorkFactors$' -count=1
+FAIL: all three independently allowed memory/iteration/parallelism changes were admitted.
+Exit status: 1 (expected red regression; 0.303s)
+$ go test -race ./internal/operatorauth -run '^TestAccountJournalPreservesWorkPolicyAcrossTransitions$' -count=1
+FAIL: commit admitted work-factor transition; replay adopted historical work-factor change.
+Exit status: 1 (expected red regression; 0.243s)
+
+After correction, parameter/state assertions (no timing-based assertions):
+$ go test -race ./internal/operatorauth -run 'Test(SingleLiveAccount|AccountJournalPreservesWorkPolicy)' -count=10
+ok localrmm/internal/operatorauth 7.474s
+Exit status: 0
+$ go test -race ./internal/operatorauth -count=1
+ok localrmm/internal/operatorauth 10.497s
+Exit status: 0
+$ go vet ./internal/operatorauth
+Exit status: 0
+$ git diff --check
+Exit status: 0
+
+Same-policy real password rotation and fresh login after reset/restart are covered.
+Rejected policy changes preserve revision/audit/session state without fencing.
+Previously documented SQLite/protected-path/frontend/PR209 gates remain open.
