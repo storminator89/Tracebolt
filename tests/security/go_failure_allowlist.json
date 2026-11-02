@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "c9eaf73473b979c81b4a99227d3f0ee4c6daaaccea6e3b288fb9def25161a2b7",
+  "goSourceSha256": "f80ca8da49813311eda8a1c9524ce31b416f988388fffdc2f779704f44503e66",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -5850,6 +5850,16 @@
       "TestReadAdminResourceContextHTTPConsentStartsUncheckedAndClears",
       "TestReadAdminReviewUsesSummaryWithOptionalExactDetails",
       "TestReviewIncludesFullDisclosureAndTruthfulLimitations",
+      "TestRustFrontendBackAndReselectionClearAllConsent",
+      "TestRustFrontendCancellationWaitsForConsoleOwnerAndFinishJoins",
+      "TestRustFrontendCloseAndBadLayoutBeforePresentationAreInert",
+      "TestRustFrontendExactMappingsRequireRenderedOperationAndSingleAttempt",
+      "TestRustFrontendProtectedSelectionErrorsDoNotRenderPrivateInput",
+      "TestRustFrontendReviewUsesOriginalExactPresentation",
+      "TestRustFrontendUninstallNeedsIndependentConfirmationAndRender",
+      "TestRustGUICIContextRequiresEveryHostedPR201TLSBinding",
+      "TestRustNativeGUIFixture",
+      "TestRustNativeGUITLSCI",
       "TestSelectedInputAndTrustAreFrozen",
       "TestSuccessAndFailureNeverRetry",
       "TestTrustMustBePublicHTTPSAndFullDigests",
