@@ -7,6 +7,10 @@ import { systemDevice, systemView } from './system-inventory-fixtures';
 import type { Device } from './types';
 import type { SystemView } from './system-inventory-types';
 import { journalSession, journalView } from './journal-fixtures';
+import { overviewView } from './complete-overview-fixtures';
+import { completeView } from './complete-packages-fixtures';
+import { validCompletePackageView } from './complete-packages-types';
+import type { CompletePackageView } from './complete-packages-types';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 const authFixture = vi.hoisted(() => ({ expiresAt: '2026-10-05T00:00:00Z' }));
@@ -22,6 +26,77 @@ beforeEach(() => { authFixture.expiresAt = '2026-10-05T00:00:00Z'; setLocale('en
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('compact capability collection status', () => {
+    it.each(['en', 'de'] as const)('keeps completed source evidence when a later status read times out (%s)', async locale => {
+        setLocale(locale, false);
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'Date'] });
+        const overview = overviewView(); overview.serverNow = '2026-10-04T18:30:10Z';
+        authFixture.expiresAt = new Date(Date.parse(overview.serverNow) + 300000).toISOString();
+        let resolve!: (value: CompletePackageView) => void, signal: AbortSignal | undefined;
+        vi.mocked(request).mockImplementation(async (path, options) => {
+            if (path.endsWith('/overview')) return overview;
+            signal = options?.signal as AbortSignal;
+            return new Promise<CompletePackageView>(r => { resolve = r; });
+        });
+        const d = device(); d.id = overview.deviceId; d.capabilities.push(
+            { id: 'complete_process_inventory', name: 'Complete processes', status: 'scope', detail: 'Accepted complete generation.' },
+            { id: 'package_inventory', name: 'Complete packages', status: 'scope', detail: 'Independent source status.' },
+        );
+        render(<DeviceCapabilities device={d}/>);
+        await act(async () => { await Promise.resolve(); });
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(row('complete_process_inventory')).toHaveAttribute('data-state', 'available');
+        const capturedAt = row('complete_process_inventory').querySelector('time')!.dateTime;
+        await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+        expect(signal!.aborted).toBe(true);
+        expect(row('complete_process_inventory')).toHaveAttribute('data-state', 'available');
+        expect(row('complete_process_inventory').querySelector('time')!.dateTime).toBe(capturedAt);
+        expect(row('complete_process_inventory')).not.toHaveTextContent('timeout');
+        expect(row('systemd')).toHaveAttribute('data-state', 'failed');
+        expect(row('socket_inventory')).toHaveAttribute('data-state', 'failed');
+        expect(row('package_inventory')).toHaveAttribute('data-state', 'failed');
+        expect(row('systemd')).toHaveTextContent('timeout');
+        expect(row('systemd')).toHaveTextContent(locale === 'de' ? 'Technisch fehlgeschlagen' : 'Technical failure');
+        // A response ignored by the aborted transport must not replace timeout.
+        const late = completeView(); late.deviceId = d.id;
+        expect(validCompletePackageView(late, d.id)).toBe(true);
+        await act(async () => resolve(late));
+        expect(row('package_inventory')).toHaveAttribute('data-state', 'failed');
+        expect(row('package_inventory')).toHaveTextContent('timeout');
+        expect(row('package_inventory').querySelector('time')).toBeNull();
+        expect(row('systemd')).toHaveAttribute('data-state', 'failed');
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([
+            `/devices/${d.id}/inventory/overview`, `/devices/${d.id}/inventory/packages`,
+        ]);
+        await act(async () => { await vi.advanceTimersByTimeAsync(100001); });
+        expect(row('complete_process_inventory')).toHaveAttribute('data-state', 'stale');
+        expect(row('complete_process_inventory').querySelector('time')!.dateTime).toBe(capturedAt);
+        expect(vi.mocked(request).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+    });
+    it.each([
+        ['operator denial', 'denied', 'operator_access_denied'],
+        ['invalid response', 'failed', 'invalid_status'],
+        ['unreadable source', 'failed', 'status_unavailable'],
+    ])('does not replace a completed %s with a sibling timeout', async (kind, state, reason) => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'Date'] });
+        vi.mocked(request).mockImplementation(async path => {
+            if (!path.endsWith('/overview')) return new Promise(() => {});
+            if (kind === 'operator denial') throw new APIError('DO_NOT_DISPLAY_RAW_SOURCE_ERROR', 403);
+            if (kind === 'invalid response') return { invalid: 'DO_NOT_DISPLAY_RAW_SOURCE_ERROR' };
+            throw new Error('DO_NOT_DISPLAY_RAW_SOURCE_ERROR');
+        });
+        const d = device(); d.capabilities.push({ id: 'complete_process_inventory', name: 'Complete processes', status: 'scope', detail: 'Independent source.' });
+        render(<DeviceCapabilities device={d}/>);
+        await act(async () => { await Promise.resolve(); });
+        expect(row('complete_process_inventory')).toHaveAttribute('data-state', state);
+        expect(row('complete_process_inventory')).toHaveTextContent(reason);
+        await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+        expect(row('complete_process_inventory')).toHaveAttribute('data-state', state);
+        expect(row('complete_process_inventory')).toHaveTextContent(reason);
+        expect(row('complete_process_inventory')).not.toHaveTextContent('timeout');
+        expect(row('systemd')).toHaveTextContent('timeout');
+        expect(document.body).not.toHaveTextContent('DO_NOT_DISPLAY_RAW_SOURCE_ERROR');
+    });
     it('replaces static orange scope badges with actual bounded source status', async () => {
         render(<DeviceCapabilities device={device()}/>);
         await waitFor(() => expect(row('systemd')).toHaveAttribute('data-state', 'available'));

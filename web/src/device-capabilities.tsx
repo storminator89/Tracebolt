@@ -55,9 +55,16 @@ export function DeviceCapabilities({ device }: { device: Device }) {
         const read = async () => {
             if (!alive || stopped || suspended || pending || !enabled || !wanted.length || document.visibilityState === 'hidden') return;
             if (hasLogoutIntent() || scopeEpoch !== getProtectedRequestEpoch() || performance.now() >= evidence.sessionDeadline) { lock(); return; }
-            const controller = new AbortController(); pending = controller; setLoading(true);
+            const controller = new AbortController(), unfinished = new Set(wanted); pending = controller; setLoading(true);
             const active = () => alive && !stopped && !suspended && !controller.signal.aborted && !hasLogoutIntent() && scopeEpoch === getProtectedRequestEpoch();
-            timeout = window.setTimeout(() => { if (!active()) return; controller.abort(); for (const key of wanted) setSnapshots(previous => ({ ...previous, [key]: { error: 'timeout', anchor: capture() } })); pending = null; setLoading(false); timer = window.setTimeout(read, 15000); }, 10000);
+            timeout = window.setTimeout(() => {
+                if (!active()) return;
+                controller.abort();
+                // One batch deadline bounds sequential reads, but a slow sibling
+                // must not replace a source result already validated this batch.
+                for (const key of unfinished) setSnapshots(previous => ({ ...previous, [key]: { error: 'timeout', anchor: capture() } }));
+                pending = null; setLoading(false); timer = window.setTimeout(read, 15000);
+            }, 10000);
             for (const key of wanted) {
                 if (!active()) break;
                 const anchor = capture();
@@ -84,6 +91,7 @@ export function DeviceCapabilities({ device }: { device: Device }) {
                     if (error instanceof APIError && error.status === 401) { lock(); break; }
                     setSnapshots(previous => ({ ...previous, [key]: { error: error instanceof APIError && error.status === 403 ? 'operator_access_denied' : error instanceof Error && error.message === 'invalid_status' ? 'invalid_status' : 'status_unavailable', anchor } }));
                 }
+                unfinished.delete(key);
             }
             if (pending === controller) { window.clearTimeout(timeout); pending = null; if (alive) setLoading(false); if (active()) timer = window.setTimeout(read, 15000); }
         };
