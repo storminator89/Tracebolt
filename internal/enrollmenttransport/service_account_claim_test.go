@@ -24,7 +24,7 @@ import (
 // of operatorauth's own concurrency and journal tests.
 type serviceClaimHarness struct {
 	configure func(operatorauth.ActorAdmission) error
-	approve   func(context.Context, string) (func() (int, func(), error), uint64)
+	approve   func(context.Context, string) (func() ([]byte, func(), error), uint64)
 }
 
 func serviceAccountHarness(t *testing.T, windows bool) serviceClaimHarness {
@@ -44,7 +44,7 @@ func serviceAccountHarness(t *testing.T, windows bool) serviceClaimHarness {
 		if err = manager.Report(ctx, f.snapshot.InvitationID, f.cert.CertificateHash(), caps); err != nil {
 			t.Fatal(err)
 		}
-		return serviceClaimHarness{manager.ConfigureAccountAuthority, func(c context.Context, actor string) (func() (int, func(), error), uint64) {
+		return serviceClaimHarness{manager.ConfigureAccountAuthority, func(c context.Context, actor string) (func() ([]byte, func(), error), uint64) {
 			r, e := manager.Preview(c, f.snapshot.Approval.DeviceID, actor, "fixture.service")
 			if e != nil {
 				t.Fatal(e)
@@ -58,9 +58,9 @@ func serviceAccountHarness(t *testing.T, windows bool) serviceClaimHarness {
 			if e != nil {
 				t.Fatal(e)
 			}
-			return func() (int, func(), error) {
+			return func() ([]byte, func(), error) {
 				g, release, err := manager.ClaimWithAdmission(ctx, f.snapshot.InvitationID, f.cert.CertificateHash(), identity)
-				return len(g.Envelope), release, err
+				return g.Envelope, release, err
 			}, persisted.Jobs[len(persisted.Jobs)-1].AuthorityEpoch
 		}}
 	}
@@ -92,7 +92,7 @@ func serviceAccountHarness(t *testing.T, windows bool) serviceClaimHarness {
 	if err = m.Report(ctx, f.snapshot.InvitationID, f.cert.CertificateHash(), windowsaction.Capabilities{Version: windowsaction.CapabilitiesVersion, Binding: b, CapturedAt: time.Now().Unix(), Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	return serviceClaimHarness{m.ConfigureAccountAuthority, func(c context.Context, actor string) (func() (int, func(), error), uint64) {
+	return serviceClaimHarness{m.ConfigureAccountAuthority, func(c context.Context, actor string) (func() ([]byte, func(), error), uint64) {
 		r, e := m.Preview(c, f.snapshot.Approval.DeviceID, actor, b.Target, "start")
 		if e != nil {
 			t.Fatal(e)
@@ -112,9 +112,9 @@ func serviceAccountHarness(t *testing.T, windows bool) serviceClaimHarness {
 		if e != nil {
 			t.Fatal(e)
 		}
-		return func() (int, func(), error) {
+		return func() ([]byte, func(), error) {
 			g, release, err := m.ClaimWithAdmission(ctx, f.snapshot.InvitationID, f.cert.CertificateHash(), identity)
-			return len(g.Envelope), release, err
+			return g.Envelope, release, err
 		}, persisted.Jobs[len(persisted.Jobs)-1].AuthorityEpoch
 	}}
 }
@@ -168,16 +168,16 @@ func TestServiceAccountClaimEpochAndLease(t *testing.T) {
 					mu.Unlock() // revoke/regrant one actor only
 					n, release, err := claim()
 					if scenario != "other-actor-continues" {
-						if !errors.Is(err, denied) || release != nil || n != 0 {
+						if !errors.Is(err, denied) || release != nil || len(n) != 0 {
 							t.Fatal("retired approval released permit", err)
 						}
 						n, release, err = claim()
-						if !errors.Is(err, denied) || release != nil || n != 0 {
+						if !errors.Is(err, denied) || release != nil || len(n) != 0 {
 							t.Fatal("repeat revived approval", err)
 						}
 						return
 					}
-					if err != nil || n == 0 || release == nil {
+					if err != nil || len(n) == 0 || release == nil {
 						t.Fatal("other actor blocked", err)
 					}
 					if mu.TryLock() {
@@ -193,7 +193,7 @@ func TestServiceAccountClaimEpochAndLease(t *testing.T) {
 					if release != nil {
 						release()
 					}
-					if err == nil || n != 0 {
+					if err == nil || len(n) != 0 {
 						t.Fatal("consumed permit replayed", err)
 					}
 				})
