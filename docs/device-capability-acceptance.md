@@ -32,6 +32,10 @@ also remain distinct. Fixed help text never interpolates raw source errors.
 
 The existing bounded, status-only readers keep original observation and session
 deadlines. Refresh does not extend a stalled server clock or expired session.
+The shared sequential-read deadline marks only unfinished sources as timed out;
+a slow sibling cannot overwrite a completed source observation, denial or invalid
+response. Retained observations still age from their original capture time, and
+late responses to an aborted batch cannot replace its result.
 The profile-scope label explicitly separates advertised support from local
 approval and current collection. Existing private inventory views retain their
 own source/grant/field coverage; the guide is not a claim that every listed cause
