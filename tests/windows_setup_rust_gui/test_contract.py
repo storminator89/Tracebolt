@@ -190,6 +190,51 @@ class NativeAdapterSourceTests(unittest.TestCase):
         self.assertIsNone(session.process)
         self.assertIsNone(session.previous_dpi)
 
+    def test_restore_waits_for_exact_rect_and_retains_deadline_and_identity(self):
+        original, maximized = (20, 30, 876, 749), (-8, -8, 1032, 736)
+        for mode in ("delayed", "never", "lost"):
+            with self.subTest(mode=mode):
+                state = {"rect": original, "zoomed": False, "pending": False, "messages": []}
+                clock = Clock(); clock.now = 0
+                def pause(seconds):
+                    clock.sleep(seconds)
+                    if state["pending"] and mode == "delayed":
+                        state["rect"], state["pending"] = original, False
+                def root():
+                    if state["pending"] and mode == "lost":
+                        raise c.Failure("window-identity")
+                    return 7
+                def show(handle, command):
+                    self.assertEqual(handle, 7)
+                    if command == 3:
+                        state["rect"], state["zoomed"] = maximized, True
+                    else:
+                        self.assertEqual(command, 9)
+                        state["zoomed"], state["pending"] = False, True
+                    return 1
+                def send(handle, message):
+                    # A queued restoration may complete before this message;
+                    # snapshotting its old rectangle is the test-driver race.
+                    if state["pending"] and mode == "delayed":
+                        state["rect"], state["pending"] = original, False
+                    state["messages"].append(message)
+                session = object.__new__(w.Session)
+                session.budget = c.Deadline(1, clock.time, pause)
+                session._root, session._rect = root, lambda handle: w.Rect(*state["rect"])
+                session.resize_client, session.check_layout = lambda *_: None, lambda: None
+                session._move, session._send = lambda *_: None, send
+                session.u = type("U", (), {"ShowWindowAsync": staticmethod(show),
+                    "IsZoomed": staticmethod(lambda handle: int(state["zoomed"]))})()
+                if mode == "delayed":
+                    session.exercise_geometry()
+                    self.assertGreater(clock.now, 0)
+                    self.assertEqual(state["messages"], [0x001a, 0x007e])
+                else:
+                    stage = "deadline" if mode == "never" else "window-identity"
+                    with self.assertRaisesRegex(c.Failure, "^" + stage + "$"):
+                        session.exercise_geometry()
+                    self.assertEqual(state["messages"], [])
+
     def test_foreign_pid_is_rejected_before_class_read_or_action(self):
         session = object.__new__(w.Session)
         session.process = type("Process", (), {"pid": 7, "poll": lambda self: None})()

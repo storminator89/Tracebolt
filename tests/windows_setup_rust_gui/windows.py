@@ -342,7 +342,10 @@ class Session:
         need(self.u.ShowWindowAsync(root, 3) != 0, "layout")
         eventually(lambda: self.u.IsZoomed(self._root()) != 0, self.budget, "layout")
         need(self.u.ShowWindowAsync(root, 9) != 0, "layout")
-        eventually(lambda: self.u.IsZoomed(self._root()) == 0, self.budget, "layout")
+        def restored():
+            current = self._root()
+            return self.u.IsZoomed(current) == 0 and bytes(self._rect(current)) == bytes(original)
+        eventually(restored, self.budget, "layout")
         before = self._rect(root)
         for message in (0x001a, 0x007e):  # Messages to own window; no OS setting is changed.
             self._send(root, message)
