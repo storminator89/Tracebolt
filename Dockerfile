@@ -44,6 +44,7 @@ COPY internal/ internal/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/manager ./cmd/lan-manager \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/manager-setup ./cmd/manager-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/operator-account-init ./cmd/operator-account-init \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/operator-factor ./cmd/operator-factor \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/action-setup ./cmd/action-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/windows-action-manager-setup ./cmd/windows-action-manager-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/windows-update-manager-setup ./cmd/windows-update-manager-setup \
@@ -58,6 +59,7 @@ FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
 COPY --from=build /out/manager-setup /tracebolt/manager-setup
 COPY --from=build /out/operator-account-init /tracebolt/operator-account-init
+COPY --from=build /out/operator-factor /tracebolt/operator-factor
 COPY --from=build /out/action-setup /tracebolt/action-setup
 COPY --from=build /out/windows-action-manager-setup /tracebolt/windows-action-manager-setup
 COPY --from=build /out/windows-update-manager-setup /tracebolt/windows-update-manager-setup

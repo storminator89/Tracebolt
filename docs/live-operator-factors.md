@@ -1,6 +1,10 @@
 # Optional live-account factors and reset
 
-This is the API-only local factor path supporting TB-14 / #141. It is not
+This is the local factor path supporting TB-14 / #141. Enrollment and reset
+have a [non-browser terminal client](operator-factor-client.md), including
+protected local proposal/handoff custody; the APIs remain available. The cockpit login source supports an optional
+OTP input selected by validated server-wide protocol metadata; that frontend
+change is not yet typechecked, built or browser-tested. This is not
 acceptance of the broader MFA/recovery/UI work in #140, full named administration
 in #133, an installed deployment or a browser-tested login experience. Existing
 factorless static v1/v2 and live v3 accounts are not silently migrated or enrolled.
@@ -32,8 +36,12 @@ Whitespace is permitted, but unknown, duplicate, reordered, null or noncanonical
 fields/encodings and trailing values are rejected. Never put actual material in
 Git, command arguments, environment variables, URLs, logs or support artifacts.
 This contract is not permission to provision a real account or distribute secrets.
-Provisioning, delivery and later proposal replacement/cleanup remain approved
-credential-custody operations; the manager does not manufacture or delete them.
+The terminal client's explicit `prepare` operation supplies protected random
+custody material and a private handoff without displaying it. Delivery to the
+intended authenticator remains an approved human possession step. Stale proposal
+replacement requires explicit review and preserves the original bytes; no
+authority history is deleted. The running manager does not manufacture the
+material or expose it in HTTP. See the client runbook for prerequisites and limits.
 
 ## Enrollment and login
 
@@ -62,6 +70,17 @@ this API nor direct `LoginNamed` calls can issue a password-only session. Static
 v1/v2 JSON schemas remain exact and do not accept `otp`. Existing factorless v3
 requests need not add an empty field. Null, duplicate, unknown or mistyped fields
 remain rejected. Invalid factor credentials never mint a cookie.
+
+Only TLS live v3 advertises `loginFactorProfile: "totp-sha256-8"` in its session
+views, before and after login. This is server-wide protocol support, not a lookup
+of an individual's enrollment. Static v1/v2 and development omit the field; live
+authority cannot be configured on the plaintext test handler. The cockpit source
+validates that exact profile and named/LAN/HTTPS combination before presenting an
+optional eight-digit string field. Leading zeroes remain intact; empty codes are
+omitted so legacy requests remain unchanged. Codes are cleared on submit, lock,
+bootstrap, logout, account change and hidden/pagehide transitions, and are never
+persisted or broadcast. A profile change during login fails closed. Source review
+does not substitute for the pending frontend compilation/build gate.
 
 The verifier considers only the current step and its two immediate neighbors,
 uses constant-time code comparisons and accepts only steps strictly above the

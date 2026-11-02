@@ -8,11 +8,12 @@ packages compile, and protected initializer, API, startup and real-socket
 withdrawal regressions pass. The broad race run also finishes successfully; see
 [the current validation record](tb14-local-validation.txt) for exact revisions,
 commands, results and limits. A subsequent native implementation supplies real
-[optional API-only factors and reset](live-operator-factors.md), with targeted
+[optional factors and reset](live-operator-factors.md), with targeted
 security regression evidence. Required CI acceptance remains blocked by the
 unchanged #129 source-allowlist boundary. The necessary personal-identity/account
 administration foundation is tested, not full completion of #133. No host
-provisioning, browser test or CI change was performed.
+provisioning, browser test or CI change was performed. A subsequent cockpit
+OTP-login source fix has only static review until its frontend build gate clears.
 
 ## Protected authority and explicit provisioning
 
@@ -180,7 +181,7 @@ is not an installed-endpoint, container or cross-platform deployment claim.
 | Personal deferred/external work | Actor-bound test-alarm delivery; named-account route policy denies personal AI analyze/provider-test, including `manage_accounts` administrators | Alarm worker/store and real API-route denial tests pass; no external provider delivery or recall claim |
 | Audit and clear failure policy | Revision and audit in the same durable frame; uncertain target remains fenced | Journal replay, injected sync uncertainty, initializer subprocess short write and real temporary-journal integrity failure are tested; these are not power loss, root-compromise or external monotonic-witness proofs |
 | Operationally usable account changes | Account API, explicit credential proposal, administrator preservation | Static Linux initializer compiles and help runs; packaging source contracts pass; no image build, container lifecycle or host provisioning |
-| Actual MFA-reset semantics | Explicit TOTP factor store, durable replay use, fresh requester proof, reset to mandatory re-enrollment | Targeted core/journal/real TLS API tests prove actual factor reset and independent administrators; no browser UI or full #140 claim |
+| Actual MFA-reset semantics | Explicit TOTP factor store, durable replay use, fresh requester proof, reset to mandatory re-enrollment | Targeted core/journal/real TLS API tests prove actual factor reset and independent administrators; cockpit OTP input is source-reviewed but not built; no browser or full #140 claim |
 | Necessary named-administration foundation | Named identity, independent manage_accounts, exact account API and actual requester audit | Two named administrators plus restricted user tested directly against protected journal/TLS API; unrelated #133 administrative routes remain denied, not implicitly granted |
 | Required CI acceptance | Existing strict Go-byte source allowlist remains unchanged | BLOCKED by the previously denied #129 synchronization boundary; no bypass or green CI claim |
 

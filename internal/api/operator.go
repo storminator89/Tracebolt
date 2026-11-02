@@ -109,6 +109,7 @@ type operatorRequest struct {
 
 type authView struct {
 	LoginMode              string                    `json:"loginMode"`
+	LoginFactorProfile     *string                   `json:"loginFactorProfile,omitempty"`
 	ActorID                *string                   `json:"actorId"`
 	Capabilities           []operatorauth.Capability `json:"capabilities"`
 	Mode                   string                    `json:"mode"`
@@ -128,6 +129,9 @@ type authView struct {
 func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, error) {
 	if app == nil || c.Auth == nil || c.Registry == nil || c.Devices == nil {
 		return nil, errors.New("LAN operator authentication, trust registry and device source are required")
+	}
+	if c.Auth.LiveAccounts() && c.InsecureHTTPTest {
+		return nil, errors.New("live account authority requires the TLS operator profile")
 	}
 	scheme, defaultPort, cookieName := "https", "443", operatorauth.CookieName
 	if c.InsecureHTTPTest {
@@ -325,6 +329,10 @@ func (h *operatorHandler) view(session *operatorauth.Session) authView {
 	view := authView{LoginMode: "shared", Capabilities: []operatorauth.Capability{}, Mode: "lan", Transport: "https", AuthenticationRequired: true, ServerNow: now.UTC()}
 	if h.auth.Named() {
 		view.LoginMode = "named"
+	}
+	if h.auth.LiveAccounts() && !h.insecureHTTPTest {
+		profile := "totp-sha256-8"
+		view.LoginFactorProfile = &profile
 	}
 	if h.insecureHTTPTest {
 		warning := "unencrypted_lan_test"
@@ -868,6 +876,8 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 			fail(w, 429, "session_capacity", "Session limit reached. Sign out of unused sessions or wait for expiry.")
 		case errors.Is(err, operatorauth.ErrBusy):
 			fail(w, 503, "authentication_busy", "Sign-in is temporarily unavailable.")
+		case errors.Is(err, operatorauth.ErrAuthorityUncertain):
+			fail(w, 503, "account_authority_uncertain", "The account is fenced. Preserve protected authority and audit; do not retry uncertain authentication.")
 		default:
 			fail(w, 401, "invalid_credentials", "Sign-in failed.")
 		}

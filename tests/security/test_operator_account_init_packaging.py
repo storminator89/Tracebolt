@@ -8,6 +8,29 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class OperatorAccountInitPackagingTests(unittest.TestCase):
+    def test_standard_build_includes_factor_client_without_running_it(self):
+        build = (ROOT / "Makefile").read_text().split("\nbuild:\n", 1)[1].split("\ntest:\n", 1)[0]
+        self.assertRegex(
+            build,
+            r"(?m)^\tgo build -buildvcs=false -trimpath -o bin/operator-factor ./cmd/operator-factor$",
+        )
+        self.assertEqual(build.count("./cmd/operator-factor"), 1)
+        self.assertNotRegex(build, r"(?m)^\t(?:\./)?bin/operator-factor\b")
+
+    def test_container_copies_factor_client_without_activation_or_host_changes(self):
+        builder, runtime = (ROOT / "Dockerfile").read_text().split("FROM scratch AS runtime\n", 1)
+        self.assertRegex(
+            builder,
+            re.escape("CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build ")
+            + r"[^\n]* -o /out/operator-factor ./cmd/operator-factor(?: \\\n|\n)",
+        )
+        self.assertEqual(builder.count("./cmd/operator-factor"), 1)
+        self.assertEqual(runtime.splitlines().count("COPY --from=build /out/operator-factor /tracebolt/operator-factor"), 1)
+        self.assertIn("USER 65532:65532\n", runtime)
+        self.assertIn('ENTRYPOINT ["/tracebolt/manager"]\n', runtime)
+        self.assertNotIn("RUN ", runtime)
+        self.assertNotRegex(builder, r"(?:RUN|&&)\s+/out/operator-factor\b")
+
     def test_standard_build_includes_initializer(self):
         build = (ROOT / "Makefile").read_text().split("\nbuild:\n", 1)[1].split("\ntest:\n", 1)[0]
         self.assertRegex(

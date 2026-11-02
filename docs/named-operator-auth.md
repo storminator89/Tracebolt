@@ -82,9 +82,16 @@ proposal, never a verifier or path in HTTP. Accepted changes revoke the target's
 sessions and old approval epochs without restarting other accounts. Uncertain
 persistence fences the target and requires inspection. There is no account UI,
 automatic MFA enrollment or claim of deployment acceptance. The explicit,
-API-only [local factor path](live-operator-factors.md) separately supports
+[local factor path](live-operator-factors.md) separately supports
 password-plus-OTP login and actual factor reset; it is not the full #140
-WebAuthn/OIDC/recovery/UI work. See the linked contracts for evidence and limits.
+WebAuthn/OIDC/recovery/UI work. Enrollment/reset remain APIs; cockpit OTP login
+source awaits frontend compilation/build, with no browser-test claim. See the
+linked contracts for evidence and limits.
+
+The [non-browser operator-factor client](operator-factor-client.md) supplies
+explicit private custody staging, enrollment, fresh authenticated reset and
+bounded account-status review without credentials in arguments or logs. It does
+not add grants, install a service or authorize a real credential handoff by itself.
 
 ## Capability and existing-route mapping
 

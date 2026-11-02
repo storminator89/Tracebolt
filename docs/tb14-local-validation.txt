@@ -1,4 +1,76 @@
-CURRENT NATIVE MFA/RESET VERIFICATION (2026-11-02 UTC)
+NON-BROWSER FACTOR CLIENT/CUSTODY FOLLOW-UP (native targeted verification)
+Added operator-factor prepare/enroll/reset/status, pinned TLS transport,
+foreground hidden credentials, private create-only handoff/proposal staging,
+explicit stale-only archives, bounded logout and honest uncertainty results.
+No browser, network registry, private-key/CA read, manager restart, host grants,
+real credential provisioning, dependency or CI configuration change.
+
+go test -race ./internal/operatorfactorclient ./internal/operatorfactorcustody \
+  ./cmd/operator-factor -count=1 -timeout=2m
+PASS 1.877s / 1.162s / 1.035s.
+go test -race ./internal/api \
+  -run '^TestFactor(Client|APILifecycle|OptionalLoginParser|LoginProfile)' \
+  -count=1 -timeout=2m
+PASS 11.459s.
+
+The actual client/custody integration uses private public-constructor files and
+the real TLS handler, account journal, factor proof consumption, fresh reset,
+independent administrators, stale-proposal archival/re-enrollment, journal reopen
+and explicit logout. Authenticator proofs are synthetic software fixtures, not
+an actual device-import or native host-deployment acceptance.
+
+Confirmed real-path findings fixed, without weakening fixtures: normal UTF-8
+JSON content type was rejected by the first client; a durable OTP-commit error
+was mislabeled as ordinary HTTP401 instead of explicit503/uncertain; successful
+self-reset was incorrectly reported as unconfirmed cleanup. Independent native
+source review found no remaining confirmed blocking client defect after fixes.
+Packaging contracts pass for the existing and new tool; neither is activated by
+the Makefile/Dockerfile. Full repository/race/browser suites were not repeated.
+go vet ./internal/operatorfactorclient ./internal/operatorfactorcustody
+  ./cmd/operator-factor: PASS. Targeted Windows/amd64 CLI and Windows/Darwin
+  custody crossbuilds pass; those outputs were not executed.
+python3 -I -B tests/security/test_operator_account_init_packaging.py:
+PASS, four inert packaging contracts, 0.002s.
+Static Linux/amd64 operator-factor build: PASS; --help only, no provisioning.
+Binary SHA-256:
+6b742ea876207aa50ecd6a0d11827c31da610aade24336f458600a511431a8d4
+Retained final targeted-log SHA-256:
+f5da9ab9f9a18e36341e892a197be47346fe59410a789027e2de54e7860f57ce
+Retained initial native build/help-log SHA-256:
+4fe440ca8c44f0947d62a9dbc48dff0e4e787dba54ec6853cae03f7d32b3f37f
+Final status-output hardening accepts only the seventeen known capability names,
+not arbitrary server strings. Its focused client race package passes 1.696s.
+Rebuilt matching Linux client SHA-256:
+749f7dd9f87cba9b1a6095c3bdb88186fe7edf7858e3a4c2ceb7c435a8200cc2
+
+Frontend compilation/build and the previously denied #129 source-allowlist/CI
+operation remain unexecuted; the client does not waive or bypass either gate.
+The actual approved human import of a private handoff into a compatible
+authenticator and a real host/container execution remain distinct from these
+synthetic-secret protocol/PTY/file fixtures. No such deployment is claimed.
+
+PRIOR COCKPIT MFA LOGIN FOLLOW-UP (source fix; frontend acceptance still blocked)
+Source baseline: local164d715 / remote fbc0e4b, identical tree057bd55c.
+Confirmed product gap: the cockpit form sent only username/password, so an
+actually enrolled MFA account could not sign in through that form.
+Local source now adds server-wide loginFactorProfile metadata, an optional
+canonical eight-digit OTP field, strict profile/legacy handling, transient
+secret clearing and DE/EN notices. Constructor rejects live TLS authority on
+the plaintext test handler; no per-account enrollment lookup is exposed.
+
+go test -race ./internal/api \
+  -run '^TestFactor(LoginProfile|OptionalLoginParser|APILifecycle)' \
+  -count=1 -timeout=2m: PASS 8.140s.
+Independent native source review of metadata/login/translation changes finds
+no confirmed defect. Diff whitespace is clean.
+
+Frontend source was NOT typechecked, built, rendered or browser-tested. The
+earlier denied frontend/registry operation was not retried or replaced through
+direct Node/other execution. This compilation/build gate and the untouched #129
+exact-source CI gate remain open. Enrollment/reset remain actual protected API
+operations, not a claimed account-management or recovery UI. No merge/closure.
+
+PRIOR NATIVE MFA/RESET VERIFICATION (2026-11-02 UTC)
 Base: eb77e99e0f7fff3cc2dfa5f7d53c35aa32b8e5b5; subsequent native source change
 adds the real optional API-only factor subsystem, not a renamed session reset.
 Platform/toolchain/cache protection remain as recorded below. No new dependency,

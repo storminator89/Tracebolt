@@ -90,6 +90,6 @@ account-specific session and capability withdrawal without restarting the
 manager. `manage_accounts` admits `GET /api/auth/accounts` and the Origin/CSRF-
 protected `POST /api/auth/accounts/update`; static v1/v2 behavior stays unchanged.
 No account-management UI or production deployment acceptance is implied. The
-separate optional [API-only factor contract](live-operator-factors.md) supplies
+separate optional [factor contract](live-operator-factors.md) supplies
 actual factor enrollment/login/reset without silently migrating accounts.
 Current implementation evidence and open gates are kept in those contracts.

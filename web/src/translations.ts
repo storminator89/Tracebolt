@@ -1,5 +1,9 @@
 /** UI strings only. Evidence, logs and model output are never translated here. */
 export const english = {
+  'Einmalcode (falls eingerichtet)': 'One-time code (if configured)',
+  'Acht Ziffern aus dem eingerichteten Authenticator. Ohne Faktor leer lassen.': 'Eight digits from your configured authenticator. Leave blank if no factor is configured.',
+  'Der Einmalcode muss genau acht Ziffern enthalten.': 'The one-time code must contain exactly eight digits.',
+  'Anmeldung nicht möglich. Benutzername, Passwort und gegebenenfalls Einmalcode prüfen.': 'Unable to sign in. Check your username, password and one-time code if configured.',
   'Anbieterantwort nicht verfügbar': 'Provider response unavailable',
   'Vorschau gültig bis': 'Preview valid until',
   'Die Beobachtung änderte sich während der KI-Anfrage. Daten können bereits übertragen worden sein. Kein Ergebnis übernommen.': 'The observation changed during the AI request. Data may already have been sent. No result was retained.',

@@ -6,6 +6,7 @@ build:
 	go build -buildvcs=false -trimpath -o bin/lan-manager ./cmd/lan-manager
 	go build -buildvcs=false -trimpath -o bin/manager-setup ./cmd/manager-setup
 	go build -buildvcs=false -trimpath -o bin/operator-account-init ./cmd/operator-account-init
+	go build -buildvcs=false -trimpath -o bin/operator-factor ./cmd/operator-factor
 	go build -buildvcs=false -trimpath -o bin/manager-restore-quarantine ./cmd/manager-restore-quarantine
 	go build -buildvcs=false -trimpath -o bin/lan-agent ./cmd/lan-agent
 	go build -buildvcs=false -trimpath -o bin/enroll-agent ./cmd/enroll-agent

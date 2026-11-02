@@ -7,6 +7,7 @@ import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, mutate, request 
 import { Logo } from './components';
 import { fullDate, noteBytes, readSaved, saveLocal } from './utils';
 export type OperatorLoginMode = 'shared' | 'named';
+export type OperatorLoginFactorProfile = 'totp-sha256-8';
 export type OperatorCapability = 'read' | 'plan_updates' | 'execute_updates' | 'restart_service' | 'manage_alarms' | 'manage_application_checks' | 'manage_sessions' | 'manage_accounts' | 'read_customers' | 'windows_service_control' | 'windows_update_install' | 'windows_update_download' | 'windows_update_schedule' | 'windows_software_install' | 'windows_managed_msi_deliver' | 'windows_managed_msi_install' | 'windows_managed_msi_schedule';
 export interface OperatorSession {
     mode: 'development' | 'lan';
@@ -19,8 +20,10 @@ export interface OperatorSession {
     serverNow: string;
     expiresAt: string | null;
     expiresInSeconds: number | null;
-    // Older managers omit all three fields. Present metadata must be complete.
+    // Older managers omit the loginMode/actorId/capabilities triplet. If present it must be complete.
     loginMode?: OperatorLoginMode;
+    // Server-wide live-TLS protocol support, never an individual account lookup.
+    loginFactorProfile?: OperatorLoginFactorProfile;
     actorId?: string | null;
     capabilities?: OperatorCapability[];
 }
@@ -68,6 +71,7 @@ export function validOperatorSession(value: unknown, browserProtocol = window.lo
     if (s.insecureTestMode ? s.mode !== 'lan' || s.transport !== 'http' || s.transportWarning !== 'unencrypted_lan_test' : s.transportWarning !== null || (s.mode === 'lan' && s.transport !== 'https')) return false;
     if (s.mode === 'lan' && `${s.transport}:` !== browserProtocol) return false;
     if (!validOperatorMetadata(s)) return false;
+    if ('loginFactorProfile' in s && (s.loginFactorProfile !== 'totp-sha256-8' || s.mode !== 'lan' || s.transport !== 'https' || s.loginMode !== 'named' || s.insecureTestMode)) return false;
     if (s.mode === 'development')
         return s.authenticationRequired === false && s.authenticated === false;
     if (s.authenticationRequired !== true)
@@ -132,6 +136,8 @@ export function AuthBoundary({ children }: {
     const [session, setSession] = useState<OperatorSession | null>(null);
     // Retain the validated login mode even when lock paths discard the session.
     const [loginMode, setLoginMode] = useState<OperatorLoginMode>('shared');
+    const [loginFactorProfile, setLoginFactorProfile] = useState<OperatorLoginFactorProfile | undefined>(undefined);
+    const [otp, setOTP] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [notice, setNotice] = useState('');
@@ -146,12 +152,12 @@ export function AuthBoundary({ children }: {
     const channelRef = useRef<BroadcastChannel | null>(null);
     const logoutIntentStored = useRef(true);
     useEffect(() => { document.documentElement.dataset.theme = theme; saveLocal('local-rmm-theme', theme); }, [theme]);
-    const install = useCallback((next: OperatorSession) => { setInsecureTestMode(next.insecureTestMode); setLoginMode(next.loginMode ?? 'shared'); setUsername(''); setCheckingAccess(false); sessionRef.current = next; modeRef.current = next.mode; setSession(next); setPhase(next.authenticationRequired && !next.authenticated ? 'signin' : 'ready'); }, []);
+    const install = useCallback((next: OperatorSession) => { setInsecureTestMode(next.insecureTestMode); setLoginMode(next.loginMode ?? 'shared'); setLoginFactorProfile(next.loginFactorProfile); setUsername(''); setOTP(''); setCheckingAccess(false); sessionRef.current = next; modeRef.current = next.mode; setSession(next); setPhase(next.authenticationRequired && !next.authenticated ? 'signin' : 'ready'); }, []);
     const lock = useCallback((message: string) => {
         abortProtectedRequests();
         current.current?.abort();
         setUsername('');
-        setPassword('');
+        setPassword(''); setOTP('');
         setPending(false);
         setNotice(message);
         setError('');
@@ -171,7 +177,7 @@ export function AuthBoundary({ children }: {
         setPhase('loading');
         setError('');
         setUsername('');
-        setPassword('');
+        setPassword(''); setOTP('');
         signoutUnconfirmed.current = hasLogoutIntent();
         const timeout = window.setTimeout(() => {
             controller.abort();
@@ -189,7 +195,7 @@ export function AuthBoundary({ children }: {
             if (!validOperatorSession(next))
                 throw new APIError(t("Der Manager hat keinen g\u00FCltigen Zugriffsstatus geliefert."));
             setInsecureTestMode(next.insecureTestMode);
-            setLoginMode(next.loginMode ?? 'shared');
+            setLoginMode(next.loginMode ?? 'shared'); setLoginFactorProfile(next.loginFactorProfile);
             if (signoutUnconfirmed.current && next.authenticated) {
                 sessionRef.current = next;
                 modeRef.current = next.mode;
@@ -221,7 +227,7 @@ export function AuthBoundary({ children }: {
         }
         catch { }
     }, []);
-    const lockFromOtherTab = useCallback((logoutPending: boolean) => { if(logoutPending) logoutIntentStored.current = rememberLogoutIntent(); abortProtectedRequests(); current.current?.abort(); setUsername(''); setPassword(''); setPending(false); sessionRef.current = null; setSession(null); signoutUnconfirmed.current = logoutPending; setPhase('blocked'); setNotice(''); setError(logoutPending && !logoutIntentStored.current ? t("Abmeldung unbestätigt; die Browsersperre konnte nicht gespeichert werden. Bitte alle Tabs schließen und erneut abmelden.") : logoutPending ? t("Abmeldung in einem anderen Tab begonnen. Zugriff bleibt gesperrt.") : t("Die Sitzung wurde in einem anderen Tab ge\u00E4ndert. Status erneut pr\u00FCfen.")); }, []);
+    const lockFromOtherTab = useCallback((logoutPending: boolean) => { if(logoutPending) logoutIntentStored.current = rememberLogoutIntent(); abortProtectedRequests(); current.current?.abort(); setUsername(''); setPassword(''); setOTP(''); setPending(false); sessionRef.current = null; setSession(null); signoutUnconfirmed.current = logoutPending; setPhase('blocked'); setNotice(''); setError(logoutPending && !logoutIntentStored.current ? t("Abmeldung unbestätigt; die Browsersperre konnte nicht gespeichert werden. Bitte alle Tabs schließen und erneut abmelden.") : logoutPending ? t("Abmeldung in einem anderen Tab begonnen. Zugriff bleibt gesperrt.") : t("Die Sitzung wurde in einem anderen Tab ge\u00E4ndert. Status erneut pr\u00FCfen.")); }, []);
     useEffect(() => {
         let channel: BroadcastChannel | null = null;
         if (typeof window.BroadcastChannel === 'function') {
@@ -301,7 +307,7 @@ export function AuthBoundary({ children }: {
                     setNotice(t("Sitzung abgelaufen. Bitte erneut anmelden."));
                     return;
                 }
-                const changed = oldSession?.mode !== next.mode || oldSession?.csrfToken !== next.csrfToken || oldSession?.loginMode !== next.loginMode || oldSession?.actorId !== next.actorId || JSON.stringify(oldSession?.capabilities) !== JSON.stringify(next.capabilities);
+                const changed = oldSession?.mode !== next.mode || oldSession?.csrfToken !== next.csrfToken || oldSession?.loginMode !== next.loginMode || oldSession?.loginFactorProfile !== next.loginFactorProfile || oldSession?.actorId !== next.actorId || JSON.stringify(oldSession?.capabilities) !== JSON.stringify(next.capabilities);
                 if (changed) {
                     abortProtectedRequests();
                     setPrivateEpoch(value => value + 1);
@@ -328,6 +334,7 @@ export function AuthBoundary({ children }: {
             }
         };
         const visibility = () => {
+            if (document.visibilityState === 'hidden') setOTP('');
             if (!privateView.current)
                 return;
             if (document.visibilityState === 'hidden') {
@@ -337,7 +344,7 @@ export function AuthBoundary({ children }: {
             else
                 void restore();
         };
-        const pagehide = () => { conceal(); current.current?.abort(); setUsername(''); setPassword(''); setPending(false); };
+        const pagehide = () => { conceal(); current.current?.abort(); setUsername(''); setPassword(''); setOTP(''); setPending(false); };
         const pageshow = (event: PageTransitionEvent) => {
             if (event.persisted && !privateView.current)
                 void bootstrap();
@@ -349,13 +356,15 @@ export function AuthBoundary({ children }: {
         window.addEventListener('pageshow', pageshow);
         return () => { document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', pagehide); window.removeEventListener('pageshow', pageshow); };
     }, [bootstrap, install, lock, lockFromOtherTab]);
+    const invalidOTP = loginFactorProfile !== undefined && otp !== '' && (otp.length !== 8 || !/^[0-9]{8}$/.test(otp));
+    const loginBlocked = pending || noteBytes(password) < 12 || noteBytes(password) > 1024 || (loginMode === 'named' && (username.trim().length === 0 || username.length > 64)) || invalidOTP;
     const login = async (event: React.SubmitEvent<HTMLFormElement>) => {
         event.preventDefault();
-        const bytes = noteBytes(password);
-        if (pending || bytes < 12 || bytes > 1024 || (loginMode === 'named' && (username.trim().length === 0 || username.length > 64)))
+        if (loginBlocked)
             return;
         const secret = password;
-        setPassword('');
+        const oneTimeCode = loginFactorProfile === 'totp-sha256-8' ? otp : '';
+        setPassword(''); setOTP('');
         setPending(true);
         setError('');
         setNotice('');
@@ -370,11 +379,11 @@ export function AuthBoundary({ children }: {
             }
         }, 15000);
         try {
-            const credentials = loginMode === 'named' ? { username, password: secret } : { password: secret };
+            const credentials = loginMode === 'named' ? { username, password: secret, ...(oneTimeCode ? { otp: oneTimeCode } : {}) } : { password: secret };
             const next = await request<OperatorSession>('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials), signal: controller.signal });
             if (!alive.current || controller.signal.aborted)
                 return;
-            if (!validOperatorSession(next) || next.mode !== 'lan' || !next.authenticated || (next.loginMode ?? 'shared') !== loginMode)
+            if (!validOperatorSession(next) || next.mode !== 'lan' || !next.authenticated || (next.loginMode ?? 'shared') !== loginMode || next.loginFactorProfile !== loginFactorProfile)
                 throw new APIError(t("Die Anmeldung konnte nicht best\u00E4tigt werden."));
             signoutUnconfirmed.current = false;
             clearLogoutIntent();
@@ -384,7 +393,7 @@ export function AuthBoundary({ children }: {
         catch (err) {
             if (alive.current && !controller.signal.aborted) {
                 const status = err instanceof APIError ? err.status : undefined;
-                setError(status === 401 ? loginMode === 'named' ? t("Anmeldung nicht möglich. Benutzername und Passwort prüfen.") : t("Anmeldung nicht m\u00F6glich. Passwort pr\u00FCfen.") : status === 429 ? t("Zu viele Anmeldeversuche. Bitte sp\u00E4ter erneut versuchen.") : status === 403 ? t("Dieser Zugang ist nicht für die Anmeldung freigegeben.") : status === 503 ? t("Anmeldung vor\u00FCbergehend nicht verf\u00FCgbar.") : t("Die Anmeldung konnte nicht best\u00E4tigt werden. Bitte erneut versuchen."));
+                setError(status === 401 ? loginFactorProfile ? t("Anmeldung nicht möglich. Benutzername, Passwort und gegebenenfalls Einmalcode prüfen.") : loginMode === 'named' ? t("Anmeldung nicht möglich. Benutzername und Passwort prüfen.") : t("Anmeldung nicht m\u00F6glich. Passwort pr\u00FCfen.") : status === 429 ? t("Zu viele Anmeldeversuche. Bitte sp\u00E4ter erneut versuchen.") : status === 403 ? t("Dieser Zugang ist nicht für die Anmeldung freigegeben.") : status === 503 ? t("Anmeldung vor\u00FCbergehend nicht verf\u00FCgbar.") : t("Die Anmeldung konnte nicht best\u00E4tigt werden. Bitte erneut versuchen."));
             }
         }
         finally {
@@ -400,7 +409,7 @@ export function AuthBoundary({ children }: {
         current.current?.abort();
         setPhase('signingout');
         setUsername('');
-        setPassword('');
+        setPassword(''); setOTP('');
         setPending(true);
         setError('');
         setNotice('');
@@ -449,7 +458,7 @@ export function AuthBoundary({ children }: {
     };
     if (phase === 'ready' && session && (!session.authenticationRequired || session.authenticated))
         return <OperatorContext.Provider value={{ checkingAccess, insecureTestMode, mode: session.mode, authenticated: session.authenticated, loginMode: session.loginMode ?? 'shared', actorId: session.actorId ?? null, capabilities: session.capabilities ?? (session.authenticated ? ['read'] : []), hasExplicitMetadata: session.loginMode !== undefined && session.actorId !== undefined && session.capabilities !== undefined, expiresAt: session.expiresAt, logout: () => void logout(), theme, setTheme }}><div key={privateEpoch} ref={privateView} className="auth-private-view" style={checkingAccess ? { visibility: 'hidden' } : undefined} inert={checkingAccess ? true : undefined} aria-hidden={checkingAccess ? true : undefined}>{children}</div>{checkingAccess && <div className="auth-resume-check" role="status"><LoaderCircle className="spin" size={20}/>{t("Zugriff wird erneut gepr\u00FCft \u2026")}</div>}</OperatorContext.Provider>;
-    return <div className="auth-shell"><header className="auth-header"><div className="auth-brand"><Logo /><span>Tracebolt</span></div><div className="auth-header-actions"><LanguageSelector /><button className="icon-button" aria-label={theme === 'light' ? t("Dunkles Design aktivieren") : t("Helles Design aktivieren")} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>{insecureTestMode && <TransportWarning />}<main className="auth-main"><section className="auth-card"><div className="auth-symbol"><LockKeyhole size={24}/></div><h1>{phase === 'loading' ? t("Zugriff wird gepr\u00FCft") : phase === 'signingout' ? t("Wird abgemeldet") : phase === 'blocked' ? t("Zugriff nicht verf\u00FCgbar") : t("Anmelden")}</h1><p className="auth-address"><ShieldCheck size={14}/>{window.location.host}</p>{(phase === 'loading' || phase === 'signingout') ? <div className="auth-loading" role="status"><LoaderCircle className="spin" size={19}/>{phase === 'loading' ? t("Manager-Status wird geladen \u2026") : t("Sitzung wird beendet \u2026")}</div> : <>{notice && <div className="auth-notice" role="status"><Info size={15}/><span>{ui(notice)}</span></div>}{error && <div className="auth-error" role="alert"><TriangleAlert size={16}/><span>{ui(error)}</span></div>}{phase === 'signin' ? <form onSubmit={event => void login(event)}>{loginMode === 'named' && <label className="form-field"><span>{t("Operator-Benutzername")}</span><input aria-label={t("Operator-Benutzername")} type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={event => setUsername(event.target.value)} disabled={pending} maxLength={64} autoFocus/></label>}<label className="form-field"><span>{t("Operator-Passwort")}</span><input aria-label={t("Operator-Passwort")} type="password" autoComplete="off" spellCheck={false} value={password} onChange={event => setPassword(event.target.value)} disabled={pending} maxLength={1024} placeholder={t("Vom Administrator vergeben")} autoFocus={loginMode === 'shared'}/></label>{password && noteBytes(password) < 12 && <p className="auth-field-hint">{t("Passwort ist zu kurz.")}</p>}{noteBytes(password) > 1024 && <p className="auth-field-hint">{t("Maximal 1024 UTF-8-Bytes.")}</p>}<button className="button primary auth-submit" type="submit" disabled={pending || noteBytes(password) < 12 || noteBytes(password) > 1024 || (loginMode === 'named' && (username.trim().length === 0 || username.length > 64))}>{pending ? <LoaderCircle className="spin" size={16}/> : <ArrowRight size={16}/>}{t("Anmelden")}</button></form> : <button className="button auth-retry" onClick={() => signoutUnconfirmed.current ? void logout() : void bootstrap()} disabled={pending}>{signoutUnconfirmed.current ? <LogOut size={15}/> : <RefreshCw size={15}/>} {signoutUnconfirmed.current ? t("Erneut abmelden") : t("Status erneut pr\u00FCfen")}</button>}{phase === 'blocked' && signoutUnconfirmed.current && <><button className="text-button auth-check-session" onClick={() => { setPhase('signin'); setError(''); setNotice(t("Bitte frisch anmelden.")); }}>{t("Neu anmelden")}</button><button className="text-button auth-check-session" onClick={() => void bootstrap()}>{t("Zugriffsstatus pr\u00FCfen")}</button></>}</>}</section><p className="auth-footnote"><LockKeyhole size={13}/>{t("Gesch\u00FCtzte Daten werden erst nach best\u00E4tigtem Zugriff geladen.")}</p></main></div>;
+    return <div className="auth-shell"><header className="auth-header"><div className="auth-brand"><Logo /><span>Tracebolt</span></div><div className="auth-header-actions"><LanguageSelector /><button className="icon-button" aria-label={theme === 'light' ? t("Dunkles Design aktivieren") : t("Helles Design aktivieren")} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</button></div></header>{insecureTestMode && <TransportWarning />}<main className="auth-main"><section className="auth-card"><div className="auth-symbol"><LockKeyhole size={24}/></div><h1>{phase === 'loading' ? t("Zugriff wird gepr\u00FCft") : phase === 'signingout' ? t("Wird abgemeldet") : phase === 'blocked' ? t("Zugriff nicht verf\u00FCgbar") : t("Anmelden")}</h1><p className="auth-address"><ShieldCheck size={14}/>{window.location.host}</p>{(phase === 'loading' || phase === 'signingout') ? <div className="auth-loading" role="status"><LoaderCircle className="spin" size={19}/>{phase === 'loading' ? t("Manager-Status wird geladen \u2026") : t("Sitzung wird beendet \u2026")}</div> : <>{notice && <div className="auth-notice" role="status"><Info size={15}/><span>{ui(notice)}</span></div>}{error && <div className="auth-error" role="alert"><TriangleAlert size={16}/><span>{ui(error)}</span></div>}{phase === 'signin' ? <form onSubmit={event => void login(event)}>{loginMode === 'named' && <label className="form-field"><span>{t("Operator-Benutzername")}</span><input aria-label={t("Operator-Benutzername")} type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={event => { setUsername(event.target.value); setPassword(''); setOTP(''); }} disabled={pending} maxLength={64} autoFocus/></label>}<label className="form-field"><span>{t("Operator-Passwort")}</span><input aria-label={t("Operator-Passwort")} type="password" autoComplete="off" spellCheck={false} value={password} onChange={event => setPassword(event.target.value)} disabled={pending} maxLength={1024} placeholder={t("Vom Administrator vergeben")} autoFocus={loginMode === 'shared'}/></label>{loginFactorProfile === 'totp-sha256-8' && <label className="form-field"><span>{t("Einmalcode (falls eingerichtet)")}</span><input aria-label={t("Einmalcode (falls eingerichtet)")} type="text" inputMode="numeric" autoComplete="one-time-code" autoCapitalize="none" spellCheck={false} value={otp} onChange={event => setOTP(event.target.value)} disabled={pending} maxLength={8} pattern="[0-9]{8}"/><span className="auth-field-hint">{t("Acht Ziffern aus dem eingerichteten Authenticator. Ohne Faktor leer lassen.")}</span></label>}{invalidOTP && <p className="auth-field-hint">{t("Der Einmalcode muss genau acht Ziffern enthalten.")}</p>}{password && noteBytes(password) < 12 && <p className="auth-field-hint">{t("Passwort ist zu kurz.")}</p>}{noteBytes(password) > 1024 && <p className="auth-field-hint">{t("Maximal 1024 UTF-8-Bytes.")}</p>}<button className="button primary auth-submit" type="submit" disabled={loginBlocked}>{pending ? <LoaderCircle className="spin" size={16}/> : <ArrowRight size={16}/>}{t("Anmelden")}</button></form> : <button className="button auth-retry" onClick={() => signoutUnconfirmed.current ? void logout() : void bootstrap()} disabled={pending}>{signoutUnconfirmed.current ? <LogOut size={15}/> : <RefreshCw size={15}/>} {signoutUnconfirmed.current ? t("Erneut abmelden") : t("Status erneut pr\u00FCfen")}</button>}{phase === 'blocked' && signoutUnconfirmed.current && <><button className="text-button auth-check-session" onClick={() => { setPhase('signin'); setError(''); setNotice(t("Bitte frisch anmelden.")); }}>{t("Neu anmelden")}</button><button className="text-button auth-check-session" onClick={() => void bootstrap()}>{t("Zugriffsstatus pr\u00FCfen")}</button></>}</>}</section><p className="auth-footnote"><LockKeyhole size={13}/>{t("Gesch\u00FCtzte Daten werden erst nach best\u00E4tigtem Zugriff geladen.")}</p></main></div>;
 }
 export function OperatorAccount() { const operator = useOperator(); return <div className="operator"><div className="operator-avatar">{operator?.mode === 'lan' ? 'OP' : 'LO'}</div><span><strong>{operator?.mode === 'lan' ? t("Operator") : t("Local Operator")}</strong><small title={operator?.expiresAt ? t("Sitzungsende: {0}", { "0": fullDate(operator.expiresAt) }) : undefined}>{operator?.authenticated ? t("LAN \u00B7 Sitzung aktiv") : t("Lokaler Zugriff \u00B7 v0.1.0")}</small></span>{operator?.mode === 'lan' && operator.authenticated ? <button className="icon-button operator-logout" aria-label={t("Abmelden")} title={t("Abmelden")} onClick={operator.logout}><LogOut size={17}/></button> : <ShieldCheck size={17}/>}</div>; }
 
