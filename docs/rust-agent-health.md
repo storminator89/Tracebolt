@@ -97,6 +97,13 @@ traversal; missing or unfamiliar types stay unclassified. Existing explicit
 operation classes and request timeouts keep their precedence. The public next
 action remains fixed text, never a formatted source error.
 
+Bounded enrollment/receipt body reads retain the request's typed diagnostic even
+when the blocking HTTP reader wraps it in an I/O error: a stalled body remains
+`transport-timeout`, and an interrupted body stays `transport-unclassified` when
+no narrower typed cause is present. A successful HTTP status or partial receipt
+never establishes acceptance or advances pending telemetry. Unrelated local I/O
+errors do not gain a transport classification.
+
 The additional transport codes are derived diagnostic vocabulary only;
 identity, grants, wire telemetry and authoritative state are unchanged. Older
 binaries may reject a sidecar containing a new code as `health-unavailable` rather

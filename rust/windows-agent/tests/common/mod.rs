@@ -43,6 +43,14 @@ pub fn response(status: u16, content_type: &str, body: &[u8]) -> Vec<u8> {
 }
 impl Manager {
     pub fn new(reply: impl FnOnce(&str) -> Vec<u8>) -> Self {
+        Self::start(reply, false)
+    }
+    // Keep the incomplete response open until fixture teardown. The client's
+    // existing bounded timeout must end the read, not a delayed server close.
+    pub fn holding_response(reply: impl FnOnce(&str) -> Vec<u8>) -> Self {
+        Self::start(reply, true)
+    }
+    fn start(reply: impl FnOnce(&str) -> Vec<u8>, hold_response: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let origin = format!(
@@ -106,6 +114,9 @@ impl Manager {
                         .push(String::from_utf8(header).unwrap());
                     let _ = stream.write_all(&raw);
                     let _ = stream.flush();
+                    while hold_response && !done.load(Ordering::SeqCst) {
+                        thread::sleep(Duration::from_millis(2));
+                    }
                 }
             }
         });
