@@ -37,7 +37,11 @@ func lifecyclePasswordHash() string {
 }
 func lifecycleJournal(t *testing.T) (*operatorauth.AccountJournal, string, *operatorauth.Manager) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "accounts.jsonl")
+	dir := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal("create private journal fixture directory", err)
+	}
+	path := filepath.Join(dir, "accounts.jsonl")
 	initial := operatorauth.AccountSnapshot{AuthorityID: lifecycleAuthorityID, Profile: "tls", Version: operatorauth.AccountVersion, Revision: 1, Accounts: []operatorauth.AccountRecord{
 		{Operator: operatorauth.Operator{ID: lifecycleAdminID, Username: "admin", PasswordHash: testOperatorHash(), Capabilities: []operatorauth.Capability{operatorauth.Read, operatorauth.ManageAccounts}}, Revision: 1},
 		{Operator: operatorauth.Operator{ID: lifecycleWorkerID, Username: "worker", PasswordHash: testOperatorHash(), Capabilities: []operatorauth.Capability{operatorauth.Read, operatorauth.RestartService}}, Revision: 1},
