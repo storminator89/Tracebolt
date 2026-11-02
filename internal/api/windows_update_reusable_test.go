@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/operatorauth"
 	fence "localrmm/internal/windowsmutationfence"
@@ -28,7 +29,16 @@ func TestReusableWUAAPIExactReviewAndReadOnlyReconciliation(t *testing.T) {
 	}
 	j := r.Jobs[0]
 	ch, _ := job.VerifyChallenge(j.Challenge, r.PublicKey)
-	now := time.Now().UTC().Unix()
+	// Keep this fixture independent of wall-clock scheduling. Reopen the same
+	// retained record with the public clock seam and the original signing key.
+	clock := time.Unix(r.ClockFloor, 0).UTC()
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{62}, 32))
+	m, e = job.Open(f.store, f.authority, updateAPIReadiness{j.Preview.Readiness}, key, func() time.Time { return clock })
+	if e != nil {
+		t.Fatal(e)
+	}
+	f.handler.windowsUpdateJobs = m
+	now := clock.Unix()
 	shared := fence.Status{Active: true, Phase: "idle", Revision: 1, Retained: 1}
 	proof, _ := job.SignStatement(job.Statement{Version: job.RelayVersion, Kind: "mutation", Binding: r.Consent.Binding, JobID: j.ID, ReferenceDigest: actionpermit.Digest(j.Challenge), Deadline: ch.Deadline, IssuedAt: now, ExpiresAt: now + 60, Mutation: &shared}, ek)
 	if e = m.Report(ctx, proof); e != nil {
@@ -37,13 +47,36 @@ func TestReusableWUAAPIExactReviewAndReadOnlyReconciliation(t *testing.T) {
 	if code, v := f.call(t, "POST", "/approve", map[string]any{"previewId": j.ID, "previewDigest": j.Preview.Digest, "acknowledged": true}, nil); code != 200 {
 		t.Fatal(code, v)
 	}
+	// Force Claim into a later whole second than the mutation proof. The old
+	// pre-Approve timestamp must never be reused as result completion time.
+	clock = clock.Add(2 * time.Second)
 	envelope, e := m.Claim(ctx, j.ID)
 	if e != nil {
 		t.Fatal(e)
 	}
 	p, _ := job.Verify(envelope, r.PublicKey)
-	result := job.Result{JobID: j.ID, EnvelopeDigest: actionpermit.Digest(envelope), Attempted: true, Outcome: "succeeded", OperationResult: 2, RebootRequired: job.Yes, CompletedAt: now}
-	proof, _ = job.SignStatement(job.Statement{Version: job.RelayVersion, Kind: "result", Binding: r.Consent.Binding, JobID: j.ID, ReferenceDigest: result.EnvelopeDigest, Deadline: p.Preview.ExpiresAt, IssuedAt: now, ExpiresAt: now + 300, Result: &result}, ek)
+	completedAt := clock.Unix() // Only sampled after successful Claim.
+	claimed, err := job.DecodeRecord(f.store["jobs.json"])
+	if err != nil || claimed.Jobs[0].ClaimedAt <= now || completedAt < claimed.Jobs[0].ClaimedAt {
+		t.Fatal("fixture did not cross the controlled claim-second boundary")
+	}
+	result := job.Result{JobID: j.ID, EnvelopeDigest: actionpermit.Digest(envelope), Attempted: true, Outcome: "succeeded", OperationResult: 2, RebootRequired: job.Yes, CompletedAt: completedAt}
+	// Retain the strict production lower bound: the formerly reused timestamp
+	// is rejected without modifying the consumed claim or persisted receipt.
+	stale := result
+	stale.CompletedAt = now
+	staleProof, err := job.SignStatement(job.Statement{Version: job.RelayVersion, Kind: "result", Binding: r.Consent.Binding, JobID: j.ID, ReferenceDigest: result.EnvelopeDigest, Deadline: p.Preview.ExpiresAt, IssuedAt: now, ExpiresAt: now + 300, Result: &stale}, ek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeStale := bytes.Clone(f.store["jobs.json"])
+	if err := m.Report(ctx, staleProof); !errors.Is(err, job.ErrConflict) {
+		t.Fatal("pre-claim completion timestamp accepted", err)
+	}
+	if !bytes.Equal(beforeStale, f.store["jobs.json"]) {
+		t.Fatal("rejected result changed consumed claim")
+	}
+	proof, _ = job.SignStatement(job.Statement{Version: job.RelayVersion, Kind: "result", Binding: r.Consent.Binding, JobID: j.ID, ReferenceDigest: result.EnvelopeDigest, Deadline: p.Preview.ExpiresAt, IssuedAt: completedAt, ExpiresAt: completedAt + 300, Result: &result}, ek)
 	if e = m.Report(ctx, proof); e != nil {
 		t.Fatal(e)
 	}
