@@ -12,6 +12,10 @@ upload or paid service is selected by this setup.
 ## Image and runtime boundary
 
 - Multi-stage build: Node builds the UI; Go builds a static Linux manager.
+- The same Go build also includes `/tracebolt/manager-setup` for explicit
+  [configuration-only doctor/create-only init](manager-initialization.md) use.
+  The default entrypoint remains the manager; no setup command runs automatically.
+  Existing read-only configuration mounts do not become writable init destinations.
 - The project [Apache License 2.0](../LICENSE) is included at
   `/tracebolt/licenses/LICENSE`, alongside the pinned dependency notice.
 - Shell-free final image; fixed UID/GID `65532:65532`; no package manager.
