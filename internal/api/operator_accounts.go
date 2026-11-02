@@ -11,6 +11,10 @@ func (h *operatorHandler) accountsAPI(w http.ResponseWriter, r *http.Request, se
 		fail(w, 404, "not_found", "Live account authority is not configured.")
 		return
 	}
+	if r.URL.Path == "/api/auth/accounts/reset-factor" {
+		h.resetFactorAPI(w, r, session)
+		return
+	}
 	if r.URL.Path == "/api/auth/accounts" && r.Method == http.MethodGet {
 		views, err := h.auth.AccountViews(r.Context(), session)
 		if err != nil {

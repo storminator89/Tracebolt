@@ -2,10 +2,17 @@
 
 This document describes a source candidate based on main
 `071ed51432395be62fa9c0a42ef914c500f80ddd`. It is not release, deployment or
-Issue #141 acceptance evidence. The Linux startup/API/dispatch integration and
-initializer have not passed compilation or full integration tests in this
-workspace: the existing offline cache lacks `modernc.org/sqlite@v1.60.1`.
-No provisioning, host change, browser test or CI change was performed.
+complete Issue #141 acceptance evidence. Independent native Linux verification
+subsequently used an existing, checksum-verified offline SQLite cache: all Go
+packages compile, and protected initializer, API, startup and real-socket
+withdrawal regressions pass. The broad race run also finishes successfully; see
+[the current validation record](tb14-local-validation.txt) for exact revisions,
+commands, results and limits. A subsequent native implementation supplies real
+[optional API-only factors and reset](live-operator-factors.md), with targeted
+security regression evidence. Required CI acceptance remains blocked by the
+unchanged #129 source-allowlist boundary. The necessary personal-identity/account
+administration foundation is tested, not full completion of #133. No host
+provisioning, browser test or CI change was performed.
 
 ## Protected authority and explicit provisioning
 
@@ -152,26 +159,39 @@ The proposal is read only after administrator admission, then the update
 rechecks current authority and revision. Successful use leaves the proposal in
 place, but its old revision prevents reuse. Custodian replacement/cleanup is a
 separate protected-material operation, not an HTTP capability. `resetSessions`
-is a session reset; this candidate does not implement an MFA factor store or
-claim an actual factor-credential reset.
+is a session reset and is not relabeled as factor reset. The separate
+[factor enrollment/reset API](live-operator-factors.md) supplies actual durable
+factor authority, password-plus-OTP login, fresh requester authentication and
+reset-to-re-enrollment with target session/epoch withdrawal. It adds no implicit
+MFA to existing accounts and does not claim the full WebAuthn/OIDC/recovery/UI
+scope of #140. That distinction is tested rather than inferred from session reset.
 
-This is an unresolved acceptance-scope conflict in #141: its MFA-reset wording
-is not satisfied by session invalidation. There is no MFA factor store or factor
-reset operation in this candidate, and no #140 product feature has been added.
-The MFA-specific criterion must remain open; neither these password tests nor
-a session-reset test establishes it. Closure requires an explicit resolution
-of that acceptance scope, not an inferred equivalence.
+## Acceptance matrix and evidence limits
 
-## Acceptance matrix and remaining evidence
+The current native verification is recorded in
+[tb14-local-validation.txt](tb14-local-validation.txt). Source/fixture evidence
+is not an installed-endpoint, container or cross-platform deployment claim.
 
-| TB-14 boundary | Source mechanism | Remaining acceptance evidence |
+| TB-14 boundary | Source mechanism | Executed evidence and limits |
 | --- | --- | --- |
-| Durable, versioned accounts and atomic changes | Protected v3 reference, pinned used marker, journal snapshot/audit transitions | Public-path provisioning/startup and crash/reopen acceptance on a supported protected filesystem; full integration build |
-| Immediate account-specific session/grant withdrawal | Deny fence, session cancellation/drain, current account admissions, post-hash revision check; core race suite including self-disable and crossed administrators passed | Compiled API/session transport acceptance on final candidate |
-| Deferred dispatch and regrant safety | Durable approval epochs/floors; lease integration for service actions, package/update/software/MSI jobs | SQLite-backed recovery tests and transport write-boundary tests for every path, including MSI Poll/Chunk |
-| Personal deferred/external work | Actor-bound test-alarm delivery; named-account route policy denies personal AI analyze/provider-test, including `manage_accounts` administrators | Worker/transport regressions and the real-route AI denial regression (SQLite-blocked); no live AI capability or external-call recall claim |
-| Audit and clear failure policy | Revision and audit in the same durable frame; uncertain target remains fenced | Full failure-injection matrix and reviewed recovery procedure; no rollback guarantee beyond stated trust boundary |
-| Operationally usable account changes | Account API, explicit credential proposal, administrator preservation | API admission/redaction/negative tests and matching supported deployment artifacts; MFA remains absent |
+| Durable, versioned accounts and atomic changes | Protected v3 reference, pinned used marker, journal snapshot/audit transitions | Public constructor, initializer, profile admission, normal prepare/restart and torn-history rejection pass on protected native temporary paths; no hardware power-loss proof |
+| Immediate account-specific session/grant withdrawal | Deny fence, session cancellation/drain, current account admissions, post-hash revision check | Core race tests and real protected-file API/password/reset/restart fixtures pass, including independent administrators and crossed/self updates |
+| Deferred dispatch and regrant safety | Durable approval epochs/floors; lease integration for service actions, package/update/software/MSI jobs | Manager/transport suites pass; real journal/auth/SQLite service claim plus actual HTTP socket flush/regrant/restart passes ten race repetitions; this is not every installed endpoint's native execution |
+| Personal deferred/external work | Actor-bound test-alarm delivery; named-account route policy denies personal AI analyze/provider-test, including `manage_accounts` administrators | Alarm worker/store and real API-route denial tests pass; no external provider delivery or recall claim |
+| Audit and clear failure policy | Revision and audit in the same durable frame; uncertain target remains fenced | Journal replay, injected sync uncertainty, initializer subprocess short write and real temporary-journal integrity failure are tested; these are not power loss, root-compromise or external monotonic-witness proofs |
+| Operationally usable account changes | Account API, explicit credential proposal, administrator preservation | Static Linux initializer compiles and help runs; packaging source contracts pass; no image build, container lifecycle or host provisioning |
+| Actual MFA-reset semantics | Explicit TOTP factor store, durable replay use, fresh requester proof, reset to mandatory re-enrollment | Targeted core/journal/real TLS API tests prove actual factor reset and independent administrators; no browser UI or full #140 claim |
+| Necessary named-administration foundation | Named identity, independent manage_accounts, exact account API and actual requester audit | Two named administrators plus restricted user tested directly against protected journal/TLS API; unrelated #133 administrative routes remain denied, not implicitly granted |
+| Required CI acceptance | Existing strict Go-byte source allowlist remains unchanged | BLOCKED by the previously denied #129 synchronization boundary; no bypass or green CI claim |
+
+### Historical uncached-executor notes
+
+The following notes describe earlier attempts in a different executor. Their
+missing SQLite/tooling and ancestor-ownership limitations do not describe the
+subsequent native verification above. They are retained as failed-attempt
+history, not as current unexecuted-test claims. The current validation record
+supersedes their test status. PR #209 remains separate and unapplied; passing
+the current API suite does not validate that PR's additional contention fixes.
 
 Recorded tests for the configuration/provisioning slice used Linux, Go 1.27.1
 at `/workspace/toolchains/go/bin/go`, existing cache `/workspace/go-cache` and
@@ -298,10 +318,10 @@ service entrypoint, elevate privileges, invent writable mounts or chmod/chown
 existing host paths as part of these instructions. Activation remains the separate
 reviewed switch to the new v3 reference described above.
 
-The packaging source-contract tests passed locally; no image build, publication,
-container lifecycle or deployment ran. This executor's targeted static compilation
-was attempted with its existing Go 1.27.1, `GOPROXY=off` and caches, output target
-`/tmp/tb14-operator-account-init`, but stopped before compilation because SQLite
-source is absent. Therefore that output is not reported as a built artifact.
-The separately authorized cached executor must provide the actual binary hash
-and compile evidence; Docker/native deployment acceptance remains distinct.
+The packaging source-contract tests and full container-fixture Go package pass
+in the native executor. Its targeted static Linux/amd64 initializer build from
+`eb77e99e0f7fff3cc2dfa5f7d53c35aa32b8e5b5` succeeds with Go 1.27.1 and the
+verified existing offline cache. SHA-256:
+`c9aaa8fc946805addcbb1fcd3043a9c24a0e88f381813bb2adf44e6345aacec6`.
+Only `--help` was executed on this binary. No image build, publication, container
+lifecycle or deployment ran; those remain distinct from source/build evidence.

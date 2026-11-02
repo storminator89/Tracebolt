@@ -21,14 +21,15 @@
       "requirements": "Dedicated LAN operator surface. TLS by default; explicit HTTP-test profile only with independent test auth/state. Exact configured Origin/Host, application/json, <=4096 raw bytes; no pre-login CSRF token needed. No CORS. Named mode requires both username and password; shared mode requires password only. Unknown, duplicate, missing or client-supplied actor/role/capability fields are rejected. Unknown names perform bounded dummy hashing and never fall back to shared authentication.",
       "response": "Session view above, authenticated=true, per-session csrfToken, expiresAt and expiresInSeconds. Named sessions carry a server-derived stable actorId and explicit capabilities; shared sessions carry null actorId and read-only display capability, with existing legacy administration semantics. Anonymous views disclose only loginMode, null actorId and an empty capability list.",
       "cookie": "TLS: __Host-tracebolt-session, Secure, HttpOnly, SameSite=Strict, Path=/, no Domain. HTTP test: tracebolt-http-test-session, same properties except Secure=false. Token only in Set-Cookie, never JSON.",
-      "semantics": "Existing cookie session revoked on successful login; session and CSRF both rotate. Default absolute expiry30min, no silent sliding extension.",
+      "semantics": "Existing cookie session revoked on successful login; session and CSRF both rotate. Default absolute expiry30min, no silent sliding extension. TLS live v3 additionally accepts optional otp, required in effect for an explicitly factor-bound account. Password and unused TOTP must both validate; consumption is durable before session output and does not change the account epoch. Pending factor re-enrollment never falls back to password-only. Static v1/v2 reject otp. See docs/live-operator-factors.md; no browser MFA UI acceptance is implied.",
       "bodyByLoginMode": {
         "shared": {
           "password": "12..1024 UTF-8 bytes; never persisted or logged"
         },
         "named": {
           "username": "1..64 ASCII bytes; exact configured lowercase username",
-          "password": "12..1024 UTF-8 bytes; never persisted or logged"
+          "password": "12..1024 UTF-8 bytes; never persisted or logged",
+          "otp": "TLS live v3 only, optional JSON field; factor-bound account requires an unused eight-digit TOTP-SHA256 proof. Absent/invalid proof never creates a session. Static v2 rejects this field."
         }
       }
     },
@@ -110,7 +111,7 @@
     "GET /api/auth/accounts": {
       "requirements": "TLS v3 live account authority only. Authenticated named session with current manage_accounts; no query or request body. Static v1/v2 return404.",
       "response": {
-        "items": "Bounded sorted list of id, revision, revocationFloor, disabled, uncertain and capabilities. No usernames, verifiers, tokens or proposal paths."
+        "items": "Bounded sorted list of id, revision, revocationFloor, disabled, uncertain and capabilities; factor-bound accounts additionally expose factorState and factorGeneration. No usernames, verifiers, factor secrets/history, OTPs, tokens or proposal paths."
       },
       "reference": "docs/live-operator-authority.md"
     },
@@ -137,12 +138,44 @@
         "503": "account_authority_uncertain; target remains fenced; preserve state and inspect before recovery"
       },
       "reference": "docs/live-operator-authority.md"
+    },
+    "POST /api/auth/factors/enroll": {
+      "requirements": "TLS live v3 only. Exact Origin/Host, application/json, strict object <=4096 bytes. No ambient-cookie authority or pre-login CSRF; current account password, protected exact-bound proposal and new-factor possession are all required. Disabled/uncertain/active-factor accounts cannot use it to bypass reset.",
+      "body": {
+        "username": "exact existing username; derives actor on server",
+        "password": "current account password",
+        "otp": "unused eight-digit proof of separately provisioned TOTP-SHA256 factor",
+        "expectedRevision": "exact positive current account revision, also pinned by protected proposal"
+      },
+      "response": {
+        "enrolled": true,
+        "revision": "previous account revision + 1",
+        "nextStep": "sign_in_with_fresh_factor"
+      },
+      "semantics": "No cookie issued. Advances account epoch, cancels target sessions/old approvals, audits actual self-authenticated actor and consumes enrollment code. Fresh subsequent OTP required for login; retired factor secrets cannot be re-enrolled. No caller-supplied secret/path or automatic recovery.",
+      "reference": "docs/live-operator-factors.md"
+    },
+    "POST /api/auth/accounts/reset-factor": {
+      "requirements": "TLS live v3, current named manage_accounts session, exact Origin/Host, per-session CSRF, strict application/json object <=4096 bytes. Fresh password AND unused factor proof of the requester are additionally required, not credentials of the target.",
+      "body": {
+        "actorId": "existing target account, never requester identity",
+        "expectedRevision": "exact positive target account revision",
+        "password": "fresh requester's password",
+        "otp": "fresh unused requester's eight-digit TOTP-SHA256 proof"
+      },
+      "response": {
+        "updated": true,
+        "revision": "previous target revision + 1",
+        "factorState": "enrollment_required"
+      },
+      "semantics": "Durably consumes proof, rechecks short proof freshness/current authority after actor drain, audits actual requester, increments target factor generation/account epoch and cancels target sessions/approvals. Last usable administrator protected; unrelated accounts continue. Pending target cannot sign in password-only and must perform protected re-enrollment. No retry, factor-history deletion or implicit MFA downgrade.",
+      "reference": "docs/live-operator-factors.md"
     }
   },
   "modeBehavior": {
     "development": "Existing loopback-only guard remains unchanged. GET auth/session explicitly says authenticationRequired=false, authenticated=false, csrfToken=current process token, expiry=null. No fake authentication. Login/logout routes are disabled.",
     "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile.",
-    "named": "Named loginMode supports protected static v2 and explicit TLS-only v3; the session metadata format is unchanged. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. Static v1/v2 expose no live account-management API. Static v2 configuration changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied. Application-check settings GET and POST both require the separate manage_application_checks grant; application-check status remains readable without destinations. V3 current manage_accounts explicitly admits the account GET/update routes below through protected journal revisions and audit. Other operators need not restart. V3 is provisioned separately and never inferred from editing a v2 file; see docs/live-operator-authority.md. No MFA-factor reset or deployment acceptance is claimed."
+    "named": "Named loginMode supports protected static v2 and explicit TLS-only v3; the session metadata format is unchanged. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. Static v1/v2 expose no live account-management API. Static v2 configuration changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied. Application-check settings GET and POST both require the separate manage_application_checks grant; application-check status remains readable without destinations. V3 current manage_accounts explicitly admits the account GET/update routes below through protected journal revisions and audit. Other operators need not restart. V3 is provisioned separately and never inferred from editing a v2 file; see docs/live-operator-authority.md. Explicit optional API-only TOTP enrollment/login/reset is described in docs/live-operator-factors.md; this does not complete #140 or establish browser/deployment acceptance."
   },
   "errors": {
     "400": "invalid typed or duplicate-key body",

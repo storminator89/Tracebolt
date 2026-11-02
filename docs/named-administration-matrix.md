@@ -9,6 +9,9 @@ Session/capability inventory revalidated at main
 `9e72704895c218f3ab63b016532ec74cbcd952d4` (2026-11-01): the explicit
 `manage_sessions` grant and the existing account-scoped session API are included
 below. This correction changes no runtime grants or routes.
+The TB-14 live-authority candidate adds only TLS v3 account listing/update under
+explicit `manage_accounts`; the account rows below distinguish this from static
+v1/v2. It does not grant the remaining TB-06 administrative surfaces.
 The initial [TB-06 / #133](https://github.com/storminator89/Tracebolt/issues/133)
 slice was an inventory and regression contract. The separately approved
 [customer-read follow-on](named-customer-read.md) now adds only optional explicit
@@ -25,11 +28,11 @@ included nor published by this slice.
 - **Shared** means an authenticated v1 shared-password session. Its human
   `ActorID()` is empty. Existing legacy administrative route access is independent
   of the displayed `read` capability; that display is not a complete grant list.
-- **Named/read** means an authenticated v2 named session with its required,
+- **Named/read** means an authenticated v2/v3 named session with its required,
   explicitly configured `read` grant. **Denied** also applies to a named account
-  holding *all sixteen* currently defined capabilities, except where a row
-  explicitly names the separate customer-read grant. There is no admin,
-  wildcard, role inheritance or shared-password fallback.
+  holding *all seventeen* currently defined capabilities, except where a row
+  explicitly names its separate grant and required profile. There is no wildcard admin,
+  role inheritance or shared-password fallback.
 - **Allowed** is route admission only, not guaranteed success. Correct profile,
   current device/issuer authority, feature configuration, revision, typed body,
   acknowledgement and existing expiry/consume-once rules still apply. Feature
@@ -45,7 +48,7 @@ included nor published by this slice.
 
 The LAN boundary in `internal/api/operator.go` first checks actual transport
 (TLS 1.3, or separately configured HTTP-test), exact Host/Origin, canonical paths,
-framing and session expiry/revocation. Except the separately scoped session API
+framing and session expiry/revocation. Except the separately scoped session and TLS v3 account APIs
 and capability-gated typed action/alarm/application-check endpoints, it then
 denies named non-read requests with `403 operator_capability_required`. The
 `namedReadRoute` classifier admits GET/HEAD and a finite list of read-only POST queries; **classifier admission does
@@ -55,7 +58,7 @@ JSON writes retain same-origin, CSRF and bounded strict-body requirements.
 
 The current capability inventory is `read`, `plan_updates`, `execute_updates`,
 `restart_service`, `manage_alarms`, `manage_application_checks`, `manage_sessions`,
-`read_customers`, `windows_service_control`, `windows_update_install`, `windows_update_download`,
+`read_customers`, `manage_accounts`, `windows_service_control`, `windows_update_install`, `windows_update_download`,
 `windows_update_schedule`, `windows_software_install`,
 `windows_managed_msi_deliver`, `windows_managed_msi_install` and
 `windows_managed_msi_schedule` (`internal/operatorauth/operators.go`). The required
@@ -211,18 +214,30 @@ the 38-route baseline count below deliberately excludes it.
 
 | Method and route / operation | R/W | Shared | Named | Actual identity / current boundary |
 | --- | --- | --- | --- | --- |
-| `GET /api/auth/session` | R | Anonymous or current session view | Same | Anonymous discloses no names/grants; authenticated named actor comes from immutable server configuration |
-| `POST /api/auth/login` | W/session | Password-only in v1 | Exact username/password in v2 | Strict schema cannot supply actor, role or capabilities; named login never falls back to shared |
+| `GET /api/auth/session` | R | Anonymous or current session view | Same | Anonymous discloses no names/grants; authenticated named actor comes from server-held v2/v3 authority |
+| `POST /api/auth/login` | W/session | Password-only in v1 | Exact username/password in v2/v3 | Strict schema cannot supply actor, role or capabilities; named login never falls back to shared |
 | `POST /api/auth/logout` | W/session | Allowed | Allowed | Current actual session only; Origin/CSRF, revocation and admitted-work drain; does not revoke other sessions |
 | `GET /api/auth/sessions` | R/session | Own shared account | Own named account; all accounts only with explicit `manage_sessions` | Server-held actor scopes the bounded redacted view; actual current session is marked; no credential or username is returned |
 | `POST /api/auth/sessions/revoke` | W/session | Own shared account | Own named account; other accounts only with explicit `manage_sessions` | Exact opaque session selector, current Origin/CSRF and requester admission; missing/inaccessible targets share `revoked:false`; success drains the target admission barrier, with no new durable human audit record |
 | Protected `operatorAuthFile` provisioning/replacement + manager restart | W/account | Local explicitly authorized administration, **not HTTP** | Same | v1/v2 mutually exclusive; static grants; restart invalidates old memory sessions |
-| Account listing/create/update/delete, password reset, grant edit, live reload, account disablement, shared-to-named migration API/UI | W/account | **Absent** | **Absent** | No route or capability exists; do not invent a path or imply availability |
+| `GET /api/auth/accounts` | R/account | Unavailable in static v1 | TLS v3 plus explicit `manage_accounts`; static v2 unavailable | Current admission; redacted IDs, revisions, floors and grants, no verifier |
+| `POST /api/auth/accounts/update` | W/account | Unavailable in static v1 | TLS v3 plus explicit `manage_accounts`; static v2 unavailable | Exact Origin/CSRF, target revision and replacement grants; durable audit binds actual session requester separately from target. Disable/grant/session/password changes revoke target sessions and approvals; last active account administrator is preserved |
+| `POST /api/auth/factors/enroll` | W/factor | Unavailable in static v1 | TLS v3 only; no ambient-session grant | Current password, exact protected proposal and new OTP possession derive the actual self-actor; no cookie; old epochs revoked and enrollment OTP consumed |
+| `POST /api/auth/accounts/reset-factor` | W/factor | Unavailable in static v1 | TLS v3 plus current `manage_accounts`, CSRF and fresh requester password/OTP | Exact target revision; short proof bound to final admission; durable actual-requester audit, target epoch/session withdrawal and mandatory re-enrollment; independent accounts retained |
+| Protected named-v2 seed to v3 initializer | Local provisioning | No implicit conversion from shared credentials | Explicit protected named seed with `manage_accounts` | Create-only journal/used-marker/reference; stopped-manager writer lease; no generated identity or privilege, no automatic activation or downgrade |
+| Account create/delete/rename, shared-to-named migration API/UI | W/account | **Absent** | **Absent** | Existing-account/factor operations do not imply account creation, migration or UI authority |
 
 Evidence: `operator.go`, `internal/operatorauth/{auth,operators}.go`,
 `internal/lanconfig/operators.go`, [named authentication](named-operator-auth.md).
-Account configuration is read from the protected file; loaders do not provision
-users, rewrite credentials or edit host permissions. Actual server-derived actor
+Static account configuration is read from the protected file; loaders do not provision
+users, rewrite credentials or edit host permissions. TLS v3 instead opens the pinned
+protected journal; its account updates and audit commit together. Password reset
+requires a separate protected actor/revision-bound credential proposal, never a
+request-supplied verifier/path. `actorId` in the update body names the target, not
+the requester. The [optional local factor contract](live-operator-factors.md)
+separately supplies actual TOTP login/reset without implicitly enrolling existing
+accounts or completing the broader #140 scope. See
+[live account authority](live-operator-authority.md). Actual server-derived actor
 identity is available for named sessions, but session metadata is not an audit
 trail for every success. Session listing/revocation is not account provisioning
 or disablement: valid configured credentials may sign in again. There is no
@@ -267,8 +282,9 @@ appropriate. Reject request-supplied identity and recheck current authority at
 dispatch; preserve logout, expiry, revision, replay, revocation and original
 approval floors. Define static-restart and standing-job revocation behavior and
 version any necessary records without adopting/relabeling older authority.
-Neither `manage_sessions` nor `read_customers` is a precedent for implicit
-account/grant editing or any customer write; those decisions remain open.
+Neither `manage_sessions` nor `read_customers` permits account/grant editing or
+any customer write. Only explicit TLS v3 `manage_accounts` admits the existing-account
+updates above; remaining customer and other administration decisions stay open.
 
 TB-06 remains open until **two separately named administrators plus a restricted
 user** actually administer the reviewed surface without a common password,
@@ -279,11 +295,20 @@ fixture logins that are all denied administration do not meet that criterion.
 
 ## Verification scope
 
+`internal/api/operator_account_named_admins_test.go` exercises the actual TLS
+v3 account routes with two separately authenticated account administrators and a
+restricted reader. Both administrators update the reader; persisted journal audit
+frames must name each actual requester. Target-ID impersonation, request-supplied
+requester fields and another session's CSRF are rejected without a durable update.
+Target sessions are revoked while both administrators remain usable. The fixture
+uses public protected-journal creation, not an authority-store mock. This narrow
+account-administration proof does not complete the broader TB-06 acceptance above.
+
 `internal/api/named_administration_contract_test.go` adds direct real-TLS-listener
 contracts for 38 method/route restrictions: twenty enrollment writes across four
 domains, two manual-trust writes, five customer reads/writes and eleven AI
 settings/invocation routes. The two customer GETs remain denied without their
-exact grant; the other 36 routes are denied even with all 16 capabilities. They
+exact grant; the other 36 routes are denied even with all 16 pre-v3 capabilities. They
 cover anonymous requests, read-only identity and two distinct all-grant identities;
 forged body authority
 cannot turn a denial into body/feature handling. Positive existing read admission,

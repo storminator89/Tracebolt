@@ -1,3 +1,175 @@
+CURRENT NATIVE MFA/RESET VERIFICATION (2026-11-02 UTC)
+Base: eb77e99e0f7fff3cc2dfa5f7d53c35aa32b8e5b5; subsequent native source change
+adds the real optional API-only factor subsystem, not a renamed session reset.
+Platform/toolchain/cache protection remain as recorded below. No new dependency,
+download, browser, external provider, host provisioning or CI configuration.
+
+Native parallel work was divided into core login/reset, protected journal,
+actual TLS API fixtures and independent source review. Confirmed review findings
+were corrected before acceptance: expired proof after actor-drain, old-secret
+re-enrollment, generic JSON secret disclosure risk, unnecessary OTP consumption
+at full session capacity, and excessive full-roster writes for each OTP.
+factor_use now uses a compact, narrowly replay-validated delta frame.
+
+Final focused regression command, exit 0:
+go test -race ./internal/operatorauth \
+  -run 'Test(MFA|LiveAccount|Review.*Account|ReviewSelf)' -count=1 -timeout=5m
+PASS 8.934s.
+go test -race ./internal/api \
+  -run 'Test(Factor|LiveAccount|AccountLifecycle)' -count=1 -timeout=5m
+PASS 10.740s.
+Combined retained log SHA-256:
+ab125c4f692a02c149444cca80392b511330ac77930d8a5e950f15dc2d04f746
+
+The relevant unchanged legacy post-hash revision-race test first exposed an
+error-semantic regression: access was correctly denied but ErrCredentials
+replaced ErrUnauthenticated. Production semantics were repaired; the old test
+was not weakened and passes in the focused group above. The failed earlier
+operatorauth package run is retained separately, not reported as a full pass.
+
+Subsequent narrow overflow-bound/RFC race tests: PASS 1.289s, checking LastStep,
+extreme clocks and proof-deadline arithmetic. These strengthen only bounds;
+no broad suite was repeated for this final guard.
+
+Other completed relevant checks:
+- Actual two-admin/restricted-user TLS API + persisted requester audit:
+  TestLiveAccountNamedAdministratorsPersistActualRequesters, PASS 2.527s.
+- Actual protected factor enrollment/login/reset/new enrollment/restart:
+  TestFactorAPILifecycleProtectedEnrollmentResetAndRestart, PASS 5.908s,
+  subsequently included against compact journal frames in the final group.
+- Optional OTP parser/strict v1-v2 compatibility: PASS 3.114s, also in final group.
+- Native normal manager prepare/restart regression: PASS 2.923s.
+- go vet ./internal/operatorauth ./internal/api: PASS.
+- GOOS=windows and GOOS=darwin, GOARCH=amd64, go build of the two affected
+  packages: PASS; source compilation, not native execution.
+- Protected journal/delta/retirement/JSON/proposal and existing journal race
+  regressions: PASS 1.271s, subsequently included in final focused group.
+- Independent native source review: no remaining confirmed blocking code defect;
+  this is not a release or automatic-merge clearance.
+- JSON contract parses; diff whitespace clean; go.mod/go.sum, CI and denied
+  source-allowlist/reporter/selector files are unchanged.
+
+Matching static Linux initializer builds; only --help executes, no provisioning.
+Binary SHA-256:
+d0927d392158339c46cd279e0ffe63615fb78d8854947577d7c01f99d16ec220
+
+The earlier 20-package broad result below belongs to the prior source candidate,
+not automatically to these new production changes. Per the requested test scope,
+only high-value targeted auth/API/journal/startup regressions were rerun here.
+Frontend source is unchanged; no denied registry/build operation was retried.
+
+Functional #141 evidence now includes actual MFA reset: fresh requester password
+and single-use OTP; exact target revision; durable reset-to-enrollment-required;
+old sessions, epochs and retired factor secrets rejected; other operators remain
+usable. Necessary named-account foundations are tested with two administrators
+and a restricted user; unrelated #133 enrollment/trust/customer/AI writes remain
+denied and full #133/#140 completion is not claimed.
+
+Outstanding acceptance gate: existing tests/security/pr_checks.py:491 requires
+the exact Go-byte allowlist through report_go_failure.py:99. These source changes
+require the canonical #129 synchronization, an earlier denied operation. No such
+file was regenerated, modified, bypassed or replaced, and no successful exact-head
+CI result is claimed. No partial PR, main merge or issue closure is claimed.
+See live-operator-factors.md for finite journal/history and API-only limits.
+
+PRIOR SOURCE-CANDIDATE VERIFICATION (before native MFA changes)
+CURRENT NATIVE VERIFICATION (2026-11-02 UTC)
+Source candidate: eb77e99e0f7fff3cc2dfa5f7d53c35aa32b8e5b5
+Baseline: 071ed51432395be62fa9c0a42ef914c500f80ddd
+Candidate binary/full-index diff SHA-256:
+f93b4f8f8b1249a1440cec89f65690c1bce5023fd72ea9e99e708cf4fb5b5e63
+This hash identifies the source candidate before this documentation-only update.
+Platform: Linux amd64, Go 1.27.1, runtime UID 1000; protected ancestors retain
+their existing ownership/modes. No host permissions or production guards changed.
+
+An existing native module cache already contained modernc.org/sqlite v1.60.1.
+Its h1:/blz53O951KWFOso4QQvEs/Fq6cDBKLtMVrYNSeJVKw= matches go.sum.
+go mod verify: all modules verified. GOPROXY=off and GOTOOLCHAIN=local remained
+set; no dependency download, proxy substitution or denied-source workaround.
+
+Native completed checks:
+- go test -run '^$' ./... -timeout=5m: PASS, all 268 Go packages compile
+  (235 with tests, 33 without). This command does not execute test cases.
+- Real protected initializer suite after profile-order correction: PASS (2.134s).
+- TestAccountLifecycleProtectedPasswordProposalAndRestart and integrity-failure
+  fixture: PASS (5.060s); real public journal/proposal files, not memory-only store.
+- TestLiveAccountPublicInitializationPrepareAndRestart: PASS (2.697s).
+- TestReusableWUAAPIExactReviewAndReadOnlyReconciliation: PASS with race, ten
+  repetitions (5.553s); unchanged-main stale-completion fixture failure was first
+  reproduced independently; no production timestamp/conflict guard was weakened.
+- go test -race ./internal/enrollmenttransport -run
+  'Test(JournalAccountRevocationFencesRealServiceSocketAndRestart|ServiceAccountClaimEpochAndLease|AccountBound)'
+  -count=10: PASS (103.816s), after adding the integrated regression at 37456b0.
+  Uses the real journal, auth manager, SQLite claim, TCP response flush and restart.
+- go vet: PASS for the affected packages and container-fixture package.
+- Windows/amd64 and Darwin/amd64 affected-source compilation: PASS; not execution.
+- Existing manager-setup and new initializer packaging contracts: PASS, two tests
+  each; optimized Python execution also passed. No image build/deployment implied.
+- go test -race ./tests/container -count=1: PASS (1.316s), opt-in container lifecycle
+  not executed. No Docker engine/image build/publication was used.
+- Frontend typecheck and Vite production build: PASS on bd3e792, whose Go/web
+  production source is byte-identical to eb77e99. Existing dependencies were reused
+  only after the two package-lock.json files compared identical. No browser tests.
+  A later repeat on eb77e99 did not reach a terminal result and is not counted.
+
+Static initializer build on eb77e99: PASS, Go 1.27.1 Linux/amd64:
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath \
+  -ldflags='-s -w' -o /tmp/issue141-operator-account-init ./cmd/operator-account-init
+file: statically linked, stripped ELF x86-64; --help: PASS.
+Binary SHA-256:
+c9aaa8fc946805addcbb1fcd3043a9c24a0e88f381813bb2adf44e6345aacec6
+The binary was not used to provision a real installation.
+
+Final broad race run: PASS, exit status 0; stderr empty.
+The twenty affected packages run at bd3e792f4f10be7a19cab86ad30616443f6ab8f1
+with -race -json -count=1 -timeout=45m. Later commits add only tests, packaging and
+documentation; Go/web production source is unchanged. The stronger integrated
+37456b0 transport regression is separately exercised ten times above.
+18 packages pass; windowsactionjob and windowsactionmanager contain no tests.
+4,489 test/subtest PASS outcomes, zero FAIL, nine SKIP outcomes. The skips are
+six explicitly gated host/systemd/native tests, one synthetic physical-capacity
+test and two subprocess helper entrypoints that skip standalone invocation.
+No new #141 regression skipped. Enrollmentstore passes in 2236.703s, API in
+824.008s, enrollmenttransport in 361.687s and lan-manager in 191.863s.
+
+Exact package command:
+go test -race -json \
+  ./internal/operatorauth ./internal/lanconfig ./internal/api \
+  ./internal/enrollmentstore ./internal/enrollmenttransport \
+  ./internal/actionjob ./internal/actionmanager \
+  ./internal/windowsactionjob ./internal/windowsactionmanager \
+  ./internal/packagecontroller ./internal/packageupdate \
+  ./internal/windowsupdatejob ./internal/windowssoftwarejob \
+  ./internal/windowsmanagedmsi ./internal/windowsmanagedmsimanager \
+  ./internal/alarmdelivery ./internal/store ./internal/managersetup \
+  ./cmd/lan-manager ./cmd/operator-account-init -count=1 -timeout=45m
+
+Retained native broad-run JSON log SHA-256:
+427cd4164797bae23011bd89763f32c0a3e5fa571403eb55f6c37e844dc36d03
+Retained integrated ten-repetition race log SHA-256:
+209b6366aa1390c4fc23fe82199bf3dece859e6fa842b7136675525d60223daf
+Retained all-268-package compilation log SHA-256:
+338eccfbd7762b18e91094aa2fc0cdfc541b2bdfa02c7f44ec2c7ebf2d4f99dc
+
+The earlier af87c048 broad attempt was not green: API hit the inherited WUA
+completion-time fixture defect; enrollmentstore exceeded that attempt's 30-minute
+harness budget. The corrected, larger-budget run above replaces neither event
+with a fabricated pass and is the final full-run evidence for this candidate.
+
+Acceptance is NOT complete: #141 explicitly mentions MFA reset, but no factor
+store or actual factor reset exists. Password/session reset tests do not prove
+factor reset. Declared dependency #133 remains open; existing named maintenance
+roles plus manage_accounts do not supply all named administrative operations.
+PR #209 remains separate/unapplied; these results do not validate its additional
+clock/cancellation fixes. No issue/PR was closed or merged from this candidate.
+No GUI/browser, native installed Windows/macOS endpoint, host-service provisioning,
+real external-provider call or cross-platform deployment/E2E acceptance is claimed.
+
+HISTORICAL UNCACHED-EXECUTOR ATTEMPTS FOLLOW
+The missing SQLite/tooling/ancestor limitations below are historical and are
+superseded by the native results above; failed attempts are not erased or counted
+as successful tests.
+
 TB-14 source-candidate validation; not release or full acceptance.
 Baseline: 071ed51432395be62fa9c0a42ef914c500f80ddd
 Platform: Linux amd64

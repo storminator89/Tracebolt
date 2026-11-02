@@ -132,6 +132,12 @@ func (aiConfigRequest) GoString() string { return "api.aiConfigRequest{secrets:r
 // readObject rejects unknown and duplicate keys before typed decoding. API bodies
 // accept scalar config fields only; no request can supply evidence or a provider.
 func readObject(w http.ResponseWriter, r *http.Request, limit int64, fields []string, out any) bool {
+	return readObjectWithOptional(w, r, limit, fields, nil, out)
+}
+
+// Optional fields remain explicitly enumerated and retain the same duplicate,
+// null, type and body-size checks. Existing callers still require exact fields.
+func readObjectWithOptional(w http.ResponseWriter, r *http.Request, limit int64, fields, optional []string, out any) bool {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
 		var maximum *http.MaxBytesError
@@ -158,6 +164,9 @@ func readObject(w http.ResponseWriter, r *http.Request, limit int64, fields []st
 	for _, field := range fields {
 		expected[field] = true
 	}
+	for _, field := range optional {
+		expected[field] = true
+	}
 	seen := map[string]bool{}
 	for decoder.More() {
 		token, err := decoder.Token()
@@ -180,8 +189,13 @@ func readObject(w http.ResponseWriter, r *http.Request, limit int64, fields []st
 			}
 		}
 	}
-	if _, err = decoder.Token(); err != nil || len(seen) != len(expected) {
+	if _, err = decoder.Token(); err != nil {
 		return invalid()
+	}
+	for _, field := range fields {
+		if !seen[field] {
+			return invalid()
+		}
 	}
 	if _, err = decoder.Token(); err != io.EOF {
 		return invalid()

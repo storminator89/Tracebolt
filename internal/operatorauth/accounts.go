@@ -25,6 +25,7 @@ type AccountRecord struct {
 	Revision        uint64
 	RevocationFloor uint64
 	Disabled        bool
+	Factor          *AccountFactor
 }
 type AccountSnapshot struct {
 	AuthorityID string
@@ -87,6 +88,11 @@ type liveAccounts struct {
 func copySnapshot(s AccountSnapshot) AccountSnapshot {
 	s.Accounts = append([]AccountRecord(nil), s.Accounts...)
 	for i := range s.Accounts {
+		if s.Accounts[i].Factor != nil {
+			f := *s.Accounts[i].Factor
+			f.RetiredHashes = append([]string(nil), f.RetiredHashes...)
+			s.Accounts[i].Factor = &f
+		}
 		s.Accounts[i].Operator.Capabilities = append([]Capability(nil), s.Accounts[i].Operator.Capabilities...)
 	}
 	return s
@@ -97,13 +103,33 @@ func validateAccounts(s AccountSnapshot) (map[string]principal, error) {
 	}
 	ops := make([]Operator, len(s.Accounts))
 	admin := false
+	factorKeys := map[string]bool{}
 	for i, a := range s.Accounts {
+		if !validAccountFactor(a.Factor) {
+			return nil, ErrConfiguration
+		}
+		if a.Factor != nil {
+			keys := append([]string(nil), a.Factor.RetiredHashes...)
+			if a.Factor.State == FactorActive {
+				digest, ok := factorSecretDigest(a.Factor.Secret)
+				if !ok {
+					return nil, ErrConfiguration
+				}
+				keys = append(keys, digest)
+			}
+			for _, digest := range keys {
+				if factorKeys[digest] {
+					return nil, ErrConfiguration
+				}
+				factorKeys[digest] = true
+			}
+		}
 		if a.Revision == 0 || a.Revision > s.Revision || a.RevocationFloor != a.Revision-1 {
 			return nil, ErrConfiguration
 		}
 		ops[i] = a.Operator
 		for _, c := range a.Operator.Capabilities {
-			if !a.Disabled && c == ManageAccounts {
+			if !a.Disabled && factorUsable(a.Factor) && c == ManageAccounts {
 				admin = true
 			}
 		}
@@ -140,7 +166,7 @@ func (e *accountEntry) permits(epoch uint64, cap Capability) bool {
 		return false
 	}
 	v := e.current.Load()
-	return v != nil && !v.record.Disabled && epoch == v.record.Revision && epoch > v.record.RevocationFloor && capabilityBit(cap) != 0 && v.principal.grants&capabilityBit(cap) != 0
+	return v != nil && !v.record.Disabled && factorUsable(v.record.Factor) && epoch == v.record.Revision && epoch > v.record.RevocationFloor && capabilityBit(cap) != 0 && v.principal.grants&capabilityBit(cap) != 0
 }
 func (s Session) accountActive() bool {
 	return s.account == nil || s.account.permits(s.accountRevision, Read)
@@ -198,12 +224,14 @@ func (AccountChange) String() string   { return "operatorauth.AccountChange{reda
 func (AccountChange) GoString() string { return "operatorauth.AccountChange{redacted}" }
 
 type AccountView struct {
-	ID              string       `json:"id"`
-	Revision        uint64       `json:"revision"`
-	RevocationFloor uint64       `json:"revocationFloor"`
-	Disabled        bool         `json:"disabled"`
-	Uncertain       bool         `json:"uncertain"`
-	Capabilities    []Capability `json:"capabilities"`
+	ID               string       `json:"id"`
+	Revision         uint64       `json:"revision"`
+	RevocationFloor  uint64       `json:"revocationFloor"`
+	Disabled         bool         `json:"disabled"`
+	Uncertain        bool         `json:"uncertain"`
+	Capabilities     []Capability `json:"capabilities"`
+	FactorState      string       `json:"factorState,omitempty"`
+	FactorGeneration uint64       `json:"factorGeneration,omitempty"`
 }
 
 func (m *Manager) AccountViews(ctx context.Context, requester Session) ([]AccountView, error) {
@@ -225,7 +253,12 @@ func (m *Manager) AccountViews(ctx context.Context, requester Session) ([]Accoun
 	// Startup operator order is irrelevant to authority; avoid exposing credentials.
 	for id, e := range m.live.byID {
 		v := e.current.Load()
-		out = append(out, AccountView{id, v.record.Revision, v.record.RevocationFloor, v.record.Disabled, e.pending.Load(), append([]Capability(nil), v.record.Operator.Capabilities...)})
+		view := AccountView{ID: id, Revision: v.record.Revision, RevocationFloor: v.record.RevocationFloor, Disabled: v.record.Disabled, Uncertain: e.pending.Load(), Capabilities: append([]Capability(nil), v.record.Operator.Capabilities...)}
+		if v.record.Factor != nil {
+			view.FactorState = v.record.Factor.State
+			view.FactorGeneration = v.record.Factor.Generation
+		}
+		out = append(out, view)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
@@ -299,37 +332,55 @@ func (m *Manager) ChangeAccount(ctx context.Context, requester Session, change A
 			return ErrConfiguration
 		}
 	}
+	return m.commitAccountChangeLocked(ctx, e, next, requester.ActorID(), operation, &requester, release)
+}
+
+// Caller holds live.updates. A nil requester is only used after local enrollment
+// has checked the current password and possession of its protected factor proposal.
+func (m *Manager) commitAccountChangeLocked(ctx context.Context, e *accountEntry, next AccountSnapshot, actor, operation string, requester *Session, release func()) error {
+	live := m.live
+	old := e.current.Load()
+	principals, err := validateAccounts(next)
+	if err != nil {
+		return err
+	}
 	// Publish the deny fence before waiting. No fresh login, session admission or
 	// actor lease can enter while an older admitted operation drains.
 	m.mu.Lock()
-	if ctx.Err() != nil || !m.requesterLocked(requester) || !requester.accountActive() || !m.now().Before(requester.gate.expires) {
+	if ctx.Err() != nil || !m.factorProofCurrent(ctx) || requester != nil && (!m.requesterLocked(*requester) || !requester.accountActive() || !m.now().Before(requester.gate.expires)) {
 		m.mu.Unlock()
 		return ErrUnauthenticated
 	}
 	e.pending.Store(true)
 	var targets []Session
 	for _, s := range m.sessions {
-		if s.actor.id == change.TargetID {
+		if s.actor.id == e.current.Load().record.Operator.ID {
 			s.markRevoked()
 			targets = append(targets, s)
 		}
 	}
-	selfSerial := requester.gate.revocationSerial.Load()
+	var selfSerial uint64
+	if requester != nil {
+		selfSerial = requester.gate.revocationSerial.Load()
+	}
 	m.mu.Unlock()
 	e.lease.Lock()
 	var updated AccountRecord
 	for _, a := range next.Accounts {
-		if a.Operator.ID == change.TargetID {
+		if a.Operator.ID == e.current.Load().record.Operator.ID {
 			updated = a
 			break
 		}
 	}
-	audit := AccountAudit{next.Revision, requester.ActorID(), change.TargetID, old.record.Revision, updated.Revision, m.now().UTC().Unix(), operation}
-	requesterValid := ctx.Err() == nil && m.now().Before(requester.gate.expires)
-	if requester.account == e {
-		requesterValid = requesterValid && requester.accountRevision == old.record.Revision && requester.gate.revocationSerial.Load() == selfSerial
-	} else {
-		requesterValid = requesterValid && !requester.gate.revoked.Load() && requester.accountActive()
+	audit := AccountAudit{next.Revision, actor, e.current.Load().record.Operator.ID, old.record.Revision, updated.Revision, m.now().UTC().Unix(), operation}
+	requesterValid := ctx.Err() == nil && m.factorProofCurrent(ctx)
+	if requester != nil {
+		requesterValid = requesterValid && m.now().Before(requester.gate.expires)
+		if requester.account == e {
+			requesterValid = requesterValid && requester.accountRevision == old.record.Revision && requester.gate.revocationSerial.Load() == selfSerial
+		} else {
+			requesterValid = requesterValid && !requester.gate.revoked.Load() && requester.accountActive()
+		}
 	}
 	if audit.At <= 0 || !requesterValid {
 		err = ErrUnauthenticated

@@ -522,6 +522,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.login(w, r)
 		return
 	}
+	if r.URL.Path == "/api/auth/factors/enroll" {
+		h.enrollFactorAPI(w, r)
+		return
+	}
 	if !apiPath {
 		if r.Method != "GET" && r.Method != "HEAD" {
 			fail(w, 405, "method_not_allowed", "Method is unsupported.")
@@ -539,7 +543,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token, _ := namedOperatorCookie(r, h.cookieName)
 	ctx, cancel := context.WithDeadline(r.Context(), session.ExpiresAt)
 	defer cancel()
-	accountRoute := r.URL.Path == "/api/auth/accounts" || r.URL.Path == "/api/auth/accounts/update"
+	accountRoute := r.URL.Path == "/api/auth/accounts" || r.URL.Path == "/api/auth/accounts/update" || r.URL.Path == "/api/auth/accounts/reset-factor"
 	// Account changes own their requester lifetime fence. Self-revocation must
 	// not cancel its own durable commit; client cancellation/deadline still apply.
 	if !accountRoute {
@@ -830,15 +834,20 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		OTP      string `json:"otp"`
 	}
 	fields := []string{"password"}
+	var optionalFields []string
 	if h.auth.Named() {
 		fields = append(fields, "username")
+		if h.auth.LiveAccounts() {
+			optionalFields = []string{"otp"}
+		}
 	}
-	if !readObject(w, r, 4096, fields, &input) {
+	if !readObjectWithOptional(w, r, 4096, fields, optionalFields, &input) {
 		return
 	}
-	defer func() { input.Password = "" }()
+	defer func() { input.Password, input.OTP = "", "" }()
 	peer, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		fail(w, 401, "invalid_credentials", "Sign-in failed.")
@@ -846,7 +855,7 @@ func (h *operatorHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	var session operatorauth.Session
 	if h.auth.Named() {
-		session, err = h.auth.LoginNamed(r.Context(), peer, input.Username, input.Password)
+		session, err = h.auth.LoginNamedMFA(r.Context(), peer, input.Username, input.Password, input.OTP)
 	} else {
 		session, err = h.auth.Login(r.Context(), peer, input.Password)
 	}

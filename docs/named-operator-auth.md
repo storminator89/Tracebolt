@@ -81,8 +81,10 @@ It changes existing accounts only; password resets use a separately protected
 proposal, never a verifier or path in HTTP. Accepted changes revoke the target's
 sessions and old approval epochs without restarting other accounts. Uncertain
 persistence fences the target and requires inspection. There is no account UI,
-MFA-factor implementation or claim of deployment/MFA acceptance; see the linked
-contract for current evidence and remaining gates.
+automatic MFA enrollment or claim of deployment acceptance. The explicit,
+API-only [local factor path](live-operator-factors.md) separately supports
+password-plus-OTP login and actual factor reset; it is not the full #140
+WebAuthn/OIDC/recovery/UI work. See the linked contracts for evidence and limits.
 
 ## Capability and existing-route mapping
 

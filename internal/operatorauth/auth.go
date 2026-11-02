@@ -309,6 +309,9 @@ func (m *Manager) Login(ctx context.Context, peer, password string) (Session, er
 	return m.login(ctx, peer, "", password, false)
 }
 func (m *Manager) login(ctx context.Context, peer, username, password string, named bool) (Session, error) {
+	return m.loginWithOTP(ctx, peer, username, password, "", named)
+}
+func (m *Manager) loginWithOTP(ctx context.Context, peer, username, password, otp string, named bool) (Session, error) {
 	if err := ctx.Err(); err != nil {
 		return Session{}, err
 	}
@@ -351,6 +354,30 @@ func (m *Manager) login(ctx context.Context, peer, username, password string, na
 	}
 	if err := ctx.Err(); err != nil {
 		return Session{}, err
+	}
+	if account != nil {
+		// Refuse a known-full account before spending a durable one-use factor.
+		// This is only an early bound, not a reservation: concurrent logins still
+		// recheck capacity under mu when the session is actually inserted.
+		m.mu.Lock()
+		if ctx.Err() != nil || !account.permits(accountRevision, Read) {
+			m.mu.Unlock()
+			return Session{}, ErrUnauthenticated
+		}
+		m.purgeLocked(m.now())
+		available := m.sessionAvailableLocked(actor.id)
+		m.mu.Unlock()
+		if !available {
+			return Session{}, ErrCapacity
+		}
+		m.live.updates.Lock()
+		err := m.consumeLoginFactorLocked(ctx, account, accountRevision, otp)
+		m.live.updates.Unlock()
+		if err != nil {
+			return Session{}, err
+		}
+	} else if otp != "" {
+		return Session{}, ErrCredentials
 	}
 	token, err := randomHex(32)
 	if err != nil {

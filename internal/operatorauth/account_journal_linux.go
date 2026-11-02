@@ -38,79 +38,209 @@ func (*AccountJournal) String() string   { return "operatorauth.AccountJournal{r
 func (*AccountJournal) GoString() string { return "operatorauth.AccountJournal{redacted}" }
 
 type storedAccount struct {
-	ID              string       `json:"id"`
-	Username        string       `json:"username"`
-	PasswordHash    string       `json:"passwordHash"`
-	Capabilities    []Capability `json:"capabilities"`
-	Revision        uint64       `json:"revision"`
-	RevocationFloor uint64       `json:"revocationFloor"`
-	Disabled        bool         `json:"disabled"`
+	ID              string        `json:"id"`
+	Username        string        `json:"username"`
+	PasswordHash    string        `json:"passwordHash"`
+	Capabilities    []Capability  `json:"capabilities"`
+	Revision        uint64        `json:"revision"`
+	RevocationFloor uint64        `json:"revocationFloor"`
+	Disabled        bool          `json:"disabled"`
+	Factor          *storedFactor `json:"factor,omitempty"`
 }
+
+// Only this private wire type marshals factor secrets. Public AccountFactor,
+// AccountRecord and AccountSnapshot values never expose them through JSON.
+type storedFactor struct {
+	Version       string   `json:"version"`
+	Generation    uint64   `json:"generation"`
+	State         string   `json:"state"`
+	Secret        string   `json:"secret,omitempty"`
+	LastStep      uint64   `json:"lastStep"`
+	RetiredHashes []string `json:"retiredHashes,omitempty"`
+}
+
+func (storedFactor) String() string   { return "operatorauth.storedFactor{redacted}" }
+func (storedFactor) GoString() string { return "operatorauth.storedFactor{redacted}" }
+func storedFactorFor(f *AccountFactor) *storedFactor {
+	if f == nil {
+		return nil
+	}
+	return &storedFactor{Version: f.Version, Generation: f.Generation, State: f.State, Secret: f.Secret, LastStep: f.LastStep, RetiredHashes: append([]string(nil), f.RetiredHashes...)}
+}
+func (f *storedFactor) accountFactor() *AccountFactor {
+	if f == nil {
+		return nil
+	}
+	return &AccountFactor{Version: f.Version, Generation: f.Generation, State: f.State, Secret: f.Secret, LastStep: f.LastStep, RetiredHashes: append([]string(nil), f.RetiredHashes...)}
+}
+
 type accountFrame struct {
-	AuthorityID string          `json:"authorityId"`
-	Profile     string          `json:"profile"`
-	Version     string          `json:"version"`
-	Revision    uint64          `json:"revision"`
-	Previous    string          `json:"previous"`
-	Accounts    []storedAccount `json:"accounts"`
-	Audit       *AccountAudit   `json:"audit"`
+	AuthorityID string           `json:"authorityId"`
+	Profile     string           `json:"profile"`
+	Version     string           `json:"version"`
+	Revision    uint64           `json:"revision"`
+	Previous    string           `json:"previous"`
+	Accounts    []storedAccount  `json:"accounts,omitempty"`
+	Audit       *AccountAudit    `json:"audit"`
+	FactorUse   *storedFactorUse `json:"factorUse,omitempty"`
+}
+
+// A use record carries no credential or account roster. Replay derives exactly
+// one counter advance from the pinned previous snapshot, then validates the full
+// reconstructed transition with the same rules as an in-memory writer.
+type storedFactorUse struct {
+	Generation uint64 `json:"generation"`
+	LastStep   uint64 `json:"lastStep"`
 }
 
 func frameFor(s AccountSnapshot, previous string, audit *AccountAudit) accountFrame {
 	f := accountFrame{AuthorityID: s.AuthorityID, Profile: s.Profile, Version: s.Version, Revision: s.Revision, Previous: previous, Audit: audit, Accounts: make([]storedAccount, len(s.Accounts))}
+	if audit != nil && audit.Operation == "factor_use" {
+		f.Accounts = nil
+		for _, a := range s.Accounts {
+			if a.Operator.ID == audit.TargetID && a.Factor != nil {
+				f.FactorUse = &storedFactorUse{Generation: a.Factor.Generation, LastStep: a.Factor.LastStep}
+				break
+			}
+		}
+		return f
+	}
 	for i, a := range s.Accounts {
-		f.Accounts[i] = storedAccount{a.Operator.ID, a.Operator.Username, a.Operator.PasswordHash, a.Operator.Capabilities, a.Revision, a.RevocationFloor, a.Disabled}
+		f.Accounts[i] = storedAccount{ID: a.Operator.ID, Username: a.Operator.Username, PasswordHash: a.Operator.PasswordHash, Capabilities: append([]Capability(nil), a.Operator.Capabilities...), Revision: a.Revision, RevocationFloor: a.RevocationFloor, Disabled: a.Disabled, Factor: storedFactorFor(a.Factor)}
 	}
 	return f
 }
 func (f accountFrame) snapshot() AccountSnapshot {
 	s := AccountSnapshot{AuthorityID: f.AuthorityID, Profile: f.Profile, Version: f.Version, Revision: f.Revision, Accounts: make([]AccountRecord, len(f.Accounts))}
 	for i, a := range f.Accounts {
-		s.Accounts[i] = AccountRecord{Operator: Operator{a.ID, a.Username, a.PasswordHash, a.Capabilities}, Revision: a.Revision, RevocationFloor: a.RevocationFloor, Disabled: a.Disabled}
+		s.Accounts[i] = AccountRecord{Operator: Operator{a.ID, a.Username, a.PasswordHash, append([]Capability(nil), a.Capabilities...)}, Revision: a.Revision, RevocationFloor: a.RevocationFloor, Disabled: a.Disabled, Factor: a.Factor.accountFactor()}
 	}
 	return s
 }
 func frameDigest(raw []byte) string { h := sha256.Sum256(raw); return hex.EncodeToString(h[:]) }
 
+// Factor values are immutable snapshot input. Never share their pointers with a
+// frame or with a caller; neither marshaling nor replay may mutate live authority.
+func journalFactorCopy(f *AccountFactor) *AccountFactor {
+	if f == nil {
+		return nil
+	}
+	copy := *f
+	copy.RetiredHashes = append([]string(nil), f.RetiredHashes...)
+	return &copy
+}
+
 func validTransition(before AccountSnapshot, t AccountTransition) bool {
-	if _, err := validateAccounts(t.Next); err != nil || before.AuthorityID != t.Next.AuthorityID || before.Profile != t.Next.Profile || before.Revision != t.PreviousRevision || t.Next.Revision != before.Revision+1 || t.Next.Revision == 0 || len(before.Accounts) != len(t.Next.Accounts) {
+	if _, err := validateAccounts(t.Next); err != nil || before.AuthorityID != t.Next.AuthorityID || before.Profile != t.Next.Profile || before.Version != t.Next.Version || before.Revision != t.PreviousRevision || t.Next.Revision != before.Revision+1 || t.Next.Revision == 0 || len(before.Accounts) != len(t.Next.Accounts) {
 		return false
 	}
 	a := t.Audit
-	if a.Revision != t.Next.Revision || a.At <= 0 || a.Current != a.Previous+1 || a.Current == 0 {
+	if a.Revision != t.Next.Revision || a.At <= 0 || a.Current == 0 {
 		return false
 	}
-	if a.Operation != "permissions" && a.Operation != "disable" && a.Operation != "credential_reset" && a.Operation != "session_reset" {
+	use := a.Operation == "factor_use"
+	selfEnrollment := a.Operation == "factor_enroll"
+	factorReset := a.Operation == "factor_reset"
+	if use {
+		if a.Current != a.Previous || a.ActorID != a.TargetID {
+			return false
+		}
+	} else if a.Current != a.Previous+1 {
 		return false
 	}
-	target, admin := false, false
+	if a.Operation != "permissions" && a.Operation != "disable" && a.Operation != "credential_reset" && a.Operation != "session_reset" && !use && !selfEnrollment && !factorReset {
+		return false
+	}
+	if selfEnrollment && a.ActorID != a.TargetID {
+		return false
+	}
+	target, admin, factorAdmin := false, false, false
 	for i, old := range before.Accounts {
 		next := t.Next.Accounts[i]
-		if old.Operator.ID == a.ActorID && !old.Disabled {
+		if old.Operator.ID == a.ActorID && !old.Disabled && (old.Factor == nil || old.Factor.State == "active") {
 			for _, c := range old.Operator.Capabilities {
 				if c == ManageAccounts {
 					admin = true
+					factorAdmin = old.Factor != nil && old.Factor.State == "active"
 				}
 			}
 		}
-		if old.Operator.ID == a.TargetID {
-			target = true
-			if next.Operator.ID != old.Operator.ID || next.Operator.Username != old.Operator.Username || a.Previous != old.Revision || a.Current != next.Revision || next.RevocationFloor != old.Revision {
+		if old.Operator.ID != a.TargetID {
+			if !reflect.DeepEqual(old, next) {
 				return false
 			}
-			previousVerifier, previousErr := parseHash(old.Operator.PasswordHash)
-			nextVerifier, nextErr := parseHash(next.Operator.PasswordHash)
-			if previousErr != nil || nextErr != nil || !sameWorkFactors(previousVerifier, nextVerifier) {
+			continue
+		}
+		target = true
+		if next.Operator.ID != old.Operator.ID || next.Operator.Username != old.Operator.Username || a.Previous != old.Revision || a.Current != next.Revision {
+			return false
+		}
+		if use {
+			if old.Disabled || old.Factor == nil || next.Factor == nil || old.Factor.State != "active" || next.Factor.LastStep <= old.Factor.LastStep {
 				return false
 			}
-			if next.Operator.PasswordHash != old.Operator.PasswordHash && a.Operation != "credential_reset" {
+			comparison := next
+			comparison.Factor = journalFactorCopy(next.Factor)
+			comparison.Factor.LastStep = old.Factor.LastStep
+			if !reflect.DeepEqual(old, comparison) {
 				return false
 			}
-		} else if !reflect.DeepEqual(old, next) {
+			continue
+		}
+		if next.RevocationFloor != old.Revision {
+			return false
+		}
+		previousVerifier, previousErr := parseHash(old.Operator.PasswordHash)
+		nextVerifier, nextErr := parseHash(next.Operator.PasswordHash)
+		if previousErr != nil || nextErr != nil || !sameWorkFactors(previousVerifier, nextVerifier) {
+			return false
+		}
+		if next.Operator.PasswordHash != old.Operator.PasswordHash && a.Operation != "credential_reset" {
+			return false
+		}
+		if selfEnrollment || factorReset {
+			// These transitions change only factor authority and the account epoch.
+			comparison := next
+			comparison.Factor = old.Factor
+			comparison.Revision, comparison.RevocationFloor = old.Revision, old.RevocationFloor
+			if !reflect.DeepEqual(old, comparison) || next.Factor == nil {
+				return false
+			}
+			if selfEnrollment {
+				if old.Disabled || next.Factor.State != "active" || next.Factor.LastStep == 0 {
+					return false
+				}
+				generation := uint64(1)
+				if old.Factor != nil {
+					if old.Factor.State != "enrollment_required" {
+						return false
+					}
+					generation = old.Factor.Generation
+				}
+				if next.Factor.Generation != generation || old.Factor != nil && !reflect.DeepEqual(next.Factor.RetiredHashes, old.Factor.RetiredHashes) || old.Factor == nil && len(next.Factor.RetiredHashes) != 0 {
+					return false
+				}
+			} else {
+				if old.Factor == nil || old.Factor.State != "active" || next.Factor.State != "enrollment_required" || next.Factor.Generation == 0 || next.Factor.Generation != old.Factor.Generation+1 || next.Factor.Secret != "" || next.Factor.LastStep != 0 {
+					return false
+				}
+				key, ok := factorSecret(old.Factor.Secret)
+				if !ok {
+					return false
+				}
+				digest := sha256.Sum256(key)
+				clear(key)
+				history := append(append([]string(nil), old.Factor.RetiredHashes...), hex.EncodeToString(digest[:]))
+				if !reflect.DeepEqual(next.Factor.RetiredHashes, history) {
+					return false
+				}
+
+			}
+		} else if !reflect.DeepEqual(old.Factor, next.Factor) {
 			return false
 		}
 	}
-	return target && admin
+	return target && (use || selfEnrollment || admin && (!factorReset || factorAdmin))
 }
 
 // The public path constructors enforce the existing Linux ancestor ownership
@@ -260,7 +390,36 @@ func openAccountJournalFile(f *os.File) (*AccountJournal, error) {
 		if !same || frame.Previous != j.previous {
 			return nil, ErrAuthorityUncertain
 		}
-		s := frame.snapshot()
+		var s AccountSnapshot
+		if frame.FactorUse != nil {
+			if i == 0 || frame.Audit == nil || frame.Audit.Operation != "factor_use" || frame.Accounts != nil {
+				return nil, ErrAuthorityUncertain
+			}
+			s = copySnapshot(j.snapshot)
+			s.AuthorityID, s.Profile, s.Version, s.Revision = frame.AuthorityID, frame.Profile, frame.Version, frame.Revision
+			found := false
+			for n := range s.Accounts {
+				a := &s.Accounts[n]
+				if a.Operator.ID == frame.Audit.TargetID {
+					if a.Factor == nil || a.Factor.Generation != frame.FactorUse.Generation {
+						return nil, ErrAuthorityUncertain
+					}
+					a.Factor.LastStep = frame.FactorUse.LastStep
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, ErrAuthorityUncertain
+			}
+		} else {
+			// factor_use has exactly one encoding. It cannot smuggle a complete
+			// account mutation or silently omit its consumed-counter evidence.
+			if frame.Audit != nil && frame.Audit.Operation == "factor_use" {
+				return nil, ErrAuthorityUncertain
+			}
+			s = frame.snapshot()
+		}
 		if _, err := validateAccounts(s); err != nil {
 			return nil, ErrAuthorityUncertain
 		}
