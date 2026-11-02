@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -162,5 +163,46 @@ func TestSessionRevocationAfterBodyReadRechecksRequestersAuthority(t *testing.T)
 	}
 	if _, err := auth.Lookup(reader.Token); err != nil {
 		t.Fatal("delayed unauthorized request revoked target")
+	}
+}
+
+// The contention regression lives beside the manager's private mutex. This real
+// TLS route check verifies that its expiry result is reflected in session JSON
+// and protected requests without expiring a later login from another account.
+func TestSessionViewUsesAbsoluteExpiryAndPreservesOtherAccount(t *testing.T) {
+	o := newOperatorFixture(t, 0)
+	var ticks atomic.Int64
+	start := time.Now()
+	ticks.Store(start.UnixNano())
+	auth, err := operatorauth.New(operatorauth.Config{Now: func() time.Time { return time.Unix(0, ticks.Load()) }, Operators: []operatorauth.Operator{
+		{ID: namedActorID, Username: "reader", PasswordHash: testOperatorHash(), Capabilities: []operatorauth.Capability{operatorauth.Read}},
+		{ID: "operator_11111111111111111111111111111111", Username: "other", PasswordHash: testOperatorHash(), Capabilities: []operatorauth.Capability{operatorauth.Read}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o.server.Config.Handler.(*operatorHandler).auth = auth
+	first, err := auth.LoginNamed(context.Background(), "127.0.0.1", "reader", operatorFixturePassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks.Store(start.Add(time.Minute).UnixNano())
+	other, err := auth.LoginNamed(context.Background(), "127.0.0.2", "other", operatorFixturePassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticks.Store(first.ExpiresAt.Add(-time.Nanosecond).UnixNano())
+	if r, v := o.call(t, "GET", "/api/auth/session", nil, "", sessionCookie(first)); r.StatusCode != 200 || v["authenticated"] != true {
+		t.Fatal("unexpired session rejected")
+	}
+	ticks.Store(first.ExpiresAt.UnixNano())
+	if r, v := o.call(t, "GET", "/api/auth/session", nil, "", sessionCookie(first)); r.StatusCode != 200 || v["authenticated"] != false {
+		t.Fatal("expired session reported authenticated")
+	}
+	if r, _ := o.call(t, "GET", "/api/auth/sessions", nil, "", sessionCookie(first)); r.StatusCode != 401 {
+		t.Fatal("expired protected request admitted")
+	}
+	if r, v := o.call(t, "GET", "/api/auth/session", nil, "", sessionCookie(other)); r.StatusCode != 200 || v["authenticated"] != true {
+		t.Fatal("other account lost its independent lifetime")
 	}
 }

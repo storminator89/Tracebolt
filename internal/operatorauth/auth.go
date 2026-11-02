@@ -250,9 +250,9 @@ func (m *Manager) attempt(peer string) error {
 		return ErrCredentials
 	}
 	ip = ip.Unmap()
-	now := m.now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := m.now() // Sample at admission, after any wait for manager state.
 	m.purgeLocked(now)
 	if m.global.start.IsZero() || now.Sub(m.global.start) >= time.Minute {
 		m.global = attempts{start: now}
@@ -324,12 +324,12 @@ func (m *Manager) login(ctx context.Context, peer, username, password string, na
 	if err != nil {
 		return Session{}, ErrBusy
 	}
-	now := m.now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := m.now() // Expiry and quota cleanup share the actual admission time.
 	life, revoke := context.WithCancel(context.Background())
 	actor.verifier = verifier{} // Never retain password material in session state.
 	session := Session{actor: actor, ID: id, CSRFToken: csrf, ExpiresAt: now.Add(m.ttl), lifetime: life, revoke: revoke, gate: &sessionGate{now: m.now, expires: now.Add(m.ttl)}}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.purgeLocked(now)
 	if !m.sessionAvailableLocked(actor.id) {
 		revoke()
@@ -354,9 +354,9 @@ func (m *Manager) Lookup(token string) (Session, error) {
 	if !ok {
 		return Session{}, ErrUnauthenticated
 	}
-	now := m.now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := m.now() // Sample at admission, after any wait for manager state.
 	m.purgeLocked(now)
 	session, ok := m.sessions[key]
 	if !ok || session.gate == nil || session.gate.revoked.Load() {
