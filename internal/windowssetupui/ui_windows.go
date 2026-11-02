@@ -164,6 +164,9 @@ func Run(c Config, h Hooks) error {
 	if runtime.GOARCH != c.Architecture {
 		return ErrConfiguration
 	}
+	if rustFrontendEnabled() {
+		return runRust(c, h)
+	}
 	w := &wizard{config: c, hooks: h, flow: freshFlow(c, h), controls: make(map[int]uintptr)}
 	if err := selectInitialBootstrap(&w.flow, c, h); err != nil {
 		return ErrConfiguration

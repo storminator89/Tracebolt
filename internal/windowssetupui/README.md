@@ -1,5 +1,10 @@
 # Native Windows setup UI candidate
 
+The separate [experimental Rust view](../../rust/windows-setup/README.md) is an
+explicit build-tagged, in-process source candidate over this package's same Go
+flow and original coordinator hooks. It does not change this default UI/builder,
+the Rust Basic agent, release status or native acceptance requirements.
+
 `Run(Config, Hooks) error` uses fixed Win32 controls through `x/sys/windows`,
 without WebView, browser navigation, downloads, third-party GUI packages, or a
 second installation engine. The caller supplies the embedded service provenance,
