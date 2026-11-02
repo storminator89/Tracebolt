@@ -15,7 +15,7 @@ Configuration fields:
 - `operatorOrigin` and `agentOrigin`: distinct exact public origins, HTTPS for TLS or HTTP for test, with no path, query, credentials, trailing slash or explicit default port. Host/Origin checks remain exact. Docker host-port mappings can differ from internal listener ports; this is transport-level forwarding with unchanged TLS/Host, not a trusted reverse-proxy header contract.
 - `tlsCertificateFile`, `tlsPrivateKeyFile`: preprovided server material for TLS. Both configured origin names/IPs must match the leaf SAN before any listener starts. The leaf must meet the exclusive server-auth role and key policy. HTTP test rejects these fields when nonempty.
 - `agentClientCAFile`: explicit CA roots for manually approved public client certificates. No ambient/system-root fallback. This remains required for HTTP public-key approvals.
-- `operatorAuthFile`: private JSON containing `schemaVersion: tracebolt.operator-auth.v1`, a matching `profile`, and `passwordHash`. Only bounded Argon2id version19 PHC values are accepted: memory64–128MiB, iterations2–4, parallelism1–4, salt16–32bytes and output32bytes. This application does not generate a persistent credential. The optional strict named-only v2 format is [documented separately](named-operator-auth.md); existing v1 configuration remains supported.
+- `operatorAuthFile`: private JSON containing `schemaVersion: tracebolt.operator-auth.v1`, a matching `profile`, and `passwordHash`. Only bounded Argon2id version19 PHC values are accepted: memory64–128MiB, iterations2–4, parallelism1–4, salt16–32bytes and output32bytes. This application does not generate a persistent credential. The optional strict named-only v2 format is [documented separately](named-operator-auth.md); existing v1 configuration remains supported. Explicit TLS-only v3 uses a protected journal reference instead of inline verifiers; see [live account authority](live-operator-authority.md) for stopped-manager initialization, `manage_accounts`, account GET/update and failure/recovery boundaries.
 - `stateDirectory`: a private runtime-owned directory. A durable profile marker prevents TLS/HTTP state reuse. Existing nonempty unmarked directories are rejected, as are insecure files, symlinks, mismatched stored identities and unsafe SQLite sidecars. The server does not chmod an insecure supplied directory into acceptance.
 - `webDirectory`: built frontend assets.
 - `insecureHTTPAcknowledged`: must be true for HTTP test, false/omitted for TLS.
@@ -80,6 +80,15 @@ separate evidence gates. No fixture key may be reused for deployment.
 
 Existing v1 shared login and administration remain unchanged. The optional
 [protected static v2 named configuration](named-operator-auth.md) adds explicit
-actor identity, read/query access and currently inert maintenance grants. It
+actor identity, read/query access and separately scoped maintenance grants. It
 requires a separately provisioned configuration and manager restart; no migration,
 credential generation, live reload or privileged action is automatic.
+
+TLS-only [v3 live account authority](live-operator-authority.md) is a separate
+explicit startup selection. Its protected journal/used-marker state permits
+account-specific session and capability withdrawal without restarting the
+manager. `manage_accounts` admits `GET /api/auth/accounts` and the Origin/CSRF-
+protected `POST /api/auth/accounts/update`; static v1/v2 behavior stays unchanged.
+No account-management UI, MFA-factor reset or production deployment acceptance
+is implied. Current implementation evidence and open gates are kept in that
+linked contract.

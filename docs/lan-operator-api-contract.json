@@ -106,12 +106,43 @@
         }
       },
       "response": "Current SettingsView. Save always disables, enable is separate, disable retains the draft. Every accepted change rotates revision; stale/busy changes return409. Unsafe unavailable/external/blocked state returns503. Invalid input returns400. No error echoes targets or raw errors."
+    },
+    "GET /api/auth/accounts": {
+      "requirements": "TLS v3 live account authority only. Authenticated named session with current manage_accounts; no query or request body. Static v1/v2 return404.",
+      "response": {
+        "items": "Bounded sorted list of id, revision, revocationFloor, disabled, uncertain and capabilities. No usernames, verifiers, tokens or proposal paths."
+      },
+      "reference": "docs/live-operator-authority.md"
+    },
+    "POST /api/auth/accounts/update": {
+      "requirements": "TLS v3 only; current authenticated manage_accounts, exact configured Origin/Host, per-session CSRF, application/json and strict object <=4096 bytes. Reject duplicate/unknown/null required fields. Static v1/v2 return404.",
+      "body": {
+        "actorId": "exact existing target operator ID",
+        "expectedRevision": "positive integer; exact current target account revision",
+        "disabled": "required boolean",
+        "capabilities": "required complete explicit replacement list; read remains mandatory",
+        "resetSessions": "required boolean; session reset is not an MFA-factor reset",
+        "resetPassword": "required boolean; true reads a separately provisioned protected proposal bound to authority, actor and revision; no password, verifier or path accepted in HTTP"
+      },
+      "response": {
+        "updated": true,
+        "revision": "previous target revision + 1"
+      },
+      "semantics": "Every accepted update advances the target epoch/floor, cancels its sessions and drains existing admissions with durable revision/audit. Last enabled account administrator cannot be removed. Self-update clears its cookie; unrelated accounts remain available. Password rotation preserves Argon2 work factors. Already delivered irreversible permits cannot be recalled. No account creation, rename, MFA-factor operation or automatic retry.",
+      "errors": {
+        "400": "invalid_account_change",
+        "401": "authentication_required",
+        "403": "operator_capability_required or Origin/CSRF denial",
+        "409": "account_revision_conflict",
+        "503": "account_authority_uncertain; target remains fenced; preserve state and inspect before recovery"
+      },
+      "reference": "docs/live-operator-authority.md"
     }
   },
   "modeBehavior": {
     "development": "Existing loopback-only guard remains unchanged. GET auth/session explicitly says authenticationRequired=false, authenticated=false, csrfToken=current process token, expiry=null. No fake authentication. Login/logout routes are disabled.",
     "lan": "Dedicated authenticated operator handler. Unauthenticated auth/session is200, protected APIs401. Static assets may load without data. Actual TLS required in the default profile, never inferred from forwarded headers. HTTP test accepts plaintext only, has its own cookie/state/auth profile and permanent warning. Developer ingress is unavailable in either profile.",
-    "named": "Static protected v2 named-only configuration. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. No account-management, action or execution route exists. Config changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied. Application-check settings GET and POST both require the separate manage_application_checks grant; application-check status remains readable without destinations."
+    "named": "Named loginMode supports protected static v2 and explicit TLS-only v3; the session metadata format is unchanged. All operators explicitly require read. Existing GET/HEAD views and exact journal/query or inventory/{system,overview,packages,complete-updates}/query POSTs are readable; these POSTs retain Origin/CSRF checks. Logout is allowed. Other legacy administrative writes are denied; none of the new grants implies those rights. Static v1/v2 expose no live account-management API. Static v2 configuration changes take effect only after manager restart; all in-memory sessions then disappear. Explicit manage_alarms additionally admits the exact alarm settings/test routes; unrelated administrative routes remain denied. Application-check settings GET and POST both require the separate manage_application_checks grant; application-check status remains readable without destinations. V3 current manage_accounts explicitly admits the account GET/update routes below through protected journal revisions and audit. Other operators need not restart. V3 is provisioned separately and never inferred from editing a v2 file; see docs/live-operator-authority.md. No MFA-factor reset or deployment acceptance is claimed."
   },
   "errors": {
     "400": "invalid typed or duplicate-key body",
@@ -154,7 +185,8 @@
   },
   "authFileVersions": [
     "tracebolt.operator-auth.v1",
-    "tracebolt.operator-auth.v2"
+    "tracebolt.operator-auth.v2",
+    "tracebolt.operator-auth.v3"
   ],
   "capabilities": {
     "read": "Explicit read/query access as mapped above. No new collection or unrelated administration.",
@@ -162,6 +194,7 @@
     "execute_updates": "Future approved typed package execution; currently inert.",
     "restart_service": "Future approved typed service restart; currently inert.",
     "manage_alarms": "Explicit alarm configuration and synthetic-test permission, with separately acknowledged destination/payload and complete-profile managed setup.",
-    "manage_application_checks": "Explicit application-check destination review and save/enable/disable permission. No existing grant implies it. No account/grant provisioning; no direct test/probe action."
+    "manage_application_checks": "Explicit application-check destination review and save/enable/disable permission. No existing grant implies it. No account/grant provisioning; no direct test/probe action.",
+    "manage_accounts": "Explicit current TLS v3 authority to list and update existing accounts through the account API. No grant implies it; manage_sessions is distinct. Static v1/v2 expose no account API even if this grant is present in a named provisioning seed."
   }
 }

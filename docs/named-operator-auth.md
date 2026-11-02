@@ -4,7 +4,7 @@ Status: optional source implementation for controlled-action authorization. No
 service restart, package planning/execution, privileged helper, signing key,
 account-management UI or host configuration is enabled by this change.
 
-## Two explicit startup modes
+## Static v1/v2 startup modes
 
 The manager still reads the existing `operatorAuthFile` through the protected
 local-file loader. The default, existing `tracebolt.operator-auth.v1` object
@@ -63,6 +63,27 @@ creates users, changes permissions or writes configuration. Provisioning and
 migration require a separate administrator decision. Keep real verifiers out of
 Git, terminal output, screenshots, logs and support artifacts.
 
+## Explicit TLS v3 live account authority
+
+The separately provisioned `tracebolt.operator-auth.v3` mode is documented in
+[live operator authority](live-operator-authority.md). Its protected reference
+pins a versioned journal and permanent used marker; editing a v1/v2 file is not
+live authority or migration. V3 retains named login/session metadata, requires
+TLS and never automatically grants `manage_accounts`. The stopped-manager
+`operator-account-init` step and later explicit configuration activation are
+separate from account updates after startup.
+
+With current `manage_accounts`, `GET /api/auth/accounts` returns bounded account
+IDs, revisions, revocation floors, disabled/uncertain flags and capabilities.
+`POST /api/auth/accounts/update` additionally requires exact Origin/CSRF and the
+strict reviewed target revision, full capability list and explicit reset flags.
+It changes existing accounts only; password resets use a separately protected
+proposal, never a verifier or path in HTTP. Accepted changes revoke the target's
+sessions and old approval epochs without restarting other accounts. Uncertain
+persistence fences the target and requires inspection. There is no account UI,
+MFA-factor implementation or claim of deployment/MFA acceptance; see the linked
+contract for current evidence and remaining gates.
+
 ## Capability and existing-route mapping
 
 The [method/route and actor matrix](named-administration-matrix.md) inventories
@@ -87,6 +108,9 @@ TB-06. It documents current denials, not new administration grants or migration.
 - `manage_alarms`: explicit browser alarm configuration and synthetic-test permission.
   It does not enable delivery by itself; destination/payload approval and the protected
   complete-profile manager settings are required. See [alarm delivery](alarm-delivery.md).
+- `manage_accounts`: explicit permission for the TLS v3 account GET/update API
+  above. It is not implied by `manage_sessions` or any other grant, and does not
+  enable that API in static v1/v2 mode.
 - `manage_sessions`: explicit permission to list/revoke other accounts' current
   manager sessions through the bounded [session API](manager-session-limits.md).
   It does not change accounts, credentials, capabilities or future login rights.
@@ -117,14 +141,15 @@ Signing out is always available with valid same-origin/CSRF credentials.
 V2 intentionally has no shared-password fallback or implicit legacy-admin
 capability. An existing installation that needs current enrollment/log
 administration should keep its v1 configuration until a separately reviewed
-named-administration mapping is available. This narrow slice does not offer
-account-management or a live migration UI. Existing v1 deployments keep their
+named-administration mapping is available. Static v1/v2 do not expose the v3 live account-management API or a migration UI. Existing v1 deployments keep their
 current routes and password-only form.
 
 ## Session identity, expiry and revocation
 
-The server derives each actor ID and capability set from an immutable defensive
-copy of startup configuration after checking username and password. Login JSON
+In static v2, the server derives each actor ID and capability set from an immutable
+defensive copy of startup configuration after checking username and password.
+V3 instead admits the current protected account revision and rechecks that
+revision after password hashing; its session grants remain server-held. Login JSON
 cannot supply actor, role or capabilities. Session responses add `loginMode`,
 `actorId` and `capabilities`; shared sessions have a null actor and only the
 `read` display capability, while retaining their legacy route behavior. The
@@ -137,12 +162,14 @@ revokes that session and waits for short already-admitted work to drain. New
 capability admissions fail after logout, expiry or context cancellation. The
 capability guard uses private server-held grants, not caller-editable arrays.
 
-**Configuration is static until the manager is restarted.** Editing the file
+**V1/v2 configuration is static until the manager is restarted.** Editing its file
 alone does not revoke an active account, rotate its verifier or change a grant.
 To remove/disable an account or change its permissions, an administrator updates
 the protected file and restarts the manager. All sessions are memory-only and
 must sign in again; old cookies cannot be looked up in the new manager. There is
-no live reload or claim that editing a file affects an already-running process.
+no live reload for those modes or claim that editing a file affects an already-running process.
+V3 account changes instead use the explicit audited API described above; its
+reference remains protected startup configuration, not an editable live grant file.
 The authenticated [session API](manager-session-limits.md) lists and revokes exact
 current sessions, scoped to the same account unless `manage_sessions` was
 explicitly configured. Logout still affects the current session only. Session
