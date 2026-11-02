@@ -11,9 +11,13 @@ import (
 // ValidateOperatorAuth reuses the runtime's strict credential schema and verifier
 // policy. No login, password hashing, session or account creation is performed.
 func ValidateOperatorAuth(raw []byte, profile string) error {
-	hash, operators, err := loadOperatorAuth(raw, profile)
+	hash, operators, reference, err := loadOperatorMaterial(raw, profile)
 	if err != nil {
 		return ErrConfiguration
+	}
+	if reference != nil {
+		// Schema-only; opening live authority is a startup operation.
+		return nil
 	}
 	if _, err := operatorauth.New(operatorauth.Config{PasswordHash: hash, Operators: operators}); err != nil {
 		return ErrConfiguration

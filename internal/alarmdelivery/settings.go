@@ -8,6 +8,7 @@ import (
 	"errors"
 	"localrmm/internal/lanconfig"
 	"localrmm/internal/lanstore"
+	"localrmm/internal/operatorauth"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,8 +17,6 @@ import (
 
 const SettingsFile = "alarm-settings.json"
 const settingsFileSchema = "tracebolt.alarm-settings-config.v1"
-const TestSchemaVersion = "tracebolt.alarm-test.v1"
-const TestRule = "delivery-test"
 
 var ErrSettingsConflict = errors.New("alarm_settings_changed")
 var ErrSettingsBusy = errors.New("alarm_settings_busy")
@@ -140,19 +139,41 @@ func (s savedSettings) config(managerID, profile string) (Config, error) {
 // TryLock keeps HTTP session gates away from provider I/O. Construction, View and
 // Change never resolve a destination or contact a provider.
 type Settings struct {
-	operation sync.Mutex
-	mu        sync.RWMutex
-	queue     SettingsQueue
-	file      string
-	saved     savedSettings
-	config    Config
-	worker    *Worker
-	mode      string
-	blocked   bool
-	now       func() time.Time
-	transport func(Config) (Transport, error)
+	operation        sync.Mutex
+	mu               sync.RWMutex
+	queue            SettingsQueue
+	file             string
+	saved            savedSettings
+	config           Config
+	worker           *Worker
+	mode             string
+	blocked          bool
+	now              func() time.Time
+	transport        func(Config) (Transport, error)
+	accountAdmission operatorauth.ActorAdmission
 }
 
+// ConfigureAccountAuthority wires the live account policy before worker startup.
+// It affects only explicitly enqueued test messages, not committed monitoring.
+func (s *Settings) ConfigureAccountAuthority(admission operatorauth.ActorAdmission) error {
+	if s == nil || admission == nil {
+		return ErrInvalid
+	}
+	s.operation.Lock()
+	defer s.operation.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.accountAdmission != nil {
+		return ErrInvalid
+	}
+	if s.worker != nil {
+		if err := s.worker.ConfigureAccountAuthority(admission); err != nil {
+			return err
+		}
+	}
+	s.accountAdmission = admission
+	return nil
+}
 func NewSettings(q SettingsQueue, stateDir, managerID, profile string, external Config) (*Settings, error) {
 	return newSettings(q, stateDir, managerID, profile, external, time.Now, NewWebhook)
 }
@@ -277,6 +298,11 @@ func (s *Settings) activate(ctx context.Context, c Config) error {
 		w, e = NewWorker(s.queue, binding, t, s.now)
 		if e != nil {
 			return e
+		}
+		if s.accountAdmission != nil {
+			if e = w.ConfigureAccountAuthority(s.accountAdmission); e != nil {
+				return e
+			}
 		}
 	}
 	var e error
@@ -406,6 +432,14 @@ func (s *Settings) Test(ctx context.Context, revision, requestID, actor string) 
 	}
 	if !validSettingsActor(actor) || !validRevision(requestID) {
 		return ErrConfiguration
+	}
+	if s.accountAdmission != nil {
+		leased, release, err := s.accountAdmission(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx), operatorauth.ManageAlarms)
+		if err != nil {
+			return err
+		}
+		defer release()
+		ctx = leased
 	}
 	if !s.operation.TryLock() {
 		return ErrSettingsBusy

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const windowsManagedMSIPrefix = "/v1/windows-managed-msi/"
@@ -155,13 +156,26 @@ func (h *Ingress) windowsManagedMSIRequest(w http.ResponseWriter, r *http.Reques
 		failure(w, 409, "windows_managed_msi_unavailable")
 		return
 	}
+	guarded, accountRelease, accountErr := manager.BeginResponseAdmission(r.Context(), permit, chunkDigest)
+	if accountErr != nil {
+		failure(w, 403, "agent_unauthorized")
+		return
+	}
+	defer accountRelease()
+	r = r.WithContext(guarded)
+	// Bound the held authority lease across actual response handoff. A partial
+	// write remains consumed/uncertain; account withdrawal never refunds it.
+	if manager.AccountAuthorityConfigured() {
+		if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			failure(w, 503, "storage_unavailable")
+			return
+		}
+	}
 	if len(out) > msi.MaxFrameBytes || !authorize() || manager.CheckRelease(r.Context(), permit, chunkDigest) != nil {
 		failure(w, 403, "agent_unauthorized")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, _ = w.Write(out)
+	writeAccountBoundJSONResponse(w, r, out, manager.AccountAuthorityConfigured())
 }
 
 func (h *Ingress) ConfigureWindowsManagedMSIRegistry(r *windowsmanagedmsimanager.Registry) error {

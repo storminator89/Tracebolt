@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+const TestSchemaVersion = "tracebolt.alarm-test.v1"
+const TestRule = "delivery-test"
+
 func NewTestPayload(id string, now time.Time) Payload {
 	return Payload{SchemaVersion: TestSchemaVersion, EventID: id, DeviceID: "synthetic", IncidentID: "synthetic", Rule: TestRule, Target: "configured-webhook", Severity: "info", Transition: "test", State: "test", Reason: "operator_requested_test", ObservedAt: now, TransitionAt: now}
 }

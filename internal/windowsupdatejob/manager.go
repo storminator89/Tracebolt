@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"localrmm/internal/operatorauth"
 	"sync"
 	"time"
 
@@ -110,27 +111,29 @@ func (r Result) Validate() error {
 }
 
 type Job struct {
-	Purpose            string           `json:"purpose,omitempty"`
-	Occurrence         uint64           `json:"occurrence,string,omitempty"`
-	RetirePermit       []byte           `json:"retirePermit,omitempty"`
-	RetireClaimedAt    int64            `json:"retireClaimedAt,omitempty"`
-	RetireReport       []byte           `json:"retireReport,omitempty"`
-	Challenge          []byte           `json:"challenge"`
-	ReadinessClaimedAt int64            `json:"readinessClaimedAt"`
-	ReadinessReport    []byte           `json:"readinessReport"`
-	ResultReport       []byte           `json:"resultReport"`
-	ID                 string           `json:"id"`
-	ActorID            string           `json:"actorId"`
-	Selection          Selection        `json:"selection"`
-	RequestedAt        int64            `json:"requestedAt"`
-	State              string           `json:"state"`
-	Reason             string           `json:"reason"`
-	Preview            *Preview         `json:"preview"`
-	ApprovedAt         int64            `json:"approvedAt"`
-	Envelope           []byte           `json:"envelope"`
-	ClaimedAt          int64            `json:"claimedAt"`
-	Result             *Result          `json:"result"`
-	Schedule           *ScheduledIntent `json:"schedule,omitempty"`
+	AuthorityEpoch       uint64           `json:"authorityEpoch,string,omitempty"`
+	Purpose              string           `json:"purpose,omitempty"`
+	Occurrence           uint64           `json:"occurrence,string,omitempty"`
+	RetireAuthorityEpoch uint64           `json:"retireAuthorityEpoch,string,omitempty"`
+	RetirePermit         []byte           `json:"retirePermit,omitempty"`
+	RetireClaimedAt      int64            `json:"retireClaimedAt,omitempty"`
+	RetireReport         []byte           `json:"retireReport,omitempty"`
+	Challenge            []byte           `json:"challenge"`
+	ReadinessClaimedAt   int64            `json:"readinessClaimedAt"`
+	ReadinessReport      []byte           `json:"readinessReport"`
+	ResultReport         []byte           `json:"resultReport"`
+	ID                   string           `json:"id"`
+	ActorID              string           `json:"actorId"`
+	Selection            Selection        `json:"selection"`
+	RequestedAt          int64            `json:"requestedAt"`
+	State                string           `json:"state"`
+	Reason               string           `json:"reason"`
+	Preview              *Preview         `json:"preview"`
+	ApprovedAt           int64            `json:"approvedAt"`
+	Envelope             []byte           `json:"envelope"`
+	ClaimedAt            int64            `json:"claimedAt"`
+	Result               *Result          `json:"result"`
+	Schedule             *ScheduledIntent `json:"schedule,omitempty"`
 }
 type Record struct {
 	RetiredBaseFloor    uint64       `json:"retiredBaseFloor,string,omitempty"`
@@ -283,6 +286,7 @@ func EncodeRecord(r Record) ([]byte, error) {
 }
 
 type Manager struct {
+	accountAuthority   operatorauth.ActorAdmission
 	transactionStore   TransactionStore
 	configurationCheck func() error
 	operatorAllowed    func(string) bool
@@ -380,6 +384,14 @@ func (m *Manager) observeTime() (int64, error) {
 	return n, nil
 }
 func (m *Manager) transaction(ctx context.Context, fn func(Current, int64) error) error {
+	originalFn := fn
+	fn = func(c Current, n int64) error {
+		if err := m.checkAccountReceipt(ctx); err != nil {
+			return err
+		}
+		return originalFn(c, n)
+	}
+
 	if ctx == nil {
 		return ErrInvalid
 	}
@@ -457,6 +469,11 @@ func (m *Manager) blocked(n int64, except string) bool {
 	return false
 }
 func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selection) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, id, false)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !enrollmentcrypto.ValidID(actor, "operator_") || !enrollmentcrypto.ValidID(id, "update_") || !ValidSelection(s) {
@@ -501,7 +518,7 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		if download {
 			purpose = DownloadPurpose
 		}
-		m.record.Jobs = append(m.record.Jobs, Job{Purpose: purpose, Challenge: challenge, ID: id, ActorID: actor, Selection: s, RequestedAt: n, State: "requested", Reason: "readiness_pending"})
+		m.record.Jobs = append(m.record.Jobs, Job{AuthorityEpoch: operatorauth.ApprovalEpochFromContext(ctx), Purpose: purpose, Challenge: challenge, ID: id, ActorID: actor, Selection: s, RequestedAt: n, State: "requested", Reason: "readiness_pending"})
 		if e := m.save(n); e != nil {
 			return e
 		}
@@ -540,6 +557,11 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 	})
 }
 func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack bool) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, id, false)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !ack || !enrollmentcrypto.ValidID(actor, "operator_") || !actionpermit.ValidDigest(d) {
@@ -597,6 +619,11 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 // a lost response may re-deliver the envelope. TLS relay ingress is the only
 // production delivery surface.
 func (m *Manager) Claim(ctx context.Context, id string) ([]byte, error) {
+	ctx, releaseAccount, leaseErr := m.leaseJob(ctx, id, false)
+	if leaseErr != nil {
+		return nil, leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var raw []byte

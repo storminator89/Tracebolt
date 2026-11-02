@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/inventoryledger"
 	"localrmm/internal/keyvalidation"
+	"localrmm/internal/operatorauth"
 	"localrmm/internal/windowsaction"
 	"localrmm/internal/windowsactionjob"
 	"time"
@@ -340,7 +341,23 @@ func (s *Store) PreviewWindowsServiceAction(ctx context.Context, key ed25519.Pub
 	return r, e
 }
 func (s *Store) ApproveWindowsServiceAction(ctx context.Context, key ed25519.PublicKey, device, id, digest, actor string, now time.Time, sign func(windowsaction.Permit) ([]byte, error)) (windowsactionjob.Record, error) {
-	r, _, e := s.windowsActionTransaction(ctx, key, device, "", "", now, func(r *windowsactionjob.Record, now time.Time) error { return r.Approve(id, digest, actor, now, sign) })
+	r, _, e := s.windowsActionTransaction(ctx, key, device, "", "", now, func(r *windowsactionjob.Record, now time.Time) error {
+		epoch := operatorauth.ApprovalEpochFromContext(ctx)
+		for _, j := range r.Jobs {
+			if j.Preview.ID == id && j.AuthorityEpoch != epoch {
+				return windowsactionjob.ErrConflict
+			}
+		}
+		if e := r.Approve(id, digest, actor, now, sign); e != nil {
+			return e
+		}
+		for i := range r.Jobs {
+			if r.Jobs[i].Preview.ID == id {
+				r.Jobs[i].AuthorityEpoch = epoch
+			}
+		}
+		return nil
+	})
 	return r, e
 }
 func (s *Store) PeekWindowsServiceAction(ctx context.Context, key ed25519.PublicKey, id, hash string, now time.Time) (windowsactionjob.Delivery, error) {
@@ -362,6 +379,11 @@ func (s *Store) ClaimWindowsServiceAction(ctx context.Context, key ed25519.Publi
 	var grant windowsactionjob.Grant
 	_, _, e := s.windowsActionTransaction(ctx, key, "", id, hash, now, func(r *windowsactionjob.Record, now time.Time) error {
 		var e error
+		for _, j := range r.Jobs {
+			if j.Identity() == i && j.AuthorityEpoch != operatorauth.ApprovalEpochFromContext(ctx) {
+				return windowsactionjob.ErrConflict
+			}
+		}
 		grant, e = r.Claim(i, now)
 		return e
 	})
@@ -392,4 +414,17 @@ func (s *Store) PreviewWindowsServiceActionExpected(ctx context.Context, key ed2
 		return r.MakePreview(job, actor, target, op, now)
 	})
 	return r, err
+}
+
+func (s *Store) WindowsServiceActionAuthority(ctx context.Context, key ed25519.PublicKey, id, hash string, identity windowsaction.Identity, now time.Time) (string, uint64, error) {
+	r, _, e := s.windowsActionTransaction(ctx, key, "", id, hash, now, func(*windowsactionjob.Record, time.Time) error { return nil })
+	if e != nil {
+		return "", 0, e
+	}
+	for _, j := range r.Jobs {
+		if j.Identity() == identity {
+			return j.Preview.ActorID, j.AuthorityEpoch, nil
+		}
+	}
+	return "", 0, windowsactionjob.ErrNotFound
 }

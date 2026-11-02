@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/operatorauth"
 	msi "localrmm/internal/windowsmanagedmsi"
 	"sort"
 	"strconv"
@@ -227,6 +228,18 @@ func (r *Registry) worklistWrite(ctx context.Context, actor, kind string, bindin
 	if e != nil {
 		return msi.WorklistJournal{}, e
 	}
+	leaseKind := kind
+	if kind == "read" {
+		leaseKind = "install"
+		if r.ordered[0].allowed(actor, "deliver") {
+			leaseKind = "deliver"
+		}
+	}
+	ctx, release, e := leaseAccount(ctx, r.artifact.accountAuthority, actor, operatorauth.ApprovalEpochFromContext(ctx), capsFor(leaseKind, false))
+	if e != nil {
+		return msi.WorklistJournal{}, e
+	}
+	defer release()
 	ctx, e = r.worklistContext(ctx, actor, kind)
 	if e != nil {
 		return msi.WorklistJournal{}, e
@@ -455,6 +468,15 @@ func (r *Registry) ConfirmWorklist(ctx context.Context, sess WorklistSession, id
 	}
 	ctx = msi.WithCatalogueOccurrence(ctx, occ)
 	if q.Kind == "schedule" {
+		if r == nil || r.artifact == nil {
+			return WorklistView{}, msi.ErrUnavailable
+		}
+		var release func()
+		ctx, release, err = leaseAccount(ctx, r.artifact.accountAuthority, sess.ActorID, operatorauth.ApprovalEpochFromContext(ctx), capsFor("install", true))
+		if err != nil {
+			return WorklistView{}, err
+		}
+		defer release()
 		check := func() error {
 			for _, b := range bindings {
 				m := r.Manager(b.DeviceID)

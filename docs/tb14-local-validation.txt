@@ -1,0 +1,145 @@
+TB-14 source-candidate validation; not release or full acceptance.
+Baseline: 071ed51432395be62fa9c0a42ef914c500f80ddd
+Platform: Linux amd64
+UTC: 2026-11-02T17:33:01.400133+00:00
+Environment: GOPROXY=off GOTOOLCHAIN=local GOCACHE=/workspace/go-cache GOPATH=/workspace/go-path
+No browser/GUI, downloads, host or CI changes.
+
+$ /workspace/toolchains/go/bin/go version
+go version go1.27.1 linux/amd64
+Exit status: 0
+
+$ /workspace/toolchains/go/bin/go test -race ./internal/operatorauth ./internal/windowsupdatejob ./internal/windowssoftwarejob ./internal/windowsmanagedmsi ./internal/actionjob ./internal/windowsactionjob -count=1
+ok  	localrmm/internal/operatorauth	12.550s
+ok  	localrmm/internal/windowsupdatejob	103.840s
+ok  	localrmm/internal/windowssoftwarejob	3.131s
+ok  	localrmm/internal/windowsmanagedmsi	4.448s
+ok  	localrmm/internal/actionjob	1.389s
+?   	localrmm/internal/windowsactionjob	[no test files]
+Exit status: 0
+
+$ /workspace/toolchains/go/bin/go test -race internal/enrollmenttransport/account_response.go internal/enrollmenttransport/account_response_test.go -count=10
+ok  	command-line-arguments	1.123s
+Exit status: 0
+
+$ /workspace/toolchains/go/bin/go test -race ./internal/lanconfig -run Test(AccountAuthority|ManageAccounts|NamedAuthStrict|NamedApplicationCheck|ManageSessions|CustomerRead) -count=1
+ok  	localrmm/internal/lanconfig	1.026s
+Exit status: 0
+
+$ /workspace/toolchains/go/bin/go vet ./internal/operatorauth ./internal/windowsupdatejob ./internal/windowssoftwarejob ./internal/windowsmanagedmsi
+Exit status: 0
+
+$ /workspace/toolchains/go/bin/go test -race ./internal/api ./internal/enrollmentstore ./internal/enrollmenttransport ./cmd/lan-manager ./cmd/operator-account-init
+go: downloading modernc.org/sqlite v1.60.1
+# localrmm/internal/api
+internal/lanstore/store.go:14:2: module lookup disabled by GOPROXY=off
+# localrmm/internal/api
+internal/enrollmentstore/begin_busy.go:7:2: module lookup disabled by GOPROXY=off
+FAIL	localrmm/internal/api [setup failed]
+# localrmm/internal/enrollmentstore
+internal/lanstore/store.go:14:2: module lookup disabled by GOPROXY=off
+# localrmm/internal/enrollmentstore
+internal/enrollmentstore/begin_busy.go:7:2: module lookup disabled by GOPROXY=off
+FAIL	localrmm/internal/enrollmentstore [setup failed]
+# localrmm/internal/enrollmenttransport
+internal/lanstore/store.go:14:2: module lookup disabled by GOPROXY=off
+# localrmm/internal/enrollmenttransport
+internal/enrollmentstore/begin_busy.go:7:2: module lookup disabled by GOPROXY=off
+FAIL	localrmm/internal/enrollmenttransport [setup failed]
+# localrmm/cmd/lan-manager
+internal/lanstore/store.go:14:2: module lookup disabled by GOPROXY=off
+# localrmm/cmd/lan-manager
+internal/enrollmentstore/begin_busy.go:7:2: module lookup disabled by GOPROXY=off
+FAIL	localrmm/cmd/lan-manager [setup failed]
+# localrmm/cmd/operator-account-init
+internal/lanstore/store.go:14:2: module lookup disabled by GOPROXY=off
+FAIL	localrmm/cmd/operator-account-init [setup failed]
+FAIL
+Exit status: 1
+
+SQLite-dependent packages above fail in dependency setup before compilation; no bypass attempted.
+Public protected-path startup/provisioning and native acceptance remain unverified.
+Frontend typecheck not run: no installed TypeScript tooling. Separate PR #209 dependency remains.
+
+Complete candidate file roster (relative to repository):
+cmd/lan-manager/main.go
+cmd/operator-account-init/initialize_linux.go
+cmd/operator-account-init/initialize_other.go
+cmd/operator-account-init/main.go
+cmd/operator-account-init/main_test.go
+docs/live-operator-authority.md
+docs/tb14-local-validation.txt
+internal/actionjob/authority_epoch_test.go
+internal/actionjob/job.go
+internal/actionmanager/manager.go
+internal/alarmdelivery/account_authority_test.go
+internal/alarmdelivery/settings.go
+internal/alarmdelivery/test_payload.go
+internal/alarmdelivery/types.go
+internal/api/ai_live_accounts_test.go
+internal/api/operator.go
+internal/api/operator_accounts.go
+internal/api/operator_accounts_test.go
+internal/api/operator_test.go
+internal/enrollmentstore/service_actions.go
+internal/enrollmentstore/windows_service_actions.go
+internal/enrollmentstore/windows_software_jobs.go
+internal/enrollmenttransport/account_response.go
+internal/enrollmenttransport/account_response_test.go
+internal/enrollmenttransport/package_actions.go
+internal/enrollmenttransport/service_account_claim_test.go
+internal/enrollmenttransport/service_actions.go
+internal/enrollmenttransport/windows_managed_msi.go
+internal/enrollmenttransport/windows_service_actions.go
+internal/enrollmenttransport/windows_software_jobs.go
+internal/enrollmenttransport/windows_update_jobs.go
+internal/lanconfig/account_authority.go
+internal/lanconfig/account_authority_test.go
+internal/lanconfig/config.go
+internal/lanconfig/operators.go
+internal/managersetup/setup_linux.go
+internal/operatorauth/account_journal_linux.go
+internal/operatorauth/account_journal_linux_test.go
+internal/operatorauth/account_journal_other.go
+internal/operatorauth/accounts.go
+internal/operatorauth/accounts_review_test.go
+internal/operatorauth/accounts_test.go
+internal/operatorauth/actor_admission.go
+internal/operatorauth/auth.go
+internal/operatorauth/credential_proposal_linux_test.go
+internal/operatorauth/operators.go
+internal/operatorauth/proposal_test.go
+internal/packagecontroller/account_authority_test.go
+internal/packagecontroller/manager.go
+internal/packageupdate/authority_epoch_test.go
+internal/packageupdate/contract.go
+internal/packageupdate/results.go
+internal/store/alarm_authority_test.go
+internal/store/alarm_settings.go
+internal/store/alarms.go
+internal/windowsactionjob/job.go
+internal/windowsactionmanager/manager.go
+internal/windowsmanagedmsi/account_epoch.go
+internal/windowsmanagedmsi/account_epoch_test.go
+internal/windowsmanagedmsi/manager_types.go
+internal/windowsmanagedmsimanager/account_authority.go
+internal/windowsmanagedmsimanager/account_authority_test.go
+internal/windowsmanagedmsimanager/artifact.go
+internal/windowsmanagedmsimanager/catalogue.go
+internal/windowsmanagedmsimanager/manager.go
+internal/windowsmanagedmsimanager/reusable.go
+internal/windowsmanagedmsimanager/schedule.go
+internal/windowsmanagedmsimanager/worklist.go
+internal/windowssoftwarejob/account_authority.go
+internal/windowssoftwarejob/account_authority_test.go
+internal/windowssoftwarejob/manager.go
+internal/windowssoftwarejob/relay.go
+internal/windowssoftwarejob/transactional.go
+internal/windowsupdatejob/account_authority.go
+internal/windowsupdatejob/account_authority_test.go
+internal/windowsupdatejob/manager.go
+internal/windowsupdatejob/relay.go
+internal/windowsupdatejob/reusable_manager.go
+internal/windowsupdatejob/schedule.go
+internal/windowsupdatejob/transactional.go
+web/src/auth.tsx

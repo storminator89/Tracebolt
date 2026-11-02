@@ -12,6 +12,7 @@ import (
 	"localrmm/internal/windowsactionmanager"
 	"localrmm/internal/windowsactionwire"
 	"net/http"
+	"time"
 )
 
 // ConfigureWindowsServiceActions is called once during trusted construction, before
@@ -102,6 +103,12 @@ func (h *Ingress) windowsServiceActions(w http.ResponseWriter, r *http.Request) 
 	match := func(n uint64) bool { return h.profile == "tls" || seq == n }
 	var out any = struct{}{}
 	var err error
+	var authorityRelease func()
+	defer func() {
+		if authorityRelease != nil {
+			authorityRelease()
+		}
+	}()
 	switch r.URL.Path {
 	case windowsactionwire.CapabilitiesPath:
 		c, e := windowsactionwire.DecodeCapabilities(raw)
@@ -122,7 +129,13 @@ func (h *Ingress) windowsServiceActions(w http.ResponseWriter, r *http.Request) 
 			failure(w, 400, "invalid_service_action")
 			return
 		}
-		out, err = h.windowsActions.Claim(r.Context(), identity.InvitationID, identity.Issuance.CertificateHash, claim)
+		if h.windowsActions.AccountAuthorityConfigured() {
+			if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				failure(w, 503, "storage_unavailable")
+				return
+			}
+		}
+		out, authorityRelease, err = h.windowsActions.ClaimWithAdmission(r.Context(), identity.InvitationID, identity.Issuance.CertificateHash, claim)
 	case windowsactionwire.ResultPath:
 		result, e := windowsactionwire.DecodeResult(raw)
 		if e != nil || !match(result.Identity.Sequence) {
@@ -143,9 +156,7 @@ func (h *Ingress) windowsServiceActions(w http.ResponseWriter, r *http.Request) 
 		failure(w, 503, "storage_unavailable")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, _ = w.Write(raw)
+	writeAccountBoundJSONResponse(w, r, raw, authorityRelease != nil && h.windowsActions.AccountAuthorityConfigured())
 }
 func windowsServiceActionFailure(w http.ResponseWriter, e error) {
 	switch {

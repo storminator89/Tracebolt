@@ -79,15 +79,19 @@ type operatorFixture struct {
 
 func newOperatorFixture(t *testing.T, ttl time.Duration) operatorFixture {
 	t.Helper()
+	auth, err := operatorauth.New(operatorauth.Config{PasswordHash: testOperatorHash(), TTL: ttl})
+	if err != nil {
+		t.Fatal("fixture auth failed")
+	}
+	return newOperatorFixtureWithAuth(t, auth)
+}
+func newOperatorFixtureWithAuth(t *testing.T, auth *operatorauth.Manager) operatorFixture {
+	t.Helper()
 	app := setup(t)
 	caPEM, serverPair, clientPEM, clientCert := operatorCertificates(t)
 	registry, err := lantrust.NewRegistry(context.Background(), caPEM, lantrust.NewMemoryStore())
 	if err != nil {
 		t.Fatal("fixture registry failed")
-	}
-	auth, err := operatorauth.New(operatorauth.Config{PasswordHash: testOperatorHash(), TTL: ttl})
-	if err != nil {
-		t.Fatal("fixture auth failed")
 	}
 	server := httptest.NewUnstartedServer(nil)
 	handler, err := NewLANOperatorHandler(app, LANOperatorConfig{Origin: "https://" + server.Listener.Addr().String(), Auth: auth, Registry: registry, Devices: func() ([]model.Device, error) { return []model.Device{}, nil }})

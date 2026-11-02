@@ -58,6 +58,11 @@ func (r *Registry) ConfigureSchedulePolicy(ctx context.Context, allowed func(str
 }
 
 func (m *Manager) Schedule(ctx context.Context, actor string, q msi.ScheduleRequest) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "install", true)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	if m == nil || q.Validate() != nil {
 		return msi.ErrInvalid
 	}
@@ -98,6 +103,11 @@ func (m *Manager) Schedule(ctx context.Context, actor string, q msi.ScheduleRequ
 	return e
 }
 func (m *Manager) CancelSchedule(ctx context.Context, actor, digest string) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "install", true)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	if m == nil || !msi.ValidDigest(digest) {
 		return msi.ErrInvalid
 	}

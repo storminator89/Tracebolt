@@ -41,8 +41,9 @@ type Artifact struct {
 // Record contains bounded metadata and signed evidence only, never MSI chunks.
 // Upload intent is permanent even if its exact body never arrived or fsync failed.
 type Record struct {
-	Schedule            *ScheduledIntent `json:"schedule,omitempty"`
-	SchedulePolicyFloor int64            `json:"schedulePolicyFloor,omitempty"`
+	AccountEpochs       map[string]uint64 `json:"accountEpochs,omitempty"`
+	Schedule            *ScheduledIntent  `json:"schedule,omitempty"`
+	SchedulePolicyFloor int64             `json:"schedulePolicyFloor,omitempty"`
 	// Manager-owned occurrence metadata; never part of signed endpoint authority.
 	ArtifactRetiredCount uint64            `json:"artifactRetiredCount,string,omitempty"`
 	Jobs                 *JobLedger        `json:"jobs,omitempty"`
@@ -80,7 +81,7 @@ func NewRecord(g Grant, key, executor ed25519.PublicKey, at int64) (Record, erro
 	return r, r.Validate()
 }
 func (r Record) Validate() error {
-	if r.validateMutationReport() != nil || r.validateSchedule() != nil {
+	if r.validateAccountEpochs() != nil || r.validateMutationReport() != nil || r.validateSchedule() != nil {
 		return ErrIntegrity
 	}
 	if r.validateReusableRecord() != nil || (r.Version != RecordVersion && r.Version != ReusableRecordVersion && r.Version != ScheduledRecordVersion && !r.Catalogue()) || r.Grant.Validate() != nil || !keyvalidation.Ed25519(r.PublicKey) || !keyvalidation.Ed25519(r.ExecutorPublicKey) || Digest(r.PublicKey) != r.Grant.Binding.KeyID || Digest(r.ExecutorPublicKey) != r.Grant.Binding.ExecutorKeyID || !ValidTime(r.ClockFloor) {
@@ -176,6 +177,9 @@ func DecodeRecord(raw []byte) (Record, error) {
 	return r, nil
 }
 func Transition(before, after Record) error {
+	if accountEpochTransition(before, after) != nil {
+		return ErrConsumed
+	}
 	if after.Validate() != nil || before.Version != after.Version || before.Grant != after.Grant || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.ClockFloor < before.ClockFloor {
 		return ErrIntegrity
 	}

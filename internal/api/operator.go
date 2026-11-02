@@ -539,9 +539,19 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token, _ := namedOperatorCookie(r, h.cookieName)
 	ctx, cancel := context.WithDeadline(r.Context(), session.ExpiresAt)
 	defer cancel()
-	stopRevocation := context.AfterFunc(session.Lifetime(), cancel)
-	defer stopRevocation()
+	accountRoute := r.URL.Path == "/api/auth/accounts" || r.URL.Path == "/api/auth/accounts/update"
+	// Account changes own their requester lifetime fence. Self-revocation must
+	// not cancel its own durable commit; client cancellation/deadline still apply.
+	if !accountRoute {
+		stopRevocation := context.AfterFunc(session.Lifetime(), cancel)
+		defer stopRevocation()
+	}
+	ctx = operatorauth.WithApprovalEpoch(ctx, session.ApprovalEpoch())
 	r = r.WithContext(context.WithValue(ctx, operatorRequestKey{}, operatorRequest{session: session, origin: h.origin, active: func() bool { _, err := h.auth.Lookup(token); return err == nil }}))
+	if accountRoute {
+		h.accountsAPI(w, r, session)
+		return
+	}
 	if r.URL.Path == "/api/auth/sessions" || r.URL.Path == "/api/auth/sessions/revoke" {
 		h.sessionsAPI(w, r, session)
 		return

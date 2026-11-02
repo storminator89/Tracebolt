@@ -182,6 +182,11 @@ func (m *Manager) scheduleAuthorized(j *Job) bool {
 }
 
 func (m *Manager) Schedule(ctx context.Context, device, actor, id, d string, start, end int64, ack bool) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, id, true)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !ack || !enrollmentcrypto.ValidID(actor, "operator_") || !actionpermit.ValidDigest(d) {
@@ -230,6 +235,11 @@ func (m *Manager) Schedule(ctx context.Context, device, actor, id, d string, sta
 	})
 }
 func (m *Manager) CancelSchedule(ctx context.Context, device, actor, id, d string) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, "", true)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !enrollmentcrypto.ValidID(actor, "operator_") || !actionpermit.ValidDigest(d) {
@@ -268,6 +278,11 @@ func (m *Manager) CancelSchedule(ctx context.Context, device, actor, id, d strin
 // RevokeScheduling is irreversible for the original local grant. Removing and
 // later re-adding a named capability cannot undo this durable generation fence.
 func (m *Manager) RevokeScheduling(ctx context.Context, device, actor string, ack bool) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, "", true)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !ack || !enrollmentcrypto.ValidID(actor, "operator_") {

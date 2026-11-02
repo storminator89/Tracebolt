@@ -95,6 +95,9 @@ func (m *Manager) enrollmentTransaction(ctx context.Context, fn func(Current, in
 				return err
 			}
 		}
+		if err = CheckAccountTransition(original, m.record); err != nil {
+			return err
+		}
 		*r = m.record
 		return nil
 	})

@@ -31,11 +31,12 @@ type Preview struct {
 	Digest    string                `json:"digest"`
 }
 type Job struct {
-	Preview    Preview                `json:"preview"`
-	ApprovedAt time.Time              `json:"approvedAt"`
-	Envelope   []byte                 `json:"envelope"`
-	ClaimedAt  *time.Time             `json:"claimedAt"`
-	Results    []windowsaction.Result `json:"results"`
+	AuthorityEpoch uint64                 `json:"authorityEpoch,omitempty"` // Manager-side approval revision; never part of signed endpoint bytes.
+	Preview        Preview                `json:"preview"`
+	ApprovedAt     time.Time              `json:"approvedAt"`
+	Envelope       []byte                 `json:"envelope"`
+	ClaimedAt      *time.Time             `json:"claimedAt"`
+	Results        []windowsaction.Result `json:"results"`
 }
 type Record struct {
 	Version            string                      `json:"version"`

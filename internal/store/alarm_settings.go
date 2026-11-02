@@ -9,6 +9,8 @@ import (
 	"errors"
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/operatorauth"
+	"strconv"
 	"time"
 )
 
@@ -65,6 +67,15 @@ func (s *Store) EnqueueAlarmTest(ctx context.Context, b alarmdelivery.Binding, r
 	var created int64
 	e = tx.QueryRowContext(ctx, `SELECT id,state,created FROM alarm_outbox WHERE id=? AND binding=? AND rule=?`, id, b.Key(), alarmdelivery.TestRule).Scan(&existing.EventID, &existing.State, &created)
 	if e == nil {
+		var storedActor, storedEpoch string
+		receiptErr := tx.QueryRowContext(ctx, `SELECT actor,epoch FROM alarm_test_authority WHERE event_id=?`, id).Scan(&storedActor, &storedEpoch)
+		epoch := operatorauth.ApprovalEpochFromContext(ctx)
+		if receiptErr != nil && !(errors.Is(receiptErr, sql.ErrNoRows) && epoch == 0) {
+			return nil, alarmdelivery.ErrInvalid
+		}
+		if receiptErr == nil && (storedActor != actor || storedEpoch != strconv.FormatUint(epoch, 10)) {
+			return nil, alarmdelivery.ErrInvalid
+		}
 		existing.CreatedAt = time.UnixMilli(created).UTC()
 		return &existing, tx.Commit()
 	}
@@ -102,6 +113,9 @@ func (s *Store) EnqueueAlarmTest(ctx context.Context, b alarmdelivery.Binding, r
 		return nil, alarmdelivery.ErrInvalid
 	}
 	if _, e = tx.ExecContext(ctx, `INSERT INTO alarm_outbox(id,binding,device,incident,rule,transition,body,state,created,due) VALUES(?,?,?, ?,?,'opened',?,'queued',?,?)`, id, b.Key(), "synthetic", id, alarmdelivery.TestRule, body, now.UnixMilli(), now.UnixMilli()); e != nil {
+		return nil, e
+	}
+	if _, e = tx.ExecContext(ctx, `INSERT INTO alarm_test_authority(event_id,actor,epoch) VALUES(?,?,?)`, id, actor, strconv.FormatUint(operatorauth.ApprovalEpochFromContext(ctx), 10)); e != nil {
 		return nil, e
 	}
 	if e = insertAlarmAudit(ctx, tx, alarmdelivery.SettingsAudit{Revision: id[:32], Actor: actor, Action: "test", At: now}); e != nil {

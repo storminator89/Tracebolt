@@ -49,11 +49,12 @@ type Config struct {
 	InsecureHTTPAcknowledged        bool   `json:"insecureHTTPAcknowledged"`
 }
 type Material struct {
-	Config       Config
-	Server       tls.Certificate `json:"-"`
-	ClientCA     []byte
-	PasswordHash string                  `json:"-"`
-	Operators    []operatorauth.Operator `json:"-"`
+	AccountAuthority *AccountAuthorityReference `json:"-"`
+	Config           Config
+	Server           tls.Certificate `json:"-"`
+	ClientCA         []byte
+	PasswordHash     string                  `json:"-"`
+	Operators        []operatorauth.Operator `json:"-"`
 }
 
 func (Material) MarshalJSON() ([]byte, error) { return []byte(`{"redacted":true}`), nil }
@@ -243,7 +244,7 @@ func LoadMaterial(c Config) (Material, error) {
 		return fail()
 	}
 	defer clear(auth)
-	passwordHash, operators, e := loadOperatorAuth(auth, c.Profile)
+	passwordHash, operators, accountAuthority, e := loadOperatorMaterial(auth, c.Profile)
 	if e != nil {
 		return fail()
 	}
@@ -251,7 +252,7 @@ func LoadMaterial(c Config) (Material, error) {
 	if e != nil {
 		return fail()
 	}
-	m := Material{Config: c, ClientCA: ca, PasswordHash: passwordHash, Operators: operators}
+	m := Material{Config: c, ClientCA: ca, PasswordHash: passwordHash, Operators: operators, AccountAuthority: accountAuthority}
 	if c.Profile == TLS {
 		cert, e := ReadProtected(c.TLSCertificateFile, false, 65536)
 		if e != nil {

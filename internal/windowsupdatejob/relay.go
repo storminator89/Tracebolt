@@ -151,10 +151,18 @@ type Pending struct {
 }
 
 func (m *Manager) Pending(ctx context.Context) (*Pending, error) {
+	ctx, releaseAccount, leaseErr := m.leaseSchedules(ctx)
+	if leaseErr != nil {
+		return nil, leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out *Pending
 	e := m.transaction(ctx, func(c Current, n int64) error {
+		if e := m.blockDeniedAccountSchedules(ctx, n); e != nil {
+			return e
+		}
 		if e := m.triggerSchedule(c, n); e != nil {
 			return e
 		}
@@ -196,6 +204,11 @@ func (m *Manager) Pending(ctx context.Context) (*Pending, error) {
 	return out, nil
 }
 func (m *Manager) ClaimReadiness(ctx context.Context, id string) ([]byte, error) {
+	ctx, releaseAccount, leaseErr := m.leaseJob(ctx, id, false)
+	if leaseErr != nil {
+		return nil, leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []byte
@@ -236,6 +249,11 @@ func (m *Manager) ClaimReadiness(ctx context.Context, id string) ([]byte, error)
 // Report admits a pinned executor signature AND the surrounding enrollment
 // transaction's live leaf. Transport authentication alone is insufficient.
 func (m *Manager) Report(ctx context.Context, raw []byte) error {
+	ctx, releaseAccount, leaseErr := m.leaseReadinessReport(ctx, raw)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	var retirement retirementReportEnvelope
 	if canonical(raw, &retirement, MaxRelayBytes) == nil && retirement.Report.Version == RetirementVersion {
 		return m.reportRetirement(ctx, raw)
@@ -339,6 +357,11 @@ func (m *Manager) Report(ctx context.Context, raw []byte) error {
 // Review explicitly reopens only the exact saved unsigned preview, with its
 // original digest/age, for the same authenticated operator. It never re-resolves.
 func (m *Manager) Review(ctx context.Context, device, actor, id string) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, id, false)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID {

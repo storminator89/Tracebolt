@@ -80,6 +80,7 @@ type Approval struct {
 	ApprovedAt    time.Time `json:"approvedAt"`
 }
 type Job struct {
+	AuthorityEpoch   uint64                `json:"authorityEpoch,omitempty"` // Manager-side approval revision; never part of signed endpoint bytes.
 	Preview          Preview               `json:"preview"`
 	Approval         Approval              `json:"approval"`
 	Envelope         []byte                `json:"envelope"`

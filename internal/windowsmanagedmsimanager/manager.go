@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstate"
+	"localrmm/internal/operatorauth"
 	msi "localrmm/internal/windowsmanagedmsi"
 	fence "localrmm/internal/windowsmutationfence"
 	"reflect"
@@ -16,6 +17,7 @@ import (
 )
 
 type Manager struct {
+	accountAuthority                operatorauth.ActorAdmission
 	artifact                        *ArtifactManager
 	mu                              sync.Mutex
 	store                           msi.TransactionStore
@@ -122,6 +124,9 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 	if m == nil || m.failed || ctx == nil {
 		return msi.Record{}, msi.ErrUncertain
 	}
+	if actor != "" && m.accountAuthority != nil && !hasAccountHold(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx), capsFor(kind, false)) {
+		return msi.Record{}, msi.ErrAuthority
+	}
 	var scheduledActor string
 	ctx = msi.WithSchedulePolicy(ctx, m.scheduleAllowed)
 	ctx = msi.WithFinalCheck(ctx, func() error {
@@ -146,7 +151,11 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 		if e := msi.TerminalizeSchedulePolicy(r, at.Unix(), m.scheduleAllowed); e != nil {
 			return e
 		}
+		original := *r
 		err := fn(r, c, at.Unix())
+		if err == nil {
+			err = m.bindAccountEpochs(ctx, original, r)
+		}
 		if r.Schedule != nil && !r.Schedule.Terminal() && len(r.ResultReport) == 0 {
 			scheduledActor = r.Schedule.Approval.ActorID
 		}
@@ -158,6 +167,11 @@ func (m *Manager) transaction(ctx context.Context, actor, kind string, fn func(*
 	return r, e
 }
 func (m *Manager) ReserveUpload(ctx context.Context, actor string, selection msi.Selection, native string) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "deliver", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	if m.artifact != nil {
 		return msi.ErrAuthority
 	}
@@ -184,6 +198,11 @@ type UploadChunk struct {
 }
 
 func (m *Manager) Upload(ctx context.Context, actor string, q UploadChunk) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "deliver", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	if m.artifact != nil {
 		return msi.ErrAuthority
 	}
@@ -247,6 +266,11 @@ func (m *Manager) Upload(ctx context.Context, actor string, q UploadChunk) error
 	return e
 }
 func (m *Manager) CompleteUpload(ctx context.Context, actor string) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "deliver", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	if m.artifact != nil {
 		return msi.ErrAuthority
 	}
@@ -297,6 +321,11 @@ func (m *Manager) DeliverArtifact(ctx context.Context, actor, id string, ack boo
 	return m.deliver(ctx, actor, id, ack, artifactID, bindingDigest)
 }
 func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artifactID, bindingDigest string) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "deliver", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !ack || !msi.ValidTransferID(id) {
@@ -372,6 +401,11 @@ func (m *Manager) deliver(ctx context.Context, actor, id string, ack bool, artif
 	return e
 }
 func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms, maintenance bool, synchronous ...bool) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "install", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !packageReview || !terms || !maintenance || len(synchronous) > 1 {
@@ -419,6 +453,11 @@ func (m *Manager) Review(ctx context.Context, actor string, packageReview, terms
 	return e
 }
 func (m *Manager) Approve(ctx context.Context, actor, readinessDigest string, ack bool) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "install", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !ack || !msi.ValidDigest(readinessDigest) {
@@ -462,6 +501,11 @@ func (m *Manager) Approve(ctx context.Context, actor, readinessDigest string, ac
 	return e
 }
 func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
+	ctx, accountRelease, accountErr := m.beginBackground(ctx, "poll", nil, "")
+	if accountErr != nil {
+		return msi.PollResponse{}, accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.scheduledProfile {
@@ -507,6 +551,9 @@ func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
 			return e
 		}
 		actor, kind = p.ActorID, p.Kind
+		if m.accountAuthority != nil && !hasAccountHold(ctx, actor, r.AccountEpochs[msi.Digest(raw)], capsFor(kind, p.ScheduleDigest != "")) {
+			return msi.ErrAuthority
+		}
 		if p.ScheduleDigest != "" && !m.scheduleAllowed(actor) {
 			return msi.ErrAuthority
 		}
@@ -532,6 +579,11 @@ func (m *Manager) Poll(ctx context.Context) (msi.PollResponse, error) {
 	return out, nil
 }
 func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, error) {
+	ctx, accountRelease, accountErr := m.beginBackground(ctx, "chunk", nil, "")
+	if accountErr != nil {
+		return msi.Chunk{}, accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var p msi.Permit
@@ -546,6 +598,9 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 				return msi.ErrInvalid
 			}
 			actor = p.ActorID
+			if m.accountAuthority != nil && !hasAccountHold(ctx, actor, r.AccountEpochs[msi.Digest(r.DeliveryPermit)], capsFor("deliver", false)) {
+				return msi.ErrAuthority
+			}
 			custody = artifactCustody(*r.Artifact)
 			occurrence = r.ArtifactRetiredCount
 			if !m.allowed(actor, "deliver") {
@@ -594,6 +649,13 @@ func (m *Manager) Chunk(ctx context.Context, q msi.ChunkRequest) (msi.Chunk, err
 	return msi.Chunk{TransferID: q.TransferID, Index: q.Index, PermitDigest: q.PermitDigest, Digest: msi.Digest(data), Data: data}, nil
 }
 func (m *Manager) Report(ctx context.Context, raw []byte) error {
+	// Signed result truth remains admissible after account withdrawal. If no
+	// schedule lease is available, bindAccountEpochs forbids new authority while
+	// allowing unchanged permits and result/retirement evidence to persist.
+	if guarded, release, err := m.beginBackground(ctx, "report", nil, ""); err == nil {
+		ctx = guarded
+		defer release()
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	_, e := m.transaction(ctx, "", "", func(r *msi.Record, _ msi.Current, n int64) error {
@@ -865,6 +927,11 @@ func (m *Manager) View(ctx context.Context) (View, error) {
 // CheckRelease is the final small transaction after serialization/storage waits.
 // It never creates or retries a claim, permit, chunk, installation or report.
 func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest string) error {
+	ctx, accountRelease, accountErr := m.BeginResponseAdmission(ctx, raw, deliveryDigest)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var actor, kind string
@@ -896,6 +963,9 @@ func (m *Manager) CheckRelease(ctx context.Context, raw []byte, deliveryDigest s
 			return e
 		}
 		actor, kind = p.ActorID, p.Kind
+		if m.accountAuthority != nil && !hasAccountHold(ctx, actor, r.AccountEpochs[msi.Digest(raw)], capsFor(kind, p.ScheduleDigest != "")) {
+			return msi.ErrAuthority
+		}
 		scheduled = p.ScheduleDigest != ""
 		if p.ScheduleDigest != "" && p.Kind == "install" && !msi.ScheduleDispatchReady(*r, n) {
 			return msi.ErrUnavailable

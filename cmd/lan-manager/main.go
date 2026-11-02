@@ -93,15 +93,38 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if enrollment == nil && enrollmentconfig.RejectEnrollmentMode(c.StateDirectory) != nil {
 		return nil, enrollmentconfig.ErrConfiguration
 	}
-	auth, e := operatorauth.New(operatorauth.Config{PasswordHash: m.PasswordHash, Operators: m.Operators})
-	if e != nil {
-		return nil, e
-	}
+	var auth *operatorauth.Manager
+	var accountJournal *operatorauth.AccountJournal
 	writerLease, e := startupManagerWriterLease(c.StateDirectory, lanstore.AcquireManagerWriter)
 	if e != nil {
 		return nil, e
 	}
 	leaseHandedOff := false
+	defer func() {
+		if !leaseHandedOff && accountJournal != nil {
+			_ = accountJournal.Close()
+		}
+	}()
+	if e = lanconfig.CheckAccountAuthorityMarker(c.StateDirectory, m.AccountAuthority); e != nil {
+		if writerLease != nil {
+			_ = writerLease.Close()
+		}
+		return nil, e
+	}
+	if m.AccountAuthority != nil {
+		accountJournal, e = operatorauth.OpenAccountJournal(m.AccountAuthority.AuthorityFile)
+		if e == nil {
+			auth, e = operatorauth.New(operatorauth.Config{AuthorityStore: accountJournal, AuthorityID: m.AccountAuthority.AuthorityID, AuthorityProfile: m.AccountAuthority.Profile})
+		}
+	} else {
+		auth, e = operatorauth.New(operatorauth.Config{PasswordHash: m.PasswordHash, Operators: m.Operators})
+	}
+	if e != nil {
+		if writerLease != nil {
+			_ = writerLease.Close()
+		}
+		return nil, e
+	}
 	defer func() {
 		if !leaseHandedOff && writerLease != nil {
 			_ = writerLease.Close()
@@ -316,6 +339,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if e != nil {
 			return fail(e)
 		}
+		if auth.LiveAccounts() {
+			if e = actions.ConfigureAccountAuthority(auth.LeaseActor); e != nil {
+				return fail(e)
+			}
+		}
 		if e = enrolledIngress.ConfigureServiceActions(actions); e != nil {
 			return fail(e)
 		}
@@ -341,6 +369,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		windowsActions, e = windowsactionmanager.Load(context.Background(), windowsStore, c.WindowsServiceActionsConfigFile, forbidden...)
 		if e != nil {
 			return fail(e)
+		}
+		if auth.LiveAccounts() {
+			if e = windowsActions.ConfigureAccountAuthority(auth.LeaseActor); e != nil {
+				return fail(e)
+			}
 		}
 		if e = windowsIngress.ConfigureWindowsServiceActions(windowsActions); e != nil {
 			return fail(e)
@@ -369,6 +402,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		windowsUpdates, e = windowsupdatemanager.LoadRegistry(context.Background(), windowsStore, c.WindowsUpdateJobsConfigFile, forbidden...)
 		if e != nil {
 			return fail(e)
+		}
+		if auth.LiveAccounts() {
+			if e = windowsUpdates.ConfigureAccountAuthority(auth.LeaseActor); e != nil {
+				return fail(e)
+			}
 		}
 		if e = windowsUpdates.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsUpdateInstall) }); e != nil {
 			return fail(e)
@@ -410,6 +448,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if e != nil {
 			return fail(e)
 		}
+		if auth.LiveAccounts() {
+			if e = windowsSoftware.ConfigureAccountAuthority(auth.LeaseActor); e != nil {
+				return fail(e)
+			}
+		}
 		if e = windowsSoftware.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsSoftwareInstall) }); e != nil {
 			return fail(e)
 		}
@@ -448,6 +491,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		managedMSI, e = windowsmanagedmsimanager.LoadRegistry(context.Background(), windowsStore, c.WindowsManagedMSIConfigFile, c.StateDirectory, forbidden...)
 		if e != nil {
 			return fail(e)
+		}
+		if auth.LiveAccounts() {
+			if e = managedMSI.ConfigureAccountAuthority(auth.LeaseActor); e != nil {
+				return fail(e)
+			}
 		}
 		if e = managedMSI.ConfigureOperatorPolicy(func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIDeliver) }, func(actor string) bool { return auth.ActorHasCapability(actor, operatorauth.WindowsManagedMSIInstall) }); e != nil {
 			return fail(e)
@@ -489,6 +537,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		if e != nil {
 			return fail(e)
 		}
+		if auth.LiveAccounts() {
+			if e = packageActions.ConfigureAccountAuthority(auth.LeaseActor); e != nil {
+				return fail(e)
+			}
+		}
 		if e = enrolledIngress.ConfigurePackageActions(packageActions); e != nil {
 			return fail(e)
 		}
@@ -520,6 +573,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			alarmQueue = api.NewWindowsNotificationQueue(appStore, windowsService)
 		}
 		alarmWorker, e = alarmdelivery.NewSettings(alarmQueue, c.StateDirectory, managerID, c.Profile, alarms)
+		if e == nil && auth.LiveAccounts() {
+			e = alarmWorker.ConfigureAccountAuthority(auth.LeaseActor)
+		}
 		if e != nil {
 			appStore.Close()
 			return fail(e)
@@ -574,6 +630,9 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			}
 			if windowsStore != nil {
 				windowsStore.Close()
+			}
+			if accountJournal != nil {
+				_ = accountJournal.Close()
 			}
 			// Workers are joined by run before p.close; release only after the
 			// final store/controller/session close, never before settlement.

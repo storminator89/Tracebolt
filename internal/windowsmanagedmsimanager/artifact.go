@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/operatorauth"
 	msi "localrmm/internal/windowsmanagedmsi"
 	"sort"
 	"sync"
@@ -13,15 +14,16 @@ import (
 )
 
 type ArtifactManager struct {
-	reusable        bool
-	mu              sync.Mutex
-	store           msi.ArtifactStore
-	key             ed25519.PublicKey
-	spool           *Spool
-	now             func() time.Time
-	check           func() error
-	deliveryAllowed func(string) bool
-	failed          bool
+	accountAuthority operatorauth.ActorAdmission
+	reusable         bool
+	mu               sync.Mutex
+	store            msi.ArtifactStore
+	key              ed25519.PublicKey
+	spool            *Spool
+	now              func() time.Time
+	check            func() error
+	deliveryAllowed  func(string) bool
+	failed           bool
 }
 
 func newArtifactManager(ctx context.Context, store msi.ArtifactStore, key ed25519.PublicKey, spool *Spool, clock func() time.Time, check func() error) (*ArtifactManager, error) {
@@ -87,6 +89,9 @@ func (m *ArtifactManager) transaction(ctx context.Context, actor, kind string, f
 		if e := m.check(); e != nil {
 			return e
 		}
+		if m.accountAuthority != nil && !hasAccountHold(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx), capsFor("deliver", false)) {
+			return msi.ErrAuthority
+		}
 		if !enrollmentcrypto.ValidID(actor, "operator_") || m.deliveryAllowed == nil || !m.deliveryAllowed(actor) {
 			return msi.ErrAuthority
 		}
@@ -129,6 +134,11 @@ func (m *ArtifactManager) ReserveReusableUpload(ctx context.Context, actor strin
 	return m.reserveUpload(ctx, actor, selection, native, status, evidence)
 }
 func (m *ArtifactManager) reserveUpload(ctx context.Context, actor string, selection msi.Selection, native, status, evidence string) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	if m.Catalogue() {
 		return msi.ErrAuthority
 	}
@@ -155,6 +165,11 @@ func (m *ArtifactManager) reserveUpload(ctx context.Context, actor string, selec
 }
 
 func (m *ArtifactManager) Upload(ctx context.Context, actor string, q UploadChunk) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -236,6 +251,11 @@ func (m *ArtifactManager) Upload(ctx context.Context, actor string, q UploadChun
 	return e
 }
 func (m *ArtifactManager) CompleteUpload(ctx context.Context, actor string) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -280,6 +300,11 @@ func (m *ArtifactManager) CompleteUpload(ctx context.Context, actor string) erro
 // manager spool only after every assigned target durably acknowledged retirement.
 // Unassigned devices contribute no permission and receive no package.
 func (m *ArtifactManager) RetireArtifact(ctx context.Context, actor, artifactID string, ack bool) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !ack || !msi.ValidDigest(artifactID) {

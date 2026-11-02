@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"localrmm/internal/operatorauth"
 	"regexp"
 	"sync"
 	"time"
@@ -77,6 +78,10 @@ type Transport interface {
 type Attempt struct {
 	Payload Payload
 	Number  int
+	// TestActor/AuthorityEpoch are protected outbox metadata, never external payload.
+	OperatorTest   bool
+	TestActor      string
+	AuthorityEpoch uint64
 }
 type Queue interface {
 	ClaimAlarm(context.Context, Binding, time.Time) (*Attempt, error)
@@ -86,11 +91,12 @@ type Queue interface {
 // Worker serializes claims, never holds a storage transaction across transport.
 // A crash after claiming leaves an uncertain record; startup never replays it.
 type Worker struct {
-	mu        sync.Mutex
-	queue     Queue
-	binding   Binding
-	transport Transport
-	now       func() time.Time
+	mu               sync.Mutex
+	queue            Queue
+	binding          Binding
+	transport        Transport
+	now              func() time.Time
+	accountAdmission operatorauth.ActorAdmission
 }
 
 func NewWorker(q Queue, b Binding, t Transport, now func() time.Time) (*Worker, error) {
@@ -101,6 +107,20 @@ func NewWorker(q Queue, b Binding, t Transport, now func() time.Time) (*Worker, 
 		now = time.Now
 	}
 	return &Worker{queue: q, binding: b, transport: t, now: now}, nil
+}
+
+// ConfigureAccountAuthority is startup-only and cannot change a running policy.
+func (w *Worker) ConfigureAccountAuthority(admission operatorauth.ActorAdmission) error {
+	if w == nil || admission == nil {
+		return ErrInvalid
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.accountAdmission != nil {
+		return ErrInvalid
+	}
+	w.accountAdmission = admission
+	return nil
 }
 func (w *Worker) Step(ctx context.Context) error {
 	w.mu.Lock()
@@ -113,7 +133,31 @@ func (w *Worker) Step(ctx context.Context) error {
 		return e
 	}
 	step, cancel := context.WithTimeout(ctx, 10*time.Second)
-	result := w.transport.Send(step, a.Payload)
+	result := Result{Outcome: Failed, Code: "operator_authority_revoked"}
+	release := func() {}
+	admitted := true
+	// Tests are a separate fixed payload class. Never infer routine monitoring
+	// authority from absent test metadata or retrofit an actor onto committed rules.
+	if a.OperatorTest || a.Payload.Rule == TestRule || a.Payload.SchemaVersion == TestSchemaVersion {
+		if !IsTestPayload(a.Payload) {
+			admitted = false
+			result.Code = "invalid_payload"
+		} else if w.accountAdmission != nil {
+			var err error
+			step, release, err = w.accountAdmission(step, a.TestActor, a.AuthorityEpoch, operatorauth.ManageAlarms)
+			admitted = err == nil
+			if !admitted {
+				release = func() {}
+			}
+		} else if a.AuthorityEpoch != 0 {
+			// A live-mode receipt cannot be dispatched after startup loses its policy.
+			admitted = false
+		}
+	}
+	if admitted {
+		result = w.transport.Send(step, a.Payload)
+	}
+	release()
 	cancel()
 	// Persist an ambiguous shutdown result even when the request context expired.
 	save, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

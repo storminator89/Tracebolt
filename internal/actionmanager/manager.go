@@ -19,6 +19,7 @@ import (
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/keyvalidation"
 	"localrmm/internal/lanconfig"
+	"localrmm/internal/operatorauth"
 	"path/filepath"
 	"sync"
 	"time"
@@ -42,12 +43,13 @@ type signingKey struct {
 	closed bool
 }
 type Manager struct {
-	store  *enrollmentstore.Store
-	config Config
-	path   string
-	raw    []byte
-	key    *signingKey
-	now    func() time.Time
+	accountAuthority operatorauth.ActorAdmission // immutable after startup
+	store            *enrollmentstore.Store
+	config           Config
+	path             string
+	raw              []byte
+	key              *signingKey
+	now              func() time.Time
 }
 
 func (Manager) String() string               { return "actionmanager.Manager{secrets:redacted}" }
@@ -182,6 +184,14 @@ func (m *Manager) View(ctx context.Context, device string) (actionjob.Record, er
 }
 
 func (m *Manager) Preview(ctx context.Context, device, actor, unit string) (actionjob.Record, error) {
+	if m == nil {
+		return actionjob.Record{}, ErrConfiguration
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx))
+	if err != nil {
+		return actionjob.Record{}, err
+	}
+	defer release()
 	if e := m.live(); e != nil {
 		return actionjob.Record{}, e
 	}
@@ -192,6 +202,14 @@ func (m *Manager) Preview(ctx context.Context, device, actor, unit string) (acti
 	return m.store.PreviewServiceAction(ctx, m.keyPublic(), device, "action_"+hex.EncodeToString(b[:]), actor, unit, m.config.TransportProfile, m.Now())
 }
 func (m *Manager) Approve(ctx context.Context, device, id, digest, actor string) (actionjob.Record, error) {
+	if m == nil {
+		return actionjob.Record{}, ErrConfiguration
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx))
+	if err != nil {
+		return actionjob.Record{}, err
+	}
+	defer release()
 	if e := m.live(); e != nil {
 		return actionjob.Record{}, e
 	}
@@ -213,11 +231,56 @@ func (m *Manager) Peek(ctx context.Context, id, hash string) (actionjob.Delivery
 	return m.store.PeekServiceAction(ctx, m.keyPublic(), id, hash, m.Now())
 }
 func (m *Manager) Claim(ctx context.Context, id, hash string, i actionjob.Identity) (actionjob.Grant, error) {
-	if e := m.live(); e != nil {
-		return actionjob.Grant{}, e
+	grant, release, err := m.ClaimWithAdmission(ctx, id, hash, i)
+	if release != nil {
+		release()
 	}
-	return m.store.ClaimServiceAction(ctx, m.keyPublic(), id, hash, m.config.TransportProfile, i, m.Now())
+	return grant, err
 }
+
+// ClaimWithAdmission returns the exact actor lease to the transport. Release only
+// after bounded serialization/write; a denied/uncertain handoff never unconsumes.
+func (m *Manager) ClaimWithAdmission(ctx context.Context, id, hash string, i actionjob.Identity) (actionjob.Grant, func(), error) {
+	if m == nil {
+		return actionjob.Grant{}, nil, ErrConfiguration
+	}
+	actor, epoch, err := m.store.ServiceActionAuthority(ctx, m.keyPublic(), id, hash, i, m.Now())
+	if err != nil {
+		return actionjob.Grant{}, nil, err
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, epoch)
+	if err != nil {
+		return actionjob.Grant{}, nil, err
+	}
+	if err = m.live(); err != nil {
+		release()
+		return actionjob.Grant{}, nil, err
+	}
+	ctx = operatorauth.WithApprovalEpoch(ctx, epoch)
+	grant, err := m.store.ClaimServiceAction(ctx, m.keyPublic(), id, hash, m.config.TransportProfile, i, m.Now())
+	if err != nil {
+		release()
+		return actionjob.Grant{}, nil, err
+	}
+	return grant, release, nil
+}
+func (m *Manager) ConfigureAccountAuthority(admit operatorauth.ActorAdmission) error {
+	if m == nil || admit == nil || m.accountAuthority != nil {
+		return ErrConfiguration
+	}
+	m.accountAuthority = admit
+	return nil
+}
+func (m *Manager) admitAccount(ctx context.Context, actor string, epoch uint64) (context.Context, func(), error) {
+	if m.accountAuthority == nil {
+		if epoch != 0 {
+			return ctx, nil, ErrConfiguration
+		}
+		return ctx, func() {}, nil
+	}
+	return m.accountAuthority(ctx, actor, epoch, operatorauth.RestartService)
+}
+
 func (m *Manager) Accept(ctx context.Context, id, hash string, result actionhelper.Result) error {
 	if m == nil {
 		return ErrConfiguration
@@ -232,3 +295,6 @@ func (m *Manager) MatchesBinding(b enrollmentstate.Binding) bool {
 
 // PublicKey returns the public command pin for cross-domain key separation.
 func (m *Manager) PublicKey() ed25519.PublicKey { return m.keyPublic() }
+
+// AccountAuthorityConfigured is startup metadata, never a capability grant.
+func (m *Manager) AccountAuthorityConfigured() bool { return m != nil && m.accountAuthority != nil }

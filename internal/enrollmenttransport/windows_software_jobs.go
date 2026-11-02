@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/enrollmentstore"
@@ -188,6 +189,20 @@ func (h *Ingress) windowsSoftwareJobRequest(w http.ResponseWriter, r *http.Reque
 		windowsSoftwareJobFailure(w, err)
 		return
 	}
+	if strings.HasSuffix(r.URL.Path, "-claim") && manager.AccountAuthorityConfigured() {
+		// A consumed claim may be withheld after revocation; it is never restored.
+		// Lease the exact persisted approval epoch through this bounded handoff.
+		if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			failure(w, http.StatusServiceUnavailable, "storage_unavailable")
+			return
+		}
+		release, err := manager.BeginResponseAdmission(r.Context(), out)
+		if err != nil {
+			windowsSoftwareJobFailure(w, err)
+			return
+		}
+		defer release()
+	}
 	// Claims have already durably consumed delivery. Any final rejection or
 	// response loss must never return or automatically retry an envelope.
 	if !h.verifiedTLS(r, h.now()) {
@@ -198,9 +213,7 @@ func (h *Ingress) windowsSoftwareJobRequest(w http.ResponseWriter, r *http.Reque
 		failure(w, http.StatusServiceUnavailable, "storage_unavailable")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(out)
+	writeAccountBoundJSONResponse(w, r, out, strings.HasSuffix(r.URL.Path, "-claim") && manager.AccountAuthorityConfigured())
 }
 
 func windowsSoftwareJobFailure(w http.ResponseWriter, err error) {

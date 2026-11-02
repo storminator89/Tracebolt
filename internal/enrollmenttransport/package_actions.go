@@ -11,6 +11,7 @@ import (
 	"localrmm/internal/packageupdate"
 	"localrmm/internal/packagewire"
 	"net/http"
+	"time"
 )
 
 // ConfigurePackageActions is called once during trusted construction, before
@@ -101,6 +102,12 @@ func (h *Ingress) packageActions(w http.ResponseWriter, r *http.Request) {
 	match := func(n uint64) bool { return h.profile == "tls" || seq == n }
 	var out any = struct{}{}
 	var err error
+	var authorityRelease func()
+	defer func() {
+		if authorityRelease != nil {
+			authorityRelease()
+		}
+	}()
 	switch r.URL.Path {
 	case packagewire.CapabilitiesPath:
 		c, e := packagewire.DecodeCapabilities(raw)
@@ -121,7 +128,13 @@ func (h *Ingress) packageActions(w http.ResponseWriter, r *http.Request) {
 			failure(w, 400, "invalid_package_action")
 			return
 		}
-		out, err = h.packages.Claim(r.Context(), identity.Approval.DeviceID, "sha256:"+identity.Issuance.CertificateHash, claim)
+		if h.packages.AccountAuthorityConfigured() {
+			if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				failure(w, 503, "storage_unavailable")
+				return
+			}
+		}
+		out, authorityRelease, err = h.packages.ClaimWithAdmission(r.Context(), identity.Approval.DeviceID, "sha256:"+identity.Issuance.CertificateHash, claim)
 	case packagewire.ResultPath:
 		result, e := packagewire.DecodeResult(raw)
 		if e != nil || !match(result.Sequence) {
@@ -142,9 +155,7 @@ func (h *Ingress) packageActions(w http.ResponseWriter, r *http.Request) {
 		failure(w, 503, "storage_unavailable")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, _ = w.Write(raw)
+	writeAccountBoundJSONResponse(w, r, raw, authorityRelease != nil && h.packages.AccountAuthorityConfigured())
 }
 func packageActionFailure(w http.ResponseWriter, e error) {
 	switch {

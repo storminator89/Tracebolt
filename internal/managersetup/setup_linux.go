@@ -119,7 +119,11 @@ func inspect(r *Report, c lanconfig.Config, options Options, now time.Time, list
 			r.add("operator_auth", "fail", "Operator authentication schema, profile or verifier policy is invalid.", "Have the credential custodian provide the current profile-bound operator-auth schema and accepted Argon2id verifier/capabilities; placeholders are not credentials.")
 			materialOK = false
 		} else {
-			r.add("operator_auth", "pass", "Operator authentication matches the runtime schema and verifier policy; no login was attempted.", "")
+			if ref, err := lanconfig.ParseAccountAuthority(values[3], c.Profile); err == nil && ref != nil {
+				r.add("operator_auth", "unknown", "The live-account reference schema is valid; durable account revisions, audit and verifier authority require the exclusive startup check.", "Verify the protected live-account journal and used marker through the authorized manager startup; doctor never opens or locks its authority store.")
+			} else {
+				r.add("operator_auth", "pass", "Operator authentication matches the runtime schema and verifier policy; no login was attempted.", "")
+			}
 		}
 	}
 	if values[0] != nil && values[1] != nil {

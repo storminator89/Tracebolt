@@ -97,9 +97,12 @@ func parseHash(encoded string) (verifier, error) {
 }
 
 type Config struct {
-	PasswordHash string     `json:"-"`
-	Operators    []Operator `json:"-"` // Optional named-only mode; mutually exclusive with PasswordHash.
-	TTL          time.Duration
+	AuthorityID      string       `json:"-"`
+	AuthorityProfile string       `json:"-"`
+	AuthorityStore   AccountStore `json:"-"` // Optional explicit durable live mode; never mixed with startup principals.
+	PasswordHash     string       `json:"-"`
+	Operators        []Operator   `json:"-"` // Optional named-only mode; mutually exclusive with PasswordHash.
+	TTL              time.Duration
 	// Now is a deterministic test seam. Production callers leave it nil.
 	Now func() time.Time `json:"-"`
 }
@@ -108,25 +111,29 @@ func (Config) String() string   { return "operatorauth.Config{secrets:redacted}"
 func (Config) GoString() string { return "operatorauth.Config{secrets:redacted}" }
 
 type Session struct {
-	ID        string    `json:"-"`
-	Token     string    `json:"-"` // Only a successful Login returns this; never retained in the session map.
-	CSRFToken string    `json:"-"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	actor     principal // Immutable, private authority; never filled from request fields.
-	revoke    context.CancelFunc
-	lifetime  context.Context
-	gate      *sessionGate
+	ID              string    `json:"-"`
+	Token           string    `json:"-"` // Only a successful Login returns this; never retained in the session map.
+	CSRFToken       string    `json:"-"`
+	ExpiresAt       time.Time `json:"expiresAt"`
+	account         *accountEntry
+	accountRevision uint64
+	actor           principal // Immutable, private authority; never filled from request fields.
+	revoke          context.CancelFunc
+	lifetime        context.Context
+	gate            *sessionGate
 }
 
 type sessionGate struct {
-	mu      sync.RWMutex
-	revoked atomic.Bool
-	now     func() time.Time
-	expires time.Time
+	mu               sync.RWMutex
+	revoked          atomic.Bool
+	revocationSerial atomic.Uint64
+	now              func() time.Time
+	expires          time.Time
 }
 
 func (s Session) markRevoked() {
 	if s.gate != nil {
+		s.gate.revocationSerial.Add(1)
 		s.gate.revoked.Store(true)
 	}
 	if s.revoke != nil {
@@ -140,11 +147,11 @@ func (s Session) markRevoked() {
 // writing a response or waiting on provider/network I/O. Existing admitted work
 // finishes before Logout returns; no new work is admitted after revocation/expiry.
 func (s Session) BeginMutation(ctx context.Context) (func(), error) {
-	if s.gate == nil || ctx.Err() != nil || s.gate.revoked.Load() || !s.gate.now().Before(s.gate.expires) {
+	if s.gate == nil || !s.accountActive() || ctx.Err() != nil || s.gate.revoked.Load() || !s.gate.now().Before(s.gate.expires) {
 		return nil, ErrUnauthenticated
 	}
 	s.gate.mu.RLock()
-	if ctx.Err() != nil || s.gate.revoked.Load() || !s.gate.now().Before(s.gate.expires) {
+	if !s.accountActive() || ctx.Err() != nil || s.gate.revoked.Load() || !s.gate.now().Before(s.gate.expires) {
 		s.gate.mu.RUnlock()
 		return nil, ErrUnauthenticated
 	}
@@ -159,6 +166,7 @@ type attempts struct {
 	count int
 }
 type managerState struct {
+	live      *liveAccounts
 	mu        sync.Mutex
 	verifier  verifier
 	operators map[string]principal
@@ -176,6 +184,24 @@ type Manager struct{ *managerState }
 func (Manager) String() string   { return "operatorauth.Manager{secrets:redacted}" }
 func (Manager) GoString() string { return "operatorauth.Manager{secrets:redacted}" }
 func New(config Config) (*Manager, error) {
+	var live *liveAccounts
+	if config.AuthorityStore == nil && (config.AuthorityID != "" || config.AuthorityProfile != "") {
+		return nil, ErrConfiguration
+	}
+	if config.AuthorityStore != nil {
+		if config.PasswordHash != "" || config.Operators != nil {
+			return nil, ErrConfiguration
+		}
+		var err error
+		live, config.Operators, err = loadAccounts(context.Background(), config.AuthorityStore)
+		if err == nil && (config.AuthorityID != live.snapshot.AuthorityID || config.AuthorityProfile != live.snapshot.Profile) {
+			return nil, ErrConfiguration
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var v verifier
 	var operators map[string]principal
 	var err error
@@ -204,7 +230,7 @@ func New(config Config) (*Manager, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Manager{managerState: &managerState{verifier: v, operators: operators, now: now, ttl: ttl, sessions: map[[32]byte]Session{}, peers: map[netip.Addr]attempts{}, hashing: make(chan struct{}, 1)}}, nil
+	return &Manager{managerState: &managerState{live: live, verifier: v, operators: operators, now: now, ttl: ttl, sessions: map[[32]byte]Session{}, peers: map[netip.Addr]attempts{}, hashing: make(chan struct{}, 1)}}, nil
 }
 func randomHex(size int) (string, error) {
 	value := make([]byte, size)
@@ -296,9 +322,18 @@ func (m *Manager) login(ctx context.Context, peer, username, password string, na
 	v := m.verifier // Dummy workload for an unknown user or wrong login mode.
 	actor := principal{grants: capabilityBit(Read)}
 	known := !named && !m.Named()
+	var account *accountEntry
+	var accountRevision uint64
 	if named && m.Named() && validUsername(username) {
 		if configured, exists := m.operators[username]; exists {
 			v, actor, known = configured.verifier, configured, true
+			if m.live != nil {
+				account = m.live.byName[username]
+				current := account.current.Load()
+				accountRevision = current.record.Revision
+				v, actor = current.principal.verifier, current.principal
+				known = account.permits(accountRevision, Read)
+			}
 		}
 	}
 	secret := []byte(password)
@@ -327,9 +362,13 @@ func (m *Manager) login(ctx context.Context, peer, username, password string, na
 	now := m.now()
 	life, revoke := context.WithCancel(context.Background())
 	actor.verifier = verifier{} // Never retain password material in session state.
-	session := Session{actor: actor, ID: id, CSRFToken: csrf, ExpiresAt: now.Add(m.ttl), lifetime: life, revoke: revoke, gate: &sessionGate{now: m.now, expires: now.Add(m.ttl)}}
+	session := Session{account: account, accountRevision: accountRevision, actor: actor, ID: id, CSRFToken: csrf, ExpiresAt: now.Add(m.ttl), lifetime: life, revoke: revoke, gate: &sessionGate{now: m.now, expires: now.Add(m.ttl)}}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if ctx.Err() != nil || account != nil && !account.permits(accountRevision, Read) {
+		revoke()
+		return Session{}, ErrUnauthenticated
+	}
 	m.purgeLocked(now)
 	if !m.sessionAvailableLocked(actor.id) {
 		revoke()
@@ -359,7 +398,7 @@ func (m *Manager) Lookup(token string) (Session, error) {
 	defer m.mu.Unlock()
 	m.purgeLocked(now)
 	session, ok := m.sessions[key]
-	if !ok || session.gate == nil || session.gate.revoked.Load() {
+	if !ok || session.gate == nil || !session.accountActive() || session.gate.revoked.Load() {
 		return Session{}, ErrUnauthenticated
 	}
 	return session, nil

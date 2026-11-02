@@ -13,6 +13,7 @@ import (
 	"localrmm/internal/enrollmentstate"
 	"localrmm/internal/inventoryledger"
 	"localrmm/internal/keyvalidation"
+	"localrmm/internal/operatorauth"
 	"time"
 )
 
@@ -296,7 +297,24 @@ func (s *Store) PreviewServiceAction(ctx context.Context, key ed25519.PublicKey,
 	return s.serviceActionTransaction(ctx, key, device, "", "", now, true, func(r *actionjob.Record) error { _, e := r.MakePreview(job, actor, unit, profile, now); return e })
 }
 func (s *Store) ApproveServiceAction(ctx context.Context, key ed25519.PublicKey, device, id, digest, actor, profile string, now time.Time, sign func(actionpermit.Permit) ([]byte, error)) (actionjob.Record, error) {
-	return s.serviceActionTransaction(ctx, key, device, "", "", now, true, func(r *actionjob.Record) error { _, e := r.Approve(id, digest, actor, profile, now, sign); return e })
+	return s.serviceActionTransaction(ctx, key, device, "", "", now, true, func(r *actionjob.Record) error {
+		epoch := operatorauth.ApprovalEpochFromContext(ctx)
+		for _, j := range r.Jobs {
+			if j.Preview.ID == id && j.AuthorityEpoch != epoch {
+				return actionjob.ErrConflict
+			}
+		}
+		_, e := r.Approve(id, digest, actor, profile, now, sign)
+		if e != nil {
+			return e
+		}
+		for i := range r.Jobs {
+			if r.Jobs[i].Preview.ID == id {
+				r.Jobs[i].AuthorityEpoch = epoch
+			}
+		}
+		return nil
+	})
 }
 func (s *Store) PeekServiceAction(ctx context.Context, key ed25519.PublicKey, id, hash string, now time.Time) (actionjob.Delivery, error) {
 	r, e := s.serviceActionTransaction(ctx, key, "", id, hash, now, false, func(*actionjob.Record) error { return nil })
@@ -315,7 +333,16 @@ func (s *Store) PeekServiceAction(ctx context.Context, key ed25519.PublicKey, id
 }
 func (s *Store) ClaimServiceAction(ctx context.Context, key ed25519.PublicKey, id, hash, profile string, identity actionjob.Identity, now time.Time) (actionjob.Grant, error) {
 	var grant actionjob.Grant
-	_, e := s.serviceActionTransaction(ctx, key, "", id, hash, now, true, func(r *actionjob.Record) error { var e error; grant, e = r.Claim(identity, profile, now); return e })
+	_, e := s.serviceActionTransaction(ctx, key, "", id, hash, now, true, func(r *actionjob.Record) error {
+		for _, j := range r.Jobs {
+			if j.Identity() == identity && j.AuthorityEpoch != operatorauth.ApprovalEpochFromContext(ctx) {
+				return actionjob.ErrConflict
+			}
+		}
+		var e error
+		grant, e = r.Claim(identity, profile, now)
+		return e
+	})
 	if e != nil {
 		return actionjob.Grant{}, e
 	}
@@ -324,4 +351,19 @@ func (s *Store) ClaimServiceAction(ctx context.Context, key ed25519.PublicKey, i
 func (s *Store) AcceptServiceAction(ctx context.Context, key ed25519.PublicKey, id, hash string, result actionhelper.Result, now time.Time) error {
 	_, e := s.serviceActionTransaction(ctx, key, "", id, hash, now, true, func(r *actionjob.Record) error { return r.Accept(result, now) })
 	return e
+}
+
+// ServiceActionAuthority discovers immutable manager-side authority before a lease
+// is acquired. Claim rechecks the same epoch/identity in its own transaction.
+func (s *Store) ServiceActionAuthority(ctx context.Context, key ed25519.PublicKey, id, hash string, identity actionjob.Identity, now time.Time) (string, uint64, error) {
+	r, e := s.serviceActionTransaction(ctx, key, "", id, hash, now, false, func(*actionjob.Record) error { return nil })
+	if e != nil {
+		return "", 0, e
+	}
+	for _, j := range r.Jobs {
+		if j.Identity() == identity {
+			return j.Preview.ActorID, j.AuthorityEpoch, nil
+		}
+	}
+	return "", 0, actionjob.ErrNotFound
 }

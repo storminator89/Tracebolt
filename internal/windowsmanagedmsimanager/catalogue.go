@@ -41,7 +41,12 @@ func (m *ArtifactManager) catalogueContext(ctx context.Context, actor string) (c
 	return msi.WithFinalCheck(ctx, check), nil
 }
 func (m *ArtifactManager) ReserveCatalogueUpload(ctx context.Context, actor, revision string, selection msi.Selection, native, status, evidence string) error {
-	ctx, e := m.catalogueContext(ctx, actor)
+	ctx, release, e := m.beginAccount(ctx, actor)
+	if e != nil {
+		return e
+	}
+	defer release()
+	ctx, e = m.catalogueContext(ctx, actor)
 	if e != nil {
 		return e
 	}

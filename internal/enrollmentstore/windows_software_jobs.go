@@ -376,6 +376,9 @@ func (s *Store) windowsSoftwareJobCurrent(t *transaction, id string, binding win
 // or erasing/replacing a consumed signed record. Unsigned readiness slots remain
 // replaceable; signed history, original ages, envelopes and results do not.
 func windowsSoftwareJobTransition(before, after windowssoftwarejob.Record, now int64) error {
+	if err := windowssoftwarejob.CheckAccountTransition(before, after); err != nil {
+		return err
+	}
 
 	if before.Version != after.Version || before.Consent != after.Consent || !bytes.Equal(before.PublicKey, after.PublicKey) || !bytes.Equal(before.ExecutorPublicKey, after.ExecutorPublicKey) || after.Sequence < before.Sequence || after.ReadinessSequence < before.ReadinessSequence || after.ClockFloor < before.ClockFloor || after.ClockFloor > now {
 		return windowssoftwarejob.ErrInvalid

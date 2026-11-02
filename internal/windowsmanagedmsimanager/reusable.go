@@ -9,6 +9,11 @@ import (
 // retirement of that job's app-owned payload and released owner metadata. It
 // neither cancels an admitted install nor installs the next package.
 func (m *Manager) Retire(ctx context.Context, actor, resultDigest string, ack bool) error {
+	ctx, accountRelease, accountErr := m.beginAccount(ctx, actor, "install", false)
+	if accountErr != nil {
+		return accountErr
+	}
+	defer accountRelease()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !ack || !msi.ValidDigest(resultDigest) {

@@ -26,6 +26,7 @@ const (
 	ManageApplicationChecks   Capability = "manage_application_checks"
 	ManageSessions            Capability = "manage_sessions"
 	ReadCustomers             Capability = "read_customers"
+	ManageAccounts            Capability = "manage_accounts"
 	MaxOperators                         = 32
 )
 
@@ -44,11 +45,11 @@ func (Operator) GoString() string { return "operatorauth.Operator{secrets:redact
 type principal struct {
 	id       string
 	username string
-	grants   uint16
+	grants   uint32
 	verifier verifier
 }
 
-func capabilityBit(c Capability) uint16 {
+func capabilityBit(c Capability) uint32 {
 	switch c {
 	case Read:
 		return 1
@@ -82,6 +83,8 @@ func capabilityBit(c Capability) uint16 {
 		return 16384
 	case ReadCustomers:
 		return 32768
+	case ManageAccounts:
+		return 65536
 	default:
 		return 0
 	}
@@ -124,7 +127,7 @@ func namedPrincipals(operators []Operator) (map[string]principal, error) {
 			return nil, ErrConfiguration
 		}
 		work = v
-		var grants uint16
+		var grants uint32
 		for _, c := range op.Capabilities {
 			bit := capabilityBit(c)
 			if bit == 0 || grants&bit != 0 {
@@ -154,7 +157,7 @@ func (s Session) Named() bool     { return s.actor.id != "" }
 // Call BeginCapability immediately before short privileged dispatch work.
 func (s Session) Capabilities() []Capability {
 	out := make([]Capability, 0, 9)
-	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule, WindowsSoftwareInstall, WindowsManagedMSIDeliver, WindowsManagedMSIInstall, WindowsManagedMSISchedule, WindowsUpdateDownload, ManageSessions, ReadCustomers} {
+	for _, c := range []Capability{Read, PlanUpdates, ExecuteUpdates, RestartService, ManageAlarms, ManageApplicationChecks, WindowsServiceControl, WindowsUpdateInstall, WindowsUpdateSchedule, WindowsSoftwareInstall, WindowsManagedMSIDeliver, WindowsManagedMSIInstall, WindowsManagedMSISchedule, WindowsUpdateDownload, ManageSessions, ReadCustomers, ManageAccounts} {
 		if s.actor.grants&capabilityBit(c) != 0 {
 			out = append(out, c)
 		}
@@ -184,9 +187,10 @@ func (m *Manager) LoginNamed(ctx context.Context, peer, username, password strin
 	return m.login(ctx, peer, username, password, true)
 }
 
-// ActorHasCapability is the current immutable named-account grant used before
-// dispatching a previously explicit approval. Account changes require restart;
-// approval never manufactures a grant after that restart.
+// ActorHasCapability is a point-in-time policy observation. Static configuration
+// changes require restart; live accounts read the current fenced revision.
+// Delayed dispatch must hold LeaseActor with its durable approval epoch through
+// admission: a boolean check alone does not serialize revocation.
 func (m *Manager) ActorHasCapability(actor string, cap Capability) bool {
 	if m == nil || actor == "" || cap == Read {
 		return false
@@ -194,6 +198,13 @@ func (m *Manager) ActorHasCapability(actor string, cap Capability) bool {
 	bit := capabilityBit(cap)
 	if bit == 0 {
 		return false
+	}
+	if m.live != nil {
+		e := m.live.byID[actor]
+		if e == nil {
+			return false
+		}
+		return e.permits(e.current.Load().record.Revision, cap)
 	}
 	for _, p := range m.operators {
 		if p.id == actor {

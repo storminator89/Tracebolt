@@ -9,6 +9,7 @@ import (
 	"errors"
 	"localrmm/internal/alarmdelivery"
 	"localrmm/internal/health"
+	"strconv"
 	"time"
 )
 
@@ -16,6 +17,7 @@ const alarmSchema = `CREATE TABLE IF NOT EXISTS alarm_settings(id INTEGER PRIMAR
 INSERT OR IGNORE INTO alarm_settings(id,binding,enabled) VALUES(1,'',0);
 CREATE TABLE IF NOT EXISTS alarm_outbox(id TEXT PRIMARY KEY, binding TEXT NOT NULL, device TEXT NOT NULL, incident TEXT NOT NULL, rule TEXT NOT NULL, transition TEXT NOT NULL CHECK(transition IN ('opened','recovered')), body BLOB NOT NULL CHECK(length(body)>0 AND length(body)<=2048 AND json_valid(body)), state TEXT NOT NULL CHECK(state IN ('queued','in_flight','provider_accepted','failed','uncertain','suppressed')), attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts>=0 AND attempts<=5), created INTEGER NOT NULL, due INTEGER NOT NULL, last_attempt INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, code TEXT NOT NULL DEFAULT '', UNIQUE(binding,device,incident,transition));
 CREATE INDEX IF NOT EXISTS alarm_due ON alarm_outbox(state,due);
+CREATE TABLE IF NOT EXISTS alarm_test_authority(event_id TEXT PRIMARY KEY REFERENCES alarm_outbox(id) ON DELETE CASCADE,actor TEXT NOT NULL,epoch TEXT NOT NULL CHECK(length(epoch)>0 AND length(epoch)<=20));
 CREATE TABLE IF NOT EXISTS alarm_config_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,revision TEXT NOT NULL UNIQUE,actor TEXT NOT NULL,action TEXT NOT NULL,at INTEGER NOT NULL);`
 
 // ConfigureAlarms runs at startup or while the controller has stopped dispatch.
@@ -289,9 +291,27 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 		if json.Unmarshal(r.body, &p) != nil || p.EventID != r.id || len(r.body) > alarmdelivery.MaxPayloadBytes {
 			return nil, alarmdelivery.ErrInvalid
 		}
-		if r.rule == alarmdelivery.TestRule && !alarmdelivery.IsTestPayload(p) {
+		attempt := alarmdelivery.Attempt{Payload: p, Number: r.attempts + 1, OperatorTest: r.rule == alarmdelivery.TestRule}
+		var epoch string
+		e = tx.QueryRowContext(ctx, `SELECT actor,epoch FROM alarm_test_authority WHERE event_id=?`, r.id).Scan(&attempt.TestActor, &epoch)
+		if e != nil && !errors.Is(e, sql.ErrNoRows) {
+			return nil, e
+		}
+		if e == nil {
+			// Sidecar provenance remains a test even if another stored field is
+			// malformed; it must never fall through as routine monitoring.
+			attempt.OperatorTest = true
+			parsed, err := strconv.ParseUint(epoch, 10, 64)
+			if err != nil || strconv.FormatUint(parsed, 10) != epoch || !validAlarmActor(attempt.TestActor) {
+				return nil, alarmdelivery.ErrInvalid
+			}
+			attempt.AuthorityEpoch = parsed
+		}
+		if attempt.OperatorTest && !alarmdelivery.IsTestPayload(p) {
 			return nil, alarmdelivery.ErrInvalid
 		}
+		// Missing historic test receipt is intentionally left unbound. The live
+		// worker rejects it, never promoting it to the actor's current revision.
 		if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET state='in_flight',attempts=attempts+1,last_attempt=? WHERE id=?`, ms, r.id); e != nil {
 			return nil, e
 		}
@@ -301,7 +321,7 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 		if e = tx.Commit(); e != nil {
 			return nil, e
 		}
-		return &alarmdelivery.Attempt{Payload: p, Number: r.attempts + 1}, nil
+		return &attempt, nil
 	}
 	return nil, tx.Commit()
 }
@@ -340,7 +360,7 @@ func (s *Store) CompleteAlarm(ctx context.Context, b alarmdelivery.Binding, a al
 func sanitizeAlarmCode(code string) string {
 	// Never persist provider bodies, endpoint strings, wrapped errors or secrets.
 	switch code {
-	case "disabled", "request_cancelled", "invalid_payload", "invalid_destination", "dns_failed", "destination_blocked", "connection_failed", "request_uncertain", "provider_accepted", "provider_rate_limited", "provider_uncertain", "redirect_blocked", "provider_rejected":
+	case "operator_authority_revoked", "disabled", "request_cancelled", "invalid_payload", "invalid_destination", "dns_failed", "destination_blocked", "connection_failed", "request_uncertain", "provider_accepted", "provider_rate_limited", "provider_uncertain", "redirect_blocked", "provider_rejected":
 		return code
 	default:
 		return "transport_result"

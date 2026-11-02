@@ -47,18 +47,19 @@ type Config struct {
 type DeviceAuthority func(context.Context, string, string, time.Time) error
 type ActorAuthority func(string, operatorauth.Capability) bool
 type Manager struct {
-	mu     *sync.Mutex
-	config Config
-	path   string
-	raw    []byte
-	key    ed25519.PrivateKey
-	store  packageupdate.DurableStore
-	owned  *packageupdatestore.Store
-	device DeviceAuthority
-	actor  ActorAuthority
-	now    func() time.Time
-	caps   *packagehelper.Capabilities
-	closed bool
+	accountAuthority operatorauth.ActorAdmission // configured once before listeners
+	mu               *sync.Mutex
+	config           Config
+	path             string
+	raw              []byte
+	key              ed25519.PrivateKey
+	store            packageupdate.DurableStore
+	owned            *packageupdatestore.Store
+	device           DeviceAuthority
+	actor            ActorAuthority
+	now              func() time.Time
+	caps             *packagehelper.Capabilities
+	closed           bool
 }
 
 func (Manager) String() string               { return "packagecontroller.Manager{authority:redacted}" }
@@ -217,6 +218,14 @@ func (m *Manager) permit(r packageupdate.Record, j packageupdate.Job, action str
 	return packagepermit.Sign(context.Background(), p, m.key)
 }
 func (m *Manager) Prepare(ctx context.Context, device, actor string, req packageupdate.PrepareRequest) error {
+	if m == nil {
+		return packageupdate.ErrUnavailable
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx), operatorauth.PlanUpdates)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if m == nil || m.mu == nil {
 		return packageupdate.ErrUnavailable
 	}
@@ -226,7 +235,7 @@ func (m *Manager) Prepare(ctx context.Context, device, actor string, req package
 	if e := m.live(ctx, device, m.config.IncarnationDigest, now); e != nil {
 		return e
 	}
-	if !m.actor(actor, operatorauth.PlanUpdates) {
+	if m.accountAuthority == nil && !m.actor(actor, operatorauth.PlanUpdates) {
 		return packageupdate.ErrUnavailable
 	}
 	if e := packageupdate.ValidatePrepare(req); e != nil {
@@ -238,6 +247,9 @@ func (m *Manager) Prepare(ctx context.Context, device, actor string, req package
 	}
 	for _, j := range r.Jobs {
 		if j.Request.RequestID == req.RequestID {
+			if j.AuthorityEpoch != operatorauth.ApprovalEpochFromContext(ctx) {
+				return packageupdate.ErrConflict
+			}
 			next, e := packageupdate.PrepareNative(ctx, r, req, actor, now.Unix(), j.PreparationEnvelope)
 			if e != nil {
 				return e
@@ -266,9 +278,18 @@ func (m *Manager) Prepare(ctx context.Context, device, actor string, req package
 	if e != nil {
 		return e
 	}
+	next.Jobs[len(next.Jobs)-1].AuthorityEpoch = operatorauth.ApprovalEpochFromContext(ctx)
 	return m.save(ctx, r, next)
 }
 func (m *Manager) Approve(ctx context.Context, device, actor string, req packageupdate.ApprovalRequest) error {
+	if m == nil {
+		return packageupdate.ErrUnavailable
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx), operatorauth.ExecuteUpdates)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if m == nil || m.mu == nil {
 		return packageupdate.ErrUnavailable
 	}
@@ -278,7 +299,7 @@ func (m *Manager) Approve(ctx context.Context, device, actor string, req package
 	if e := m.live(ctx, device, m.config.IncarnationDigest, now); e != nil {
 		return e
 	}
-	if !m.actor(actor, operatorauth.ExecuteUpdates) {
+	if m.accountAuthority == nil && !m.actor(actor, operatorauth.ExecuteUpdates) {
 		return packageupdate.ErrUnavailable
 	}
 	r, e := m.read(ctx, now.Unix())
@@ -288,6 +309,9 @@ func (m *Manager) Approve(ctx context.Context, device, actor string, req package
 	for _, j := range r.Jobs {
 		if j.Request.RequestID != req.RequestID {
 			continue
+		}
+		if j.AuthorityEpoch != operatorauth.ApprovalEpochFromContext(ctx) {
+			return packageupdate.ErrConflict
 		}
 		signed := j.ExecutionEnvelope
 		if j.ApprovedAt == 0 {
@@ -372,6 +396,75 @@ func (m *Manager) Peek(ctx context.Context, device, inc string) (packagewire.Del
 	return delivery(r.Jobs[len(r.Jobs)-1])
 }
 func (m *Manager) Claim(ctx context.Context, device, inc string, id packagewire.Identity) (packagewire.Grant, error) {
+	grant, release, err := m.ClaimWithAdmission(ctx, device, inc, id)
+	if release != nil {
+		release()
+	}
+	return grant, err
+}
+func (m *Manager) ClaimWithAdmission(ctx context.Context, device, inc string, id packagewire.Identity) (packagewire.Grant, func(), error) {
+	if m == nil || m.mu == nil || !packagewire.ValidIdentity(id) {
+		return packagewire.Grant{}, nil, packageupdate.ErrInvalid
+	}
+	// Release controller/store locks before waiting for account authority.
+	m.mu.Lock()
+	if err := m.live(ctx, device, inc, m.now().UTC()); err != nil {
+		m.mu.Unlock()
+		return packagewire.Grant{}, nil, err
+	}
+	r, err := m.read(ctx, m.now().Unix())
+	var job packageupdate.Job
+	found := false
+	if err == nil {
+		for _, j := range r.Jobs {
+			d, e := delivery(j)
+			if e == nil && d.Identity == id {
+				job = j
+				found = true
+				break
+			}
+		}
+	}
+	m.mu.Unlock()
+	if err != nil {
+		return packagewire.Grant{}, nil, err
+	}
+	if !found {
+		return packagewire.Grant{}, nil, packageupdate.ErrNotFound
+	}
+	cap := operatorauth.PlanUpdates
+	if id.Kind == packagepermit.Execute {
+		cap = operatorauth.ExecuteUpdates
+	}
+	ctx, release, err := m.admitAccount(ctx, job.ActorID, job.AuthorityEpoch, cap)
+	if err != nil {
+		return packagewire.Grant{}, nil, err
+	}
+	ctx = operatorauth.WithApprovalEpoch(ctx, job.AuthorityEpoch)
+	grant, err := m.claimAdmitted(ctx, device, inc, id)
+	if err != nil {
+		release()
+		return packagewire.Grant{}, nil, err
+	}
+	return grant, release, nil
+}
+func (m *Manager) ConfigureAccountAuthority(admit operatorauth.ActorAdmission) error {
+	if m == nil || admit == nil || m.accountAuthority != nil {
+		return ErrConfiguration
+	}
+	m.accountAuthority = admit
+	return nil
+}
+func (m *Manager) admitAccount(ctx context.Context, actor string, epoch uint64, cap operatorauth.Capability) (context.Context, func(), error) {
+	if m.accountAuthority == nil {
+		if epoch != 0 {
+			return ctx, nil, ErrConfiguration
+		}
+		return ctx, func() {}, nil
+	}
+	return m.accountAuthority(ctx, actor, epoch, cap)
+}
+func (m *Manager) claimAdmitted(ctx context.Context, device, inc string, id packagewire.Identity) (packagewire.Grant, error) {
 	if m == nil || m.mu == nil || !packagewire.ValidIdentity(id) {
 		return packagewire.Grant{}, packageupdate.ErrInvalid
 	}
@@ -392,6 +485,9 @@ func (m *Manager) Claim(ctx context.Context, device, inc string, id packagewire.
 		return packagewire.Grant{}, packageupdate.ErrNotFound
 	}
 	j := r.Jobs[len(r.Jobs)-1]
+	if j.AuthorityEpoch != operatorauth.ApprovalEpochFromContext(ctx) {
+		return packagewire.Grant{}, packageupdate.ErrConflict
+	}
 	d, e := delivery(j)
 	if e != nil || d.Identity != id || d.State != "pending" {
 		return packagewire.Grant{}, packageupdate.ErrConflict
@@ -400,7 +496,7 @@ func (m *Manager) Claim(ctx context.Context, device, inc string, id packagewire.
 	if id.Kind == packagepermit.Execute {
 		cap = operatorauth.ExecuteUpdates
 	}
-	if !m.actor(j.ActorID, cap) {
+	if m.accountAuthority == nil && !m.actor(j.ActorID, cap) {
 		return packagewire.Grant{}, packageupdate.ErrUnavailable
 	}
 	var next packageupdate.Record
@@ -555,3 +651,6 @@ func (m *Manager) view(ctx context.Context, device, id string, now time.Time) (p
 	}
 	return v, nil
 }
+
+// AccountAuthorityConfigured is startup metadata, never a capability grant.
+func (m *Manager) AccountAuthorityConfigured() bool { return m != nil && m.accountAuthority != nil }

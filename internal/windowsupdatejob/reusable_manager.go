@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"localrmm/internal/actionpermit"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/operatorauth"
 )
 
 type RetirementView struct {
@@ -125,6 +126,11 @@ func (r Record) validateReusable() error {
 // Retire requests exact, reviewed evidence compaction. A successful result alone
 // cannot release a native owner: the endpoint must prove its saved receipt too.
 func (m *Manager) Retire(ctx context.Context, device, actor, id string, occurrence uint64, envelopeDigest, resultDigest string, ack bool) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, "", false)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !ack || !enrollmentcrypto.ValidID(actor, "operator_") || !enrollmentcrypto.ValidID(id, "update_") || occurrence == 0 || !actionpermit.ValidDigest(envelopeDigest) || !actionpermit.ValidDigest(resultDigest) {
@@ -144,7 +150,7 @@ func (m *Manager) Retire(ctx context.Context, device, actor, id string, occurren
 			}
 			if len(j.RetirePermit) > 0 {
 				p, e := VerifyRetirement(j.RetirePermit, m.record.PublicKey)
-				if e != nil || p.ActorID != actor {
+				if e != nil || p.ActorID != actor || j.RetireAuthorityEpoch != operatorauth.ApprovalEpochFromContext(ctx) {
 					return ErrConflict
 				}
 				return nil
@@ -155,12 +161,18 @@ func (m *Manager) Retire(ctx context.Context, device, actor, id string, occurren
 				return e
 			}
 			j.RetirePermit = raw
+			j.RetireAuthorityEpoch = operatorauth.ApprovalEpochFromContext(ctx)
 			return m.save(n)
 		}
 		return ErrConflict
 	})
 }
 func (m *Manager) ClaimRetirement(ctx context.Context, id string) ([]byte, error) {
+	ctx, releaseAccount, leaseErr := m.leaseJob(ctx, id, true)
+	if leaseErr != nil {
+		return nil, leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if ctx == nil {
@@ -251,7 +263,12 @@ func (m *Manager) reportRetirement(ctx context.Context, raw []byte) error {
 	})
 }
 
-func ClearRetirementFields(j *Job) { j.RetirePermit = nil; j.RetireClaimedAt = 0; j.RetireReport = nil }
+func ClearRetirementFields(j *Job) {
+	j.RetirePermit = nil
+	j.RetireAuthorityEpoch = 0
+	j.RetireClaimedAt = 0
+	j.RetireReport = nil
+}
 func CanCompactRetiredJob(before, after Record, j Job) bool {
 	if !before.Consent.Reusable() || len(j.RetireReport) == 0 || j.Occurrence > before.RetiredFloor || after.RetiredFloor < before.RetiredFloor {
 		return false
@@ -267,6 +284,9 @@ func CanCompactRetiredJob(before, after Record, j Job) bool {
 // CheckReusableTransition is the enrollment transaction's immutable retirement
 // guard. Only one exact signed acknowledgement can advance each floor/chain.
 func CheckReusableTransition(before, after Record) error {
+	if err := CheckAccountTransition(before, after); err != nil {
+		return err
+	}
 	if !before.Consent.Reusable() {
 		return after.validateReusable()
 	}

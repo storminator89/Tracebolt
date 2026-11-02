@@ -159,7 +159,7 @@ func ValidateSuccessor(ctx context.Context, old, next Record) error {
 	}
 	for i, a := range old.Jobs {
 		b := next.Jobs[i]
-		if a.Sequence != b.Sequence || !bytes.Equal(a.PreparationEnvelope, b.PreparationEnvelope) || a.PreparationClaimedAt != 0 && a.PreparationClaimedAt != b.PreparationClaimedAt || len(a.ExecutionEnvelope) > 0 && !bytes.Equal(a.ExecutionEnvelope, b.ExecutionEnvelope) || !equalJSON(a.Request, b.Request) || a.ActorID != b.ActorID || a.CreatedAt != b.CreatedAt || b.UpdatedAt < a.UpdatedAt || a.Preview != nil && !equalJSON(a.Preview, b.Preview) || a.ApprovedAt != 0 && a.ApprovedAt != b.ApprovedAt || a.ClaimedAt != 0 && a.ClaimedAt != b.ClaimedAt || len(b.Results) < len(a.Results) || len(b.Results) > len(a.Results)+1 {
+		if a.AuthorityEpoch != b.AuthorityEpoch || a.Sequence != b.Sequence || !bytes.Equal(a.PreparationEnvelope, b.PreparationEnvelope) || a.PreparationClaimedAt != 0 && a.PreparationClaimedAt != b.PreparationClaimedAt || len(a.ExecutionEnvelope) > 0 && !bytes.Equal(a.ExecutionEnvelope, b.ExecutionEnvelope) || !equalJSON(a.Request, b.Request) || a.ActorID != b.ActorID || a.CreatedAt != b.CreatedAt || b.UpdatedAt < a.UpdatedAt || a.Preview != nil && !equalJSON(a.Preview, b.Preview) || a.ApprovedAt != 0 && a.ApprovedAt != b.ApprovedAt || a.ClaimedAt != 0 && a.ClaimedAt != b.ClaimedAt || len(b.Results) < len(a.Results) || len(b.Results) > len(a.Results)+1 {
 			return ErrConflict
 		}
 		for k, result := range a.Results {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"localrmm/internal/operatorauth"
 	"sync"
 	"time"
 
@@ -117,6 +118,7 @@ func reservedOperations(r Record) int {
 }
 
 type Job struct {
+	AuthorityEpoch     uint64    `json:"authorityEpoch,string,omitempty"`
 	Challenge          []byte    `json:"challenge"`
 	ReadinessClaimedAt int64     `json:"readinessClaimedAt"`
 	ReadinessReport    []byte    `json:"readinessReport"`
@@ -253,6 +255,7 @@ func EncodeRecord(r Record) ([]byte, error) {
 }
 
 type Manager struct {
+	accountAuthority   operatorauth.ActorAdmission
 	transactionStore   TransactionStore
 	configurationCheck func() error
 	operatorAllowed    func(string) bool
@@ -348,6 +351,14 @@ func (m *Manager) observeTime() (int64, error) {
 	return n, nil
 }
 func (m *Manager) transaction(ctx context.Context, fn func(Current, int64) error) error {
+	originalFn := fn
+	fn = func(c Current, n int64) error {
+		if err := m.checkAccountReceipt(ctx); err != nil {
+			return err
+		}
+		return originalFn(c, n)
+	}
+
 	if ctx == nil {
 		return ErrInvalid
 	}
@@ -413,6 +424,11 @@ func (m *Manager) blocked(n int64, except string) bool {
 	return false
 }
 func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selection) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, id)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !enrollmentcrypto.ValidID(actor, "operator_") || !enrollmentcrypto.ValidID(id, "software_") || !ValidSelection(s) {
@@ -447,7 +463,7 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 		if err != nil {
 			return err
 		}
-		m.record.Jobs = append(m.record.Jobs, Job{Challenge: challenge, ID: id, ActorID: actor, Selection: s, RequestedAt: n, State: "requested", Reason: "readiness_pending"})
+		m.record.Jobs = append(m.record.Jobs, Job{AuthorityEpoch: operatorauth.ApprovalEpochFromContext(ctx), Challenge: challenge, ID: id, ActorID: actor, Selection: s, RequestedAt: n, State: "requested", Reason: "readiness_pending"})
 		if e := m.save(n); e != nil {
 			return e
 		}
@@ -486,6 +502,11 @@ func (m *Manager) Request(ctx context.Context, device, actor, id string, s Selec
 	})
 }
 func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack bool) error {
+	ctx, releaseAccount, leaseErr := m.leaseRequest(ctx, actor, id)
+	if leaseErr != nil {
+		return leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if device != m.Binding().DeviceID || !ack || !enrollmentcrypto.ValidID(actor, "operator_") || !actionpermit.ValidDigest(d) {
@@ -528,6 +549,11 @@ func (m *Manager) Approve(ctx context.Context, device, actor, id, d string, ack 
 // a lost response may re-deliver the envelope. TLS relay ingress is the only
 // production delivery surface.
 func (m *Manager) Claim(ctx context.Context, id string) ([]byte, error) {
+	ctx, releaseAccount, leaseErr := m.leaseJob(ctx, id)
+	if leaseErr != nil {
+		return nil, leaseErr
+	}
+	defer releaseAccount()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var raw []byte

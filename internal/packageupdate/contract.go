@@ -95,6 +95,7 @@ type Preview struct {
 	Digest         string           `json:"digest"`
 }
 type Job struct {
+	AuthorityEpoch       uint64         `json:"authorityEpoch,omitempty"` // Manager-side approval revision; never part of signed endpoint bytes.
 	PreparationEnvelope  []byte         `json:"preparationEnvelope"`
 	PreparationClaimedAt int64          `json:"preparationClaimedAt"`
 	ExecutionEnvelope    []byte         `json:"executionEnvelope"`

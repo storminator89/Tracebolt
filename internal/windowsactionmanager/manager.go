@@ -17,6 +17,7 @@ import (
 	"localrmm/internal/enrollmentstore"
 	"localrmm/internal/keyvalidation"
 	"localrmm/internal/lanconfig"
+	"localrmm/internal/operatorauth"
 	"localrmm/internal/windowsaction"
 	"localrmm/internal/windowsactionjob"
 	"path/filepath"
@@ -42,12 +43,13 @@ type signingKey struct {
 	closed bool
 }
 type Manager struct {
-	store  *enrollmentstore.Store
-	config Config
-	path   string
-	raw    []byte
-	key    *signingKey
-	now    func() time.Time
+	accountAuthority operatorauth.ActorAdmission // immutable after startup
+	store            *enrollmentstore.Store
+	config           Config
+	path             string
+	raw              []byte
+	key              *signingKey
+	now              func() time.Time
 }
 
 func (Manager) String() string               { return "windowsactionmanager.Manager{secrets:redacted}" }
@@ -181,6 +183,14 @@ func (m *Manager) View(ctx context.Context, device string) (windowsactionjob.Rec
 }
 
 func (m *Manager) Preview(ctx context.Context, device, actor, target, operation string) (windowsactionjob.Record, error) {
+	if m == nil {
+		return windowsactionjob.Record{}, ErrConfiguration
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx))
+	if err != nil {
+		return windowsactionjob.Record{}, err
+	}
+	defer release()
 	if e := m.live(); e != nil {
 		return windowsactionjob.Record{}, e
 	}
@@ -191,6 +201,14 @@ func (m *Manager) Preview(ctx context.Context, device, actor, target, operation 
 	return m.store.PreviewWindowsServiceAction(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), device, "action_"+hex.EncodeToString(b[:]), actor, target, operation, m.Now())
 }
 func (m *Manager) Approve(ctx context.Context, device, id, digest, actor string) (windowsactionjob.Record, error) {
+	if m == nil {
+		return windowsactionjob.Record{}, ErrConfiguration
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx))
+	if err != nil {
+		return windowsactionjob.Record{}, err
+	}
+	defer release()
 	if e := m.live(); e != nil {
 		return windowsactionjob.Record{}, e
 	}
@@ -209,11 +227,56 @@ func (m *Manager) Peek(ctx context.Context, id, hash string) (windowsactionjob.D
 	return m.store.PeekWindowsServiceAction(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), id, hash, m.Now())
 }
 func (m *Manager) Claim(ctx context.Context, id, hash string, i windowsaction.Identity) (windowsactionjob.Grant, error) {
-	if e := m.live(); e != nil {
-		return windowsactionjob.Grant{}, e
+	grant, release, err := m.ClaimWithAdmission(ctx, id, hash, i)
+	if release != nil {
+		release()
 	}
-	return m.store.ClaimWindowsServiceAction(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), id, hash, i, m.Now())
+	return grant, err
 }
+
+// ClaimWithAdmission returns the exact actor lease to the transport. Release only
+// after bounded serialization/write; a denied/uncertain handoff never unconsumes.
+func (m *Manager) ClaimWithAdmission(ctx context.Context, id, hash string, i windowsaction.Identity) (windowsactionjob.Grant, func(), error) {
+	if m == nil {
+		return windowsactionjob.Grant{}, nil, ErrConfiguration
+	}
+	actor, epoch, err := m.store.WindowsServiceActionAuthority(ctx, m.keyPublic(), id, hash, i, m.Now())
+	if err != nil {
+		return windowsactionjob.Grant{}, nil, err
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, epoch)
+	if err != nil {
+		return windowsactionjob.Grant{}, nil, err
+	}
+	if err = m.live(); err != nil {
+		release()
+		return windowsactionjob.Grant{}, nil, err
+	}
+	ctx = operatorauth.WithApprovalEpoch(ctx, epoch)
+	grant, err := m.store.ClaimWindowsServiceAction(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), id, hash, i, m.Now())
+	if err != nil {
+		release()
+		return windowsactionjob.Grant{}, nil, err
+	}
+	return grant, release, nil
+}
+func (m *Manager) ConfigureAccountAuthority(admit operatorauth.ActorAdmission) error {
+	if m == nil || admit == nil || m.accountAuthority != nil {
+		return ErrConfiguration
+	}
+	m.accountAuthority = admit
+	return nil
+}
+func (m *Manager) admitAccount(ctx context.Context, actor string, epoch uint64) (context.Context, func(), error) {
+	if m.accountAuthority == nil {
+		if epoch != 0 {
+			return ctx, nil, ErrConfiguration
+		}
+		return ctx, func() {}, nil
+	}
+	return m.accountAuthority(ctx, actor, epoch, operatorauth.WindowsServiceControl)
+}
+
 func (m *Manager) Accept(ctx context.Context, id, hash string, result windowsaction.Result) error {
 	if m == nil {
 		return ErrConfiguration
@@ -266,6 +329,14 @@ func (m *Manager) ViewExpectedAt(ctx context.Context, device, expectedBinding st
 }
 
 func (m *Manager) PreviewExpected(ctx context.Context, device, actor, target, operation, expectedBinding string) (windowsactionjob.Record, error) {
+	if m == nil {
+		return windowsactionjob.Record{}, ErrConfiguration
+	}
+	ctx, release, err := m.admitAccount(ctx, actor, operatorauth.ApprovalEpochFromContext(ctx))
+	if err != nil {
+		return windowsactionjob.Record{}, err
+	}
+	defer release()
 	if !windowsaction.ValidDigest(expectedBinding) {
 		return windowsactionjob.Record{}, windowsaction.ErrInvalid
 	}
@@ -278,3 +349,6 @@ func (m *Manager) PreviewExpected(ctx context.Context, device, actor, target, op
 	}
 	return m.store.PreviewWindowsServiceActionExpected(enrollmentstore.WithOverviewClock(ctx, m.Now), m.keyPublic(), device, "action_"+hex.EncodeToString(b[:]), actor, target, operation, expectedBinding, m.Now())
 }
+
+// AccountAuthorityConfigured is startup metadata, never a capability grant.
+func (m *Manager) AccountAuthorityConfigured() bool { return m != nil && m.accountAuthority != nil }
