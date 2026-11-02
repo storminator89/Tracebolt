@@ -60,10 +60,16 @@ go build -buildvcs=false -trimpath -o bin/manager-setup ./cmd/manager-setup
 
 Record the full source SHA and resulting binary/frontend hashes. A source hash
 or local build is not a signed publisher guarantee. A versioned published manager
-image/digest and image packaging of this command remain separate TB-01 gates;
-this native command does not manufacture either. The existing Docker image uses
+image/digest remains a separate TB-01 gate; this command does not manufacture one.
+`make build` includes `bin/manager-setup`, and the Dockerfile builds the same source
+into `/tracebolt/manager-setup`. The image still starts only the manager; packaging
+the CLI never runs doctor or init automatically. The existing Docker image uses
 container paths and mount/UID semantics: do not pass those paths to a host-native
-check and mistake that for container acceptance. The following example is a
+check and mistake that for container acceptance. The default read-only configuration
+mount is suitable for doctor, not an init output destination; init requires its
+separately approved writable private output location. Merely including the binary
+does not authorize mounts, writes, credentials, deployment or image publication.
+The following example is a
 **native host-path** workflow only.
 
 ## 3. Create one new LAN configuration
