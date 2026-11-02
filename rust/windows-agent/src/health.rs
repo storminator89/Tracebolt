@@ -187,7 +187,15 @@ pub fn classify(error: &anyhow::Error) -> Code {
     if let Some(code) = error.downcast_ref::<Code>() {
         return *code;
     }
-    if let Some(e) = error.downcast_ref::<reqwest::Error>() {
+    // Blocking Response implements Read by retaining reqwest::Error inside an
+    // io::Error. Recognize that exact transport wrapper for bounded body reads,
+    // without interpreting unrelated file/SQLite I/O as network evidence.
+    if let Some(e) = error.downcast_ref::<reqwest::Error>().or_else(|| {
+        error
+            .downcast_ref::<std::io::Error>()?
+            .get_ref()?
+            .downcast_ref::<reqwest::Error>()
+    }) {
         return if e.is_timeout() {
             Code::TransportTimeout
         } else {

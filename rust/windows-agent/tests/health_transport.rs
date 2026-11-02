@@ -1,4 +1,7 @@
+mod common;
+
 use reqwest::dns::{Name, Resolve, Resolving};
+use std::io::Read;
 use std::{io, sync::Arc, time::Duration};
 use tracebolt_windows_agent::{
     config::tls_builder,
@@ -115,6 +118,48 @@ fn resolver_deadline_stays_timeout_not_dns_or_offline() {
         .unwrap_err();
     assert!(error.is_timeout());
     assert_eq!(health::classify(&error.into()), Code::TransportTimeout);
+}
+
+#[test]
+fn response_body_failures_keep_reqwest_classes_through_the_read_wrapper() {
+    for timeout in [true, false] {
+        // Both production sender and enrollment use a bounded Read::take plus
+        // read_to_end. reqwest wraps body failures inside io::Error, unlike send.
+        let reply = |_: &str| {
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 128\r\nConnection: close\r\n\r\n{\"private-body-sentinel\":".to_vec()
+        };
+        let manager = if timeout {
+            common::Manager::holding_response(reply)
+        } else {
+            common::Manager::new(reply)
+        };
+        let client = tls_builder(&manager.ca)
+            .unwrap()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+        let response = client.get(&manager.origin).send().unwrap();
+        let mut body = Vec::new();
+        let error = response.take(8193).read_to_end(&mut body).unwrap_err();
+        let held = error
+            .get_ref()
+            .and_then(|cause| cause.downcast_ref::<reqwest::Error>())
+            .expect("reqwest body read must retain its typed wrapper");
+        assert_eq!(held.is_timeout(), timeout);
+        assert!(body.starts_with(b"{\"private-body-sentinel\":"));
+        let expected = if timeout {
+            Code::TransportTimeout
+        } else {
+            Code::TransportUnclassified
+        };
+        let error = anyhow::Error::new(error).context("private-context-sentinel");
+        assert_eq!(health::classify(&error), expected);
+        assert!(!format!("{} {}", expected, expected.next_action()).contains("private-"));
+        assert_eq!(
+            health::classify(&error.context(Code::ReceiptInvalid)),
+            Code::ReceiptInvalid
+        );
+    }
 }
 
 #[test]
