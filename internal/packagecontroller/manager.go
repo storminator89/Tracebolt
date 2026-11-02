@@ -74,12 +74,12 @@ func (c Config) Binding() packageupdate.Binding {
 // Load opens an explicitly initialized native store and existing signing key.
 // Missing/corrupt/uncertain state is not recreated. There is no simulation fallback.
 func Load(ctx context.Context, path string, device DeviceAuthority, actor ActorAuthority, forbidden ...ed25519.PublicKey) (*Manager, error) {
-	raw, e := lanconfig.ReadProtected(path, true, 8192)
+	raw, e := lanconfig.ReadProtected(path, true, MaxConfigBytes)
 	if e != nil {
 		return nil, ErrConfiguration
 	}
-	var c Config
-	if lanconfig.StrictObject(raw, &c, "version", "enabled", "managerId", "endpointId", "incarnationDigest", "rootPolicyDigest", "transportProfile", "httpTestAcknowledged", "stateFile", "privateKeyFile", "localScopeAcknowledged") != nil || !valid(c) || device == nil || actor == nil {
+	c, e := ParseConfig(raw)
+	if e != nil || device == nil || actor == nil {
 		return nil, ErrConfiguration
 	}
 	// Enrollment policy must admit this exact scope before opening the

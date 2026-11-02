@@ -97,6 +97,16 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	if e != nil {
 		return nil, e
 	}
+	writerLease, e := startupManagerWriterLease(c.StateDirectory, lanstore.AcquireManagerWriter)
+	if e != nil {
+		return nil, e
+	}
+	leaseHandedOff := false
+	defer func() {
+		if !leaseHandedOff && writerLease != nil {
+			_ = writerLease.Close()
+		}
+	}()
 	if e = lanstore.PrepareProfileDirectory(c.StateDirectory, c.Profile); e != nil {
 		return nil, e
 	}
@@ -565,6 +575,11 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			if windowsStore != nil {
 				windowsStore.Close()
 			}
+			// Workers are joined by run before p.close; release only after the
+			// final store/controller/session close, never before settlement.
+			if writerLease != nil {
+				_ = writerLease.Close()
+			}
 		})
 	}
 	app, e := api.New(appStore, 8787, c.WebDirectory, model.Device{})
@@ -676,6 +691,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	} else {
 		agent = withMacOSInventoryIngress(agent, nil)
 	}
+	leaseHandedOff = true
 	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, macosInventoryMaintenance: macosInventoryMaintenance, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 
@@ -694,7 +710,8 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 	if err != nil {
 		return err
 	}
-	defer p.close()
+	drain := newManagerRequestDrain()
+	defer drain.CloseAfterDrain(p.close)
 	operator, err := net.Listen("tcp", m.Config.OperatorListen)
 	if err != nil {
 		return errors.New("operator listener could not start")
@@ -788,7 +805,7 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
-	operators, agents := server(p.operator), server(p.agent)
+	operators, agents := server(drain.Wrap(p.operator)), server(drain.Wrap(p.agent))
 	results := make(chan error, 2)
 	go func() { results <- operators.Serve(operator) }()
 	go func() { results <- agents.Serve(agent) }()
@@ -804,10 +821,9 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 	case <-ctx.Done():
 	case err = <-results:
 	}
-	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = operators.Shutdown(shutdown)
-	_ = agents.Shutdown(shutdown)
+	if shutdownErr := stopManagerHTTP(operators, agents, drain, 5*time.Second); shutdownErr != nil {
+		return shutdownErr
+	}
 	if err == http.ErrServerClosed {
 		return nil
 	}

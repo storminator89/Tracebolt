@@ -21,12 +21,12 @@ func Initialize(ctx context.Context, path string, ack bool, now time.Time, autho
 	if !ack || ctx == nil || now.Location() != time.UTC || len(authority) != 1 || authority[0] == nil {
 		return ErrConfiguration
 	}
-	raw, e := lanconfig.ReadProtected(path, true, 8192)
+	raw, e := lanconfig.ReadProtected(path, true, MaxConfigBytes)
 	if e != nil {
 		return ErrConfiguration
 	}
-	var c Config
-	if lanconfig.StrictObject(raw, &c, "version", "enabled", "managerId", "endpointId", "incarnationDigest", "rootPolicyDigest", "transportProfile", "httpTestAcknowledged", "stateFile", "privateKeyFile", "localScopeAcknowledged") != nil || !valid(c) {
+	c, e := ParseConfig(raw)
+	if e != nil {
 		return ErrConfiguration
 	}
 	if e = authority[0](ctx, c.ManagerID, c.EndpointID, c.IncarnationDigest, now); e != nil {

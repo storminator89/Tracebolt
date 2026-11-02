@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "c9eaf73473b979c81b4a99227d3f0ee4c6daaaccea6e3b288fb9def25161a2b7",
+  "goSourceSha256": "c3dd115f7285d3bf06ea44ed25ac32d053a6dc12de538339694cced851764f66",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -160,6 +160,12 @@
       "TestMacOSManagerRouteFamilyNeverFallsThrough",
       "TestManagedServiceObservationRequiresPostActionCollection",
       "TestManagerFixtureTLSWorksWithPythonVerification",
+      "TestManagerRequestDrainCleanStopCleansSynchronously",
+      "TestManagerRequestDrainSharedAdmissionAndPanic",
+      "TestManagerRequestDrainTimeoutRetainsLeaseWithoutBlockingRun",
+      "TestManagerWriterLeaseBlocksBeforeProfileOrDatabase",
+      "TestManagerWriterLeasePreparationFailureReleasesAfterStoreClose",
+      "TestManagerWriterLeaseStartupFilesystemCompatibilityOnly",
       "TestOperationalThreeBinaryEnrollmentAndForeground",
       "TestPackagePositiveEvidenceAcceptsBoundedObservations",
       "TestPackagePositiveEvidenceAcceptsMixedOperationalMeasurements",
@@ -1525,6 +1531,14 @@
       "TestSnapshotJSONDepthAndArrayBounds",
       "TestSnapshotStrictBoundsAndFields",
       "TestUnknownFreshnessDominatesStaleWithoutFalseFixedZero"
+    ],
+    "localrmm/internal/backupmanifest": [
+      "TestBackupManifestCancellation",
+      "TestBackupManifestClosedRosterAndSidecars",
+      "TestBackupManifestExactBindingBeforeReads",
+      "TestBackupManifestExactInventoryIntegrityOnly",
+      "TestBackupManifestStreamsAndFixedDiagnostics",
+      "TestBackupManifestStrictClosedJSON"
     ],
     "localrmm/internal/bootstrapfetch": [
       "TestFetchDoesNotUseEnvironmentProxy",
@@ -3672,6 +3686,11 @@
       "TestDevicesCertificateExpiryUsesApprovalWithoutRenewing",
       "TestDurableApprovalReplayAndRevocation",
       "TestFrameStrictnessAndVersionCompatibility",
+      "TestManagerWriterLeaseExclusiveWithoutStateFiles",
+      "TestManagerWriterLeaseFilesystemBoundary",
+      "TestManagerWriterLeaseProcessHelper",
+      "TestManagerWriterLeaseProtectedPathsAndQuarantine",
+      "TestManagerWriterLeaseSubprocessConflictAndCrash",
       "TestOriginalEnvelopeBoundaryIsDeterministic",
       "TestPackageFrameCanonicalOperationsReservationAndOlderLimit",
       "TestPackageFrameCanonicalReservationsAndAge",
@@ -4212,7 +4231,8 @@
       "TestNativeCurrentAuthorityAndLostPreparation",
       "TestNativeSQLiteExactDispatchResultsAndReopen",
       "TestNativeStaleCapabilitiesAndWrongExactApproval",
-      "TestOfflinePreparationRetainsExpiredPreviewWithoutApproval"
+      "TestOfflinePreparationRetainsExpiredPreviewWithoutApproval",
+      "TestParsePackageConfigInventoriesWithoutOpeningDependencies"
     ],
     "localrmm/internal/packagehelper": [
       "TestAgentReplacementDoesNotHideAlreadyAdmittedCompletion",
