@@ -235,6 +235,31 @@ class NativeAdapterSourceTests(unittest.TestCase):
                         session.exercise_geometry()
                     self.assertEqual(state["messages"], [])
 
+    def test_layout_failures_use_only_four_fixed_logical_categories(self):
+        for group in ("layout-size", "layout-controls", "layout-resize", "layout-restore-settings"):
+            with self.subTest(group=group):
+                session = object.__new__(w.Session)
+                session._root, session.present, session._control = lambda: 7, lambda _: False, lambda value: value + 100
+                session._rect = lambda handle, client=False: (
+                    w.Rect(0, 0, 840, 680) if client else
+                    w.Rect(20, 30, 876, 749) if handle == 7 else w.Rect(0, 0, 900, 40))
+                session.u = type("U", (), {
+                    "GetDpiForWindow": lambda self, handle: 95 if group == "layout-size" else 96,
+                    "ClientToScreen": lambda self, handle, pointer: 1,
+                    "GetWindowLongPtrW": lambda self, handle, index: 0x00050000,
+                    "IsWindowVisible": lambda self, handle: 1,
+                    "AdjustWindowRectExForDpi": lambda self, *args: 0,
+                    "ShowWindowAsync": lambda self, *args: 0})()
+                with self.assertRaisesRegex(c.Failure, "^" + group + "$"):
+                    if group == "layout-resize":
+                        session.resize_client(600, 440)
+                    elif group == "layout-restore-settings":
+                        session.resize_client, session.check_layout, session._move = lambda *_: None, lambda: None, lambda *_: None
+                        session.exercise_geometry()
+                    else:
+                        session.check_layout()
+        self.assertNotIn("layout", c.STAGES)
+
     def test_foreign_pid_is_rejected_before_class_read_or_action(self):
         session = object.__new__(w.Session)
         session.process = type("Process", (), {"pid": 7, "poll": lambda self: None})()

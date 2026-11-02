@@ -287,21 +287,21 @@ class Session:
         return bool(self._root())
 
     def _rect(self, h, client=False):
-        r = Rect(); need((self.u.GetClientRect if client else self.u.GetWindowRect)(h, C.byref(r)) != 0, "layout"); return r
+        r = Rect(); need((self.u.GetClientRect if client else self.u.GetWindowRect)(h, C.byref(r)) != 0, "layout-size"); return r
 
     def check_layout(self):
         root = self._root(); dpi = self.u.GetDpiForWindow(root)
-        need(96 <= dpi <= 768, "layout")
+        need(96 <= dpi <= 768, "layout-size")
         area = self._rect(root, True); origin = Point()
-        need(self.u.ClientToScreen(root, C.byref(origin)) != 0, "layout")
-        need(area.right >= (600 * dpi + 95) // 96 and area.bottom >= (440 * dpi + 95) // 96, "layout")
+        need(self.u.ClientToScreen(root, C.byref(origin)) != 0, "layout-size")
+        need(area.right >= (600 * dpi + 95) // 96 and area.bottom >= (440 * dpi + 95) // 96, "layout-size")
         style = self.u.GetWindowLongPtrW(root, -16)
-        need(style & 0x00010000 and style & 0x00040000, "layout")
+        need(style & 0x00010000 and style & 0x00040000, "layout-size")
         ids = [1, 2, 201] + ([104, 105, 106, 107] if self.present(104) else [])
         for identifier in ids:
             h = self._control(identifier); rect = self._rect(h)
-            need(origin.x <= rect.left < rect.right <= origin.x + area.right and origin.y <= rect.top < rect.bottom <= origin.y + area.bottom, "layout")
-            need(self.u.IsWindowVisible(h) != 0, "layout")
+            need(origin.x <= rect.left < rect.right <= origin.x + area.right and origin.y <= rect.top < rect.bottom <= origin.y + area.bottom, "layout-controls")
+            need(self.u.IsWindowVisible(h) != 0, "layout-controls")
         self._font_probe()
 
     def _font_probe(self):
@@ -321,7 +321,7 @@ class Session:
         root = self._root(); dpi = self.u.GetDpiForWindow(root)
         r = Rect(0, 0, (width * dpi + 95) // 96, (height * dpi + 95) // 96)
         need(self.u.AdjustWindowRectExForDpi(C.byref(r), self.u.GetWindowLongPtrW(root, -16) & 0xffffffff,
-             0, self.u.GetWindowLongPtrW(root, -20) & 0xffffffff, dpi) != 0, "layout")
+             0, self.u.GetWindowLongPtrW(root, -20) & 0xffffffff, dpi) != 0, "layout-resize")
         before = self._rect(root)
         self._move(before.left, before.top, r.right-r.left, r.bottom-r.top)
 
@@ -329,28 +329,28 @@ class Session:
         root = self._root()
         # Asynchronous cross-thread positioning avoids a synchronous WM_SIZE
         # wait on an unresponsive fixture thread. No desktop setting changes.
-        need(self.u.SetWindowPos(root, None, x, y, width, height, 0x4000 | 0x0010 | 0x0004) != 0, "layout")
+        need(self.u.SetWindowPos(root, None, x, y, width, height, 0x4000 | 0x0010 | 0x0004) != 0, "layout-resize")
         def placed():
             r = self._rect(self._root())
             return (r.left, r.top, r.right-r.left, r.bottom-r.top) == (x, y, width, height)
-        eventually(placed, self.budget, "layout")
+        eventually(placed, self.budget, "layout-resize")
 
     def exercise_geometry(self):
         root = self._root(); original = self._rect(root)
         self.resize_client(600, 440); self.check_layout()
         self._move(original.left, original.top, original.right-original.left, original.bottom-original.top)
-        need(self.u.ShowWindowAsync(root, 3) != 0, "layout")
-        eventually(lambda: self.u.IsZoomed(self._root()) != 0, self.budget, "layout")
-        need(self.u.ShowWindowAsync(root, 9) != 0, "layout")
+        need(self.u.ShowWindowAsync(root, 3) != 0, "layout-restore-settings")
+        eventually(lambda: self.u.IsZoomed(self._root()) != 0, self.budget, "layout-restore-settings")
+        need(self.u.ShowWindowAsync(root, 9) != 0, "layout-restore-settings")
         def restored():
             current = self._root()
             return self.u.IsZoomed(current) == 0 and bytes(self._rect(current)) == bytes(original)
-        eventually(restored, self.budget, "layout")
+        eventually(restored, self.budget, "layout-restore-settings")
         before = self._rect(root)
         for message in (0x001a, 0x007e):  # Messages to own window; no OS setting is changed.
             self._send(root, message)
             after = self._rect(root)
-            need(bytes(after) == bytes(before), "layout")
+            need(bytes(after) == bytes(before), "layout-restore-settings")
 
     def dialog_present(self):
         dialog = self._find("#32770")
