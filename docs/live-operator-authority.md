@@ -270,3 +270,38 @@ and v1/v2 downgrade refusal. It is an in-process Go HTTP-handler fixture with
 TLS request metadata, not initializer CLI execution, a real TLS handshake or a
 host-service deployment. Its local compilation remains SQLite-blocked pending
 execution in the separately authorized cached environment.
+
+## Packaged initializer
+
+The normal `make build` target now compiles this same source to
+`bin/operator-account-init`. A targeted static Linux/amd64 compilation is:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags='-s -w' -o bin/operator-account-init ./cmd/operator-account-init
+```
+
+The supported manager Dockerfile compiles it with the existing target OS/arch
+arguments to `/out/operator-account-init` and copies that exact executable to
+`/tracebolt/operator-account-init` in the scratch runtime. The manager entrypoint,
+nonroot UID/GID 65532, frontend and services are unchanged. Neither build invokes
+the initializer. Packaging does not initialize or activate live accounts.
+
+Use the initializer only in a separately approved maintenance execution with the
+manager stopped, the same runtime UID and the existing private state directory.
+The protected named-v2 seed must explicitly grant `manage_accounts`; the new
+reference destination must be in an existing approved private writable directory
+outside state and served frontend paths. The original configuration/seed remain
+unchanged. A running manager's writer lease causes refusal; do not bypass it.
+For a container maintenance execution, use the packaged executable explicitly
+with the same approved state/material mounts and runtime UID. Do not change the
+service entrypoint, elevate privileges, invent writable mounts or chmod/chown
+existing host paths as part of these instructions. Activation remains the separate
+reviewed switch to the new v3 reference described above.
+
+The packaging source-contract tests passed locally; no image build, publication,
+container lifecycle or deployment ran. This executor's targeted static compilation
+was attempted with its existing Go 1.27.1, `GOPROXY=off` and caches, output target
+`/tmp/tb14-operator-account-init`, but stopped before compilation because SQLite
+source is absent. Therefore that output is not reported as a built artifact.
+The separately authorized cached executor must provide the actual binary hash
+and compile evidence; Docker/native deployment acceptance remains distinct.

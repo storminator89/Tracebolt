@@ -215,3 +215,19 @@ v1/v2 fallback denial. It exercises actual prepared HTTP handlers with fixture
 TLS request metadata; it does not run a host service, browser or initializer CLI.
 $ go test -race ./cmd/lan-manager -run TestLiveAccountPublicInitializationPrepareAndRestart -count=1
 BLOCKED before compilation in this executor: missing SQLite; GOPROXY=off.
+
+Packaging correction after 37456b08e8f895b026278240349f79db12dcbd9f:
+Makefile target: bin/operator-account-init
+Docker builder output: /out/operator-account-init
+Docker runtime copy: /tracebolt/operator-account-init
+Entry point, runtime UID, services and CI configuration unchanged.
+$ python3 -m unittest discover -s tests/security -p 'test_*setup_packaging.py' -v
+PASS: 2 existing manager-setup packaging tests.
+$ python3 -m unittest discover -s tests/security -p 'test_operator_account_init_packaging.py' -v
+PASS: 2 initializer packaging source-contract tests.
+$ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOPROXY=off GOTOOLCHAIN=local GOCACHE=/workspace/go-cache GOPATH=/workspace/go-path /workspace/toolchains/go/bin/go build -buildvcs=false -trimpath -ldflags='-s -w' -o /tmp/tb14-operator-account-init ./cmd/operator-account-init
+BLOCKED before compilation by missing modernc.org/sqlite v1.60.1; no binary success claimed.
+No Docker build/run/publication, initializer execution, host change or browser test.
+$ go test -race ./tests/container -run '^(TestDeploymentExampleSchemas|TestFixtureFrameContract|TestHTTPFixtureSigningContract)$' -count=1
+BLOCKED before compilation by missing SQLite with the same offline environment.
+These selected tests are source/config fixtures, not container lifecycle acceptance.
