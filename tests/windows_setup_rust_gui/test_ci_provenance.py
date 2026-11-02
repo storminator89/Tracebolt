@@ -64,13 +64,46 @@ class PEProvenanceTests(unittest.TestCase):
 
     def test_hosted_ucrt_os_component_is_finite_not_a_runtime_wildcard(self):
         self.assertEqual(p.inspect_pe(bytes(pe_fixture((b"KERNEL32.dll", b"ucrtbase.dll"))))["imports"], ["kernel32.dll", "ucrtbase.dll"])
-        for name in [b"api-ms-win-crt-private-l1-1-0.dll", b"libgcc_s_seh-1.dll", b"libwinpthread-1.dll", b"libstdc++-6.dll"]:
+        for name in [b"api-ms-win-crt-conio-l1-1-0.dll", b"libgcc_s_seh-1.dll", b"libwinpthread-1.dll", b"libstdc++-6.dll"]:
             self.reject(bytes(pe_fixture((name,))))
+
+    def test_exact_eight_hosted_contracts_extend_only_the_inert_import_policy(self):
+        baseline = {"kernel32.dll", "msvcrt.dll", "ntdll.dll", "userenv.dll", "ws2_32.dll",
+            "api-ms-win-core-synch-l1-2-0.dll", "bcryptprimitives.dll", "gdi32.dll",
+            "user32.dll", "dbghelp.dll", "ucrtbase.dll"}
+        observed = {
+            "api-ms-win-crt-environment-l1-1-0.dll", "api-ms-win-crt-heap-l1-1-0.dll",
+            "api-ms-win-crt-locale-l1-1-0.dll", "api-ms-win-crt-math-l1-1-0.dll",
+            "api-ms-win-crt-private-l1-1-0.dll", "api-ms-win-crt-runtime-l1-1-0.dll",
+            "api-ms-win-crt-stdio-l1-1-0.dll", "api-ms-win-crt-string-l1-1-0.dll"}
+        self.assertEqual(p.SYSTEM_DLLS, frozenset(baseline))
+        self.assertEqual(p.EVIDENCED_CRT_DLLS, frozenset(observed))
+        self.assertEqual(p.ALLOWED_DLLS, frozenset(baseline | observed))
+        self.assertEqual(len(p.ALLOWED_DLLS), 19)
+        for name in observed:
+            raw = bytes(pe_fixture((b"KERNEL32.dll", name.upper().encode())))
+            seen = []
+            self.assertEqual(p.inspect_pe(raw, checkpoint=seen.append)["imports"], sorted(["kernel32.dll", name]))
+            self.assertFalse(any(label.startswith("pe-import-rejected-") for label in seen))
+            for changed in [name.replace("l1-1-0", "l1-2-0"), name + ".other", "C:\\" + name,
+                            "./" + name, "prefix-" + name, name.replace("api-ms-", "ext-ms-")]:
+                self.reject(bytes(pe_fixture((changed.encode(),))))
+        for family in ("conio", "convert", "filesystem", "multibyte", "process", "time", "utility"):
+            self.reject(bytes(pe_fixture((("api-ms-win-crt-" + family + "-l1-1-0.dll").encode(),))))
+
+    def test_approved_crt_prefix_does_not_hide_later_foreign_runtime(self):
+        observed = sorted(name.encode() for name in p.EVIDENCED_CRT_DLLS)
+        self.assertEqual(p.inspect_pe(bytes(pe_fixture(tuple(observed))))["imports"], sorted(p.EVIDENCED_CRT_DLLS))
+        seen = []
+        raw = bytes(pe_fixture((b"api-ms-win-crt-stdio-l1-1-0.dll", b"libwinpthread-1.dll")))
+        with self.assertRaisesRegex(ValueError, "^provenance$"):
+            p.inspect_pe(raw, checkpoint=seen.append)
+        self.assertEqual(seen[-1], "pe-import-rejected-compiler-runtime-shaped")
+        self.assertNotIn("pe-import-rejected-known-crt-contract", seen)
 
     def test_rejected_import_categories_never_admit_or_export_a_name(self):
         crt = [b"api-ms-win-crt-" + family.encode() + b"-l1-1-0.dll" for family in
-               ("conio", "convert", "environment", "filesystem", "heap", "locale", "math", "multibyte",
-                "private", "process", "runtime", "stdio", "string", "time", "utility")]
+               ("conio", "convert", "filesystem", "multibyte", "process", "time", "utility")]
         groups = [(crt, "pe-import-rejected-known-crt-contract"),
             ([b"bcrypt.dll", b"comdlg32.dll"], "pe-import-rejected-declared-system-link"),
             ([b"libgcc_s_seh-1.dll", b"libwinpthread-1.dll", b"libstdc++-6.dll", b"libssp-0.dll"], "pe-import-rejected-compiler-runtime-shaped"),
@@ -89,7 +122,7 @@ class PEProvenanceTests(unittest.TestCase):
 
     def test_first_rejected_import_ends_scan_without_a_fingerprint(self):
         seen = []
-        raw = bytes(pe_fixture((b"api-ms-win-crt-stdio-l1-1-0.dll", b"libwinpthread-1.dll")))
+        raw = bytes(pe_fixture((b"api-ms-win-crt-conio-l1-1-0.dll", b"libwinpthread-1.dll")))
         with self.assertRaisesRegex(ValueError, "^provenance$"):
             p.inspect_pe(raw, checkpoint=seen.append)
         self.assertEqual(seen[-1], "pe-import-rejected-known-crt-contract")

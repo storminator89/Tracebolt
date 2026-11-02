@@ -102,23 +102,23 @@ class CRTOrchestrationTests(unittest.TestCase):
     def check(self, body):
         self.assertEqual(isolated(body).returncode, 0, "isolated CRT diagnostic assertion failed")
 
-    def test_successful_evidence_still_cannot_admit_a_crt_image(self):
+    def test_successful_evidence_still_cannot_admit_an_unapproved_crt_image(self):
         self.check('''
         from unittest.mock import Mock
         spec=importlib.util.spec_from_file_location('pe_fixture',b.HERE/'test_ci_provenance.py')
         f=importlib.util.module_from_spec(spec);spec.loader.exec_module(f)
         x=object.__new__(b.Builder);x.stage='provenance';x.progress=b.Progress()
         x.crt_diagnostic=Mock(return_value={'status':'observed_read_only'})
-        raw=bytes(f.pe_fixture((b'api-ms-win-crt-stdio-l1-1-0.dll',)))
+        raw=bytes(f.pe_fixture((b'api-ms-win-crt-conio-l1-1-0.dll',)))
         try: x.inspect_image(raw,'not-executed',('a'*64,512))
         except ValueError as error: assert str(error)=='provenance'
         else: raise AssertionError('CRT evidence admitted image')
         assert x.crt_diagnostic.call_count==1 and x.crt_evidence=={'status':'observed_read_only'}
         assert x.progress.projection()=={'phase':'provenance','check':'pe-import-rejected-known-crt-contract'}
-        for name in [b'kernel32.dll',b'invented-private-marker.dll']:
+        for name in [b'kernel32.dll',b'api-ms-win-crt-stdio-l1-1-0.dll',b'invented-private-marker.dll']:
             x.crt_diagnostic.reset_mock()
             try: x.inspect_image(bytes(f.pe_fixture((name,))),'not-executed',('a'*64,512))
-            except ValueError: assert name!=b'kernel32.dll'
+            except ValueError: assert name==b'invented-private-marker.dll'
             assert x.crt_diagnostic.call_count==0
         ''')
 

@@ -117,13 +117,52 @@ fallback or policy bypass is provided.
 
 The official runner's [toolset](https://raw.githubusercontent.com/actions/runner-images/main/images/windows/toolsets/toolset-2025.json)
 and [MinGW installer](https://raw.githubusercontent.com/actions/runner-images/main/images/windows/scripts/build/Install-Mingw64.ps1)
-select GCC15/UCRT, unlike the local GCC14/MSVCRT cross-build. The finite DLL
-allowlist therefore includes only the specifically evidenced additional Windows
-OS component `ucrtbase.dll` ([MinGW import definition](https://raw.githubusercontent.com/mingw-w64/mingw-w64/master/mingw-w64-crt/lib-common/ucrtbase.def.in),
+select GCC15/UCRT, unlike the local GCC14/MSVCRT cross-build. The original eleven-name baseline includes `ucrtbase.dll`
+([MinGW import definition](https://raw.githubusercontent.com/mingw-w64/mingw-w64/master/mingw-w64-crt/lib-common/ucrtbase.def.in),
 [Microsoft UCRT deployment](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170)).
-It does not accept wildcard API sets or libgcc/libwinpthread/libstdc++ runtimes.
-The target triplet and local link do not prove the hosted CRT/import set or
-runtime compatibility; the first native CI build/run still has to establish that.
+The target triplet and local link alone do not prove the hosted CRT/import set or
+runtime compatibility.
+
+#### Exact observed CRT contracts — inert CI image only
+
+[Run 41390825514, job 125101606104](https://github.com/storminator89/Tracebolt/actions/runs/41390825514/job/125101606104)
+on PR head `a2aa31e2` produced one independently reviewed `observed_read_only`
+report: source `45ffec54dde3c04baac9870c8addd7486afcdea0`, tree
+`22f0bd0985795bd54afe4e2e9ecb9ae7144408c8`, image SHA256
+`5137eea44d39b83353d24f86f1d14ac4e27d7729e7e398bd6b74ce72250c04b6`
+(5,521,408 bytes). The hash-bound, ancestor/file-leased independent GNU-objdump
+scan required exactly **environment, heap, locale, math, private, runtime,
+stdio, string** in the fixed fifteen-contract catalogue. All fifteen fixed
+read-only API-schema queries returned true. The old import policy still rejected
+the image, and the GUI step was **skipped**.
+
+The inert CI image's separate `EVIDENCED_CRT_DLLS` policy now lists only these
+eight complete `api-ms-win-crt-<family>-l1-1-0.dll` literals. Its union with the
+unchanged eleven-name baseline is used at the two existing PE membership checks;
+all PE parsing, source/tool/image custody, repeat builds, CI context, desktop,
+PID/control/consent and cleanup checks remain. The other seven CRT families,
+version variants, arbitrary API-set names and compiler runtime DLLs remain
+rejected. No prefix/wildcard rule, fallback, production installer policy, build
+default, workflow, privilege or host setting changes.
+
+The positive rationale combines that exact hosted observation with official
+[MinGW13's desktop-UCRT recipe](https://raw.githubusercontent.com/mingw-w64/mingw-w64/v13.0.0/mingw-w64-crt/Makefile.am),
+which includes all eight (including `private`), and Microsoft's description of
+UCRT as an OS component on Windows10+/Server2016+. The separate MinGW UCRTAPP
+recipe omits `private`; this is not a universal/UWP or private-export guarantee.
+[API-set loader operation](https://learn.microsoft.com/en-us/windows/win32/apiindex/api-set-loader-operation)
+resolves contract names through the OS schema, not a same-named candidate DLL.
+This is **not** physical System32 host-path, signature or export verification.
+Microsoft's explicit system-directory-over-app-local UCRT statement names
+Windows10/11; no separate Server2025 physical-path observation is claimed.
+[DLL redirection precedes API sets](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order),
+so there is no blanket hijack-immunity claim. The bounded CI correction retains
+the existing trusted hosted-OS/toolchain/workspace assumptions, not a new trust
+or cryptographic-authentication boundary.
+
+Actual export compatibility, fixture startup, native GUI behavior and installer
+acceptance remain pending. Schema presence alone is not any of those. Nothing
+in this policy authorizes another image or a production installation.
 
 Before one launch, the builder requires locked dependencies, exact Go 1.27.1,
 repeat Rust archives and test EXEs, actual AMD64/console/zero-timestamp/unsigned
@@ -174,8 +213,9 @@ Neither fact proves which import failed, nor that it may safely be admitted.
 The follow-up reports only one of five fixed rejection categories: a public
 source-defined CRT contract, an already-declared system link, a conventional
 compiler-runtime name, API-set-shaped text, or other. Shape/category is not OS
-availability or trusted-module proof. All unlisted imports still fail the exact
-same membership guard, including every categorized CRT/API-set/runtime import.
+availability or trusted-module proof. Imports outside the separately reviewed
+fixed-name policy still fail the membership guard, including every categorized
+rejection; classification itself never admits a CRT/API-set/runtime import.
 Only the first rejection is classified; no DLL name, substring, path, hash or
 multi-import fingerprint is exported. No allowlist, linker recipe or runtime
 guard changes follow from this diagnostic.
@@ -198,8 +238,8 @@ math, multibyte, private, process, runtime, stdio, string, time, utility**. Each
 entry denotes exactly `api-ms-win-crt-<family>-l1-1-0.dll`; no other name, prefix,
 version, hash of a rejected name, or arbitrary multi-import fingerprint is
 exported. The independent producer recognizes these names **for evidence only**;
-the original PE parser/eleven-DLL membership guard stays byte-identical and
-continues to reject every one of them.
+the independent reader never changes the admission policy. The later exact-eight
+policy above is separate; all remaining catalogue entries still fail admission.
 
 The second fifteen-Boolean `schemaPresent` vector queries those same constant
 contract stems **without `.dll`**, using Microsoft's documented
@@ -223,12 +263,13 @@ not establish that this was the only cause of prior unavailable evidence.
 Positive observations carry the already-approved source/image hash bindings;
 unavailable observations contain no partial vectors.
 
-This evidence producer has portable fake/negative coverage only. Actual hosted
-fifteen-contract observations, the GUI run, installer acceptance and full Rust
-agent parity remain outstanding. The outer result remains `not_built`,
-`nativeExecution=false`, `installerHostActionsAttempted=false`; no `build.json`
-or GUI execution follows from diagnostic success. Any eventual admission change
-requires separate concrete evidence and review, not this diagnostic.
+This evidence producer has portable fake/negative coverage and the bounded
+hosted read-only observation above. The GUI run, installer acceptance and full
+Rust agent parity remain outstanding. On an unapproved import, the outer result
+remains `not_built`, `nativeExecution=false`, `installerHostActionsAttempted=false`;
+no `build.json` or GUI execution follows from diagnostic success. The exact-eight
+policy is separately reviewed using concrete evidence, not automatic admission
+from a query result. Every other launch guard still applies.
 
 Runner/tool/context references: [official Windows 2025 image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md),
 [GitHub default-variable semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/variables),

@@ -17,6 +17,19 @@ SYSTEM_DLLS = frozenset({
     "api-ms-win-core-synch-l1-2-0.dll", "bcryptprimitives.dll", "gdi32.dll",
     "user32.dll", "dbghelp.dll", "ucrtbase.dll",
 })
+# Inert PR201 test-image policy only. Observed on the hash-bound Windows2025
+# build in run 41390825514; never a prefix rule or production installer policy.
+EVIDENCED_CRT_DLLS = frozenset({
+    "api-ms-win-crt-environment-l1-1-0.dll",
+    "api-ms-win-crt-heap-l1-1-0.dll",
+    "api-ms-win-crt-locale-l1-1-0.dll",
+    "api-ms-win-crt-math-l1-1-0.dll",
+    "api-ms-win-crt-private-l1-1-0.dll",
+    "api-ms-win-crt-runtime-l1-1-0.dll",
+    "api-ms-win-crt-stdio-l1-1-0.dll",
+    "api-ms-win-crt-string-l1-1-0.dll",
+})
+ALLOWED_DLLS = SYSTEM_DLLS | EVIDENCED_CRT_DLLS
 MAX_IMAGE = 128 * 1024 * 1024
 MAX_BUILD_INFO = 64 * 1024
 _SOURCE = re.compile(r"[0-9a-f]{40}\Z")
@@ -102,7 +115,7 @@ def inspect_pe(raw, checkpoint=None):
                 value = name.decode("ascii").lower()
                 if checkpoint is not None:
                     checkpoint("pe-import-allowlist")
-                    if value not in SYSTEM_DLLS:
+                    if value not in ALLOWED_DLLS:
                         # Diagnostic only. These public source-defined names or
                         # syntactic shapes do not attest availability/identity
                         # and never enter the admission set. Stop at this first
@@ -120,7 +133,7 @@ def inspect_pe(raw, checkpoint=None):
                             checkpoint("pe-import-rejected-api-set-shaped")
                         else:
                             checkpoint("pe-import-rejected-other")
-                _need(value in SYSTEM_DLLS)
+                _need(value in ALLOWED_DLLS)
                 return value
         raise ValueError("provenance")
 

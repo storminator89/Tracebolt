@@ -111,12 +111,19 @@ class DiagnosticTests(unittest.TestCase):
                 p=b.Progress();p.mark(phase,check);assert p.projection()=={'phase':phase,'check':check}
         ''')
 
-    def test_default_provenance_algorithm_is_ast_identical_to_reviewed_guard(self):
+    def test_provenance_algorithm_is_identical_except_explicit_eight_name_policy(self):
         class StripCheckpoints(ast.NodeTransformer):
             def visit_Assign(self, node):
-                if any(isinstance(target, ast.Name) and target.id in {"PE_CHECKS", "GO_INFO_CHECKS"} for target in node.targets):
+                if any(isinstance(target, ast.Name) and target.id in {"PE_CHECKS", "GO_INFO_CHECKS", "EVIDENCED_CRT_DLLS", "ALLOWED_DLLS"} for target in node.targets):
                     return None
                 return self.generic_visit(node)
+            def visit_Name(self, node):
+                # Exact policy values are independently asserted in PE tests.
+                # Normalize only its two membership references; retain the old
+                # whole-module algorithm fingerprint rather than replacing it.
+                if node.id == "ALLOWED_DLLS":
+                    node.id = "SYSTEM_DLLS"
+                return node
             def visit_If(self, node):
                 if ast.dump(node.test) == ast.dump(ast.parse("checkpoint is not None", mode="eval").body):
                     return None
