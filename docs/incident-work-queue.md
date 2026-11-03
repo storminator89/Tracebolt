@@ -68,3 +68,74 @@ page-local filters, partial results, evidence aging, inert names, deep links and
 read-only controls. TypeScript checking is separate. These checks use no browser
 or DOM harness and establish no native collection, installed-service acceptance,
 hosted CI, deployment or release readiness.
+
+## Investigate an exact retained episode
+
+Each loaded row has an **Incident timeline** (**Vorfall-Zeitverlauf**) disclosure.
+It presents the existing episode's retained checkpoints chronologically, with
+both a local display date and the exact original UTC timestamp. Equal timestamps
+retain their independent meanings; fractional timestamps keep nanosecond ordering.
+This is not a continuous event log. Intermediate samples, raw history and missed
+manager evaluations are not reconstructed, and checkpoint gaps do not prove an
+uninterrupted failure.
+
+- **Linux:** original opening, last retained incident evidence, any closure and
+  acknowledgement. Disk/service evidence can predate manager confirmation, and
+  the last incident evidence may be the final recovery sample. Contact history's
+  last evidence timestamp is a **manager evaluation**, not an agent capture or
+  report receipt. Its separate current check shows the original accepted-report
+  receipt. No separate opening/recovery raw sample is invented.
+- **Windows assessment:** last-bad capture where available, original acceptance,
+  opening/last confirmation, recovery capture/acceptance and exact closure reason.
+  Contact has accepted-report receipt timing, not an invented capture. Reports
+  resuming is not a whole-host health verdict.
+- **Windows complete services:** independent opening, last-bad and recovery
+  generation references retain source kind, exact grant ID/revision, generation,
+  sequence, manifest digest, capture start/finish, original acceptance/expiry and
+  row count. A later current grant never replaces a historical reference.
+
+The **Current check, separate from this episode** section cannot rewrite history.
+A later good or bad check can belong to another episode or policy. Existing source
+aging can only withhold current confidence and the qualified current generation;
+historical checkpoints remain unchanged while their source reader remains
+available. Seen never confirms recovery. Linux monitoring removal and Windows
+policy changes are explicitly **closed without confirmed recovery**. Maintenance
+is not reconstructed as an episode event; its domain-specific rules remain in
+Health. The disclosures are manager-local views, not exports or security audits.
+
+Expanding/collapsing a timeline, filtering and searching issue no new request.
+Health links retain the exact device ID. Linux log links require the exact valid
+unit name; following one uses the existing view's permission checks and may start
+an already-authorized retained-log search. It does not grant a new capture scope
+or service/action authority. No acknowledgement, action preview or execution is
+started by the timeline. Existing session, navigation, visibility and source-loss
+clearing removes its private content with the source rows.
+
+## Find work on the loaded pages
+
+The **Episode outcome on loaded pages** filter separates still-open episodes,
+selected-check recovery/reports-resumed outcomes and administrative closure without
+confirmed recovery. This presentation does not add a shared lifecycle or modify
+source totals. The displayed outcome counts describe only the rows currently
+shown after all local filters, not source-wide counts or a fleet verdict.
+
+**Search loaded incidents** matches literal case-insensitive text in the existing
+device name/identity, source/platform, incident identity/key and check target.
+Input is limited to 160 characters. It does not interpret regular expressions,
+search AI prose or log content, fetch more pages, or persist the query. **Clear
+page filters** resets only these local filters; source scope and independent
+source paging remain unchanged. Refresh still restarts each source at page one.
+A zero-match result leaves missing source coverage explicitly unknown.
+
+## Focused timeline checks
+
+`cd web && ./node_modules/.bin/vitest run src/incident-timeline.test.tsx`
+uses synthetic Go-derived source fixtures and a DOM component harness, not a
+browser. It covers original contact/source meanings, delayed and simultaneous
+checkpoints, fractional ordering, independent current evidence/grants, closure
+versus recovery/seen, stale/invalid elapsed time, safe EN/DE text and exact links,
+literal bounded search, repeated disclosure, filter/reset/refresh, source loss
+and zero additional requests or mutations. The existing queue/workspace/resource,
+navigation and Windows inbox regressions remain relevant. Typecheck, environment
+classification and production build are separate checks. No native or browser
+acceptance, deployment, release or full-repository pass follows from these tests.
