@@ -36,6 +36,8 @@ unestablished by these metadata reads and are stated in the evidence limits.
 
 ## Time, access and side effects
 
+The existing metadata clock carries forward time accumulated before opening this
+tab; opening or reopening it does not renew report or certificate age.
 The existing visible-page render tick ages evidence. This component adds no
 request, timer, storage, export, capture or mutation. The collection-status reader
 keeps its existing bounded GETs, source validators, original ages, session checks

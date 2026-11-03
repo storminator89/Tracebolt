@@ -117,7 +117,8 @@ func (m *Manager) RevokeSession(ctx context.Context, requester Session, id strin
 	}
 	m.mu.Lock()
 	m.purgeLocked(m.now())
-	if !m.requesterLocked(requester) {
+	// Admission may have waited for manager state after the session gate.
+	if ctx.Err() != nil || !m.requesterLocked(requester) {
 		m.mu.Unlock()
 		release()
 		return false, ErrUnauthenticated

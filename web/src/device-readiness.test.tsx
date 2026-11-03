@@ -6,10 +6,20 @@ import type { Device } from './types';
 
 const at = '2026-11-03T12:00:00Z';
 const device = (): Device => ({ id: 'agent_fixture', source: 'lan', synthetic: false, lastSeen: at, agentVersion: 'reported-v1', capabilities: [{ id: 'inventory', status: 'scope', name: 'Inventory', detail: '' }], agentCertificate: { source: 'guided-enrollment', checkedAt: at, expiresAt: '2026-11-06T12:00:00Z' } } as Device);
-const panel = (value = device(), available = true) => <DeviceReadiness device={value} available={available} profiles={['managed-operations-v3', '', 'managed-operations-v3']} observations={[{ state: 'available' }, { state: 'scope' }, { state: 'configured' }, { state: 'denied' }]}/>;
+const panel = (value = device(), available = true) => <DeviceReadiness device={value} available={available} metadataElapsed={0} profiles={['managed-operations-v3', '', 'managed-operations-v3']} observations={[{ state: 'available' }, { state: 'scope' }, { state: 'configured' }, { state: 'denied' }]}/>;
 beforeEach(() => { setLocale('en', false); vi.useFakeTimers({ toFake: ['Date', 'performance'] }); vi.setSystemTime(new Date(at)); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('device readiness presentation', () => {
+    it('includes metadata age accumulated before mounting and never reduces it on rerender', () => {
+        const value = device(); value.agentCertificate!.expiresAt = '2026-11-03T12:01:00Z';
+        const view = (age: number) => <DeviceReadiness device={value} available metadataElapsed={age} observations={[]} profiles={[]}/>;
+        const mounted = render(view(121000));
+        expect(document.querySelector('[data-report-state]')).toHaveAttribute('data-report-state', 'stale');
+        expect(document.querySelector('[data-certificate-state]')).toHaveAttribute('data-certificate-state', 'expired');
+        mounted.rerender(view(0));
+        expect(document.querySelector('[data-report-state]')).toHaveAttribute('data-report-state', 'stale');
+        expect(document.querySelector('[data-certificate-state]')).toHaveAttribute('data-certificate-state', 'expired');
+    });
     it.each(['en', 'de'] as const)('keeps source profiles, reported version and evidence boundaries separate (%s)', locale => {
         setLocale(locale, false); render(panel());
         expect(screen.getByText('managed-operations-v3')).toBeVisible();
@@ -51,7 +61,7 @@ describe('device readiness presentation', () => {
         expect(document.querySelector('[data-report-state]')).toHaveAttribute('data-report-state', 'unknown');
     });
     it('does not infer an artifact or a profile from the reported agent version', () => {
-        render(<DeviceReadiness device={device()} available observations={[]} profiles={[]}/>);
+        render(<DeviceReadiness device={device()} available metadataElapsed={0} observations={[]} profiles={[]}/>);
         expect(screen.getByText('Not supplied')).toBeVisible();
         expect(screen.getByText('No capability status supplied')).toBeVisible();
     });

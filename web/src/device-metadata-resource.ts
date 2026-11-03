@@ -7,7 +7,7 @@ import type { Device, Metric } from './types';
 const POLL_MS = 15000, TIMEOUT_MS = 10000, MAX_BACKOFF_MS = 120000;
 type Anchor = { mono: number; wall: number };
 type MetricKey = 'cpu' | 'memory' | 'disk';
-type Snapshot = { scope: string; epoch: number; device: Device; checkedAt: string; anchor: Anchor; sampleAnchors: Record<MetricKey, Anchor> };
+type Snapshot = { scope: string; epoch: number; device: Device; checkedAt: string; anchor: Anchor; managerOffset: number; sampleAnchors: Record<MetricKey, Anchor> };
 const capture = (): Anchor => ({ mono: performance.now(), wall: Date.now() });
 function elapsed(anchor: Anchor): number {
     const mono = performance.now() - anchor.mono, wall = Date.now() - anchor.wall;
@@ -86,7 +86,13 @@ export function useDeviceMetadata(id: string, scope: string, automatic: boolean)
                 // reply omits it, repeated GETs must not renew an unchanged
                 // sample's fallback age either. Keep only three local anchors.
                 const sampleAnchor = (key: MetricKey) => current?.device[key].collectedAt === value[key].collectedAt ? current.sampleAnchors[key] : started;
-                current = { scope, epoch, device: value, checkedAt: new Date().toISOString(), anchor: started, sampleAnchors: { cpu: sampleAnchor('cpu'), memory: sampleAnchor('memory'), disk: sampleAnchor('disk') } };
+                const priorManager = Date.parse(current?.device.agentCertificate?.checkedAt ?? ''), nextManager = Date.parse(value.agentCertificate?.checkedAt ?? '');
+                const advance = nextManager - priorManager;
+                // Successful reads cannot renew source age when manager time
+                // stalls, advances too slowly or moves backwards. Preserve the
+                // offset upstream so changing device tabs cannot reset it.
+                const managerOffset = !current || !Number.isFinite(priorManager) ? 0 : !Number.isFinite(advance) || advance < 0 ? Infinity : Math.max(0, elapsed(current.anchor) + current.managerOffset - advance - elapsed(started));
+                current = { scope, epoch, device: value, checkedAt: new Date().toISOString(), anchor: started, managerOffset, sampleAnchors: { cpu: sampleAnchor('cpu'), memory: sampleAnchor('memory'), disk: sampleAnchor('disk') } };
                 setSnapshot(current);
             } catch (caught) {
                 if (!active()) return;
@@ -132,9 +138,9 @@ export function useDeviceMetadata(id: string, scope: string, automatic: boolean)
     const visible = snapshot?.scope === scope && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() ? snapshot : null;
     let device = visible?.device ?? null;
     if (device && !device.synthetic && device.source === 'lan' && visible) {
-        const age = elapsed(visible.anchor), managerNow = Date.parse(device.agentCertificate?.checkedAt ?? '');
+        const age = elapsed(visible.anchor) + visible.managerOffset, managerNow = Date.parse(device.agentCertificate?.checkedAt ?? '');
         const metric = (key: MetricKey) => agedMetric(visible.device[key], managerNow, Number.isFinite(managerNow) ? age : elapsed(visible.sampleAnchors[key]));
         device = { ...device, cpu: metric('cpu'), memory: metric('memory'), disk: metric('disk') };
     }
-    return { device, snapshot: visible, refreshing, accessEnded, error, automaticState, refresh: () => refreshRef.current() };
+    return { device, snapshot: visible, metadataElapsed: visible ? elapsed(visible.anchor) + visible.managerOffset : Infinity, refreshing, accessEnded, error, automaticState, refresh: () => refreshRef.current() };
 }

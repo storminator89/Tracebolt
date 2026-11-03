@@ -35,19 +35,21 @@ function elapsedSince(anchor: Anchor): number {
 
 /** Reuses its parent's validated status reads and render tick. No requests,
  * persistence, collection, export, grant or action is introduced here. */
-export function DeviceReadiness({ device, observations, profiles, available }: { device: Device; observations: CapabilityObservation[]; profiles: string[]; available: boolean }) {
+export function DeviceReadiness({ device, observations, profiles, available, metadataElapsed }: { device: Device; observations: CapabilityObservation[]; profiles: string[]; available: boolean; metadataElapsed: number }) {
     const [locale] = useLocale(), c = copy[locale], id = useId();
     const checkedAt = device.agentCertificate?.checkedAt;
-    const clock = useRef({ deviceId: device.id, checkedAt, anchor: capture(), offset: 0 });
+    const metadataAge = Number.isFinite(metadataElapsed) && metadataElapsed >= 0 ? metadataElapsed : Infinity;
+    const clock = useRef({ deviceId: device.id, checkedAt, anchor: capture(), offset: metadataAge });
     const prior = clock.current;
-    if (prior.deviceId !== device.id) clock.current = { deviceId: device.id, checkedAt, anchor: capture(), offset: 0 };
+    if (prior.deviceId !== device.id) clock.current = { deviceId: device.id, checkedAt, anchor: capture(), offset: metadataAge };
     else if (prior.checkedAt !== checkedAt) {
         const before = Date.parse(prior.checkedAt ?? ''), advance = Date.parse(checkedAt ?? '') - before;
         // A stalled/slow manager clock cannot renew unchanged capture age.
         // Backward manager or browser time makes this view's age unknown.
-        const offset = !Number.isFinite(before) ? 0 : advance < 0 || !Number.isFinite(advance) ? Infinity : Math.max(0, elapsedSince(prior.anchor) + prior.offset - advance);
+        const offset = !Number.isFinite(before) ? metadataAge : advance < 0 || !Number.isFinite(advance) ? Infinity : Math.max(metadataAge, elapsedSince(prior.anchor) + prior.offset - advance);
         clock.current = { deviceId: device.id, checkedAt, anchor: capture(), offset };
     }
+    else clock.current.offset = Math.max(clock.current.offset, metadataAge - elapsedSince(clock.current.anchor));
     const elapsed = elapsedSince(clock.current.anchor) + clock.current.offset;
     const facts = deviceReadinessFacts(device, observations, elapsed, available);
     const sourceProfiles = [...new Set(profiles.filter(Boolean))].sort();

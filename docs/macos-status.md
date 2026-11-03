@@ -1,8 +1,14 @@
 # macOS source status
 
-This is an unreleased source candidate. Windows `v0.1.0-windows-preview.3`
-artifacts, tags and published acceptance evidence are unchanged. A Darwin
-cross-build is compilation evidence, never native macOS acceptance.
+This guide describes current macOS source separately from the published unsigned
+[preview.1 service-test package](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-macos-preview.1).
+Follow the [release guide](macos-prerelease.md) for architecture selection, exact
+source/manifests and direct archive/helper downloads. Published test bytes do not
+establish native enrollment, launchd installation, reboot persistence, signing or
+notarization. New source changes are not automatically included in that package.
+Windows `v0.1.0-windows-preview.3` artifacts, tags and published acceptance
+evidence are unchanged. A Darwin cross-build is compilation evidence, never
+native macOS acceptance.
 
 ## First connected scope
 
@@ -68,7 +74,8 @@ initialization or repair. `--service-identity UID:GID` is only for the separatel
 provisioned dedicated nonroot launchd identity and only in foreground mode.
 
 The enrollment CLI deliberately rejects Linux pending-service/claim-only flags
-on macOS. There is no published Mac installer or verified download command.
+on macOS. There is no signed Mac installer; the published service-test package
+has its own [download and verification guide](macos-prerelease.md).
 A local build hash alone does not establish publisher trust or native acceptance.
 
 ## launchd source and test package
@@ -78,7 +85,9 @@ Apple Silicon and Intel endpoint binaries, the service CLI, a standalone Go
 preparation helper, exact source and hash manifests. Building these review
 artifacts does not require native installation or acceptance. They remain
 publisher-unsigned, unreleased test candidates; the Mac runtime does not need
-Python, Homebrew or Xcode.
+Python, Homebrew or Xcode. The published preview.1 archives and helpers are
+separate exact-source test bytes described in the [release guide](macos-prerelease.md),
+not a release of every current source change.
 
 The preparation helper verifies the selected package and public TLS bootstrap.
 Its separate `stage --apply` operation prepares a fresh dedicated account and
@@ -99,7 +108,8 @@ Source fixtures and Darwin cross-builds do not establish launched credentials,
 manager reporting, process drain, reboot persistence or native uninstall.
 See [macOS launchd source](macos-agent-service.md) for phase-bound registration
 evidence, one-attempt uncertainty and exact native test boundaries. There is
-no restart, binary upgrade, automatic repair or published download command.
+no restart, binary upgrade or automatic repair. Published test-package downloads
+do not establish native service acceptance.
 
 ## Protected state and renewal
 
@@ -181,7 +191,7 @@ explicit authority, durable replay/uncertainty contracts and native acceptance.
 No TCC, Full Disk Access, administrative privileges or system extensions are
 requested by the basic reporting source.
 
-Before any macOS release, separately authorized native tests must establish:
+Before claiming native macOS operation, separately authorized tests must establish:
 
 1. Apple Silicon and Intel syscall/ACL/descriptor/rename/flush behavior on the
    supported macOS/APFS versions, including inherited expanding ACL rejection.

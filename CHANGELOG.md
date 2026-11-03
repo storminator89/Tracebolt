@@ -55,24 +55,33 @@ four retained payloads within one 128 MiB reservation budget, exact custody/devi
 selection, scoped retirement and bounded per-entry worklists. Existing endpoint
 grants and signed wire formats remain unchanged; source verification only.
 
-Fresh Windows Read admin has twenty-one explicitly disclosed scopes. The next
-[preview.3 candidate](docs/windows-prerelease-install.md) targets current source
-with a matching manager/frontend build. Its bounded native Setup gate passed;
-publication requires successful exact-source full Validate and publisher
-review/CI. Optional features keep separate setup, consent
-and acceptance requirements. Source changes are not a published release.
+Fresh Windows Read admin has twenty-one explicitly disclosed scopes. Published
+[preview.3](docs/windows-status.md) binds its exact accepted endpoint and matching
+manager/frontend source, not the moving development branch. Its bounded native
+Setup gate and exact-source full Validate passed. Optional features keep separate
+setup, consent and acceptance requirements. New source changes are not
+automatically included in that release.
 
 ## Published endpoint prereleases
 
 - [Linux v0.1.0-rc.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-rc.3):
   verified Linux amd64 read-admin download selected by the dashboard.
   [Setup, scope and platform limits](docs/read-admin-onboarding.md).
-- [Windows v0.1.0-windows-preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2):
+- [Windows v0.1.0-windows-preview.3](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.3):
+  unsigned x64 fresh 21-scope Read admin preview; three-case hosted Server 2025
+  packaged-Setup subset. [Current source, evidence and limits](docs/windows-status.md).
+  [Attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.3/windows-prerelease-install.md).
+- Historical [Windows v0.1.0-windows-preview.2](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.2):
   unsigned x64 fresh 21-scope Read admin preview; three-case hosted Server 2025
   packaged-Setup subset. [Attached installation guide](https://github.com/storminator89/Tracebolt/releases/download/v0.1.0-windows-preview.2/windows-prerelease-install.md).
 - [Windows v0.1.0-windows-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-windows-preview.1):
   unsigned x64 five-scope read-only preview, with a limited hosted Server 2025
   acceptance result. [Historical installation and exact artifact evidence](docs/windows-prerelease-historical/windows-prerelease-install.md).
+- [macOS v0.1.0-macos-preview.1](https://github.com/storminator89/Tracebolt/releases/tag/v0.1.0-macos-preview.1):
+  unsigned Apple Silicon and Intel service-test archives and matching preparation
+  helpers. [Release guide](docs/macos-prerelease.md) and
+  [source/native limits](docs/macos-status.md). Publication does not establish
+  native enrollment, launchd installation, reboot persistence or notarization.
 
 Manager deployment is separate from endpoint releases. The existing tags and
 published assets are unchanged.
