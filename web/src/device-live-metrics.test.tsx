@@ -36,6 +36,32 @@ beforeEach(() => {
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('live device metadata', () => {
+    it.each(['stalled', 'slow', 'backward'] as const)('preserves %s manager-time evidence across successful polls and capability-tab remounts', async mode => {
+        latest.agentCertificate!.expiresAt = '2026-10-05T12:01:00Z';
+        await start();
+        vi.mocked(request).mockImplementation(async path => {
+            if (path === `/devices/${id}`) return { ...latest, agentCertificate: { ...latest.agentCertificate!, checkedAt: mode === 'slow' ? '2026-10-05T12:00:01Z' : mode === 'backward' ? '2026-10-05T11:59:59Z' : now } };
+            return answer(path);
+        });
+        await advance(121000); expect(reads().length).toBeGreaterThan(2);
+        fireEvent.click(screen.getByRole('tab', { name: 'Capabilities' })); await flush();
+        const state = () => document.querySelector('.device-readiness [data-report-state]');
+        expect(state()).toHaveAttribute('data-report-state', mode === 'backward' ? 'unknown' : 'stale');
+        expect(document.querySelector('.device-readiness [data-certificate-state]')).toHaveAttribute('data-certificate-state', mode === 'backward' ? 'unknown' : 'expired');
+        fireEvent.click(screen.getByRole('tab', { name: 'Overview' })); await flush();
+        fireEvent.click(screen.getByRole('tab', { name: 'Capabilities' })); await flush();
+        expect(state()).toHaveAttribute('data-report-state', mode === 'backward' ? 'unknown' : 'stale');
+        expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('carries metadata age into a newly opened capability summary instead of refreshing old evidence', async () => {
+        await start();
+        vi.mocked(request).mockRejectedValue(new APIError('Synthetic unavailable', 503));
+        await advance(121000);
+        fireEvent.click(screen.getByRole('tab', { name: 'Capabilities' })); await flush();
+        expect(document.querySelector('.device-readiness [data-report-state]')).toHaveAttribute('data-report-state', 'stale');
+        expect(document.querySelector('.device-readiness [data-report-state] time')).toHaveAttribute('datetime', now);
+        expect(mutate).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    });
     it('updates only metadata every 15 seconds, retaining cards, scroll and original measurement time', async () => {
         await start(); const card = resources(), main = screen.getByRole('main'); main.scrollTop = 240;
         expect(card).toHaveTextContent('0.4%'); expect(card).toHaveTextContent('23.4%');

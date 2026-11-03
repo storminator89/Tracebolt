@@ -111,6 +111,13 @@ describe('compact capability collection status', () => {
         expect(request).toHaveBeenCalledTimes(1);
         expect(vi.mocked(request).mock.calls[0][0]).toBe(`/devices/${systemDevice}/inventory/system`);
         expect(row('socket_inventory')).toHaveAttribute('data-state', 'available');
+        const summary = document.querySelector('.device-readiness')!;
+        expect(summary.querySelector('[data-readiness-state="available"]')).toHaveTextContent('2 Collected');
+        expect(summary.querySelector('[data-readiness-state="scope"]')).toHaveTextContent('1 Profile scope');
+        expect(summary.querySelector('[data-readiness-state="unsupported"]')).toHaveTextContent('1 Not supported');
+        expect(summary).toHaveTextContent('managed-operations-v3');
+        const counts = [...summary.querySelectorAll('[data-readiness-state] strong')].map(item => Number(item.textContent));
+        expect(counts.reduce((sum, count) => sum + count, 0)).toBe(document.querySelectorAll('[data-capability]').length);
     });
     it('keeps permission failure visible but treats unsupported source as neutral', async () => {
         const v = systemView();
@@ -147,6 +154,8 @@ describe('compact capability collection status', () => {
         act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
         expect(row('systemd')).toHaveAttribute('data-state', 'unknown');
         expect(screen.getByRole('button', { name: 'Check status' })).toBeDisabled();
+        expect(document.querySelector('.device-readiness')).toHaveTextContent('Current evidence unavailable');
+        expect(document.querySelector('.device-readiness [data-readiness-state]')).toBeNull();
         fireEvent.focus(window); expect(request).toHaveBeenCalledTimes(2);
     });
     it('does not renew the age of an unchanged source when server time stalls', async () => {

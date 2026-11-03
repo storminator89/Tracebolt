@@ -55,7 +55,7 @@ export function DeviceDetail({ id, onClose, onCase, initialTab, initialUnit }: {
     const cveUpdateReview = useLinuxCVEUpdateReview(id, operator);
     const [tab, setTab] = useState(initialTab ?? 'overview');
     const [serviceSource, setServiceSource] = useState<'complete' | 'preview'>('complete');
-    const { device, snapshot, refreshing, accessEnded, error, automaticState, refresh } = useDeviceMetadata(id, scope, operator?.mode === 'lan' && operator.authenticated);
+    const { device, snapshot, metadataElapsed, refreshing, accessEnded, error, automaticState, refresh } = useDeviceMetadata(id, scope, operator?.mode === 'lan' && operator.authenticated);
     const [journalUnit, setJournalUnit] = useState(initialUnit && validJournalUnit(initialUnit) ? initialUnit : '');
     const [windowsInventoryTab, setWindowsInventoryTab] = useState<'storage' | 'updates'>();
     const [inventorySource, setInventorySource] = useState<'processes' | 'preview' | 'packages' | 'updates'>();
@@ -136,7 +136,7 @@ export function DeviceDetail({ id, onClose, onCase, initialTab, initialUnit }: {
     {tab === 'cves' && securityAvailable && <LinuxCVEPanel deviceId={device.id} sessionKey={operator.expiresAt ?? undefined} onReviewUpdates={reviewUpdates}/> }
     {tab === 'security' && securityAvailable && <DeviceSecurityWorkspace deviceId={device.id} sessionKey={operator.expiresAt ?? undefined} onOpenPackages={openPackages} onOpenUpdates={openUpdates} onReviewUpdates={reviewUpdates}/>}
     {tab === 'evidence' && <><div className="evidence-list">{device.evidence.map((evidence, index) => <EvidenceCard key={evidence.id} evidence={evidence} index={index}/>)}</div>{!device.evidence.length && <p className="quiet-empty">{t("F\u00FCr dieses Ger\u00E4t sind keine Belege verf\u00FCgbar.")}</p>}</>}
-    {tab === 'capabilities' && <DeviceCapabilities key={`${device.id}:${operator?.expiresAt ?? ''}`} device={device}/>}
+    {tab === 'capabilities' && <DeviceCapabilities key={`${device.id}:${operator?.expiresAt ?? ''}`} device={device} metadataElapsed={metadataElapsed}/>}
   </div><div className="drawer-footer"><ShieldCheck size={14}/><span>{tab === 'health' && windowsAvailable ? (locale === 'de' ? 'Manager-Richtlinien · keine Remote-Ausführung' : 'Manager policies · no remote execution') : tab === 'inventory' && windowsAvailable ? (locale === 'de' ? 'Inventarbeobachtungen sind nur lesend' : 'Inventory observations are read-only') : tab === 'details' ? t("Lesende Ger\u00E4teansicht \u00B7 keine Remote-Ausf\u00FChrung") : t("Nur lesend")}</span>{tab === 'details' && <code>{device.id}</code>}</div></>}</section>;
 }
 export function CaseDetail({ id, onBack, onDevice, onChanged, onSettings = () => { window.location.hash = "/settings"; } }: {
