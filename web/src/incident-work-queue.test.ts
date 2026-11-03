@@ -9,6 +9,7 @@ import { windowsInboxSourceStatus } from './windows-complete-incident-inbox-type
 import type { WindowsInboxView } from './windows-complete-incident-inbox-types';
 import { WindowsIncidentReadOnlyRow } from './windows-incident-inbox';
 import { IncidentWorkQueue } from './incident-work-queue';
+import type { InvestigationsResource } from './investigations-resource';
 import { filterIncidentQueue, incidentQueueRows, queueSourceScopes } from './incident-work-queue-model';
 
 const now = legacyWire.active.serverNow, id = 'agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -69,7 +70,8 @@ describe('federated incident queue contracts', () => {
         expect(render()).toContain('Closed: policy changed; no recovery established'); expect(render()).not.toContain('>Recovered<');
     });
     it('labels page-local filters and missing coverage without zero-count or whole-fleet success claims', () => {
-        const html = renderToStaticMarkup(createElement(IncidentWorkQueue, { devices: [], sessionKey: null }));
+        const linux: InvestigationsResource = { view: null, counts: null, readiness: 'unknown', pending: false, failure: null, locked: false, refresh: () => {} };
+        const html = renderToStaticMarkup(createElement(IncidentWorkQueue, { devices: [], sessionKey: null, linux, scope: 'active', onScope: () => {}, linuxOffset: 0, onLinuxPage: () => {} }));
         for (const label of ['Platform on loaded pages', 'Source on loaded pages', 'Seen on loaded pages', 'Each source has its own live page and total.', 'Source coverage is incomplete.', 'No current Linux investigation data.', 'No current Windows incident data.', 'Missing source rows and totals remain unknown.']) expect(html).toContain(label);
         expect(html).not.toMatch(/0 retained|0 authorized devices|Mark seen|Review service/);
     });
