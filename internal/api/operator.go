@@ -36,6 +36,8 @@ import (
 )
 
 type LANOperatorConfig struct {
+	ManagerReadiness ManagerReadinessSource
+
 	MacOSInventoryEnrollment          *enrollmentservice.Service
 	MacOSInventoryEnrollmentBootstrap EnrollmentBootstrap
 	MacOSEnrollment                   *enrollmentservice.Service
@@ -73,6 +75,8 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	managerReadiness ManagerReadinessSource
+
 	windowsManagedMSI         *windowsmanagedmsimanager.Manager
 	windowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
 	windowsUpdateJobs         *windowsupdatejob.Manager
@@ -238,6 +242,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.mu.Lock()
 	app.lanOnly = true
 	app.guidedEnrollment = c.Enrollment != nil
+	app.automaticCertificateRenewal = c.Enrollment.AutomaticRenewal()
 	app.insecureHTTPTest = c.InsecureHTTPTest
 	app.managedPreview = nil
 	app.sample = model.Device{}
@@ -295,7 +300,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.PackageActions != nil {
 		packages = c.PackageActions
 	}
-	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	h := &operatorHandler{managerReadiness: c.ManagerReadiness, packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
 	h.windowsUpdateJobs = c.WindowsUpdateJobs
 	h.windowsSoftwareJobs = c.WindowsSoftwareJobs
 	h.windowsManagedMSI = c.WindowsManagedMSI
@@ -607,6 +612,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if session.Named() && !namedReadRoute(r) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
+		return
+	}
+	if r.URL.Path == "/api/manager/readiness" {
+		h.managerReadinessAPI(w, r)
 		return
 	}
 	if r.URL.Path == "/api/fleet/windows-notifications" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-notifications/") {

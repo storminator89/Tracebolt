@@ -1,5 +1,9 @@
 # Windows incident inbox and operator acknowledgement
 
+The LAN Investigations page also provides a [read-only cross-platform work
+queue](incident-work-queue.md). This original inbox retains its separate
+acknowledgement and service-review workflows.
+
 This manager-side source increment adds a compact, on-demand **Windows incidents**
 inbox below the fleet device list. It projects the existing durable Windows
 contact, system-volume disk, observed-group CPU, physical-RAM and selected-service

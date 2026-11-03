@@ -1,0 +1,22 @@
+.incident-work-queue{min-width:0}
+.incident-queue-toolbar{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0}
+.incident-queue-toolbar label{display:flex;align-items:center;gap:8px;font-size:12px;min-width:0}
+.incident-queue-toolbar select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;font:inherit;max-width:100%;min-width:0}
+.incident-queue-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.incident-queue-source{padding:16px;min-width:0}
+.incident-queue-source h2{font-size:14px;margin:0}
+.incident-queue-source p{margin:10px 0;font-size:12px;line-height:1.6;color:var(--secondary);overflow-wrap:anywhere}
+.incident-queue-paging{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px}
+.incident-queue-list{list-style:none;padding:0;margin:0}
+.incident-queue-entry{border-top:1px solid var(--line);min-width:0}
+.incident-queue-entry:first-child{border-top:0}
+.incident-queue-label{margin:0;padding:12px 24px 0;color:var(--secondary);font-size:11px}
+.incident-work-queue .investigation-item{padding-top:12px}
+.incident-work-queue .windows-incident-row{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);padding:12px 24px 20px;border-top:0}
+.incident-queue-empty{padding:20px 24px;font-size:13px;line-height:1.6}
+.incident-work-queue summary{cursor:pointer}
+.incident-work-queue .windows-incident-meta dt{font-size:11px;color:var(--secondary)}
+.incident-work-queue .windows-incident-meta dd{margin:3px 0 0;line-height:1.5}
+.incident-work-queue button:focus-visible,.incident-work-queue select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:800px){.incident-queue-sources{grid-template-columns:1fr}}
+@media(max-width:600px){.incident-queue-toolbar label{width:100%;justify-content:space-between}.incident-queue-toolbar select{max-width:65%}.incident-queue-label{padding:12px 16px 0}.incident-work-queue .windows-incident-row{grid-template-columns:minmax(0,1fr);padding:12px 16px 16px}.incident-work-queue button{min-height:38px}}

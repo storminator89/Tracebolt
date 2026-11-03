@@ -56,6 +56,10 @@ command is sent. There is no timeseries archive of raw telemetry.
 
 ## Fleet investigations
 
+The LAN Investigations page includes a [read-only cross-platform work
+queue](incident-work-queue.md). Linux source authority, lifecycle and independent
+paging remain as described below.
+
 The LAN **Investigations** page is a read-only projection of these same durable
 incidents. It does not create a second case, import demo cases, run an AI model or
 change a warning's state. Open, recovered and monitoring-stopped counts are

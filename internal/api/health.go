@@ -53,6 +53,12 @@ func (m *healthMonitor) evaluate(ctx context.Context) error {
 // RunHealthMonitor evaluates accepted data independently of browser visibility.
 // It exits before operator-store shutdown and never executes endpoint actions.
 func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
+	return s.RunHealthMonitorObserved(ctx, warn, nil)
+}
+
+// RunHealthMonitorObserved reports completion of each health evaluation. The
+// observer does not cover the separate proactive monitor and must not block.
+func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), observed func(time.Time, error)) error {
 	s.mu.RLock()
 	m := s.health
 	s.mu.RUnlock()
@@ -74,6 +80,9 @@ func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
 			return nil
 		}
 		now := m.source.Now()
+		if observed != nil {
+			observed(now, e)
+		}
 		if e != nil && warn != nil && (lastWarning.IsZero() || now.Sub(lastWarning) >= time.Minute) {
 			warn()
 			lastWarning = now

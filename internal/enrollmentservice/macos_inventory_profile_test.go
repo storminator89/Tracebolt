@@ -5,6 +5,7 @@ import (
 	"localrmm/internal/enrollmentcrypto"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestMacOSInventoryDeviceProjectionIsScopeOnly(t *testing.T) {
@@ -40,5 +41,20 @@ func TestMacOSInventoryDeviceProjectionIsScopeOnly(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("fresh capability absent")
+	}
+}
+
+func TestMacOSInventoryMaintenanceObserverCancellation(t *testing.T) {
+	f := newFixture(t, "tls")
+	f.service.binding.CollectionProfile = enrollmentcrypto.CollectionProfileMacOSInventory
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := f.service.RunMacOSInventoryMaintenanceObserved(ctx, func() { t.Error("canceled loop warned") }, func(time.Time, error) { t.Error("canceled loop observed") }); err != nil {
+		t.Fatal("canceled observed loop did not stop", err)
+	}
+	for _, service := range []*Service{nil, {}} {
+		if err := service.RunMacOSInventoryMaintenanceObserved(ctx, nil, func(time.Time, error) { t.Error("invalid loop observed") }); err != ErrConfiguration {
+			t.Fatal("invalid observed runner accepted", err)
+		}
 	}
 }

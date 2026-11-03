@@ -17,6 +17,12 @@ func (s *Service) MaintainMacOSInventory(ctx context.Context, now time.Time) err
 	return s.store.MaintainMacOSInventory(enrollmentstore.WithMacOSInventoryClock(ctx, s.Now), now)
 }
 func (s *Service) RunMacOSInventoryMaintenance(ctx context.Context, warn func()) error {
+	return s.RunMacOSInventoryMaintenanceObserved(ctx, warn, nil)
+}
+
+// RunMacOSInventoryMaintenanceObserved reports each completed step, including
+// failures, unless its parent context has been canceled.
+func (s *Service) RunMacOSInventoryMaintenanceObserved(ctx context.Context, warn func(), observe func(time.Time, error)) error {
 	if s == nil || s.serviceState == nil || s.binding.CollectionProfile != macosinventorywire.Profile || ctx == nil {
 		return ErrConfiguration
 	}
@@ -27,7 +33,14 @@ func (s *Service) RunMacOSInventoryMaintenance(ctx context.Context, warn func())
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if e := s.MaintainMacOSInventory(ctx, s.Now().UTC()); e != nil && ctx.Err() == nil && warn != nil {
+			e := s.MaintainMacOSInventory(ctx, s.Now().UTC())
+			if ctx.Err() != nil {
+				return nil
+			}
+			if observe != nil {
+				observe(s.Now().UTC(), e)
+			}
+			if e != nil && warn != nil {
 				warn()
 			}
 		}

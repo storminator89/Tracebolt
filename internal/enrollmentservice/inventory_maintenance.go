@@ -17,6 +17,12 @@ const InventoryMaintenanceInterval = time.Second
 // decision is cached across ticks. Busy/failing steps preserve data and retry on
 // later rounds. A bounded warning callback never receives source content.
 func (s *Service) RunInventoryMaintenance(ctx context.Context, warn func()) error {
+	return s.RunInventoryMaintenanceObserved(ctx, warn, nil)
+}
+
+// RunInventoryMaintenanceObserved reports each completed step independently of
+// warning throttling. Parent cancellation does not produce completion evidence.
+func (s *Service) RunInventoryMaintenanceObserved(ctx context.Context, warn func(), observe func(time.Time, error)) error {
 	if s == nil || s.serviceState == nil || s.store == nil || ctx == nil || s.binding.CollectionProfile != enrollmentcrypto.CollectionProfileComplete {
 		return ErrConfiguration
 	}
@@ -36,6 +42,9 @@ func (s *Service) RunInventoryMaintenance(ctx context.Context, warn func()) erro
 			slot++
 			if ctx.Err() != nil {
 				return nil
+			}
+			if observe != nil {
+				observe(s.Now().UTC(), e)
 			}
 			if e != nil && !errors.Is(e, enrollmentstore.ErrInventoryBusy) && !errors.Is(e, enrollmentstore.ErrBusy) && warn != nil && (lastWarning.IsZero() || !now.Before(lastWarning.Add(time.Minute))) {
 				warn()

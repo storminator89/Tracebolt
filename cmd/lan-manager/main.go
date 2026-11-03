@@ -47,6 +47,8 @@ import (
 )
 
 type prepared struct {
+	readiness *managerReadiness
+
 	operator, agent           http.Handler
 	operatorTLS, agentTLS     *tls.Config
 	close                     func()
@@ -602,7 +604,8 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 			return nil, e
 		}
 	}
-	operatorConfig := api.LANOperatorConfig{WindowsManagedMSIRegistry: managedMSI, WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
+	readiness := newManagerReadiness(m, enrollment, appStore, trustStore, enrolledStore, windowsStore, macosStore, macosInventoryStore)
+	operatorConfig := api.LANOperatorConfig{ManagerReadiness: readiness.Snapshot, WindowsManagedMSIRegistry: managedMSI, WindowsSoftwareRegistry: windowsSoftware, WindowsUpdateRegistry: windowsUpdates, WindowsServiceActions: windowsActions, PackageActions: packageActions, AISettings: aiSettings, AlarmSettings: alarmWorker, ApplicationCheckSettings: applicationChecks, ServiceActions: actions, Origin: c.OperatorOrigin, Auth: auth, Registry: registry, InsecureHTTPTest: c.Profile == lanconfig.HTTPTest, Devices: func() ([]model.Device, error) {
 		return trustStore.Devices(context.Background(), registry.List(), time.Now().UTC())
 	}}
 	if enrolledService != nil {
@@ -692,7 +695,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 		agent = withMacOSInventoryIngress(agent, nil)
 	}
 	leaseHandedOff = true
-	return &prepared{operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, macosInventoryMaintenance: macosInventoryMaintenance, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
+	return &prepared{readiness: readiness, operator: operator, agent: agent, operatorTLS: operatorTLS, agentTLS: agentTLS, close: closeAll, maintenance: enrolledService, windowsMaintenance: windowsService, macosInventoryMaintenance: macosInventoryMaintenance, health: app, alarms: alarmWorker, applicationChecks: applicationChecks}, nil
 }
 
 func server(handler http.Handler) *http.Server {
@@ -743,22 +746,26 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		windowsDone := make(chan struct{})
 		go func() {
 			defer close(windowsDone)
-			_ = p.health.RunWindowsHealthMonitors(windowsCtx,
+			p.readiness.windowsHealth.Start()
+			defer p.readiness.windowsHealth.Stop()
+			_ = p.health.RunWindowsHealthMonitorsObserved(windowsCtx,
 				func() {
 					log.Print("Windows contact evaluation is unavailable; existing incident history is preserved.")
 				},
 				func() {
 					log.Print("Windows percentage evaluation is unavailable; existing incident history is preserved.")
-				})
+				}, p.readiness.windowsHealth.Complete)
 		}()
 		defer func() { stopWindows(); <-windowsDone }()
 		healthCtx, stopHealth := context.WithCancel(ctx)
 		healthDone := make(chan struct{})
 		go func() {
 			defer close(healthDone)
-			_ = p.health.RunHealthMonitor(healthCtx, func() {
+			p.readiness.linuxHealth.Start()
+			defer p.readiness.linuxHealth.Stop()
+			_ = p.health.RunHealthMonitorObserved(healthCtx, func() {
 				log.Print("Health evaluation is unavailable; existing incident history is preserved.")
-			})
+			}, p.readiness.linuxHealth.Complete)
 		}()
 		defer func() { stopHealth(); <-healthDone }()
 	}
@@ -777,9 +784,11 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		maintenanceDone := make(chan struct{})
 		go func() {
 			defer close(maintenanceDone)
-			_ = p.maintenance.RunInventoryMaintenance(maintenanceCtx, func() {
+			p.readiness.linuxInventory.Start()
+			defer p.readiness.linuxInventory.Stop()
+			_ = p.maintenance.RunInventoryMaintenanceObserved(maintenanceCtx, func() {
 				log.Print("Complete inventory maintenance is unavailable; retained observations are preserved.")
-			})
+			}, p.readiness.linuxInventory.Complete)
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
@@ -788,9 +797,11 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		maintenanceDone := make(chan struct{})
 		go func() {
 			defer close(maintenanceDone)
-			_ = runWindowsEventMaintenance(maintenanceCtx, p.windowsMaintenance, func() {
+			p.readiness.windowsInventory.Start()
+			defer p.readiness.windowsInventory.Stop()
+			_ = runWindowsEventMaintenanceObserved(maintenanceCtx, p.windowsMaintenance, func() {
 				log.Print("Windows inventory/content maintenance is unavailable; retained data remains protected.")
-			})
+			}, p.readiness.windowsInventory.Complete)
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
@@ -799,9 +810,11 @@ func runWithApplicationChecks(ctx context.Context, m lanconfig.Material, enrollm
 		maintenanceDone := make(chan struct{})
 		go func() {
 			defer close(maintenanceDone)
-			_ = p.macosInventoryMaintenance.RunMacOSInventoryMaintenance(maintenanceCtx, func() {
+			p.readiness.macosInventory.Start()
+			defer p.readiness.macosInventory.Stop()
+			_ = p.macosInventoryMaintenance.RunMacOSInventoryMaintenanceObserved(maintenanceCtx, func() {
 				log.Print("macOS inventory maintenance is unavailable; retained data remains protected.")
-			})
+			}, p.readiness.macosInventory.Complete)
 		}()
 		defer func() { stopMaintenance(); <-maintenanceDone }()
 	}
