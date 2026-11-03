@@ -53,7 +53,7 @@ function dataRows(snapshot: WindowsInventorySnapshot, key: 'hostname' | 'network
         case 'network': return { headers: [c.name, c.index, c.address, c.prefix], rows: snapshot.network.rows.map(row => [row.name, String(row.index), row.address, String(row.prefixLength)]) };
     }
 }
-export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }: { resource: WindowsInventoryResource; initialTab?: 'storage'; fullServices?: { deviceId: string; sessionKey: string | null; enabled: boolean } }) {
+export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }: { resource: WindowsInventoryResource; initialTab?: 'storage' | 'updates'; fullServices?: { deviceId: string; sessionKey: string | null; enabled: boolean } }) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), [selected, setSelected] = useState<TabKey>(initialTab ?? 'processes'), [query, setQuery] = useState('');
     const [processControls, setProcessControls] = useWindowsProcessControls(resource, selected === 'processes');
     const tableKind = selected === 'services' || selected === 'software' ? selected : null;
