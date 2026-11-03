@@ -68,9 +68,20 @@ handler, including cancellation/shutdown. No readiness-probe join is inserted
 before bounded HTTP shutdown. The session is checked again before returning a
 slow result; expiry/revocation cannot receive that result.
 
-Only fixed component/state labels and check times are returned. Device, actor,
+Only fixed component/state labels, check times and public-certificate validity dates are returned. Device, actor,
 path, target, fingerprint, SQL error, telemetry, provider and secret values are
 not included. No repair action is available from this status read.
+
+## Upcoming certificate expiry
+
+The same authenticated API now also reports [loaded certificate lifetimes](manager-certificate-lifetimes.md)
+under the additive optional `certificateLifetimes` field. It shows exact original
+validity dates, the limiting presented-chain window, and independent issuer/root
+dates with seven/30-day warnings. It is API-only in this increment. These public
+certificate dates add no identity, key or credential bytes to the response.
+Warnings do not change the existing readiness status or renew anything; existing
+authority validation remains separate and authoritative. An omitted report is
+unknown, never evidence that no certificate needs attention.
 
 ## Verification boundary
 

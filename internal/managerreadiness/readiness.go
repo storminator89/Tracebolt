@@ -16,12 +16,13 @@ type Component struct {
 }
 
 type View struct {
-	SchemaVersion string      `json:"schemaVersion"`
-	Scope         string      `json:"scope"`
-	Status        string      `json:"status"`
-	ServerNow     time.Time   `json:"serverNow"`
-	Components    []Component `json:"components"`
-	Unassessed    []string    `json:"unassessed"`
+	SchemaVersion        string                `json:"schemaVersion"`
+	Scope                string                `json:"scope"`
+	Status               string                `json:"status"`
+	ServerNow            time.Time             `json:"serverNow"`
+	Components           []Component           `json:"components"`
+	Unassessed           []string              `json:"unassessed"`
+	CertificateLifetimes []CertificateLifetime `json:"certificateLifetimes,omitempty"`
 }
 
 // NewView does not equate a running process, disabled component, or unavailable

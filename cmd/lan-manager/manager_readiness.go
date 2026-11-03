@@ -166,7 +166,9 @@ func (r *managerReadiness) Snapshot(ctx context.Context) managerreadiness.View {
 	if step.Err() != nil {
 		components = append(components, managerreadiness.Component{Component: "probe", State: "timeout"})
 	}
-	return managerreadiness.NewView(now, components)
+	view := managerreadiness.NewView(now, components)
+	view.CertificateLifetimes = managerreadiness.CertificateLifetimes(now, r.tls, r.certificate, r.issuerConfigured, r.issuerDER, r.rootDER)
+	return view
 }
 
 // One round-robin slot does not prove a clean sweep or recovery of another
