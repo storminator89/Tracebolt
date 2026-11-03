@@ -20,3 +20,19 @@
 .incident-work-queue button:focus-visible,.incident-work-queue select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:800px){.incident-queue-sources{grid-template-columns:1fr}}
 @media(max-width:600px){.incident-queue-toolbar label{width:100%;justify-content:space-between}.incident-queue-toolbar select{max-width:65%}.incident-queue-label{padding:12px 16px 0}.incident-work-queue .windows-incident-row{grid-template-columns:minmax(0,1fr);padding:12px 16px 16px}.incident-work-queue button{min-height:38px}}
+.incident-queue-toolbar input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;font:inherit;max-width:100%;min-width:0}
+.incident-queue-search{flex:1 1 320px}
+.incident-queue-search input{flex:1;min-width:140px}
+.incident-timeline{margin:0 24px 20px;padding:12px 16px;border:1px solid var(--line);border-radius:6px;font-size:12px;line-height:1.6;min-width:0;overflow-wrap:anywhere}
+.incident-timeline>summary{font-weight:600}
+.incident-timeline h4{font-size:12px;margin:16px 0 8px}
+.incident-timeline p{color:var(--secondary);margin:10px 0}
+.incident-timeline dl{display:grid;gap:8px;margin:10px 0}
+.incident-timeline dt{color:var(--secondary);font-size:11px}
+.incident-timeline dd{margin:2px 0 0;white-space:normal;overflow-wrap:anywhere}
+.incident-timeline-events{display:grid;gap:12px;padding-left:20px}
+.incident-timeline-events li>time{display:block}
+.incident-timeline-exact{display:block;color:var(--secondary);font-size:11px}
+.incident-timeline-source{margin:8px 0;padding:8px 12px;border-left:2px solid var(--line)}
+.incident-work-queue input:focus-visible,.incident-timeline summary:focus-visible,.incident-timeline a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:600px){.incident-queue-search{flex-basis:100%;flex-wrap:wrap}.incident-queue-search input{width:100%;min-width:0}.incident-timeline{margin:0 16px 16px;padding:12px}.incident-queue-toolbar input{min-height:38px}}
