@@ -1,7 +1,7 @@
 import { useMobileNavigation } from './mobile-navigation';
 import { useInvestigations } from './investigations-resource';
-import { InvestigationsPage, InvestigationList, InvestigationNotice } from './investigations';
-import type { InvestigationScope } from './investigations-types';
+import { InvestigationList, InvestigationNotice } from './investigations';
+import { IncidentWorkQueue } from './incident-work-queue';
 import { useFleetIdentity } from './fleet-identity-resource';
 import type { FleetIdentityResource } from './fleet-identity-resource';
 import { FleetIdentityNotice } from './fleet-identity';
@@ -65,10 +65,8 @@ function WorkspaceApp() {
     const previousRoute = useRef(route);
     const [data, setData] = useState<Overview | null>(null);
     const [fleetRevision, setFleetRevision] = useState(0);
-    const [investigationScope, setInvestigationScope] = useState<InvestigationScope>('open');
-    const [investigationOffset, setInvestigationOffset] = useState(0);
     const [caseScope, setCaseScope] = useState('active');
-    const investigations = useInvestigations(operator.mode === 'lan' && operator.authenticated && (route.view === 'overview' || route.view === 'cases'), operator.expiresAt ?? null, String(fleetRevision), route.view === 'cases' ? investigationScope : 'open', route.view === 'cases' ? investigationOffset : 0, true);
+    const investigations = useInvestigations(operator.mode === 'lan' && operator.authenticated && route.view === 'overview', operator.expiresAt ?? null, String(fleetRevision), 'open', 0, true);
     const showFleetIdentity = operator.mode === 'lan' && operator.authenticated && !!data && (route.view === 'overview' || route.view === 'settings' || route.view === 'devices' && !route.id);
     const fleetIdentity = useFleetIdentity(showFleetIdentity, operator.expiresAt ?? null, String(fleetRevision), true);
     const [error, setError] = useState('');
@@ -140,7 +138,7 @@ function WorkspaceApp() {
     const reviewDeviceSetup = () => { setupFocusRequested.current = true; changeView('devices'); };
     const setupAdmin = operator.hasExplicitMetadata === true && operator.loginMode === 'shared';
     const emptyFleet = (withSetup = false) => <FleetEmptyState lan={operator.mode === 'lan'} loading={loading} failed={Boolean(error)} admin={setupAdmin} named={operator.loginMode === 'named'} onSetup={withSetup ? reviewDeviceSetup : undefined}/>;
-    const openInvestigations = () => { setCaseScope('active'); setInvestigationScope('open'); setInvestigationOffset(0); changeView('cases'); };
+    const openInvestigations = () => { setCaseScope('active'); changeView('cases'); };
     const openDevice = (device: Device) => navigate('devices', device.id);
     const openCase = (item: Case) => navigate('cases', item.id);
     const goActivity = (item: ActivityType) => {
@@ -171,7 +169,7 @@ function WorkspaceApp() {
       <button className="brand" onClick={() => changeView('overview')}><Logo /><span>Tracebolt<span className="brand-tag">{t("WORKSPACE")}</span></span></button>
       <div className="workspace-label"><span className="workspace-avatar">L</span><span><strong>{operator.mode === "lan" ? t("LAN-Umgebung") : t("Lokale Umgebung")}</strong><small>{t("Entwicklungsprototyp")}</small></span><span className="local-dot"/></div>
       <div className="nav-label">{t("ARBEITSBEREICH")}</div>
-      <nav>{nav.map(item => <button key={item.id} className={`nav-item ${route.view === item.id ? 'active' : ''}`} aria-current={route.view === item.id ? 'page' : undefined} onClick={() => changeView(item.id)}><item.icon size={18}/><span>{ui(item.label)}</span>{item.id === 'devices' && data && <span className="nav-number">{data.devices.length}</span>}{item.id === 'cases' && !!openInvestigationCount && <span className="nav-badge">{openInvestigationCount}</span>}</button>)}</nav>
+      <nav>{nav.map(item => <button key={item.id} className={`nav-item ${route.view === item.id ? 'active' : ''}`} aria-current={route.view === item.id ? 'page' : undefined} onClick={() => changeView(item.id)}><item.icon size={18}/><span>{ui(item.label)}</span>{item.id === 'devices' && data && <span className="nav-number">{data.devices.length}</span>}{item.id === 'cases' && !!openInvestigationCount && <span className="nav-badge" title={operator.mode === 'lan' ? (locale === 'de' ? 'Offene Linux-Health-Vorfälle' : 'Open Linux Health incidents') : undefined} aria-label={operator.mode === 'lan' ? `${locale === 'de' ? 'Offene Linux-Health-Vorfälle' : 'Open Linux Health incidents'}: ${openInvestigationCount}` : undefined}>{openInvestigationCount}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><button className={`nav-item ${route.view === 'settings' ? 'active' : ''}`} onClick={() => changeView('settings')} aria-current={route.view === 'settings' ? 'page' : undefined}><Settings2 size={18}/><span>{t("Einstellungen")}</span></button><button className="sidebar-help" onClick={() => { mobileNavigation.close(); setShortcuts(true); }}><Command size={15}/><span>{t("Tastenk\u00FCrzel")}</span><kbd>?</kbd></button><OperatorAccount /></div>
     </aside>
     <div className="main-shell" inert={mobileNav}>
@@ -204,7 +202,7 @@ function WorkspaceApp() {
             <WindowsNotifications key={`windows-notifications:${operator.expiresAt}:${route.revision}`} devices={data.devices} sessionKey={operator.expiresAt ?? null} admin={operator.hasExplicitMetadata === true && operator.loginMode === 'shared'}/>
           </>}/>
         </>}
-        {route.view === 'cases' && (operator.mode === 'lan' ? <InvestigationsPage resource={investigations} devices={data.devices} scope={investigationScope} offset={investigationOffset} onScope={scope => { setInvestigationScope(scope); setInvestigationOffset(0); }} onPage={setInvestigationOffset}/> : route.id ? <RouteDetailBoundary key={route.id} onBack={() => navigate('cases')} backLabel={t("Alle Untersuchungen")}><CaseDetail id={route.id} onBack={() => navigate('cases')} onDevice={id => navigate('devices', id)} onChanged={() => void load()} onSettings={() => navigate('settings')}/></RouteDetailBoundary> : <CasesPage cases={data.cases} onSelect={openCase} scope={caseScope} onScope={setCaseScope}/>)}
+        {route.view === 'cases' && (operator.mode === 'lan' ? <IncidentWorkQueue key={`incident-work-queue:${operator.actorId}:${operator.expiresAt}:${route.revision}`} devices={data.devices} sessionKey={operator.expiresAt ?? null}/> : route.id ? <RouteDetailBoundary key={route.id} onBack={() => navigate('cases')} backLabel={t("Alle Untersuchungen")}><CaseDetail id={route.id} onBack={() => navigate('cases')} onDevice={id => navigate('devices', id)} onChanged={() => void load()} onSettings={() => navigate('settings')}/></RouteDetailBoundary> : <CasesPage cases={data.cases} onSelect={openCase} scope={caseScope} onScope={setCaseScope}/>)}
         {route.view === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} fleetIdentity={fleetIdentity} investigationReadiness={investigations.readiness} applicationCheckEntry={route.id === applicationCheckSetupId}/>}
         <footer className="page-footer"><span><span className={`dot ${error ? 'amber' : 'teal'}`}/>{error ? t("Letzter erfolgreicher Abruf") : t("Manager verbunden")}<span className="footer-dot">·</span><time dateTime={data.generatedAt} title={fullDate(data.generatedAt)}>{fullDate(data.generatedAt)}</time></span><button onClick={() => void load()} disabled={loading}><RefreshCw size={13} className={loading ? 'spin' : ''}/>{loading ? t("Wird aktualisiert") : t("Aktualisieren")}</button></footer>
         </>}

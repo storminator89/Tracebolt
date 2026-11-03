@@ -12,13 +12,17 @@ import (
 // This manager-owned loop handles bounded Windows request metadata/cache and complete-generation reclamation.
 // It creates no endpoint grant, credential, source read or background capture.
 func runWindowsEventMaintenance(ctx context.Context, s *enrollmentservice.Service, warn func()) error {
+	return runWindowsEventMaintenanceObserved(ctx, s, warn, nil)
+}
+
+func runWindowsEventMaintenanceObserved(ctx context.Context, s *enrollmentservice.Service, warn func(), observe func(time.Time, error)) error {
 	if ctx == nil || s == nil || s.Binding().CollectionProfile != enrollmentcrypto.CollectionProfileWindowsInventory {
 		return enrollmentservice.ErrConfiguration
 	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	tick := 0
-	return windowsEventMaintenanceLoop(ctx, func(ctx context.Context, now time.Time) error {
+	return windowsEventMaintenanceLoopObserved(ctx, func(ctx context.Context, now time.Time) error {
 		tick++
 		e := s.MaintainWindowsContext(ctx, uint64(tick), now)
 		if servicesErr := s.MaintainWindowsFullServices(ctx, now); e == nil {
@@ -45,9 +49,15 @@ func runWindowsEventMaintenance(ctx context.Context, s *enrollmentservice.Servic
 			}
 		}
 		return e
-	}, s.Now, ticker.C, warn)
+	}, s.Now, ticker.C, warn, observe)
 }
 func windowsEventMaintenanceLoop(ctx context.Context, maintain func(context.Context, time.Time) error, now func() time.Time, ticks <-chan time.Time, warn func()) error {
+	return windowsEventMaintenanceLoopObserved(ctx, maintain, now, ticks, warn, nil)
+}
+
+// Completion evidence is independent of warning suppression and always uses the
+// clock after the maintenance step, never the queued tick or its start time.
+func windowsEventMaintenanceLoopObserved(ctx context.Context, maintain func(context.Context, time.Time) error, now func() time.Time, ticks <-chan time.Time, warn func(), observe func(time.Time, error)) error {
 	if ctx == nil || maintain == nil || now == nil || ticks == nil {
 		return enrollmentservice.ErrConfiguration
 	}
@@ -69,6 +79,9 @@ func windowsEventMaintenanceLoop(ctx context.Context, maintain func(context.Cont
 			cancel()
 			if ctx.Err() != nil {
 				return nil
+			}
+			if observe != nil {
+				observe(now().UTC(), err)
 			}
 			if err != nil && !errors.Is(err, enrollmentstore.ErrBusy) && warn != nil && (lastWarning.IsZero() || at.Before(lastWarning) || !at.Before(lastWarning.Add(time.Minute))) {
 				warn()

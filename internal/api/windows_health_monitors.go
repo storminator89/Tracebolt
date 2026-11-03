@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -30,6 +31,12 @@ func evaluateWindowsHealthMonitors(ctx context.Context, contact *windowsContactM
 // independent disk/CPU/RAM/selected-service ledgers, no concurrent self-contention or host activity. Shutdown joins this worker
 // before the enrollment and operator stores close.
 func (s *Server) RunWindowsHealthMonitors(ctx context.Context, warnContact, warnCapacity func()) error {
+	return s.RunWindowsHealthMonitorsObserved(ctx, warnContact, warnCapacity, nil)
+}
+
+// RunWindowsHealthMonitorsObserved reports completion after both configured
+// evaluations, including either failure. The observer must not block.
+func (s *Server) RunWindowsHealthMonitorsObserved(ctx context.Context, warnContact, warnCapacity func(), observed func(time.Time, error)) error {
 	s.mu.RLock()
 	contact, capacity := s.windowsContact, s.windowsCapacity
 	s.mu.RUnlock()
@@ -46,6 +53,9 @@ func (s *Server) RunWindowsHealthMonitors(ctx context.Context, warnContact, warn
 			return nil
 		}
 		now := time.Now()
+		if observed != nil {
+			observed(now, errors.Join(contactErr, capacityErr))
+		}
 		for i, err := range []error{contactErr, capacityErr} {
 			if err != nil && warnings[i] != nil && (last[i].IsZero() || now.Sub(last[i]) >= time.Minute) {
 				warnings[i]()

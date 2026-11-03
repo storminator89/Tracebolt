@@ -79,3 +79,51 @@ func TestWindowsEventMaintenanceCancellationAndInvalidConfiguration(t *testing.T
 		}
 	}
 }
+
+func TestWindowsEventMaintenanceObservesEveryCompletion(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.FixedZone("completion", 3600))
+	failure := errors.New("step failure")
+	results := []error{nil, failure, failure, enrollmentstore.ErrBusy, context.DeadlineExceeded}
+	ticks := make(chan time.Time, len(results))
+	for range results {
+		ticks <- base.Add(-time.Hour)
+	}
+	close(ticks)
+	clock := base
+	steps, completions, warnings := 0, 0, 0
+	err := windowsEventMaintenanceLoopObserved(context.Background(), func(ctx context.Context, at time.Time) error {
+		if !at.Equal(base.Add(time.Duration(steps) * time.Second)) {
+			t.Fatal("maintenance did not use its start time")
+		}
+		clock = clock.Add(250 * time.Millisecond)
+		result := results[steps]
+		steps++
+		return result
+	}, func() time.Time { return clock }, ticks, func() { warnings++ }, func(at time.Time, err error) {
+		if steps != completions+1 || !at.Equal(base.Add(time.Duration(completions)*time.Second+250*time.Millisecond)) || at.Location() != time.UTC {
+			t.Fatal("observer did not receive current UTC completion time", steps, completions, at)
+		}
+		if !errors.Is(err, results[completions]) {
+			t.Fatal("observer lost completion result", err)
+		}
+		completions++
+		clock = base.Add(time.Duration(completions) * time.Second)
+	})
+	if err != nil || steps != len(results) || completions != len(results) || warnings != 1 {
+		t.Fatal("completion evidence followed warning throttling", err, steps, completions, warnings)
+	}
+}
+
+func TestWindowsEventMaintenanceDoesNotObserveParentCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ticks := make(chan time.Time, 1)
+	ticks <- time.Now()
+	err := windowsEventMaintenanceLoopObserved(ctx, func(context.Context, time.Time) error {
+		cancel()
+		return context.Canceled
+	}, time.Now, ticks, func() { t.Error("shutdown warned") }, func(time.Time, error) { t.Error("shutdown produced completion evidence") })
+	if err != nil {
+		t.Fatal(err)
+	}
+}
