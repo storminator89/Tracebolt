@@ -1,6 +1,7 @@
 package api
 
 import (
+	"localrmm/internal/enrollmentcrypto"
 	"localrmm/internal/model"
 	"net/http"
 )
@@ -19,19 +20,63 @@ func (s *Server) mode() string {
 func (s *Server) lanCapabilities(w http.ResponseWriter) bool {
 	s.mu.RLock()
 	lan, insecure, guided := s.lanOnly, s.insecureHTTPTest, s.guidedEnrollment
+	profile, renewal := s.aiCollectionProfile, s.automaticCertificateRenewal
+	health, journalAI, cve := s.health != nil, s.journalAI != nil, s.linuxCVE != nil
 	s.mu.RUnlock()
 	if !lan {
 		return false
 	}
 	transport := "https-mtls"
 	identityMode := "manual-v1"
-	collector := "Separate manually approved agent observations; no manager-side collector or fallback."
-	limitations := []string{"One-environment LAN pilot with one operator and manually approved agent certificates.", "Only latest bounded observations are retained; no scheduler, history, host health evaluation or automatic remediation.", "Agent observations are authenticated claims, not independent attestation of the operating system.", "No software update or CVE assessment is integrated into this runtime yet.", "No online certificate issuer, discovery, automatic enrollment, service installation or remote shell.", "SQLite state is protected by filesystem access controls but is not encrypted.", "AI settings do not verify connectivity; analysis requires an explicit request. Private LAN model endpoints remain unsupported by the current provider policy."}
+	collector := "Separately approved agent inventory observations; no manager-side endpoint inventory collector or synthetic fallback."
+	limitations := []string{
+		"Manual agent-certificate approval is configured; there is no online certificate issuer, guided enrollment or discovery in this identity mode.",
+		"Only latest bounded manual-agent observations are retained; guided resource history and complete-profile Linux inventory, health and CVE assessment are not configured.",
+	}
 	if guided {
 		identityMode = "guided-v2"
-		collector = "Separately enrolled agent observations with explicit approval and activation; no manager-side collector or fallback."
-		limitations = []string{"Guided Linux enrollment pilot, capped at 25 retained records including tombstones; one operator and one environment.", "Foreground reporting and an explicitly installed Linux/systemd service are available. This API does not establish service installation, enablement or successful OS reboot; credential renewal is not implemented.", "The selected profile determines inventory scope. The v3 profile supports complete dpkg generations and paged service/socket views; their current coverage, permission gaps and original ages are shown separately.", "Only bounded latest/last-complete observations are retained, without a historical time series or automatic remediation. Offline advisory review, where available, is candidate evidence rather than confirmed CVE or offered-update coverage.", "Agent observations are authenticated claims, not independent operating-system attestation or proof of an installed service.", "The online issuer uses a dedicated preprovided client-only intermediate; the root private key remains offline.", "SQLite state is protected by filesystem controls and is not encrypted; old-backup rollback requires explicit recovery.", "Optional on-demand service log content requires a compatible updated endpoint and separate local helper/content permission. It is ephemeral, may contain secrets despite masking, and is excluded from AI, exports and diagnostics.", "Managed inventory is excluded from AI. Other AI analysis needs explicit consent; current private LAN model endpoints remain unsupported."}
+		collector = "Separately enrolled agent inventory observations with explicit approval and activation; no manager-side endpoint inventory collector or synthetic fallback."
+		limitations = []string{
+			"Guided enrollment requires invitation, identity approval and activation, with at most 25 retained identities including tombstones per configured store; it does not provide discovery or unattended trust.",
+			"Foreground reporting and separately installed agent services are supported source paths. This API does not establish service installation, enablement, native acceptance or successful OS reboot.",
+			"Bounded resource history retains newly accepted basic utilization observations with their original ages and visible gaps; it does not backfill missing samples or establish host health.",
+			"The online issuer uses a dedicated preprovided client-only intermediate; the root private key remains offline.",
+		}
+		switch profile {
+		case enrollmentcrypto.CollectionProfile:
+			limitations = append(limitations, "Configured Linux collection profile "+profile+" does not enable managed operational/package inventory or complete-profile health checks. Separately configured platform domains retain their own consent and scope.")
+		case enrollmentcrypto.CollectionProfileOperational:
+			limitations = append(limitations, "Configured Linux collection profile "+profile+" supports bounded operational metadata, not complete dpkg generations or complete-profile health checks.")
+		case enrollmentcrypto.CollectionProfilePackages:
+			limitations = append(limitations, "Configured Linux collection profile "+profile+" adds bounded selected package observations, not complete dpkg generations or complete-profile health checks. Offline advisory review is candidate evidence rather than confirmed CVE or offered-update coverage.")
+		case enrollmentcrypto.CollectionProfileComplete:
+			limitations = append(limitations, "Configured Linux collection profile "+profile+" supports complete dpkg generations and paged service/socket views; current coverage, permission gaps and original ages are shown separately. Optional inventory extensions still require their own local consent.")
+		default:
+			limitations = append(limitations, "Collection scope is unavailable in this metadata; no managed inventory or host authority may be inferred from guided enrollment alone.")
+		}
+		if renewal && !insecure {
+			limitations = append(limitations, "Automatic same-key certificate renewal is configured for freshly consented TLS identities. It does not extend original collection/helper grants, install services or prove successful endpoint renewal; each identity reports its own renewal status.")
+		} else {
+			limitations = append(limitations, "Automatic certificate renewal is not configured for this identity mode; HTTP-test renewal is unsupported. Existing identities and grants are not promoted automatically.")
+		}
+		if health {
+			limitations = append(limitations, "Complete-profile Linux health monitoring evaluates accepted agent contact, root-filesystem capacity and explicitly selected services, with bounded incident history. It does not execute remediation. Background health-summary AI requires separate device/provider consent.")
+		}
+		if cve {
+			limitations = append(limitations, "Linux CVE warnings compare complete supported distribution package generations with explicitly downloaded or imported advisory data. A published-fix version match is not proof of exploitability, an offered update or permission to install it.")
+		}
+		if journalAI {
+			limitations = append(limitations, "Optional service log content requires a compatible endpoint and separate local helper/content permission. It is ephemeral and may contain secrets despite masking. General case AI and health-summary AI exclude logs; service-log AI requires its own default-off device/service/provider export approval and does not export retained browsing pages.")
+		}
+		if enrollmentcrypto.ManagedCollectionProfile(profile) {
+			limitations = append(limitations, "Managed inventory is excluded from general case AI; collection consent alone never authorizes AI export.")
+		}
 	}
+	limitations = append(limitations,
+		"Agent observations are authenticated claims, not independent operating-system attestation. There is no remote shell or automatic remediation; separately supported reviewed actions require their own setup, grants and operator approval.",
+		"SQLite state is protected by filesystem access controls but is not encrypted; old-backup rollback requires explicit recovery.",
+		"Saving AI settings does not test connectivity or start analysis. Manual analysis requires an explicit request. Private IPv4 LAN HTTPS providers require explicit destination and evidence-sharing consent and remain process-memory-only; private-CA trust additionally requires the authenticated TLS operator surface.",
+	)
 	if insecure {
 		transport = "http-signed-test"
 		limitations = append([]string{"UNENCRYPTED LAN TEST: telemetry, operator passwords and sessions are exposed. Signed telemetry has no server or UI authenticity and does not prevent operator session hijacking. Use distinct disposable test material."}, limitations...)

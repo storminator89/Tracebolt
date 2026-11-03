@@ -238,6 +238,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.mu.Lock()
 	app.lanOnly = true
 	app.guidedEnrollment = c.Enrollment != nil
+	app.automaticCertificateRenewal = c.Enrollment.AutomaticRenewal()
 	app.insecureHTTPTest = c.InsecureHTTPTest
 	app.managedPreview = nil
 	app.sample = model.Device{}
