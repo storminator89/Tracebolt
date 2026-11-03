@@ -2,6 +2,7 @@ import { useMobileNavigation } from './mobile-navigation';
 import { useInvestigations } from './investigations-resource';
 import { InvestigationList, InvestigationNotice } from './investigations';
 import { IncidentWorkQueue } from './incident-work-queue';
+import { queueSourceScopes } from './incident-work-queue-model';
 import { useFleetIdentity } from './fleet-identity-resource';
 import type { FleetIdentityResource } from './fleet-identity-resource';
 import { FleetIdentityNotice } from './fleet-identity';
@@ -66,7 +67,11 @@ function WorkspaceApp() {
     const [data, setData] = useState<Overview | null>(null);
     const [fleetRevision, setFleetRevision] = useState(0);
     const [caseScope, setCaseScope] = useState('active');
-    const investigations = useInvestigations(operator.mode === 'lan' && operator.authenticated && route.view === 'overview', operator.expiresAt ?? null, String(fleetRevision), 'open', 0, true);
+    const [linuxIncidentOffset, setLinuxIncidentOffset] = useState(0);
+    const queueScope = caseScope === 'all' ? 'all' : 'active';
+    // One guarded Linux workspace reader owns counts, readiness and source pages.
+    // The overview always uses open page one; the queue keeps its exact query.
+    const investigations = useInvestigations(operator.mode === 'lan' && operator.authenticated && (route.view === 'overview' || route.view === 'cases'), operator.expiresAt ?? null, String(fleetRevision), route.view === 'cases' ? queueSourceScopes(queueScope).linux : 'open', route.view === 'cases' ? linuxIncidentOffset : 0, true);
     const showFleetIdentity = operator.mode === 'lan' && operator.authenticated && !!data && (route.view === 'overview' || route.view === 'settings' || route.view === 'devices' && !route.id);
     const fleetIdentity = useFleetIdentity(showFleetIdentity, operator.expiresAt ?? null, String(fleetRevision), true);
     const [error, setError] = useState('');
@@ -138,7 +143,7 @@ function WorkspaceApp() {
     const reviewDeviceSetup = () => { setupFocusRequested.current = true; changeView('devices'); };
     const setupAdmin = operator.hasExplicitMetadata === true && operator.loginMode === 'shared';
     const emptyFleet = (withSetup = false) => <FleetEmptyState lan={operator.mode === 'lan'} loading={loading} failed={Boolean(error)} admin={setupAdmin} named={operator.loginMode === 'named'} onSetup={withSetup ? reviewDeviceSetup : undefined}/>;
-    const openInvestigations = () => { setCaseScope('active'); changeView('cases'); };
+    const openInvestigations = () => { setCaseScope('active'); setLinuxIncidentOffset(0); changeView('cases'); };
     const openDevice = (device: Device) => navigate('devices', device.id);
     const openCase = (item: Case) => navigate('cases', item.id);
     const goActivity = (item: ActivityType) => {
@@ -202,7 +207,7 @@ function WorkspaceApp() {
             <WindowsNotifications key={`windows-notifications:${operator.expiresAt}:${route.revision}`} devices={data.devices} sessionKey={operator.expiresAt ?? null} admin={operator.hasExplicitMetadata === true && operator.loginMode === 'shared'}/>
           </>}/>
         </>}
-        {route.view === 'cases' && (operator.mode === 'lan' ? <IncidentWorkQueue key={`incident-work-queue:${operator.actorId}:${operator.expiresAt}:${route.revision}`} devices={data.devices} sessionKey={operator.expiresAt ?? null}/> : route.id ? <RouteDetailBoundary key={route.id} onBack={() => navigate('cases')} backLabel={t("Alle Untersuchungen")}><CaseDetail id={route.id} onBack={() => navigate('cases')} onDevice={id => navigate('devices', id)} onChanged={() => void load()} onSettings={() => navigate('settings')}/></RouteDetailBoundary> : <CasesPage cases={data.cases} onSelect={openCase} scope={caseScope} onScope={setCaseScope}/>)}
+        {route.view === 'cases' && (operator.mode === 'lan' ? <IncidentWorkQueue key={`incident-work-queue:${operator.actorId}:${operator.expiresAt}:${route.revision}`} devices={data.devices} sessionKey={operator.expiresAt ?? null} linux={investigations} scope={queueScope} onScope={setCaseScope} linuxOffset={linuxIncidentOffset} onLinuxPage={setLinuxIncidentOffset}/> : route.id ? <RouteDetailBoundary key={route.id} onBack={() => navigate('cases')} backLabel={t("Alle Untersuchungen")}><CaseDetail id={route.id} onBack={() => navigate('cases')} onDevice={id => navigate('devices', id)} onChanged={() => void load()} onSettings={() => navigate('settings')}/></RouteDetailBoundary> : <CasesPage cases={data.cases} onSelect={openCase} scope={caseScope} onScope={setCaseScope}/>)}
         {route.view === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} fleetIdentity={fleetIdentity} investigationReadiness={investigations.readiness} applicationCheckEntry={route.id === applicationCheckSetupId}/>}
         <footer className="page-footer"><span><span className={`dot ${error ? 'amber' : 'teal'}`}/>{error ? t("Letzter erfolgreicher Abruf") : t("Manager verbunden")}<span className="footer-dot">·</span><time dateTime={data.generatedAt} title={fullDate(data.generatedAt)}>{fullDate(data.generatedAt)}</time></span><button onClick={() => void load()} disabled={loading}><RefreshCw size={13} className={loading ? 'spin' : ''}/>{loading ? t("Wird aktualisiert") : t("Aktualisieren")}</button></footer>
         </>}

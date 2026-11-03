@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { Device } from './types';
-import { useInvestigations } from './investigations-resource';
+import type { InvestigationsResource } from './investigations-resource';
 import { INVESTIGATIONS_PAGE_SIZE } from './investigations-types';
 import { InvestigationList, InvestigationNotice } from './investigations';
 import { useWindowsIncidentInbox } from './windows-incident-inbox-resource';
@@ -36,14 +36,12 @@ function QueueTime({ value, fallback }: { value: string | null; fallback: string
     return value ? <time dateTime={value} title={value}>{fullDate(value)}</time> : <span>{fallback}</span>;
 }
 
-/** Existing private GET projections retain their own authority and clock guards.
- * Parent key includes actor, session and route revision to end obsolete reads. */
-export function IncidentWorkQueue({ devices, sessionKey }: { devices: Device[]; sessionKey: string | null }) {
+/** The workspace owns the guarded Linux reader; the private Windows reader
+ * remounts by actor, session and route revision to end obsolete reads. */
+export function IncidentWorkQueue({ devices, sessionKey, linux, scope, onScope, linuxOffset, onLinuxPage }: { devices: Device[]; sessionKey: string | null; linux: InvestigationsResource; scope: QueueScope; onScope: (scope: QueueScope) => void; linuxOffset: number; onLinuxPage: (offset: number) => void }) {
     const [locale] = useLocale(), c = copy[locale];
-    const [scope, setScope] = useState<QueueScope>('active'), [platform, setPlatform] = useState<QueuePlatform>('all'), [source, setSource] = useState<QueueSource>('all'), [seen, setSeen] = useState<QueueSeen>('all');
-    const [linuxOffset, setLinuxOffset] = useState(0), [windowsOffset, setWindowsOffset] = useState(0), scopes = queueSourceScopes(scope);
-    // Keep the cross-page server-clock lower bound from the original workspace.
-    const linux = useInvestigations(true, sessionKey, 'incident-work-queue', scopes.linux, linuxOffset, true);
+    const [platform, setPlatform] = useState<QueuePlatform>('all'), [source, setSource] = useState<QueueSource>('all'), [seen, setSeen] = useState<QueueSeen>('all');
+    const [windowsOffset, setWindowsOffset] = useState(0), scopes = queueSourceScopes(scope);
     // Deliberately read-only even for shared administrators. Existing inbox owns writes.
     const windows = useWindowsIncidentInbox(true, sessionKey, false, scopes.windows, 'all', windowsOffset, true);
     const linuxView = linux.view, windowsView = windows.view, complete = !!linuxView && !!windowsView;
@@ -52,12 +50,12 @@ export function IncidentWorkQueue({ devices, sessionKey }: { devices: Device[]; 
     const deviceIds = [...names.keys(), ...(windowsView?.items.map(item => item.deviceId) ?? [])];
     const unknownLinux = linuxView?.devices.filter(device => device.evaluatedAt === null || device.checks.some(check => check.state === 'unknown')).length ?? 0;
     const refresh = () => {
-        if (linuxOffset) setLinuxOffset(0); else linux.refresh();
+        if (linuxOffset) onLinuxPage(0); else linux.refresh();
         if (windowsOffset) setWindowsOffset(0); else windows.refresh();
     };
     const paging = (kind: 'linux' | 'windows') => {
         const view = kind === 'linux' ? linuxView : windowsView, offset = kind === 'linux' ? linuxOffset : windowsOffset;
-        const pending = kind === 'linux' ? linux.pending : windows.loading, setOffset = kind === 'linux' ? setLinuxOffset : setWindowsOffset;
+        const pending = kind === 'linux' ? linux.pending : windows.loading, setOffset = kind === 'linux' ? onLinuxPage : setWindowsOffset;
         const size = kind === 'linux' ? INVESTIGATIONS_PAGE_SIZE : WINDOWS_INCIDENT_PAGE_SIZE;
         return view && <><div className="incident-queue-paging"><span>{c.page}: {view.items.length ? `${offset + 1}–${offset + view.items.length}` : '0'} / {view.total}</span><button className="button small" disabled={pending || offset === 0} aria-label={`${c[kind]}: ${c.previous}`} onClick={() => setOffset(Math.max(0, offset - size))}>{c.previous}</button><button className="button small" disabled={pending || offset + view.items.length >= view.total} aria-label={`${c[kind]}: ${c.next}`} onClick={() => setOffset(offset + size)}>{c.next}</button></div>{view.items.length === 0 && view.total > 0 && <p>{c.changed} <button className="text-button" onClick={() => setOffset(0)}>{c.first}</button></p>}</>;
     };
@@ -65,7 +63,7 @@ export function IncidentWorkQueue({ devices, sessionKey }: { devices: Device[]; 
         <div className="page-heading"><h1>{c.title}</h1><button className="button small" disabled={linux.pending || windows.loading || linux.locked} onClick={refresh}><RefreshCw size={14}/>{c.refresh}</button></div>
         <p className="investigations-note">{c.intro}</p>
         <div className="incident-queue-toolbar">
-            <label>{c.scope}<select value={scope} onChange={event => { setScope(event.target.value as QueueScope); setLinuxOffset(0); setWindowsOffset(0); }}><option value="active">{c.active}</option><option value="all">{c.all}</option></select></label>
+            <label>{c.scope}<select value={scope} onChange={event => { onScope(event.target.value as QueueScope); onLinuxPage(0); setWindowsOffset(0); }}><option value="active">{c.active}</option><option value="all">{c.all}</option></select></label>
             <label>{c.platform}<select value={platform} onChange={event => setPlatform(event.target.value as QueuePlatform)}><option value="all">{c.allPlatforms}</option><option value="linux">Linux</option><option value="windows">Windows</option></select></label>
             <label>{c.source}<select value={source} onChange={event => setSource(event.target.value as QueueSource)}><option value="all">{c.allSources}</option>{(['linux-health', 'windows-assessment', 'windows-full-services'] as const).map(value => <option value={value} key={value}>{c[value]}</option>)}</select></label>
             <label>{c.seen}<select value={seen} onChange={event => setSeen(event.target.value as QueueSeen)}><option value="all">{c.allSeen}</option><option value="seen">{c.acknowledged}</option><option value="unseen">{c.unacknowledged}</option></select></label>
