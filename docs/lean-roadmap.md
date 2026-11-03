@@ -69,6 +69,10 @@ candidate alone does not prove completion.
 
 ## 6. Make patch evidence easy to review
 
+- **Implemented source increment:** a per-device [read-only patch evidence
+  overview](patch-evidence-overview.md) for complete cached APT candidates and
+  Windows cached results/history, with separate original times and source-view
+  navigation. This is not a current patch-compliance verdict or native acceptance.
 - **Existing:** Linux [cached APT/CVE review](linux-cve-warnings.md) and Windows
   [build/history/reboot context](windows-patch-context.md) plus separately granted
   [offline cached update inspection](windows-update-runtime.md).
