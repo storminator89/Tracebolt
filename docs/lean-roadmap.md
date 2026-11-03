@@ -32,6 +32,10 @@ candidate alone does not prove completion.
 
 ## 3. Grow Rust Windows parity progressively
 
+- **Documentation increment:** the [Windows agent scope comparison](windows-agent-parity.md)
+  records Rust Basic's exact metric subset against all twenty-one Go Read admin
+  scopes at its pinned source baseline. This adds no Rust collector or grant and
+  does not establish native acceptance or feature parity.
 - **Existing:** [Rust Basic](../rust/windows-agent/README.md) reports CPU, physical
   RAM, system-drive capacity and uptime. It is not the broader Go Read admin
   profile; automatic onboarding does not expand collection authority.
