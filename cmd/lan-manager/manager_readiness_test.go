@@ -36,6 +36,17 @@ func readinessComponent(t *testing.T, v managerreadiness.View, name string) mana
 	return managerreadiness.Component{}
 }
 
+func readinessLifetime(t *testing.T, v managerreadiness.View, role string) managerreadiness.CertificateLifetime {
+	t.Helper()
+	for _, lifetime := range v.CertificateLifetimes {
+		if lifetime.Role == role {
+			return lifetime
+		}
+	}
+	t.Fatal("missing fixed certificate role", role)
+	return managerreadiness.CertificateLifetime{}
+}
+
 func TestManagerReadinessRealPreparedStoresAndPublicIssuer(t *testing.T) {
 	m, enrollment, _ := guidedFixture(t, lanconfig.TLS)
 	p, err := prepareWithEnrollment(m, &enrollment)
@@ -75,9 +86,16 @@ func TestManagerReadinessRealPreparedStoresAndPublicIssuer(t *testing.T) {
 		}
 	}
 	cert, _ := x509.ParseCertificate(enrollment.Issuer().IssuerDER())
+	root, _ := x509.ParseCertificate(enrollment.Issuer().RootDER())
+	if got := readinessLifetime(t, v, "enrollment_issuer"); got.ValidUntil == nil || !got.ValidUntil.Equal(cert.NotAfter) {
+		t.Fatal("loaded issuer deadline missing", got)
+	}
+	if got := readinessLifetime(t, v, "enrollment_root"); got.ValidUntil == nil || !got.ValidUntil.Equal(root.NotAfter) {
+		t.Fatal("loaded root deadline missing", got)
+	}
 	p.readiness.now = func() time.Time { return cert.NotAfter }
 	v = p.readiness.Snapshot(context.Background())
-	if readinessComponent(t, v, "enrollment_issuer").State != "failed" || v.Status == "ready" {
+	if readinessComponent(t, v, "enrollment_issuer").State != "failed" || v.Status == "ready" || readinessLifetime(t, v, "enrollment_issuer").State != "expired" {
 		t.Fatal("issuer exact expiry accepted")
 	}
 }
@@ -92,6 +110,14 @@ func TestManagerReadinessManualModeAndProtectedFileReplacement(t *testing.T) {
 	v := p.readiness.Snapshot(context.Background())
 	if v.Status != "ready" || readinessComponent(t, v, "enrollment_issuer").State != "not_configured" || readinessComponent(t, v, "server_certificate").State != "not_configured" {
 		t.Fatal("manual HTTP-test view", v)
+	}
+	if len(v.CertificateLifetimes) != 3 {
+		t.Fatal("missing fixed certificate roster")
+	}
+	for _, lifetime := range v.CertificateLifetimes {
+		if lifetime.State != "not_configured" || lifetime.ValidFrom != nil || lifetime.ValidUntil != nil {
+			t.Fatal("HTTP-test claimed TLS or issuer material", lifetime)
+		}
 	}
 	path := filepath.Join(m.Config.StateDirectory, "operator.db")
 	if err := os.Rename(path, path+".preserved"); err != nil {
@@ -211,7 +237,7 @@ func TestManagerReadinessPresentedChainExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 	r := &managerReadiness{admission: make(chan struct{}, 1), now: func() time.Time { return now }, tls: true, certificate: [][]byte{leaf.Raw}, checks: []managerReadinessCheck{{"store", func(context.Context) error { return nil }}}}
 	if readinessComponent(t, r.Snapshot(context.Background()), "server_certificate").State != "ready" {
 		t.Fatal("valid loaded leaf rejected")
@@ -239,8 +265,12 @@ func TestManagerReadinessPresentedChainExpiry(t *testing.T) {
 	if readinessComponent(t, r.Snapshot(context.Background()), "server_certificate").State != "ready" {
 		t.Fatal("valid loaded chain rejected")
 	}
+	if got := readinessLifetime(t, r.Snapshot(context.Background()), "server_chain"); got.State != "within_7_days" || got.ValidUntil == nil || !got.ValidUntil.Equal(expired.NotAfter) {
+		t.Fatal("presented intermediate deadline hidden", got)
+	}
 	now = expired.NotAfter
-	if readinessComponent(t, r.Snapshot(context.Background()), "server_certificate").State != "failed" {
+	v := r.Snapshot(context.Background())
+	if readinessComponent(t, v, "server_certificate").State != "failed" || readinessLifetime(t, v, "server_chain").State != "expired" {
 		t.Fatal("live leaf concealed expired presented intermediate")
 	}
 	r.certificate = r.certificate[:1]
@@ -249,5 +279,33 @@ func TestManagerReadinessPresentedChainExpiry(t *testing.T) {
 		if readinessComponent(t, r.Snapshot(context.Background()), "server_certificate").State != "failed" {
 			t.Fatal("certificate validity boundary accepted")
 		}
+	}
+}
+
+func TestManagerReadinessLifetimeNeverReloadsFilesOrChangesValidation(t *testing.T) {
+	m, enrollment, _ := guidedFixture(t, lanconfig.TLS)
+	p, err := prepareWithEnrollment(m, &enrollment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.close()
+	before := p.readiness.Snapshot(context.Background())
+	expires := readinessLifetime(t, before, "server_chain").ValidUntil
+	// Readiness owns a defensive public copy. Changing caller material cannot
+	// refresh the loaded lifetime or make Snapshot read credential paths again.
+	for _, der := range m.Server.Certificate {
+		clear(der)
+	}
+	p.readiness.now = func() time.Time { return before.ServerNow.Add(time.Second) }
+	after := p.readiness.Snapshot(context.Background())
+	if got := readinessLifetime(t, after, "server_chain"); expires == nil || got.ValidUntil == nil || !got.ValidUntil.Equal(*expires) {
+		t.Fatal("snapshot replaced original loaded certificate deadline", got)
+	}
+	// Parsable dates alone cannot override the existing fingerprint/role/trust
+	// validator. This remains an unavailable readiness result.
+	p.readiness.fingerprint = strings.Repeat("0", 64)
+	after = p.readiness.Snapshot(context.Background())
+	if after.Status != "unavailable" || readinessComponent(t, after, "enrollment_issuer").State != "failed" || readinessLifetime(t, after, "enrollment_issuer").ValidUntil == nil {
+		t.Fatal("lifetime report promoted invalid authority", after)
 	}
 }

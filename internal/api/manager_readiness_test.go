@@ -69,7 +69,48 @@ func TestManagerReadinessRechecksSessionAfterProbe(t *testing.T) {
 		return managerreadiness.NewView(time.Now(), []managerreadiness.Component{{Component: "fixture", State: "ready"}})
 	}
 	response, v := o.call(t, "GET", "/api/manager/readiness", nil, "", nil)
-	if response.StatusCode != 401 || v["components"] != nil {
+	if response.StatusCode != 401 || v["components"] != nil || v["certificateLifetimes"] != nil {
 		t.Fatal("revoked session received probe result", response.StatusCode, v)
+	}
+}
+
+func TestManagerReadinessCertificateLifetimesRemainPrivateReadOnlyEvidence(t *testing.T) {
+	o, _ := namedOperatorFixture(t)
+	h := o.server.Config.Handler.(*operatorHandler)
+	at := time.Now().UTC().Truncate(time.Second)
+	from, until := at.Add(-time.Hour), at.Add(7*24*time.Hour)
+	h.managerReadiness = func(context.Context) managerreadiness.View {
+		v := managerreadiness.NewView(at, []managerreadiness.Component{{Component: "server_certificate", State: "ready"}})
+		v.CertificateLifetimes = []managerreadiness.CertificateLifetime{
+			{Role: "server_chain", State: "within_7_days", ValidFrom: &from, ValidUntil: &until},
+			{Role: "enrollment_issuer", State: "not_configured"},
+			{Role: "enrollment_root", State: "not_configured"},
+		}
+		return v
+	}
+	if response, _ := o.call(t, "POST", "/api/auth/login", map[string]string{"username": "reader", "password": operatorFixturePassword}, "", nil); response.StatusCode != 200 {
+		t.Fatal("named read login")
+	}
+	response, v := o.call(t, "GET", "/api/manager/readiness", nil, "", nil)
+	if response.StatusCode != 200 || response.Header.Get("Cache-Control") != "no-store" || v["status"] != "ready" {
+		t.Fatal("expiry warning changed existing readiness or private response", response.StatusCode, v)
+	}
+	items, ok := v["certificateLifetimes"].([]any)
+	if !ok || len(items) != 3 {
+		t.Fatal("missing versioned lifetime evidence", v)
+	}
+	server, ok := items[0].(map[string]any)
+	if !ok || len(server) != 4 || server["role"] != "server_chain" || server["state"] != "within_7_days" || server["validFrom"] != from.Format(time.RFC3339) || server["validUntil"] != until.Format(time.RFC3339) {
+		t.Fatal("dates or fixed role changed", server)
+	}
+	for _, item := range items[1:] {
+		row, ok := item.(map[string]any)
+		if !ok || len(row) != 2 || row["state"] != "not_configured" {
+			t.Fatal("disabled authority had invented certificate dates", item)
+		}
+	}
+	// The same private route still has no renewal/mutation method.
+	if response, _ = o.call(t, "POST", "/api/manager/readiness", nil, "", nil); response.StatusCode != 405 && response.StatusCode != 403 {
+		t.Fatal("certificate visibility admitted a mutation", response.StatusCode)
 	}
 }
