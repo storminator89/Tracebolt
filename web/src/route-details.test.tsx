@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { lazy, useEffect, useState } from 'react';
+import { lazy, useLayoutEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { AuthBoundary, OperatorAccount, useOperator } from './auth';
 import type { OperatorSession } from './auth';
@@ -13,7 +13,8 @@ const anonymous: OperatorSession = { ...session, authenticated: false, csrfToken
 const mounted = vi.fn(), unmounted = vi.fn();
 function PrivateDetail({ id = 'A' }: { id?: string }) {
     const operator = useOperator();
-    useEffect(() => { mounted(id, operator?.actorId); return () => { unmounted(id); }; }, [id, operator?.actorId]);
+    // Observe the commit itself, not a passive effect that can run after DOM discovery.
+    useLayoutEffect(() => { mounted(id, operator?.actorId); return () => { unmounted(id); }; }, [id, operator?.actorId]);
     return <section aria-label={`Private ${id}`}><input aria-label="Private draft" defaultValue=""/>{operator?.actorId}</section>;
 }
 function pendingDetail() {
