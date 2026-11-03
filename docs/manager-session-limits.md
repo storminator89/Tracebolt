@@ -92,3 +92,29 @@ revocation reconciliation, copied-cookie denial and untrusted forwarded headers.
 Frontend metadata tests keep the new opt-in capability compatible with the strict
 browser session parser. These are synthetic source/loopback fixtures, not a
 customer deployment, native endpoint acceptance or a full security audit.
+
+## Admission after lock contention (TB-14 partial)
+
+Lookup, anonymous rate-window admission and final login admission sample the
+clock while holding the manager mutex. A request queued behind that mutex must
+use the actual admission time for expiry, quota cleanup and the new session's
+absolute TTL. Expired sessions cancel their lifetime; an admitted mutation still
+retains its tombstone until the existing barrier drains. A session-revoke request
+also rechecks request cancellation under that mutex before marking its target.
+Cancellation after marking does not undo revocation or bypass the drain barrier.
+
+These corrections do not complete [TB-14](https://github.com/storminator89/Tracebolt/issues/141).
+Accounts and capabilities remain immutable startup configuration. Live account
+revision storage/reload, account-wide session and approval withdrawal, audited
+account changes, password/factor reset and atomic current-account authority at
+all delayed-dispatch boundaries remain unimplemented. A boolean capability
+snapshot alone cannot serialize future account revocation with irreversible
+permit dispatch. Already delivered permits cannot be recalled by this patch.
+No persistent identity, approval, revocation or consume-once floor is rewritten.
+
+Deterministic manager tests hold the mutex, observe the queued operation and then
+advance an atomic fake clock or cancel the request before releasing it. They
+cover expiry with and without an admitted mutation, elapsed rate windows, expired
+per-account capacity and original TTL at login, and canceled cross-account
+revocation. A real loopback TLS fixture checks the session JSON expiry boundary,
+denial of the next protected request and another account's independent lifetime.
