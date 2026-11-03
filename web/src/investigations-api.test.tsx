@@ -12,7 +12,7 @@ const metric={value:null,unit:'%',quality:'unknown' as const,source:'fixture',co
 const device:Device={id,name:'Fixture Linux',platform:'linux',os:'Linux',site:'',group:'',ip:null,status:'unknown',source:'lan',synthetic:false,lastSeen:now,agentVersion:'fixture',cpu:metric,memory:metric,disk:metric,uptime:'',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
 function fixture():InvestigationsView{return {schemaVersion:'tracebolt.investigations.v1',serverNow:now,scope:'open',offset:0,total:1,counts:{open:1,recovered:0,closed:0,all:1},devices:[{schemaVersion:'tracebolt.health-view.v1',deviceId:id,serverNow:now,evaluatedAt:now,status:'attention',maintenanceUntil:null,monitoredServices:['fixture.service'],checks:[{key:'offline:contact',kind:'offline',target:'agent',state:'ok',observedAt:now,value:null},{key:'filesystem:root',kind:'filesystem',target:'/',state:'unknown',observedAt:null,value:null},{key:'service:fixture.service',kind:'service',target:'fixture.service',state:'open',observedAt:now,value:null}],incidents:[]}],items:[{deviceId:id,incident:{id:'health_0000000000000001',key:'service:fixture.service',kind:'service',target:'fixture.service',openedAt:now,lastObservedAt:now,resolvedAt:null,acknowledgedAt:null}}]};}
 function server(mode='lan'){
- const fetch=vi.fn(async(url:string)=>{
+ const fetch=vi.fn(async(url:string, _init?:RequestInit)=>{
   if(url==='/api/auth/session')return json(mode==='lan'?journalSession:{...journalSession,mode:'development',authenticated:false,authenticationRequired:false,csrfToken:null,expiresAt:null,expiresInSeconds:null});
   if(url==='/api/overview')return json({generatedAt:now,stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,openCases:0,criticalCases:0},devices:[device],cases:[],activity:[]});
   if(url.startsWith('/api/investigations?')) { const scope=new URL(url,'https://localhost').searchParams.get('scope') as InvestigationScope; const value=fixture(); value.scope=scope; if(scope==='recovered'||scope==='closed') {value.total=0;value.items=[];} return json(value); }
@@ -43,10 +43,10 @@ it('does not fetch the new API or replace development cases',async()=>{
  const fetch=server('development');render(<App/>);await screen.findByRole('heading',{name:'Investigations',level:1});await waitFor(()=>expect(screen.getByText('No cases in this view.')).toBeVisible());expect(fetch.mock.calls.some(([url])=>url.startsWith('/api/investigations'))).toBe(false);
 });
 
-it('resets a previous recovered filter when opening the Overview open-investigations shortcut',async()=>{
- const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByRole('button',{name:'Recovered 0'}));await screen.findByText('No cases in this view');
- route('/overview');await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByRole('button',{name:/Open investigations 1\s*Health warnings/}));await screen.findByRole('heading',{name:'Investigations',level:1});await screen.findByText('fixture.service: service inactive');expect(screen.getByRole('button',{name:'Open 1'})).toHaveAttribute('aria-pressed','true');
- expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).at(-1)?.[0]).toBe('/api/investigations?scope=open&offset=0');
+it('resets the retained-history filter when opening the Overview open-investigations shortcut',async()=>{
+ const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');fireEvent.change(screen.getByRole('combobox',{name:'Status'}),{target:{value:'all'}});await waitFor(()=>expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).at(-1)?.[0]).toBe('/api/investigations?scope=all&offset=0'));await screen.findByText('fixture.service: service inactive');expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/fleet/windows-incidents/complete?')).at(-1)?.[0]).toContain('scope=all&ack=all&offset=0');
+ route('/overview');await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByRole('button',{name:/Open investigations 1\s*Health warnings/}));await screen.findByRole('heading',{name:'Investigations',level:1});await screen.findByText('fixture.service: service inactive');expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('active');
+ expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).at(-1)?.[0]).toBe('/api/investigations?scope=open&offset=0');expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/fleet/windows-incidents/complete?')).at(-1)?.[0]).toContain('scope=active&ack=all&offset=0');expect(fetch.mock.calls.every(([,init])=>!init?.method||init.method==='GET')).toBe(true);
 });
 
 it('keeps equivalent hash navigation available without reloading the same query',async()=>{
@@ -55,9 +55,9 @@ it('keeps equivalent hash navigation available without reloading the same query'
 });
 
 it('survives a rapid real hash roundtrip whose final route equals the starting route',async()=>{
- window.history.replaceState({},'', '/#/overview');server();render(<App/>);await screen.findByText('fixture.service: service inactive');
+ window.history.replaceState({},'', '/#/overview');const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');
  await act(async()=>{window.location.hash='/cases';window.location.hash='/overview';await new Promise(resolve=>setTimeout(resolve,20));});
- expect(screen.getByText('fixture.service: service inactive')).toBeVisible();fireEvent.click(screen.getByRole('button',{name:/Open investigations 1\s*Health warnings/}));await screen.findByRole('heading',{name:'Investigations',level:1});await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByRole('button',{name:'Refresh investigations'}));await screen.findByText('fixture.service: service inactive');
+ expect(screen.getByText('fixture.service: service inactive')).toBeVisible();fireEvent.click(screen.getByRole('button',{name:/Open investigations 1\s*Health warnings/}));await screen.findByRole('heading',{name:'Investigations',level:1});await screen.findByText('fixture.service: service inactive');const refresh=screen.getByRole('button',{name:'Refresh work queue'});await waitFor(()=>expect(refresh).toBeEnabled());const before=fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations')).length;fireEvent.click(refresh);await waitFor(()=>expect(fetch.mock.calls.filter(([url])=>url.startsWith('/api/investigations'))).toHaveLength(before+1));await screen.findByText('fixture.service: service inactive');
 });
 
 it.each(['health','logs'])('falls back from an unavailable %s deep link after reading device metadata',async(tab)=>{

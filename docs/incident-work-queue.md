@@ -47,8 +47,12 @@ Original observation, confirmation, capture, receipt, evaluation, closure and
 seen times are never refreshed by queue reads. Existing Linux cross-page clock
 lower bounds and Windows authority/current-source deadlines remain intact;
 current unknown evidence cannot recover retained incidents. Session, visibility,
-logout and route guards remain owned by the existing readers. The parent remounts
-the queue by actor, session and navigation revision.
+logout and route guards remain owned by the existing readers. One session-bound
+Linux workspace reader supplies both Overview and the queue, retaining the same
+open query, original clock lower bound, navigation badge and recent Settings
+readiness. The Overview shortcut resets retained-history filters and Linux paging
+to open page one. The parent remounts the Windows queue reader by actor, session
+and navigation revision; leaving both incident views suspends the Linux reader.
 
 Health links use the existing identity-addressed device routes. Linux service-log
 links retain exact journal-unit validation and do not start a log capture. Manager
