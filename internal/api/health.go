@@ -61,6 +61,7 @@ func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
 func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), observed func(time.Time, error)) error {
 	s.mu.RLock()
 	m := s.health
+	processWatches := s.linuxProcessWatches
 	s.mu.RUnlock()
 	if m == nil {
 		return nil
@@ -76,6 +77,11 @@ func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), obse
 		step, cancel := context.WithTimeout(ctx, 10*time.Second)
 		e := m.evaluate(step)
 		cancel()
+		if processWatches != nil && ctx.Err() == nil {
+			processStep, processCancel := context.WithTimeout(ctx, 10*time.Second)
+			e = errors.Join(e, processWatches.evaluate(processStep))
+			processCancel()
+		}
 		if ctx.Err() != nil {
 			return nil
 		}

@@ -24,6 +24,7 @@ var ErrLimit = errors.New("note limit reached")
 
 type Store struct {
 	db                         *sql.DB
+	linuxProcessWatchBlocked   atomic.Bool
 	applicationIncidentBlocked atomic.Bool
 	applicationIncidentActive  atomic.Bool
 	applicationIncidentLoaded  atomic.Bool
@@ -82,7 +83,7 @@ func Open(path string) (*Store, error) {
 		return fail(err)
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema, `PRAGMA user_version=1`} {
+	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema, `PRAGMA user_version=1`} {
 		if _, err = tx.Exec(q); err != nil {
 			return fail(err)
 		}

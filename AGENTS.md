@@ -86,6 +86,12 @@ missing material rather than inventing credentials or weakening protection.
   identity guard, explicit full-scope disclosure, independent durable floors and
   original capture age. No automatic collection, re-enrollment, manager reset or
   host permission grant follows from a manager upgrade or schema initialization.
+- Linux process watches reuse already-consented complete process generations and
+  remain default-off manager policies. Read `docs/linux-process-watches.md` before
+  changing opt-in, post-consent evidence, consecutive source floors, API or derived
+  retention. Preserve source-independent terminal-history cleanup, open incidents,
+  per-device outage isolation and GET-only uncertain reconciliation. No collection,
+  process control, AI/notification grant or native acceptance follows from tests.
 - Complete cached APT update rows are a separate default-off local scope;
   preview consent never authorizes the full generation. Before enabling or
   changing it, read `docs/complete-cached-updates-extension.md`. Preserve the

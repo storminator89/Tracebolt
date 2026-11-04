@@ -33,6 +33,7 @@ type Server struct {
 	journalAI           *journalAIState
 	linuxCVE            *linuxCVEState
 	health              *healthMonitor
+	linuxProcessWatches *linuxProcessWatchMonitor
 	windowsContact      *windowsContactMonitor
 	windowsCapacity     *windowsCapacityMonitor
 	store               *store.Store

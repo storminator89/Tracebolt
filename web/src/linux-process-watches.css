@@ -1,0 +1,19 @@
+.linux-process-watches { margin-block: 1rem; border: 1px solid var(--line); border-radius: .5rem; padding: 1rem; min-width: 0; }
+.linux-process-watches p, .linux-process-watches li, .linux-process-watches dd { overflow-wrap: anywhere; }
+.linux-process-watches form, .process-watch-review, .process-watch-incident, .process-watch-notice { margin-block: .75rem; padding: .875rem; border: 1px solid var(--line); border-radius: .5rem; }
+.linux-process-watches form { display: grid; gap: .75rem; }
+.linux-process-watches form p { margin: 0; }
+.linux-process-watches textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: .5rem; resize: vertical; }
+.linux-process-watches label { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; line-height: 1.5; }
+.linux-process-watches select { max-width: 100%; padding: .4rem; }
+.linux-process-watches input[type=checkbox] { flex: 0 0 auto; width: 1rem; height: 1rem; }
+.linux-process-watches dl { display: grid; gap: .5rem; margin-block: .75rem; }
+.linux-process-watches dl > div { display: grid; grid-template-columns: minmax(9rem, 1fr) minmax(0, 2fr); gap: .5rem; }
+.linux-process-watches dt { font-weight: 500; }
+.linux-process-watches dd { margin: 0; }
+.linux-process-watches time { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.linux-process-watches h3, .linux-process-watches h4 { margin: .4rem 0; }
+.linux-process-watches button, .linux-process-watches select { min-height: 40px; }
+.process-watch-name { white-space: pre-wrap; }
+.process-watch-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+@media (max-width: 600px) { .linux-process-watches dl > div { grid-template-columns: 1fr; gap: .15rem; } .linux-process-watches label { align-items: flex-start; } }
