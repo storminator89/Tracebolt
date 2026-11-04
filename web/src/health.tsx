@@ -7,6 +7,7 @@ import { fullDate } from './utils';
 import { HEALTH_VIEW_BYTES, parseHealthServices, validHealthDeviceId, validHealthView } from './health-types';
 import { validJournalUnit } from './journal-types';
 import { HealthServicePicker } from './health-service-picker';
+import { HealthMaintenanceSchedule } from './health-maintenance-schedule';
 import type { HealthKind, HealthView } from './health-types';
 import { HealthDashboard, healthCheckTitle, healthCopy } from './health-dashboard';
 import type { Device } from './types';
@@ -193,11 +194,13 @@ export function HealthPanel({ deviceId, device, sessionKey = null, onOpenLogs }:
                             <p className="health-note">{view.maintenanceUntil ? <>{t('Wartung bis:')} <Time value={view.maintenanceUntil}/></> : t('Kein Wartungsfenster aktiv.')}</p>
                             <label htmlFor={`${uid}-maintenance`}>{t('Dauer ab jetzt')}</label><div className="health-control-row"><select id={`${uid}-maintenance`} value={minutes} disabled={resource.locked} onChange={event => setMinutes(Number(event.target.value) as typeof minutes)}><option value={15}>{t('15 Minuten')}</option><option value={60}>{t('1 Stunde')}</option><option value={240}>{t('4 Stunden')}</option><option value={0}>{t('Wartung beenden')}</option></select><button className="button small" disabled={disabled} type="submit">{t('Anwenden')}</button></div>
                             <p className="health-note">{t('Wartung unterdrückt neue Warnungen. Bestehende Vorfälle bleiben sichtbar.')}</p>
+                            <p className="health-note">{locale === 'de' ? 'Gespeicherte zukünftige oder aktive Planungen nur über die einmaligen Wartungsfenster unten ändern. Diese Sofort-Steuerung kann sie nicht ersetzen oder beenden.' : 'Use the one-time window controls below to change a saved future or active schedule. These immediate controls cannot replace or end it.'}</p>
                         </form>
                         <form onSubmit={event => { event.preventDefault(); void saveServices(); }}><h3>{t('Dienste auswählen')}</h3>
                             {settingsOpen && <HealthServicePicker deviceId={deviceId} sessionKey={sessionKey} selected={draft} disabled={resource.locked || !view} onChange={next => setSelection(current => current.scope === scope ? { ...current, draft: next, dirty: true, revision: current.revision + 1 } : current)}/>}
                             <button className="button small" disabled={disabled || services === null || !dirty} type="submit">{t('Auswahl speichern')}</button>
                         </form>
+                        <HealthMaintenanceSchedule key={scope} deviceId={deviceId} sessionKey={sessionKey} enabled={settingsOpen && !resource.locked} onChanged={resource.refresh}/>
                     </div>
                 </details>
                 <details className="health-disclosure health-history"><summary><span><strong>{c.history}</strong><small>{view.incidents.length} {locale === 'de' ? 'gespeichert' : 'recorded'}</small></span><ChevronDown size={16} aria-hidden="true"/></summary>

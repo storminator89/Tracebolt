@@ -1,0 +1,22 @@
+{
+  "canManage": true,
+  "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "lastRequest": {
+    "action": "schedule",
+    "requestId": "maintenance_00000000000000000000000000000001",
+    "windowId": "maintenance_00000000000000000000000000000001"
+  },
+  "legacyMaintenanceUntil": null,
+  "remainingSlots": 63,
+  "revision": "1",
+  "schemaVersion": "tracebolt.linux-maintenance-schedule-view.v1",
+  "serverNow": "2026-11-04T14:27:56Z",
+  "window": {
+    "closedAt": null,
+    "createdAt": "2026-11-04T14:27:56Z",
+    "endsAt": "2026-11-04T14:47:56Z",
+    "id": "maintenance_00000000000000000000000000000001",
+    "startsAt": "2026-11-04T14:32:56Z",
+    "state": "pending"
+  }
+}
