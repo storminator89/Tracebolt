@@ -14,23 +14,23 @@ let retainedEpoch = -1;
 export const incidentRequestCapacity = (pending: ReadonlyMap<string, IncidentRequest>, history: ReadonlyMap<string, readonly IncidentRequest[]>) => pending.size + [...history.values()].reduce((n, rows) => n + rows.length, 0) < 128;
 type Snapshot = { key: string; epoch: number; view: ApplicationIncidentsView; started: Anchor; lifetime: number; offset: number };
 type Failure = 'unavailable' | 'session' | 'interrupted' | 'clock' | null;
-type Commands = { read: () => void; write: (body: IncidentRequest) => Promise<boolean> };
-const empty: Commands = { read: () => {}, write: async () => false };
+type Commands = { read: () => void; write: (body: IncidentRequest) => Promise<boolean>; interrupt: () => void };
+const empty: Commands = { read: () => {}, write: async () => false, interrupt: () => {} };
 
 /** Reads retained metadata deliberately. No probe, polling or write replay. */
-export function useApplicationIncidents(enabled: boolean, scope: string, sessionKey: string | null) {
+export function useApplicationIncidents(enabled: boolean, scope: string, sessionKey: string | null, readOnly = false, checkingAccess = false) {
     const epoch = getProtectedRequestEpoch(), key = JSON.stringify([scope, epoch]);
     if (retainedEpoch !== epoch) { uncertain.clear(); prior.clear(); revisions.clear(); retainedEpoch = epoch; }
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null), [busy, setBusy] = useState<'read' | 'write' | null>(null), [failure, setFailure] = useState<Failure>(null), [generation, setGeneration] = useState(0), [confirmed, setConfirmed] = useState(false), [, update] = useState(0);
-    const commands = useRef<Commands>(empty), live = useRef(key); live.current = key;
+    const commands = useRef<Commands>(empty), live = useRef(key), accessCheck = useRef(checkingAccess); live.current = key; accessCheck.current = checkingAccess;
     useEffect(() => {
         let alive = true, locked = false, suspended = document.visibilityState === 'hidden' || !document.hasFocus(), version = 0;
         let accepted: Snapshot | null = null, operation: { controller: AbortController; timer: number } | null = null;
-        const scopeActive = () => alive && enabled && live.current === key && !locked && !suspended && document.visibilityState !== 'hidden' && document.hasFocus() && epoch === getProtectedRequestEpoch() && !hasLogoutIntent();
+        const scopeActive = () => alive && enabled && !accessCheck.current && live.current === key && !locked && !suspended && document.visibilityState !== 'hidden' && document.hasFocus() && epoch === getProtectedRequestEpoch() && !hasLogoutIntent();
         const clear = (error: Failure) => { version++; operation?.controller.abort(); window.clearTimeout(operation?.timer); operation = null; accepted = null; if (alive) { setSnapshot(null); setBusy(null); setFailure(error); setConfirmed(false); setGeneration(n => n + 1); } };
         const available = () => scopeActive() && accepted !== null && age(accepted.started) < accepted.lifetime;
         const run = async (body?: IncidentRequest): Promise<boolean> => {
-            if (!scopeActive() || operation || body && (!available() || !accepted?.view.canManage || uncertain.has(key) || body.expectedRevision !== accepted.view.revision || body.sourceToken !== accepted.view.currentSource.token || !incidentRequestCapacity(uncertain, prior))) return false;
+            if (!scopeActive() || operation || body && (readOnly || !available() || !accepted?.view.canManage || uncertain.has(key) || body.expectedRevision !== accepted.view.revision || body.sourceToken !== accepted.view.currentSource.token || !incidentRequestCapacity(uncertain, prior))) return false;
             const reviewed = accepted;
             const controller = new AbortController(), started = capture(), serial = ++version, deadline = body ? 15000 : 10000;
             if (body) uncertain.set(key, body);
@@ -54,6 +54,9 @@ export function useApplicationIncidents(enabled: boolean, scope: string, session
                 if (!(age(started) < lifetime)) throw new Error('Incident snapshot expired');
                 revisions.set(key, { revision: value.revision, token: value.currentSource.token });
                 accepted = { key, epoch, view: value, started, lifetime, offset }; setSnapshot(accepted); setGeneration(n => n + 1);
+                // The independent reader must not consume an administration
+                // surface's pending or prior request-reconciliation evidence.
+                if (readOnly) return true;
                 const attempt = uncertain.get(key);
                 if (attempt && incidentRequestConfirmed(value, attempt)) { uncertain.delete(key); setConfirmed(true); }
                 else if (!body && attempt && (BigInt(value.revision) > BigInt(attempt.expectedRevision) || value.currentSource.token !== attempt.sourceToken)) { uncertain.delete(key); prior.set(key, [...(prior.get(key) ?? []), attempt]); }
@@ -71,13 +74,16 @@ export function useApplicationIncidents(enabled: boolean, scope: string, session
         const restore = () => { if (!locked && document.visibilityState !== 'hidden' && document.hasFocus()) suspended = false; };
         const visibility = () => document.visibilityState === 'hidden' ? suspend() : restore();
         const storage = (e: StorageEvent) => { if ((e.key === LOGOUT_INTENT_KEY || e.key === null) && hasLogoutIntent()) auth(); };
-        commands.current = { read: () => { void run(); }, write: run }; clear(null);
+        commands.current = { read: () => { void run(); }, write: run, interrupt: () => clear('interrupted') }; clear(null);
         if (!enabled) return () => { alive = false; clear(null); commands.current = empty; };
         window.addEventListener(AUTH_REQUIRED_EVENT, auth); for (const e of ['blur', 'pagehide', 'hashchange', 'popstate']) window.addEventListener(e, suspend); for (const e of ['focus', 'pageshow']) window.addEventListener(e, restore); window.addEventListener('storage', storage); document.addEventListener('visibilitychange', visibility);
         const timer = window.setInterval(() => { if (epoch !== getProtectedRequestEpoch() || hasLogoutIntent()) { if (!locked) auth(); } else if (accepted && !available()) clear(Number.isFinite(age(accepted.started)) ? 'interrupted' : 'clock'); else if (accepted) update(n => n + 1); }, 250);
         void run();
         return () => { alive = false; clear(null); commands.current = empty; window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, auth); for (const e of ['blur', 'pagehide', 'hashchange', 'popstate']) window.removeEventListener(e, suspend); for (const e of ['focus', 'pageshow']) window.removeEventListener(e, restore); window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility); };
-    }, [enabled, key, epoch, scope, sessionKey]);
-    const visible = enabled && snapshot?.key === key && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() && document.visibilityState !== 'hidden' && document.hasFocus() && age(snapshot.started) < snapshot.lifetime;
+    }, [enabled, key, epoch, scope, sessionKey, readOnly]);
+    // Access revalidation clears private state without remounting or restarting
+    // the reader. Returning to the same session needs an explicit reload.
+    useEffect(() => { if (checkingAccess) commands.current.interrupt(); }, [checkingAccess]);
+    const visible = enabled && !checkingAccess && snapshot?.key === key && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() && document.visibilityState !== 'hidden' && document.hasFocus() && age(snapshot.started) < snapshot.lifetime;
     return { view: visible ? snapshot.view : null, elapsed: visible ? snapshot.offset + age(snapshot.started) : Infinity, busy, failure, generation, confirmed, uncertain: uncertain.get(key) ?? null, previous: prior.get(key) ?? [], full: !incidentRequestCapacity(uncertain, prior), read: () => commands.current.read(), write: (body: IncidentRequest) => commands.current.write(body) };
 }
