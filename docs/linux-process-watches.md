@@ -19,6 +19,34 @@ of local derived-history retention is required to enable or replace the policy.
 Named read accounts can inspect the view but cannot change policy or acknowledge
 incidents. Existing session, Origin, CSRF and source-authority checks still apply.
 
+The dashboard offers already observed names from the existing private inventory,
+with exact manual entry as a fallback. Opening the chooser reads stored rows only;
+it does not request a capture or change collection consent. Each page contains at
+most 100 process rows. Names are combined exactly within the page and selection,
+without interpreting spelling, whitespace, case or wildcard characters. Whitespace
+positions and Unicode codes distinguish literal choices and reviewed names for
+sighted and screen-reader users, including whitespace-only names. Selection
+is bounded to eight names. A name may match several processes, and Linux may
+shorten names; choosing it does not identify one application. The existing
+inventory search accepts printable ASCII; other names remain selectable by paging
+or exact manual entry. Page choices are not global counts or health claims.
+
+The chooser requires the same sequence, generation ID, manifest hash, original
+capture times, completion receipt and coverage as the current fresh watch source.
+It rejects newer failed or incomplete inventory attempts and rechecks the watch
+source after each query. Inventory's 24-hour retention never substitutes for the
+watch's under-120-second freshness. Pages, searches and private reads are bounded,
+cancelable, and cannot renew the original watch-view lease. No policy write or
+approval follows from a selection.
+
+Editing an existing policy is explicit and starts with its saved names and
+threshold. Normal view expiry keeps only the unconfirmed draft in the same
+visible operator context. It removes evidence, chooser rows and approval and
+requires an explicit refresh and a new unchecked review. Closing, navigating,
+hiding, focus loss, logout, session expiry or source-identity replacement clears
+the draft. A chooser read that proves source replacement or lost management
+authority also clears the parent view and draft immediately. An uncertain write remains GET-only; it is never replayed.
+
 A matching row in running, sleeping, disk-sleep, idle or parked state counts as
 active. Stopped, tracing-stop, zombie and dead rows count as nonrunning. A watch
 can confirm an incident only when a complete generation has zero active matches

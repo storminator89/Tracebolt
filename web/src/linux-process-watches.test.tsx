@@ -70,7 +70,7 @@ describe('Linux process-watch wire contract', () => {
     });
     it('preserves exact name bytes and rejects unsupported names consistently with Go', () => {
         expect(parseProcessWatchNames('worker\n Alpha \nworker2')).toEqual([' Alpha ', 'worker', 'worker2']);
-        expect(parseProcessWatchNames('worker\nworker')).toBeNull(); expect(parseProcessWatchNames(Array.from({ length: 9 }, (_, i) => `p${i}`).join('\n'))).toBeNull();
+        expect(parseProcessWatchNames('worker\nworker')).toEqual(['worker']); expect(parseProcessWatchNames(Array.from({ length: 9 }, (_, i) => `p${i}`).join('\n'))).toBeNull();
         expect(validProcessWatchName('é'.repeat(32))).toBe(true); expect(validProcessWatchName('é'.repeat(33))).toBe(false);
         for (const name of ['', 'a\u0000', 'a\u2028', 'a\u2029', 'a\ufffd', 'a\u200b', '\ud800']) expect(validProcessWatchName(name)).toBe(false);
         expect(validProcessWatchName('worker*')).toBe(true); // The asterisk is literal, never interpreted.
@@ -97,9 +97,9 @@ describe('Linux process-watch private lifecycle and reviewed changes', () => {
         expect(captureRequest()).toMatchObject({ operation: 'policy', body: { expectedRevision: '0', sourceToken: processToken, enabled: true, names: [' Alpha ', 'worker'], consecutiveFailures: 2, retentionAcknowledged: true } });
         expect(vi.mocked(mutateRaw).mock.calls[0][0]).toBe(`/devices/${processDevice}/linux-process-watches/policy`); expect(screen.getByText('The manager confirmed this exact request.')).toBeVisible();
     });
-    it('rejects duplicate names and requires a new review after cancellation', async () => {
-        await start(); prepare('worker\nworker'); expect(screen.getByRole('button', { name: 'Review process monitoring' })).toBeDisabled(); expect(screen.queryByRole('checkbox')).toBeNull();
-        prepare(); fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Discard review' })); prepare(); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(mutateRaw).not.toHaveBeenCalled();
+    it('combines duplicate exact names and requires a new review after cancellation', async () => {
+        await start(); prepare('worker\nworker'); expect(screen.getByRole('region', { name: 'Review this exact local change' }).querySelectorAll('li')).toHaveLength(1);
+        fireEvent.click(screen.getByRole('button', { name: 'Discard review' })); prepare(); fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Discard review' })); prepare(); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(mutateRaw).not.toHaveBeenCalled();
     });
     it('keeps named read-only accounts and unavailable sources read-only without collecting', async () => {
         const v = processEnabled(); v.canManage = false; await start(v); expect(screen.getByText(/^Read only\./)).toBeVisible(); expect(screen.getAllByRole('button')).toHaveLength(1); expect(screen.queryByRole('textbox')).toBeNull();
