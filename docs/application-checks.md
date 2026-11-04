@@ -159,10 +159,12 @@ revision/generation lifecycle and audit boundaries.
 
 ## Scope and remaining gates
 
-Results exist only in memory. The [recent observation history](application-check-history.md)
+Raw check results exist only in memory. The [recent observation history](application-check-history.md)
 retains up to 32 completed outcomes per target for at most 24 hours; it is a
-sampled snapshot, not uptime or a durable incident archive. There is no alert
-delivery, incident creation, endpoint association, DB/backup check, content matching,
+sampled snapshot, not uptime or a durable incident archive. The separate opt-in [local incident workflow](application-local-incidents.md) can
+persist fixed completed-outcome evidence with confirmed recovery and mark-seen
+controls. It does not change raw status/history retention. There is no external
+alert delivery, endpoint association, DB/backup check, content matching,
 credential support or automatic target discovery. Existing device pages, health incidents and
 external alarm behavior are unchanged.
 

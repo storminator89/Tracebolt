@@ -59,14 +59,16 @@ type View struct {
 	Items           []Result  `json:"items"`
 }
 type Monitor struct {
-	config       Config
-	mu           sync.RWMutex
-	items        []Result
-	history      []targetHistory
-	historyClock time.Time
-	running      atomic.Bool
-	check        func(context.Context, target, string, time.Time) Result
-	now          func() time.Time
+	incidentSource IncidentSource
+	incidentSink   IncidentSink
+	config         Config
+	mu             sync.RWMutex
+	items          []Result
+	history        []targetHistory
+	historyClock   time.Time
+	running        atomic.Bool
+	check          func(context.Context, target, string, time.Time) Result
+	now            func() time.Time
 	// A completion-based timer prevents catch-up bursts and overlap.
 	wait func(context.Context, time.Duration) bool
 }
@@ -81,6 +83,11 @@ func (*Monitor) MarshalJSON() ([]byte, error) { return []byte(`{"redacted":true}
 // New and Status are inert. Only the manager lifecycle calls Run.
 func New(c Config) *Monitor {
 	m := &Monitor{config: c, items: []Result{}, check: newProbe().check, now: time.Now, wait: wait}
+	source, err := newIncidentSource(c, func() time.Time { return m.now().UTC() })
+	if err != nil {
+		return nil
+	}
+	m.incidentSource = source
 	for _, t := range c.targets {
 		r := Result{Kind: wireKind(c, t), ID: t.ID, State: "unknown", Reason: "not_checked"}
 		if t.Kind == "" || t.Kind == kindHTTP {
@@ -146,6 +153,8 @@ func (m *Monitor) Run(ctx context.Context) error {
 			m.items[i] = clone(r)
 			m.recordHistory(i, t, r, start, completed)
 			m.mu.Unlock()
+			// Persistence is ordered and joined, outside all status/settings locks.
+			m.observeIncidentResult(ctx, r, start, completed)
 		}
 		if !m.wait(ctx, m.config.interval) {
 			return ctx.Err()

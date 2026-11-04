@@ -91,36 +91,43 @@ func (savedSettings) GoString() string { return "applicationcheck.savedSettings{
 // Only Run can start a monitor. A failed/uncertain write or interrupted mutation
 // blocks this instance until restart and verified protected-file readback.
 type Settings struct {
-	mutation    sync.Mutex // admission rejects concurrent changes, not brief supervisor work
-	operation   sync.Mutex
-	mu          sync.RWMutex
-	running     atomic.Bool
-	file        string
-	digest      [32]byte
-	saved       savedSettings
-	config      Config
-	mode        string
-	blocked     bool
-	monitor     *Monitor
-	wake        chan struct{}
-	cancel      context.CancelFunc // operation protects worker lifecycle fields
-	done        chan struct{}
-	now         func() time.Time
-	wait        func(context.Context, time.Duration) bool
-	nextAllowed time.Time // mu protects the cooldown across configuration generations
-	factory     func(Config) *Monitor
-	persist     func(savedSettings, bool) error
+	incidentSink IncidentSink
+	mutation     sync.Mutex // admission rejects concurrent changes, not brief supervisor work
+	operation    sync.Mutex
+	mu           sync.RWMutex
+	running      atomic.Bool
+	file         string
+	digest       [32]byte
+	saved        savedSettings
+	config       Config
+	mode         string
+	blocked      bool
+	monitor      *Monitor
+	wake         chan struct{}
+	cancel       context.CancelFunc // operation protects worker lifecycle fields
+	done         chan struct{}
+	now          func() time.Time
+	wait         func(context.Context, time.Duration) bool
+	nextAllowed  time.Time // mu protects the cooldown across configuration generations
+	factory      func(Config) *Monitor
+	persist      func(savedSettings, bool) error
 }
 
-func NewSettings(stateDir, managerID, origin, profile string, external Config) (*Settings, error) {
-	return newSettings(stateDir, managerID, origin, profile, external, time.Now, New)
+func NewSettings(stateDir, managerID, origin, profile string, external Config, sinks ...IncidentSink) (*Settings, error) {
+	return newSettings(stateDir, managerID, origin, profile, external, time.Now, New, sinks...)
 }
 
-func newSettings(stateDir, managerID, origin, profile string, external Config, now func() time.Time, factory func(Config) *Monitor) (*Settings, error) {
+func newSettings(stateDir, managerID, origin, profile string, external Config, now func() time.Time, factory func(Config) *Monitor, sinks ...IncidentSink) (*Settings, error) {
 	if !validSettingsBinding(managerID, origin, profile) || now == nil || factory == nil {
 		return nil, ErrConfiguration
 	}
 	s := &Settings{mode: "managed", now: now, wait: wait, factory: factory, wake: make(chan struct{}, 1), saved: savedSettings{ManagerID: managerID, Origin: origin, Profile: profile}}
+	if len(sinks) > 1 {
+		return nil, ErrConfiguration
+	}
+	if len(sinks) == 1 {
+		s.incidentSink = sinks[0]
+	}
 	s.persist = s.write
 	if external.external {
 		if !external.Matches(managerID, origin, profile) {
@@ -165,6 +172,7 @@ func newSettings(stateDir, managerID, origin, profile string, external Config, n
 			return nil, err
 		}
 	}
+	s.config.managerID, s.config.origin, s.config.profile = managerID, origin, profile
 	s.monitor = s.newMonitor(s.config)
 	if s.monitor == nil {
 		return nil, ErrConfiguration
@@ -271,10 +279,11 @@ func (s savedSettings) config(managerID, origin, profile string) (Config, error)
 		if s.Enabled || s.IntervalSeconds != 60 || len(s.Targets) != 0 {
 			return Config{}, ErrConfiguration
 		}
-		return Config{schema: ConfigSchemaVersionV2}, nil
+		return Config{schema: ConfigSchemaVersionV2, managerID: managerID, origin: origin, profile: profile, incidentGeneration: s.Generation}, nil
 	}
 	c, err := draftConfig(s.IntervalSeconds, s.Targets, managerID, origin, profile)
 	c.enabled = s.Enabled
+	c.incidentGeneration = s.Generation
 	return c, err
 }
 
@@ -461,6 +470,12 @@ func (s *Settings) Change(ctx context.Context, in SettingsChange, actor string) 
 		s.block()
 		return ErrSettingsUnavailable
 	}
+	// The local completion sink can spend its bounded admission budget here.
+	// A committed file is not permission to activate after this request expired.
+	if err = ctx.Err(); err != nil {
+		s.block()
+		return err
+	}
 	s.mu.Lock()
 	s.saved, s.config, s.monitor = next, c, monitor
 	s.mu.Unlock()
@@ -572,6 +587,8 @@ func (s *Settings) newMonitor(c Config) *Monitor {
 		s.mu.Unlock()
 		return result
 	}
+	m.incidentSink = s.incidentSink
+	m.observeIncidentSource()
 	return m
 }
 func (s *Settings) awaitCooldown(ctx context.Context) bool {

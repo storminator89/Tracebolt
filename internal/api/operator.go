@@ -606,6 +606,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.alarmSettingsAPI(w, r)
 		return
 	}
+	if r.URL.Path == "/api/application-checks/incidents" {
+		h.applicationIncidentsAPI(w, r)
+		return
+	}
 	if r.URL.Path == "/api/application-checks/settings" {
 		h.applicationCheckSettingsAPI(w, r)
 		return

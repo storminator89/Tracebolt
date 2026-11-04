@@ -11,6 +11,7 @@ import { ApplicationNetworkAI, NetworkReviewHistoryView } from './application-ne
 import type { NetworkReviewHistory } from './application-network-ai';
 import './application-checks.css';
 import { ApplicationCheckHistory } from './application-check-history';
+import { ApplicationIncidents } from './application-incidents';
 
 const POLL_MS = 15000, TIMEOUT_MS = 10000;
 type Anchor = { mono: number; wall: number };
@@ -162,6 +163,7 @@ function ApplicationChecksContent({ canManage, canAnalyze }: { canManage: boolea
     const [aiHistory, setAIHistory] = useState<NetworkReviewHistory | null>(null);
     useEffect(() => { if (locked || hasLogoutIntent()) setAIHistory(null); }, [locked]);
     const view = snapshot?.view;
+    const storageNote = locale === 'de' ? 'Aktueller Status und Prüfbeobachtungen bleiben im Arbeitsspeicher. Nur nach separater Zustimmung werden lokale Vorfallsdaten für 30 Tage gespeichert; keine externen Benachrichtigungen.' : 'Current status and recent check observations stay in memory. Only separately approved local incident metadata is retained for 30 days; no external notifications.';
     const help = view?.enabled ? [...new Set(view.items.map(row => reasonHelp[projectApplicationCheck(view, row, elapsed).reason]).filter((key): key is TranslationKey => key !== undefined))] : [];
     return <section className="panel application-checks" aria-labelledby="application-checks-heading">
         <div className="application-checks-heading"><div><h2 id="application-checks-heading">{t('Anwendungsprüfungen')}</h2><p>{t(view?.enabled && view.schemaVersion === 'tracebolt.application-checks.v1' ? 'HTTP/TLS-Prüfung vom Manager.' : 'Prüfung vom Manager: HTTP/TLS, DNS, TCP.')}</p><p className="application-check-examples">{entry.examples}</p></div><div className="application-checks-actions">{canManage && !locked && <a className="button primary" href={applicationCheckSetupRoute}><Plus size={14}/>{entry.add}</a>}<button className="text-button" onClick={refresh} disabled={refreshing || locked} aria-label={t('Anwendungsstatus neu laden')} title={t('Gespeicherte Ergebnisse neu laden')}><RefreshCw size={14} className={refreshing ? 'spin' : ''}/>{t('Neu laden')}</button></div></div>
@@ -173,7 +175,7 @@ function ApplicationChecksContent({ canManage, canAnalyze }: { canManage: boolea
                 <p>{t('Bis zu 8 HTTP/HTTPS-, DNS- oder TCP-Ziele auf dem Manager konfigurieren.')}</p>
                 <p>{t('Entwurf speichern, Ziele und IP-Adressen prüfen, separat aktivieren. Speichern startet keine Prüfung.')}</p>
                 <p>{t('Exakte Ziele und IPs freigeben; LAN und unverschlüsseltes HTTP separat bestätigen.')}</p>
-                <p>{t('Nur nebenwirkungsfreie Ziele ohne Zugangsdaten. Ergebnisse nur im Arbeitsspeicher, keine Alarme.')}</p>
+                <p>{locale === 'de' ? 'Nur nebenwirkungsfreie Ziele ohne Zugangsdaten.' : 'Side-effect-free targets without credentials.'} {storageNote}</p>
                 <p><ConfigurationGuide/></p>
             </details>
         </>}
@@ -186,9 +188,10 @@ function ApplicationChecksContent({ canManage, canAnalyze }: { canManage: boolea
                 <p>{t('Intervall ab Rundenende. Veraltete Ergebnisse bleiben unbekannt; Erfassungszeiten bleiben erhalten.')}</p>
                 {view.schemaVersion === 'tracebolt.application-checks.v2' && <><p>{t('DNS: Systemauflösung mit Hosts-Datei, Cache oder Suchdomänen. Alle Ergebnisadressen müssen freigegeben sein; kein vollständiger, autoritativer DNS-Datensatz.')}</p><p>{t('TCP: Verbindung zur IP, dann schließen. Keine Daten, kein TLS, kein Funktionsnachweis.')}</p></>}
                 {help.length > 0 && <ul className="application-checks-help">{help.map(key => <li key={key}>{t(key)}</li>)}</ul>}
-                <p>{t('Ergebnisse bleiben im Arbeitsspeicher und erzeugen keine Alarme.')} <ConfigurationGuide/></p>
+                <p>{storageNote} <ConfigurationGuide/></p>
             </details>
         </>}
+        <ApplicationIncidents/>
         {canAnalyze && snapshot && !locked && !hasLogoutIntent() && aiHistory && <NetworkReviewHistoryView history={aiHistory} onDismiss={() => setAIHistory(null)}/>}
     </section>;
 }
