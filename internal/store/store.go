@@ -92,7 +92,7 @@ func Open(path string) (*Store, error) {
 		return fail(err)
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, linuxMountWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsMaintenanceScheduleSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema} {
+	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, linuxMountWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsProcessWatchSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsMaintenanceScheduleSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema} {
 		if _, err = tx.Exec(q); err != nil {
 			return fail(err)
 		}

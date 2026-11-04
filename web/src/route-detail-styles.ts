@@ -13,6 +13,7 @@ import './agent-certificate.css';
 import './health-service-picker.css';
 import './health.css';
 import './device-essentials.css';
+import './device-monitoring-navigation.css';
 import './resource-history.css';
 import './operational.css';
 import './package-observations.css';

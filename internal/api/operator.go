@@ -735,6 +735,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsFullSoftwareQuery(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-process-watches") {
+		h.windowsProcessWatchesAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-full-processes") {
 		h.windowsFullProcessesQuery(w, r)
 		return

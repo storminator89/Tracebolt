@@ -343,9 +343,9 @@ func TestWindowsMaintenanceScheduleFinalAuthorityGuardPreservesMinimumLead(t *te
 	}
 }
 
-// The shared schema initializer must preserve both Linux watch domains when the
+// The shared schema initializer must preserve Linux and Windows watch policies when the
 // first Windows schedule raises the operator database compatibility version.
-func TestWindowsMaintenanceSchedulePreservesExistingLinuxWatchPolicies(t *testing.T) {
+func TestWindowsMaintenanceSchedulePreservesExistingWatchPolicies(t *testing.T) {
 	s, path, mountInput, mountCommand := mountFixture(t)
 	defer func() { s.Close() }()
 	ctx := context.Background()
@@ -356,6 +356,14 @@ func TestWindowsMaintenanceSchedulePreservesExistingLinuxWatchPolicies(t *testin
 		t.Fatal(err)
 	}
 	if _, _, err := s.UpdateLinuxMountWatches(ctx, mountInput, &mountCommand, false, clock, guard); err != nil {
+		t.Fatal(err)
+	}
+	windowsInput, windowsRequest, _ := processWatchStoreFixture(t)
+	if _, err := s.ConfigureWindowsProcessWatch(ctx, windowsInput, windowsRequest, clock, guard); err != nil {
+		t.Fatal(err)
+	}
+	var windowsBefore string
+	if err := s.db.QueryRow(`SELECT body FROM windows_process_watch_devices WHERE id=?`, windowsInput.DeviceID).Scan(&windowsBefore); err != nil {
 		t.Fatal(err)
 	}
 	processBefore := string(processWatchRaw(t, s, processInput.DeviceID))
@@ -375,6 +383,16 @@ func TestWindowsMaintenanceSchedulePreservesExistingLinuxWatchPolicies(t *testin
 	var version int
 	if err = s.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 2 {
 		t.Fatal("reopen downgraded schedule compatibility", version, err)
+	}
+	var windowsAfter string
+	if err = s.db.QueryRow(`SELECT body FROM windows_process_watch_devices WHERE id=?`, windowsInput.DeviceID).Scan(&windowsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if windowsBefore != windowsAfter {
+		t.Fatal("scheduled maintenance changed existing Windows presence policy bytes")
+	}
+	if state, err := s.WindowsProcessWatchState(ctx, windowsInput.DeviceID); err != nil || state.Policy.Revision != 1 || !state.Policy.Enabled {
+		t.Fatal("Windows presence policy lost", err)
 	}
 	var mountAfter string
 	if err = s.db.QueryRow(`SELECT body FROM linux_mount_watches WHERE id=?`, mountInput.DeviceID).Scan(&mountAfter); err != nil {
