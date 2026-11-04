@@ -430,3 +430,11 @@ See `docs/proactive-service-log-ai.md` for bounds and the native fixture boundar
   unchanged. Unresolved A cannot retire, but does not grant or block unrelated B.
   Shared storage integrity failures still fail closed. No migrations, runtime
   grants, deferred queue or native acceptance follow from these source fixtures.
+
+- Windows process presence watches are a separate default-off manager policy.
+  Read `docs/windows-process-presence-watches.md` before modifying the source
+  lease, exact-name count or saved-selection UI. Toolhelp presence is neither
+  execution state nor application health. Keep complete-source integrity, original
+  capture/receipt age, unavailable-name uncertainty, exact original identity/grant,
+  explicit saved-selection consent and uncertain-write read reconciliation. This
+  live view adds no incidents, host collection, CPU/RAM policy, actions or export.
