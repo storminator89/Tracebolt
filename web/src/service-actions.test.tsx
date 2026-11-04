@@ -6,9 +6,12 @@ import { APIError, AUTH_REQUIRED_EVENT } from './api';
 import { approveServiceAction, InvalidServiceActionResponse, previewServiceAction, readServiceActions } from './service-action-api';
 import { actionAccess, actionActor, actionDevice, actionJobView, actionNow, actionPreview, actionView } from './service-action-fixtures';
 import { useServiceActions } from './service-action-resource';
+import { readServiceActionHistory } from './service-action-history-api';
+import { completedActionHistory } from './service-action-history-fixtures';
 import { ServiceActionPanel } from './service-actions';
 import { setLocale } from './i18n';
 import type { ServiceActionView } from './service-action-types';
+vi.mock('./service-action-history-api', () => ({ readServiceActionHistory: vi.fn() }));
 vi.mock('./service-action-api', async original => ({ ...await original<typeof import('./service-action-api')>(), readServiceActions: vi.fn(), previewServiceAction: vi.fn(), approveServiceAction: vi.fn() }));
 function Harness({ deviceId = actionDevice, authorized = true }: { deviceId?: string; authorized?: boolean }) {
     const workflow = useServiceActions(deviceId, authorized ? actionAccess : null);
@@ -20,12 +23,20 @@ async function preview() { fireEvent.click(screen.getByRole('button', { name: 'S
 async function approve() { fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: 'Approve try-restart' })); await flush(); }
 beforeEach(() => {
     vi.useFakeTimers(); vi.setSystemTime(actionNow); setLocale('en', false);
+    vi.mocked(readServiceActionHistory).mockReset().mockResolvedValue(completedActionHistory());
     vi.mocked(readServiceActions).mockReset().mockResolvedValue(actionView());
     vi.mocked(previewServiceAction).mockReset().mockImplementation(async (_device, unit) => ({ ...actionView(), preview: actionPreview(unit) }));
     vi.mocked(approveServiceAction).mockReset().mockResolvedValue(actionJobView());
 });
 afterEach(() => { act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))); cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('explicit selected-service action flow', () => {
+    it.each(['capacity', 'needs_intervention'] as const)('keeps real hook history accessible at %s without creating an action', async reason => {
+        vi.mocked(readServiceActions).mockResolvedValue({ ...actionJobView('needs_intervention'), reason });
+        await start(); expect(readServiceActionHistory).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Select fixture' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: 'Saved service-action history' })); await flush();
+        expect(readServiceActionHistory).toHaveBeenCalledExactlyOnceWith(actionDevice, actionAccess, expect.any(AbortSignal));
+        expect(screen.getByRole('button', { name: 'Read receipt #1' })).toBeVisible(); expect(previewServiceAction).not.toHaveBeenCalled(); expect(approveServiceAction).not.toHaveBeenCalled();
+    });
     it('requires the exact preview and interruption consent, and submits one approval on repeated clicks', async () => {
         await start(); expect(previewServiceAction).not.toHaveBeenCalled(); expect(approveServiceAction).not.toHaveBeenCalled();
         await preview(); const review = screen.getByRole('region', { name: 'Review service action' });
@@ -153,7 +164,7 @@ describe('read-first service availability', () => {
     it.each(['en', 'de'] as const)('compacts only confirmed idle unavailability and preserves live controls in %s', async locale => {
         setLocale(locale, false);
         const idle: ServiceActionView = { ...actionView(), available: false, reason: 'helper_stale', services: [] };
-        const workflow: ReturnType<typeof useServiceActions> = { view: idle, preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), refresh: vi.fn() };
+        const workflow: ReturnType<typeof useServiceActions> = { historyAccess: null, view: idle, preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), refresh: vi.fn() };
         const mounted = render(<ServiceActionPanel workflow={workflow} authorized/>), panel = mounted.container.querySelector('.service-action-panel')!;
         const renderState = (change: Partial<typeof workflow>) => mounted.rerender(<ServiceActionPanel workflow={{ ...workflow, ...change }} authorized/>);
         expect(panel).toHaveClass('service-action-panel-idle'); expect(panel).toHaveTextContent(locale === 'en' ? 'The local helper report is stale.' : 'Der lokale Helper-Bericht ist veraltet.');

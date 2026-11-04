@@ -4,6 +4,7 @@ import { useLocale } from './i18n';
 import type { ServiceActionPreview } from './service-action-types';
 import type { useServiceActions } from './service-action-resource';
 import './service-actions.css';
+import { ServiceActionHistoryPanel } from './service-action-history';
 
 const copy = {
     en: {
@@ -40,6 +41,7 @@ export function ServiceActionPanel({ workflow, authorized }: { workflow: Workflo
             {workflow.selected && !workflow.preview && workflow.loading === 'preview' && <button type="button" className="text-button" onClick={workflow.close}>{labels.cancel}</button>}
             {workflow.preview && <Review key={JSON.stringify(workflow.preview)} preview={workflow.preview} onApprove={workflow.approve} onClose={workflow.close}/>}
             {!!workflow.view?.excludedServices?.length && <details><summary>{labels.excluded} ({workflow.view.excludedServices.length})</summary><ul className="service-action-impact">{workflow.view.excludedServices.map(service => <li key={service.unit}>{service.unit}: {service.reason.replaceAll('_', ' ')}</li>)}</ul></details>}
+            {workflow.historyAccess && workflow.error !== 'session' && <ServiceActionHistoryPanel deviceId={workflow.historyAccess.deviceId} access={workflow.historyAccess.access}/>}
             {job && <section className="service-action-job" aria-label={labels.job}>
                 <strong>{labels.job}: {job.unit}</strong>
                 <p role="status">{job.state === 'expired' ? labels.jobExpired : labels[job.state]}</p>
