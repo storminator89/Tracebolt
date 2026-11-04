@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
@@ -11,6 +11,8 @@ import { WindowsIncidentReadOnlyRow } from './windows-incident-inbox';
 import { WINDOWS_INCIDENT_PAGE_SIZE } from './windows-incident-inbox-types';
 import { windowsDeviceLabel } from './windows-device-label';
 import { IncidentTimeline } from './incident-timeline';
+import { IncidentComparison } from './incident-comparison';
+import { comparisonEpisodes, comparisonSelection, MAX_COMPARISON_EPISODES, toggleComparison } from './incident-comparison-model';
 import { ManagerReadinessPanel } from './manager-readiness-panel';
 import { incidentTimeline } from './incident-timeline-model';
 import { QUEUE_SEARCH_LIMIT, filterIncidentQueue, incidentQueueRows, incidentQueueLifecycleCounts, queueSourceScopes } from './incident-work-queue-model';
@@ -19,7 +21,7 @@ import './incident-work-queue.css';
 
 const copy = {
     en: {
-        title: 'Investigations', refresh: 'Refresh work queue', intro: 'A read-only work queue for Linux and Windows incidents. Seen does not mean recovered. Opening a row grants or executes nothing.',
+        compare: 'Compare episode', title: 'Investigations', refresh: 'Refresh work queue', intro: 'A read-only work queue for Linux and Windows incidents. Seen does not mean recovered. Opening a row grants or executes nothing.',
         scope: 'Status', lifecycle: 'Episode outcome on loaded pages', allOutcomes: 'All episode outcomes', openOutcome: 'Still open', recoveredOutcome: 'Check recovery or reports resumed', stoppedOutcome: 'Closed without confirmed recovery', search: 'Search loaded incidents', searchHint: 'Device name, identity, incident or target', reset: 'Clear page filters', active: 'Open', all: 'All retained', platform: 'Platform on loaded pages', source: 'Source on loaded pages', seen: 'Seen on loaded pages', allPlatforms: 'Linux and Windows', allSources: 'All sources', allSeen: 'Seen and unseen', acknowledged: 'Seen', unacknowledged: 'Not seen',
         'linux-health': 'Linux Health', 'windows-assessment': 'Windows assessment', 'windows-full-services': 'Windows complete service inventory',
         paging: 'Each source has its own live page and total. Only those pages are merged below, newest opening first. Platform, source, seen, outcome and search filters apply to loaded pages, not the full retained history. Refresh starts both sources at page one. Device search and group filters do not narrow this fleet-wide queue.',
@@ -27,7 +29,7 @@ const copy = {
         loading: 'Reading Windows incidents…', failed: 'Windows incidents unavailable or expired. Their counts and rows are unknown.', noLinux: 'No current Linux investigation data.', noWindows: 'No current Windows incident data.', queue: 'Incident work queue', shown: 'Rows shown from current source pages', partial: 'Source coverage is incomplete. Available rows are a partial queue; an unavailable source is not empty success.', empty: 'No matching incidents on the current source pages. This is not a fleet-health assessment. Check source coverage and other pages.', incompleteEmpty: 'No matching rows from the available pages. Missing source rows and totals remain unknown.', changed: 'This live page is now empty although matching history remains. Return to its first page.', unavailableTime: 'Not available', unnamed: 'Windows device',
     },
     de: {
-        title: 'Untersuchungen', refresh: 'Arbeitsliste aktualisieren', intro: 'Eine rein lesende Arbeitsliste für Linux- und Windows-Vorfälle. Gesehen bedeutet nicht erholt. Das Öffnen einer Zeile erteilt keine Freigabe und führt nichts aus.',
+        compare: 'Episode vergleichen', title: 'Untersuchungen', refresh: 'Arbeitsliste aktualisieren', intro: 'Eine rein lesende Arbeitsliste für Linux- und Windows-Vorfälle. Gesehen bedeutet nicht erholt. Das Öffnen einer Zeile erteilt keine Freigabe und führt nichts aus.',
         scope: 'Status', lifecycle: 'Episodenausgang auf geladenen Seiten', allOutcomes: 'Alle Episodenausgänge', openOutcome: 'Weiter offen', recoveredOutcome: 'Prüfung erholt oder Berichte fortgesetzt', stoppedOutcome: 'Ohne bestätigte Erholung geschlossen', search: 'Geladene Vorfälle durchsuchen', searchHint: 'Gerätename, Identität, Vorfall oder Prüfziel', reset: 'Seitenfilter zurücksetzen', active: 'Offen', all: 'Alle gespeicherten', platform: 'Plattform auf geladenen Seiten', source: 'Quelle auf geladenen Seiten', seen: 'Kenntnisnahme auf geladenen Seiten', allPlatforms: 'Linux und Windows', allSources: 'Alle Quellen', allSeen: 'Gesehen und ungesehen', acknowledged: 'Gesehen', unacknowledged: 'Ungesehen',
         'linux-health': 'Linux Health', 'windows-assessment': 'Windows-Bewertung', 'windows-full-services': 'Vollständiges Windows-Dienstinventar',
         paging: 'Jede Quelle hat eine eigene aktuelle Seite und Trefferzahl. Nur diese Seiten werden unten nach Eröffnungszeit zusammengeführt. Plattform-, Quellen-, Kenntnisnahme-, Ausgangs- und Suchfilter gelten für geladene Seiten, nicht für die gesamte Historie. Aktualisieren beginnt beide Quellen auf Seite eins. Gerätesuche und Gruppenfilter grenzen diese flottenweite Liste nicht ein.',
@@ -52,6 +54,24 @@ export function IncidentWorkQueue({ devices, sessionKey, linux, scope, onScope, 
     const searchNames = new Map(devices.filter(device => device.source === 'lan' && !device.synthetic).map(device => [`${device.platform}:${device.id}`, device.name]));
     const rows = filterIncidentQueue(incidentQueueRows(linuxView, windowsView), platform, source, seen, lifecycle, query, searchNames);
     const outcomes = incidentQueueLifecycleCounts(rows);
+    // Store only opaque choices. Every render resolves them against the visible,
+    // guarded live rows; scope/source loss cannot leave cached private content.
+    const comparisonScope = JSON.stringify([sessionKey, scope, linuxOffset, windowsOffset, platform, source, seen, lifecycle, query, linux.locked]);
+    const [selection, setSelection] = useState({ scope: comparisonScope, ids: [] as string[], expanded: false });
+    const selected = comparisonSelection(selection.scope === comparisonScope && !linux.locked ? selection.ids : [], rows);
+    const visibleIdentities = JSON.stringify(rows.map(row => row.identity));
+    useEffect(() => {
+        setSelection(current => {
+            if (current.scope !== comparisonScope || linux.locked) return { scope: comparisonScope, ids: [], expanded: false };
+            const ids = comparisonSelection(current.ids, rows);
+            return ids.length === current.ids.length && ids.every((id, index) => id === current.ids[index]) ? current : { ...current, ids, expanded: current.expanded && ids.length >= 2 };
+        });
+    }, [comparisonScope, visibleIdentities, linux.locked]);
+    const episodes = comparisonEpisodes(selected, rows, linuxView, windowsView?.serverNow ?? null, windows.age);
+    const toggleEpisode = (identity: string) => setSelection(current => {
+        const ids = toggleComparison(current.scope === comparisonScope ? current.ids : [], rows, identity);
+        return { scope: comparisonScope, ids, expanded: current.scope === comparisonScope && current.expanded && ids.length >= 2 };
+    });
     const resetFilters = () => { setPlatform('all'); setSource('all'); setSeen('all'); setLifecycle('all'); setQuery(''); };
     const names = new Map(devices.filter(device => device.platform === 'windows' && device.source === 'lan' && !device.synthetic).map(device => [device.id, device.name]));
     const deviceIds = [...names.keys(), ...(windowsView?.items.map(item => item.deviceId) ?? [])];
@@ -85,6 +105,7 @@ export function IncidentWorkQueue({ devices, sessionKey, linux, scope, onScope, 
             <section className="panel incident-queue-source" aria-label={c.windows}><h2>{c.windows}</h2>{windows.loading && <p role="status">{c.loading}</p>}{windows.error && <p role="alert">{c.failed}</p>}{windowsView ? <><p>{windowsView.counts.total} {c.retained} · {windowsView.counts.active} {c.opened} · {windowsView.counts.resolved} {c.closed} · {windowsView.counts.acknowledged} {c.acknowledged} · {windowsView.counts.unacknowledged} {c.unacknowledged}</p><p>{windowsView.coverage.devices} {c.devices} · {windowsView.coverage.unavailableDevices} {c.unavailableDevices} · {windowsView.coverage.unknownChecks} {c.unknownChecks} · {windowsView.coverage.disabledChecks} {c.disabledChecks}</p><p>{c.readAt}: <QueueTime value={windowsView.serverNow} fallback={c.unavailableTime}/></p></> : !windows.loading && <p>{c.noWindows}</p>}{paging('windows')}</section>
         </div>
         {!complete && <p className="investigation-failure" role="status">{c.partial}</p>}
-        <section className="panel" aria-label={c.queue}><p className="incident-queue-label">{c.shown}: {rows.length}</p>{rows.length > 0 && <p className="incident-queue-label">{c.openOutcome}: {outcomes.open} · {c.recoveredOutcome}: {outcomes.recovered} · {c.stoppedOutcome}: {outcomes.stopped}</p>}{rows.length ? <ul className="incident-queue-list">{rows.map(row => <li key={row.identity} className="incident-queue-entry"><p className="incident-queue-label">{row.platform === 'linux' ? 'Linux' : 'Windows'} · {c[row.source]} · {row.seenAt ? c.acknowledged : c.unacknowledged}</p>{row.platform === 'linux' && linuxView ? <InvestigationList view={{ ...linuxView, items: [row.item] }} devices={devices}/> : row.platform === 'windows' && windowsView ? <WindowsIncidentReadOnlyRow item={row.item} name={windowsDeviceLabel(row.item.deviceId, names, deviceIds, c.unnamed)} serverNow={windowsView.serverNow} age={windows.age}/> : null}<IncidentTimeline model={incidentTimeline(row, linuxView, windowsView?.serverNow ?? null, windows.age)} platform={row.platform}/></li>)}</ul> : <p className="incident-queue-empty">{complete ? c.empty : c.incompleteEmpty}</p>}</section>
+        <IncidentComparison episodes={episodes} expanded={selection.scope === comparisonScope && selection.expanded} onExpanded={expanded => setSelection(current => current.scope === comparisonScope ? { ...current, expanded } : current)} onClear={() => setSelection({ scope: comparisonScope, ids: [], expanded: false })} onRemove={toggleEpisode}/>
+        <section className="panel" aria-label={c.queue}><p className="incident-queue-label">{c.shown}: {rows.length}</p>{rows.length > 0 && <p className="incident-queue-label">{c.openOutcome}: {outcomes.open} · {c.recoveredOutcome}: {outcomes.recovered} · {c.stoppedOutcome}: {outcomes.stopped}</p>}{rows.length ? <ul className="incident-queue-list">{rows.map(row => <li key={row.identity} className="incident-queue-entry"><label className="incident-comparison-toggle"><input type="checkbox" checked={selected.includes(row.identity)} disabled={linux.locked || selected.length >= MAX_COMPARISON_EPISODES && !selected.includes(row.identity)} onChange={() => toggleEpisode(row.identity)} aria-label={`${c.compare}: ${c[row.source]} · ${row.item.deviceId} · ${row.platform === 'linux' ? row.item.incident.id : row.item.incidentId} · ${row.platform === 'linux' ? row.item.incident.key : row.item.key}`}/>{c.compare}</label><p className="incident-queue-label">{row.platform === 'linux' ? 'Linux' : 'Windows'} · {c[row.source]} · {row.seenAt ? c.acknowledged : c.unacknowledged}</p>{row.platform === 'linux' && linuxView ? <InvestigationList view={{ ...linuxView, items: [row.item] }} devices={devices}/> : row.platform === 'windows' && windowsView ? <WindowsIncidentReadOnlyRow item={row.item} name={windowsDeviceLabel(row.item.deviceId, names, deviceIds, c.unnamed)} serverNow={windowsView.serverNow} age={windows.age}/> : null}<IncidentTimeline model={incidentTimeline(row, linuxView, windowsView?.serverNow ?? null, windows.age)} platform={row.platform}/></li>)}</ul> : <p className="incident-queue-empty">{complete ? c.empty : c.incompleteEmpty}</p>}</section>
     </div>;
 }
