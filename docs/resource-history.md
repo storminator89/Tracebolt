@@ -68,6 +68,54 @@ The history schema is additive, but older managers that do not recognize this
 optional table can reject the database. Use the matching updated manager build;
 do not reset device identity or remove private state to force a downgrade.
 
+## Investigate and compare retained intervals
+
+The device Overview now offers **1, 6, 12 or 24 hours** inside the same retained
+snapshot. The initial 24-hour chart remains available. Shorter windows keep
+original metric timestamps, reported unknown states and disconnected chart
+segments; no interpolated values or additional observations are generated.
+Keyboard inspection still identifies the exact original measurement.
+
+**Compare with previous interval** opens the sample statistics for the immediately
+preceding equal interval. Both intervals are anchored to the original manager snapshot,
+not the browser clock. The boundary sample belongs only to the later interval.
+The preceding 24-hour interval is outside retention, so that comparison is disabled
+instead of inventing a baseline. Exact UTC interval bounds are shown alongside
+the original UTC snapshot time. New accepted snapshots naturally advance both
+periods; this is live investigation, not a pinned or exported report.
+
+Each resource has independent usable-sample and minute-bucket coverage, minimum,
+median, nearest-rank 95th percentile, maximum and the longest interval between
+usable samples including its leading/trailing edges. The bucket denominator
+includes any partial UTC minute intersected by the interval. It is not uptime or
+continuous observation coverage. Samples are classified by their original metric
+timestamp; retained-report counts separately use each report's collection time.
+These can differ when a report carries an earlier original metric timestamp.
+
+Only valid observations whose original quality was healthy participate. This
+means valid **at capture**, not currently healthy. Measured zero remains zero;
+stale, denied, unknown and absent measurements are never replaced with zero.
+Repeated original metric timestamps count once. Conflicting valid values at one
+timestamp are withheld from statistics and counted explicitly. This does not
+rewrite retained observations or the existing chart's source data.
+
+The median difference uses percentage points and appears only when both intervals
+have usable samples. Statistics describe a sample distribution, not time-weighted
+load, continuous high utilization, a trend forecast, root cause or improvement.
+Sparse or missing previous evidence remains visibly incomplete. Root filesystem
+allocation and Windows system-volume capacity retain their different meanings;
+neither is storage I/O.
+
+Window selection, comparison and disclosure are local presentation controls.
+They perform no request, export, storage write, refresh, collection or action.
+The existing one-at-a-time bounded authenticated reader, 24-hour retention,
+delta protocol, certificate/session checks and suspension/clearing rules are
+unchanged. Controls reset when device/session scope changes or the source clears.
+Synthetic model/component tests cover boundary ownership, sparse/zero/unavailable
+samples, duplicates/conflicts, original times, repeated controls, source loss,
+keyboard inspection and EN/DE capacity labels. Browser/native acceptance and
+deployment are not claimed.
+
 ## Session-local delta reads
 
 The first read returns the complete verified v1 history. Subsequent visible
