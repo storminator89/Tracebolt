@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Activity, Boxes, Clock3, Database, HardDrive, Info, LoaderCircle, Network, RefreshCw, Search, ServerCog, ShieldQuestion, TriangleAlert } from 'lucide-react';
 import { APIError, AUTH_REQUIRED_EVENT, request } from './api';
@@ -7,6 +7,9 @@ import { useLocale } from './i18n';
 import type { Locale } from './i18n';
 import { effectiveOperationalStatus, operationalNow, OPERATIONAL_PROFILE, SECTION_LIMITS, SECTION_NAMES, validOperationalView } from './operational-types';
 import type { OperationalEvent, OperationalNetwork, OperationalProcess, OperationalQuality, OperationalReason, OperationalSectionName, OperationalSections, OperationalService, OperationalSoftware, OperationalStatus, OperationalView, OperationalVolume } from './operational-types';
+import { NetworkInterval } from './network-interval';
+import { advanceNetworkReadClock, compareNetworkObservations, networkObservation, retainNetworkBaseline } from './network-interval-model';
+import type { NetworkObservation, NetworkReadClock } from './network-interval-model';
 import './operational.css';
 
 export interface OperationalInventoryPanelProps { deviceId: string; sessionKey?: string | number }
@@ -128,7 +131,12 @@ function OperationalInventorySession({ deviceId }: { deviceId: string }) {
     const [retry, setRetry] = useState(0);
     const [selected, setSelected] = useState<OperationalSectionName>('volumes');
     const [filter, setFilter] = useState('');
-    const [clock, setClock] = useState({ anchor: 0, elapsed: 0 });
+    const networkReadClock = useRef<NetworkReadClock | null>(null);
+    const networkClockInvalid = useRef(false);
+    const networkLastSource = useRef<NetworkObservation | null>(null);
+    const [networkBaseline, setNetworkBaseline] = useState<{ value: NetworkObservation | null; cleared: boolean }>({ value: null, cleared: false });
+    const clearNetworkBaseline = () => { networkLastSource.current = null; setNetworkBaseline(previous => previous.value ? { value: null, cleared: true } : previous); };
+    const [clock, setClock] = useState({ anchor: 0, elapsed: 0, readElapsed: 0 });
     useEffect(() => {
         const controller = new AbortController();
         let active = true;
@@ -136,8 +144,8 @@ function OperationalInventorySession({ deviceId }: { deviceId: string }) {
         let suspended = document.visibilityState === 'hidden';
         let restartQueued = false;
         let timeout: number | undefined;
-        setView(null); setError(null); setLoading(true); setClock({ anchor: 0, elapsed: 0 });
-        const clearObservation = () => { setView(null); setClock({ anchor: 0, elapsed: 0 }); };
+        setView(null); setError(null); setLoading(true); setClock({ anchor: 0, elapsed: 0, readElapsed: 0 });
+        const clearObservation = () => { setView(null); setClock({ anchor: 0, elapsed: 0, readElapsed: 0 }); clearNetworkBaseline(); };
         const lock = () => { locked = true; controller.abort(); window.clearTimeout(timeout); if (active) { clearObservation(); setFilter(''); setError('session'); setLoading(false); } };
         // Suspension invalidates even an unfinished request: its response can no
         // longer establish an anchor. Only a request begun after restoration may.
@@ -152,6 +160,7 @@ function OperationalInventorySession({ deviceId }: { deviceId: string }) {
         };
         const visibility = () => { if (document.visibilityState === 'hidden') suspend(); else restore(); };
         const pageShow = (event: PageTransitionEvent) => { if (event.persisted) restore(); };
+        window.addEventListener('hashchange', clearNetworkBaseline);
         window.addEventListener(AUTH_REQUIRED_EVENT, lock);
         window.addEventListener('focus', restore);
         window.addEventListener('blur', suspend);
@@ -159,23 +168,58 @@ function OperationalInventorySession({ deviceId }: { deviceId: string }) {
         window.addEventListener('pageshow', pageShow);
         document.addEventListener('visibilitychange', visibility);
         if (!suspended) timeout = window.setTimeout(() => { controller.abort(); if (active && !locked && !suspended) { clearObservation(); setError('timeout'); setLoading(false); } }, 10000);
+        const readStarted = performance.now();
         if (!suspended) void request<unknown>(`/devices/${encodeURIComponent(deviceId)}/operational`, { signal: controller.signal }).then(value => {
             if (!active || suspended || controller.signal.aborted) return;
-            if (!validOperationalView(value, deviceId)) { setView(null); setError('invalid'); return; }
-            setClock({ anchor: performance.now(), elapsed: 0 }); setView(value);
+            if (!validOperationalView(value, deviceId)) { clearObservation(); setError('invalid'); return; }
+            const readTime = networkClockInvalid.current ? null : advanceNetworkReadClock(networkReadClock.current, value.serverNow, readStarted, performance.now());
+            if (readTime) networkReadClock.current = readTime.clock;
+            else networkClockInvalid.current = true;
+            let readElapsed = readTime?.elapsedMs ?? NaN;
+            let nextNetwork = networkObservation(value, readElapsed);
+            const latestPair = nextNetwork && networkLastSource.current ? compareNetworkObservations(networkLastSource.current, nextNetwork) : null;
+            const discontinuity = latestPair?.rows.some(row => row.status === 'decreased' || row.status === 'context_changed') ?? false;
+            if (latestPair?.status === 'changed') {
+                networkClockInvalid.current = true; readElapsed = NaN; nextNetwork = null;
+            }
+            networkLastSource.current = nextNetwork;
+            setNetworkBaseline(previous => {
+                const retained = discontinuity ? null : retainNetworkBaseline(previous.value, nextNetwork);
+                return previous.value && !retained ? { value: null, cleared: true } : previous;
+            });
+            const anchor = readTime?.clock.monotonicAt ?? performance.now();
+            const processingElapsed = performance.now() - anchor;
+            setClock({ anchor, elapsed: Math.max(0, Number.isFinite(processingElapsed) ? processingElapsed : 0), readElapsed: Number.isFinite(processingElapsed) && processingElapsed >= 0 ? readElapsed : NaN }); setView(value);
         }).catch(caught => {
             if (!active || suspended || controller.signal.aborted) return;
-            setView(null);
+            clearObservation();
             if (caught instanceof APIError && caught.status === 401) locked = true;
             setError(caught instanceof APIError && caught.status === 401 ? 'session' : caught instanceof APIError && caught.status === 404 ? 'missing' : 'loadError');
         }).finally(() => { window.clearTimeout(timeout); if (active && !controller.signal.aborted) setLoading(false); });
-        return () => { active = false; controller.abort(); window.clearTimeout(timeout); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('focus', restore); window.removeEventListener('blur', suspend); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', pageShow); document.removeEventListener('visibilitychange', visibility); };
+        return () => { active = false; controller.abort(); window.clearTimeout(timeout); window.removeEventListener('hashchange', clearNetworkBaseline); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('focus', restore); window.removeEventListener('blur', suspend); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', pageShow); document.removeEventListener('visibilitychange', visibility); };
     }, [deviceId, retry]);
     useEffect(() => {
         if (!view) return;
-        const timer = window.setInterval(() => setClock(previous => ({ ...previous, elapsed: Math.max(previous.elapsed, performance.now() - previous.anchor) })), 1000);
+        const timer = window.setInterval(() => setClock(previous => {
+            const elapsed = performance.now() - previous.anchor;
+            return { ...previous, elapsed: Math.max(previous.elapsed, Number.isFinite(elapsed) ? elapsed : 0), readElapsed: !Number.isFinite(elapsed) || elapsed < previous.elapsed ? NaN : previous.readElapsed };
+        }), 1000);
         return () => window.clearInterval(timer);
     }, [view]);
+    const networkCurrent = networkObservation(view, clock.elapsed + clock.readElapsed);
+    useEffect(() => {
+        if (Number.isNaN(clock.readElapsed)) networkClockInvalid.current = true;
+        if (view && !networkCurrent) clearNetworkBaseline();
+    }, [view, !!networkCurrent, clock.readElapsed]);
+    const chooseNetworkBaseline = () => {
+        // Selection rechecks the actual click time, not the preceding 1s tick.
+        const elapsed = performance.now() - clock.anchor;
+        const readElapsed = !Number.isFinite(elapsed) || elapsed < clock.elapsed ? NaN : clock.readElapsed;
+        const selected = networkObservation(view, elapsed + readElapsed);
+        setClock(previous => ({ ...previous, elapsed: Math.max(previous.elapsed, Number.isFinite(elapsed) ? elapsed : 0), readElapsed }));
+        if (!selected) { clearNetworkBaseline(); return; }
+        setNetworkBaseline({ value: selected, cleared: false });
+    };
     const status = view ? effectiveOperationalStatus(view, clock.elapsed) : null;
     const now = view ? operationalNow(view, clock.elapsed) : 0;
     const chosen = view ? currentSection(view, selected) : null;
@@ -206,6 +250,7 @@ function OperationalInventorySession({ deviceId }: { deviceId: string }) {
             </div>}
             <div className="operational-assessments">{(['updates', 'vulnerabilities'] as const).map(name => <div key={name}><ShieldQuestion size={18}/><div><h3>{labels[name]}</h3><strong>{labels.assessment}</strong><p>{labels.not_implemented}</p></div></div>)}</div><p className="operational-footnote">{labels.assessmentNote}</p>
         </>}
+        {selected === 'network' && <NetworkInterval key={networkBaseline.value?.generationId ?? 'no-baseline'} baseline={networkBaseline.value} current={networkCurrent} pending={loading} cleared={networkBaseline.cleared} onSet={chooseNetworkBaseline} onClear={() => setNetworkBaseline({ value: null, cleared: false })}/> }
         <footer className="operational-footer"><Info size={14}/><div><p>{labels.healthyNote}</p><p>{labels.privacy}</p></div></footer>
     </section>;
 }

@@ -233,3 +233,10 @@ uncertainty never become this retryable category. There is no internal authority
 transaction retry. A sender's later retry still preserves its exact pending bytes
 and original observation times. This is separate from global/identity ingress
 admission (`ingress_busy`) and the operator read concurrency guard.
+
+## Read-only network interval investigation
+
+The device's existing network preview can compare two explicitly selected,
+session-local bounded observations. See [Linux network intervals](../linux-network-intervals.md)
+for source coverage, original-time arithmetic, unknown/reset handling and private
+lifecycle limits. This changes no collector, wire profile or collection authority.
