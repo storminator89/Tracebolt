@@ -12,6 +12,17 @@ Open **Local application incidents** in the existing Application checks panel.
 Only opening or explicitly refreshing reads saved local status; there is no
 polling, one-shot check, network test or automatic write retry.
 
+**Investigations** also shows an independent **Manager application incidents**
+section. It reads the same authenticated bounded metadata when the workspace
+opens and only reloads on its own explicit reload button; it never starts a
+probe or polls. This surface is read-only for every operator, including shared
+administrators. Its retained history is separate from Linux/Windows device
+rows, page filters, totals, refresh and episode comparison. It preserves source
+provenance, original UTC times, seen markers and recovery versus monitoring-stop
+outcomes. An unavailable or expired read is not empty or healthy history. The
+private snapshot clears on navigation, blur, session change or expiry after at
+most one minute. Monitoring and seen controls remain in Application checks.
+
 An existing shared administrator or named `manage_application_checks` operator
 can select one or more currently enabled check IDs, choose two or three
 consecutive completed failures, review the exact current source, and explicitly
