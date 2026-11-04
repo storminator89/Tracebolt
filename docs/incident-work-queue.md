@@ -144,3 +144,39 @@ and zero additional requests or mutations. The existing queue/workspace/resource
 navigation and Windows inbox regressions remain relevant. Typecheck, environment
 classification and production build are separate checks. No native or browser
 acceptance, deployment, release or full-repository pass follows from these tests.
+
+## Compare exact episodes
+
+Select two to four visible episodes with **Compare episode** (**Episode
+vergleichen**), then open the comparison. Each selected episode retains its
+source-qualified identity, device, check target, native outcome, original source
+read time and separate current check. Its existing detailed timeline remains
+available. The combined chronology labels every checkpoint with its owning
+episode and source. Equal timestamps are retained independently, and ordering
+preserves the source's UTC precision through nine fractional digits.
+
+This is a live, read-only comparison of the current source pages, not a pinned
+snapshot, a merged incident or a correlation engine. Source clocks can differ.
+Time order or overlap does not establish a shared cause, uninterrupted failure,
+complete evidence, or remediation. Seen remains independent of recovery, and
+administrative closure never becomes confirmed recovery. Current evidence can
+age to unknown without changing the retained episode or its original checkpoints.
+No raw samples, AI text or log content are added.
+
+Selection stores only the exact opaque row identities in component memory. Page,
+source-scope, local-filter, search and session changes clear it. Losing a source
+or an exact visible episode removes the affected choice, with no automatic
+reselection when the source returns. An ordinary live refresh keeps choices only
+while the same exact episodes remain visible, then displays the refreshed source
+projection. Closing and reopening the comparison does not make data younger.
+Removing a choice below two closes the detailed comparison. Four choices never
+silently replace one another. Nothing is persisted, exported or transmitted, and
+selection, removal, opening and closing start no requests or mutations. Existing
+Health/Logs links keep their original permission and collection boundaries.
+
+`cd web && ./node_modules/.bin/vitest run src/incident-comparison.test.tsx`
+covers source-domain collisions, bounds, nanosecond/tied chronology, original
+provenance, stale current evidence, exact selection across live refreshes,
+source-loss pruning, session/page/filter/search changes, repeated choices,
+close/reopen/remove/reset and inert EN/DE rendering. These are synthetic component
+checks, not browser or native acceptance.
