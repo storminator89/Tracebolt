@@ -5,6 +5,7 @@ import (
 	"errors"
 	"localrmm/internal/analysis"
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/health"
 	"net/http"
 	"sort"
 	"time"
@@ -324,7 +325,7 @@ func (s *Server) runProactiveAI(parent context.Context, m *healthMonitor) error 
 		if !allowed[id] {
 			continue
 		}
-		state, e := s.store.HealthState(parent, id)
+		state, e := s.store.HealthStateAt(parent, id, now, m.source.Now)
 		if e != nil {
 			a.mu.Unlock()
 			m.mu.Unlock()
@@ -335,7 +336,7 @@ func (s *Server) runProactiveAI(parent context.Context, m *healthMonitor) error 
 			if incident.ResolvedAt != nil || incident.OpenedAt.Before(approval.enabledAt) {
 				continue
 			}
-			claim, e := s.store.ClaimHealthAnalysis(parent, id, incident.ID, approval.revision, approval.enabledAt, now)
+			claim, e := s.store.ClaimHealthAnalysis(health.WithMaintenanceClock(parent, m.source.Now), id, incident.ID, approval.revision, approval.enabledAt, now)
 			if e != nil {
 				a.mu.Unlock()
 				m.mu.Unlock()

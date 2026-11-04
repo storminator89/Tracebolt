@@ -61,7 +61,13 @@ func (s *Store) UpdateHealth(ctx context.Context, id string, fn func(*health.Sta
 
 // EvaluateHealth captures exact evaluator transitions before history pruning.
 func (s *Store) EvaluateHealth(ctx context.Context, input health.Input, now time.Time) (health.State, error) {
-	return s.updateHealth(ctx, input.DeviceID, func(h *health.State) ([]health.Incident, error) { return h.EvaluateTransitions(input, now), nil })
+	return s.updateHealth(ctx, input.DeviceID, func(h *health.State) ([]health.Incident, error) {
+		fresh, e := health.MaintenanceNow(ctx, now)
+		if e != nil {
+			return nil, e
+		}
+		return h.EvaluateTransitions(input, fresh), nil
+	})
 }
 func (s *Store) updateHealth(ctx context.Context, id string, fn func(*health.State) ([]health.Incident, error)) (health.State, error) {
 	tx, e := s.db.BeginTx(ctx, nil)
@@ -108,6 +114,11 @@ func (s *Store) updateHealth(ctx context.Context, id string, fn func(*health.Sta
 	}
 	if e = enqueueHealthAlarms(ctx, tx, id, before, state, transitions); e != nil {
 		return state, e
+	}
+	if state.Schedule != nil {
+		if e = consumeScheduledOpenings(ctx, tx, id, state, state.Schedule.ClockFloor); e != nil {
+			return state, e
+		}
 	}
 	if e = tx.Commit(); e != nil {
 		return state, e

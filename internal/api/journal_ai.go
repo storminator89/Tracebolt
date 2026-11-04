@@ -489,7 +489,7 @@ func (s *Server) runJournalAIStep(parent context.Context, m *healthMonitor) erro
 			_ = s.cancelJournalAttemptLocked(step, attempt)
 			continue
 		}
-		state, err := s.store.HealthState(step, attempt.DeviceID)
+		state, err := s.store.HealthStateAt(step, attempt.DeviceID, now, j.source.Now)
 		if err != nil {
 			unlock()
 			return err
@@ -506,7 +506,7 @@ func (s *Server) runJournalAIStep(parent context.Context, m *healthMonitor) erro
 				check = c
 			}
 		}
-		if !proactivejournal.MatchesWindow(*attempt.Capture, incident.OpenedAt, receipt.LookbackMinutes) || incident.ResolvedAt != nil || check.State != "open" || state.MaintenanceUntil != nil && now.Before(*state.MaintenanceUntil) {
+		if !proactivejournal.MatchesWindow(*attempt.Capture, incident.OpenedAt, receipt.LookbackMinutes) || incident.ResolvedAt != nil || check.State != "open" || state.MaintenanceEnd(now) != nil {
 			_ = s.cancelJournalAttemptLocked(step, attempt)
 			continue
 		}
@@ -602,12 +602,16 @@ func (s *Server) runJournalAIStep(parent context.Context, m *healthMonitor) erro
 		if !allowed[target.DeviceID] || proactivejournal.CheckTarget(step, j.source, target, now) != nil {
 			continue
 		}
-		state, err := s.store.HealthState(step, target.DeviceID)
+		state, err := s.store.HealthStateAt(step, target.DeviceID, now, j.source.Now)
 		if err != nil {
 			unlock()
 			return err
 		}
-		if state.MaintenanceUntil != nil && now.Before(*state.MaintenanceUntil) {
+		viewNow := now
+		if state.Schedule != nil && state.Schedule.ClockFloor.After(viewNow) {
+			viewNow = state.Schedule.ClockFloor
+		}
+		if state.MaintenanceEnd(viewNow) != nil {
 			continue
 		}
 		for _, x := range state.Incidents {
@@ -615,7 +619,7 @@ func (s *Server) runJournalAIStep(parent context.Context, m *healthMonitor) erro
 				continue
 			}
 			fresh := false
-			for _, c := range state.View(target.DeviceID, now).Checks {
+			for _, c := range state.View(target.DeviceID, viewNow).Checks {
 				if c.Key == x.Key && c.State == "open" {
 					fresh = true
 				}

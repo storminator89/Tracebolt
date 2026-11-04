@@ -88,9 +88,23 @@ func (s *Store) ClaimHealthAnalysis(ctx context.Context, deviceID, incidentID, r
 	if err != nil {
 		return nil, err
 	}
+	// Maintenance admission uses the serialized transaction clock, not an older
+	// sample taken before a concurrent reader advanced the durable floor.
+	if state.Schedule != nil {
+		now, err = health.MaintenanceNow(ctx, now)
+		if err != nil {
+			return nil, err
+		}
+		if err = observeHealthMaintenance(ctx, tx, deviceID, &state, now); err != nil {
+			return nil, err
+		}
+		if err = consumeScheduledOpenings(ctx, tx, deviceID, state, now); err != nil {
+			return nil, err
+		}
+	}
 	view := state.View(deviceID, now)
 	if view.Status == "maintenance" {
-		return nil, nil
+		return nil, tx.Commit()
 	}
 	var claim *HealthAnalysisClaim
 	for _, incident := range state.Incidents {
@@ -105,7 +119,7 @@ func (s *Store) ClaimHealthAnalysis(ctx context.Context, deviceID, incidentID, r
 		}
 	}
 	if claim == nil {
-		return nil, nil
+		return nil, tx.Commit()
 	}
 	if err = pruneHealthAnalyses(ctx, tx, now); err != nil {
 		return nil, err

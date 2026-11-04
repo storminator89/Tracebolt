@@ -59,3 +59,10 @@ capacity policy](windows-capacity-health.md) and independent default-off
 have deterministic durable incidents. They do not determine overall health or
 live reachability, inherit Linux disk thresholds, or enter Linux investigations,
 AI or alarm delivery. The Linux evaluator and authority inputs remain unchanged.
+
+## Fixed future Linux maintenance
+
+[One-time scheduled maintenance](linux-health-maintenance-schedule.md) adds an
+explicit UTC plan, exact-window cancel/end and restart-safe suppression to Linux
+Health settings. It preserves existing incidents and recovery semantics. This is
+a source feature, not a host action or published Linux rc.3 functionality.
