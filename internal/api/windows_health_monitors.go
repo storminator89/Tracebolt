@@ -39,8 +39,9 @@ func (s *Server) RunWindowsHealthMonitors(ctx context.Context, warnContact, warn
 func (s *Server) RunWindowsHealthMonitorsObserved(ctx context.Context, warnContact, warnCapacity func(), observed func(time.Time, error)) error {
 	s.mu.RLock()
 	contact, capacity := s.windowsContact, s.windowsCapacity
+	eventWatches := s.windowsEventWatches
 	s.mu.RUnlock()
-	if contact == nil && capacity == nil {
+	if contact == nil && capacity == nil && eventWatches == nil {
 		return nil
 	}
 	ticker := time.NewTicker(30 * time.Second)
@@ -61,6 +62,13 @@ func (s *Server) RunWindowsHealthMonitorsObserved(ctx context.Context, warnConta
 				warnings[i]()
 				last[i] = now
 			}
+		}
+		// Independent sampled-event policy. Its result does not change the
+		// existing contact/percentage readiness or incident contracts.
+		if eventWatches != nil && ctx.Err() == nil {
+			step, cancel := context.WithTimeout(ctx, 10*time.Second)
+			_ = eventWatches.evaluate(step)
+			cancel()
 		}
 		select {
 		case <-ctx.Done():

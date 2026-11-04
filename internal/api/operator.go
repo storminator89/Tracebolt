@@ -259,6 +259,9 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.health = nil
 	app.linuxProcessWatches = processWatches
 	app.windowsContact = windowsContact
+	if c.WindowsEnrollment != nil {
+		app.windowsEventWatches = &windowsEventWatchMonitor{store: app.store, source: c.WindowsEnrollment}
+	}
 	app.windowsCapacity = windowsCapacity
 	app.journalAI = nil
 	app.linuxCVE = nil
@@ -745,6 +748,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.HasSuffix(r.URL.Path, "/windows-inventory") {
 		h.windowsInventoryView(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-event-watches") {
+		h.windowsEventWatchesAPI(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-event-history") {

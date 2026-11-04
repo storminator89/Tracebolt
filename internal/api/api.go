@@ -34,6 +34,7 @@ type Server struct {
 	linuxCVE            *linuxCVEState
 	health              *healthMonitor
 	linuxProcessWatches *linuxProcessWatchMonitor
+	windowsEventWatches *windowsEventWatchMonitor
 	windowsContact      *windowsContactMonitor
 	windowsCapacity     *windowsCapacityMonitor
 	store               *store.Store
