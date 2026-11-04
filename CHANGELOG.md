@@ -6,6 +6,13 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+A separate default-off [Linux mount-capacity watch](docs/linux-mount-capacity-watch.md)
+uses already accepted complete volume generations for one selected non-root local
+mount per device. Two advancing samples confirm warnings/recovery; missing data
+stays unknown. Private local incident history, seen/stop controls and explicit
+retention consent add no endpoint scope, external delivery or remediation.
+Existing root Health and maintenance remain unchanged. This is source-only work.
+
 The local development manager has an explicit `--demo-only` mode for
 presentations: seven labeled synthetic devices, no host sampling or developer
 telemetry, unchanged loopback/CSRF boundaries and rejection of mixed state.

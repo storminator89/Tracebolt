@@ -12,6 +12,7 @@ import type { HealthKind, HealthView } from './health-types';
 import { HealthDashboard, healthCheckTitle, healthCopy } from './health-dashboard';
 import type { Device } from './types';
 import './health.css';
+import { LinuxMountWatch } from './linux-mount-watch';
 
 type Failure = 'load' | 'change' | 'invalid' | 'session' | 'timeout' | 'interrupted' | 'clock' | 'unavailable';
 type Action = 'acknowledge' | 'maintenance' | 'services';
@@ -222,5 +223,5 @@ export function HealthPanel({ deviceId, device, sessionKey = null, onOpenLogs }:
                 </details>
             </div>
         </>}
-    </section>;
+    <LinuxMountWatch key={scope} deviceId={deviceId} sessionKey={sessionKey}/></section>;
 }

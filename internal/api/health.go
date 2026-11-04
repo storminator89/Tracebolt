@@ -57,7 +57,7 @@ func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
 }
 
 // RunHealthMonitorObserved reports completion of each health evaluation. The
-// observer does not cover the separate proactive monitor and must not block.
+// observer does not cover separate proactive or mount-watch monitors and must not block.
 func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), observed func(time.Time, error)) error {
 	s.mu.RLock()
 	m := s.health
@@ -76,6 +76,7 @@ func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), obse
 	for {
 		step, cancel := context.WithTimeout(ctx, 10*time.Second)
 		e := m.evaluate(step)
+		mountErr := s.evaluateLinuxMountWatches(step, m)
 		cancel()
 		if processWatches != nil && ctx.Err() == nil {
 			processStep, processCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -89,7 +90,7 @@ func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), obse
 		if observed != nil {
 			observed(now, e)
 		}
-		if e != nil && warn != nil && (lastWarning.IsZero() || now.Sub(lastWarning) >= time.Minute) {
+		if (e != nil || mountErr != nil) && warn != nil && (lastWarning.IsZero() || now.Sub(lastWarning) >= time.Minute) {
 			warn()
 			lastWarning = now
 		}

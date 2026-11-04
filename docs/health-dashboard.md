@@ -66,3 +66,10 @@ AI or alarm delivery. The Linux evaluator and authority inputs remain unchanged.
 explicit UTC plan, exact-window cancel/end and restart-safe suppression to Linux
 Health settings. It preserves existing incidents and recovery semantics. This is
 a source feature, not a host action or published Linux rc.3 functionality.
+
+## Selected non-root mount capacity
+
+The separate, opt-in [mount-capacity watch](linux-mount-capacity-watch.md) uses
+already accepted complete volume generations for one explicitly selected local
+mount. It retains local incidents without changing root Health, maintenance,
+notifications or endpoint permissions. This is source functionality only.
