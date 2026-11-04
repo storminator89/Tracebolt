@@ -227,6 +227,13 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ApplicationChecks != nil && c.ApplicationCheckSettings != nil || !c.ApplicationChecks.Matches(managerID, c.Origin, profile) || !c.ApplicationCheckSettings.Matches(managerID, c.Origin, profile) {
 		return nil, applicationcheck.ErrConfiguration
 	}
+	var processWatches *linuxProcessWatchMonitor
+	if c.Enrollment != nil && c.Enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+		processWatches, err = newLinuxProcessWatchMonitor(app.store, c.Enrollment)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var windowsContact *windowsContactMonitor
 	var windowsCapacity *windowsCapacityMonitor
 	if c.WindowsEnrollment != nil {
@@ -250,6 +257,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanOperational = nil
 	app.lanPackages = nil
 	app.health = nil
+	app.linuxProcessWatches = processWatches
 	app.windowsContact = windowsContact
 	app.windowsCapacity = windowsCapacity
 	app.journalAI = nil
@@ -809,6 +817,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/system") {
 		h.systemInventory(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/linux-process-watches") {
+		h.linuxProcessWatchesAPI(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/health") {

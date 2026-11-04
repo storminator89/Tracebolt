@@ -1,0 +1,635 @@
+{
+  "acknowledged": {
+    "canManage": true,
+    "checks": [
+      {
+        "activeCount": 0,
+        "condition": "incident",
+        "failureCount": 0,
+        "name": "daemon",
+        "nonRunningCount": 0,
+        "successCount": 0
+      }
+    ],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [
+      {
+        "acknowledgedAt": "2026-11-04T12:00:33Z",
+        "closedAt": null,
+        "id": "processincident_0000000000000001",
+        "lastObservedAt": "2026-11-04T12:00:31Z",
+        "name": "daemon",
+        "openedAt": "2026-11-04T12:00:33Z",
+        "opening": {
+          "first": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:21Z",
+              "captureStartedAt": "2026-11-04T12:00:20Z",
+              "generationId": "sample_00000000000000000000000000000002",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:22Z",
+              "sequence": "2",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:31Z",
+              "captureStartedAt": "2026-11-04T12:00:30Z",
+              "generationId": "sample_00000000000000000000000000000003",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:32Z",
+              "sequence": "3",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "recovery": null,
+        "sourceCurrent": true,
+        "state": "open"
+      }
+    ],
+    "lastRequest": {
+      "incidentId": "processincident_0000000000000001",
+      "operation": "acknowledge",
+      "requestId": "processrequest_00000000000000000000000000000002",
+      "sourceToken": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": true,
+      "enabledAt": "2026-11-04T12:00:13Z",
+      "names": [
+        "daemon"
+      ],
+      "sourceMatches": true
+    },
+    "retentionDays": 30,
+    "revision": "2",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:33Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:31Z",
+        "captureStartedAt": "2026-11-04T12:00:30Z",
+        "generationId": "sample_00000000000000000000000000000003",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:32Z",
+        "sequence": "3",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:01:03Z"
+  },
+  "defaultOff": {
+    "canManage": true,
+    "checks": [],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [],
+    "lastRequest": null,
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": false,
+      "enabledAt": null,
+      "names": [],
+      "sourceMatches": false
+    },
+    "retentionDays": 30,
+    "revision": "0",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:13Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:11Z",
+        "captureStartedAt": "2026-11-04T12:00:10Z",
+        "generationId": "sample_00000000000000000000000000000001",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:12Z",
+        "sequence": "1",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:00:43Z"
+  },
+  "disabled": {
+    "canManage": true,
+    "checks": [],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [
+      {
+        "acknowledgedAt": "2026-11-04T12:00:33Z",
+        "closedAt": "2026-11-04T12:00:53Z",
+        "id": "processincident_0000000000000001",
+        "lastObservedAt": "2026-11-04T12:00:51Z",
+        "name": "daemon",
+        "openedAt": "2026-11-04T12:00:33Z",
+        "opening": {
+          "first": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:21Z",
+              "captureStartedAt": "2026-11-04T12:00:20Z",
+              "generationId": "sample_00000000000000000000000000000002",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:22Z",
+              "sequence": "2",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:31Z",
+              "captureStartedAt": "2026-11-04T12:00:30Z",
+              "generationId": "sample_00000000000000000000000000000003",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:32Z",
+              "sequence": "3",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "recovery": {
+          "first": {
+            "activeCount": 1,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:41Z",
+              "captureStartedAt": "2026-11-04T12:00:40Z",
+              "generationId": "sample_00000000000000000000000000000004",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:42Z",
+              "sequence": "4",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 1,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:51Z",
+              "captureStartedAt": "2026-11-04T12:00:50Z",
+              "generationId": "sample_00000000000000000000000000000005",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:52Z",
+              "sequence": "5",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "sourceCurrent": true,
+        "state": "recovered"
+      }
+    ],
+    "lastRequest": {
+      "incidentId": null,
+      "operation": "policy",
+      "requestId": "processrequest_00000000000000000000000000000003",
+      "sourceToken": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": false,
+      "enabledAt": null,
+      "names": [],
+      "sourceMatches": true
+    },
+    "retentionDays": 30,
+    "revision": "3",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:53Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:51Z",
+        "captureStartedAt": "2026-11-04T12:00:50Z",
+        "generationId": "sample_00000000000000000000000000000005",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:52Z",
+        "sequence": "5",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:01:23Z"
+  },
+  "enabled": {
+    "canManage": true,
+    "checks": [
+      {
+        "activeCount": null,
+        "condition": "unknown",
+        "failureCount": 0,
+        "name": "daemon",
+        "nonRunningCount": null,
+        "successCount": 0
+      }
+    ],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [],
+    "lastRequest": {
+      "incidentId": null,
+      "operation": "policy",
+      "requestId": "processrequest_00000000000000000000000000000001",
+      "sourceToken": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": true,
+      "enabledAt": "2026-11-04T12:00:13Z",
+      "names": [
+        "daemon"
+      ],
+      "sourceMatches": true
+    },
+    "retentionDays": 30,
+    "revision": "1",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:13Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:11Z",
+        "captureStartedAt": "2026-11-04T12:00:10Z",
+        "generationId": "sample_00000000000000000000000000000001",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:12Z",
+        "sequence": "1",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:00:43Z"
+  },
+  "open": {
+    "canManage": true,
+    "checks": [
+      {
+        "activeCount": 0,
+        "condition": "incident",
+        "failureCount": 0,
+        "name": "daemon",
+        "nonRunningCount": 0,
+        "successCount": 0
+      }
+    ],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [
+      {
+        "acknowledgedAt": null,
+        "closedAt": null,
+        "id": "processincident_0000000000000001",
+        "lastObservedAt": "2026-11-04T12:00:31Z",
+        "name": "daemon",
+        "openedAt": "2026-11-04T12:00:33Z",
+        "opening": {
+          "first": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:21Z",
+              "captureStartedAt": "2026-11-04T12:00:20Z",
+              "generationId": "sample_00000000000000000000000000000002",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:22Z",
+              "sequence": "2",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:31Z",
+              "captureStartedAt": "2026-11-04T12:00:30Z",
+              "generationId": "sample_00000000000000000000000000000003",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:32Z",
+              "sequence": "3",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "recovery": null,
+        "sourceCurrent": true,
+        "state": "open"
+      }
+    ],
+    "lastRequest": {
+      "incidentId": null,
+      "operation": "policy",
+      "requestId": "processrequest_00000000000000000000000000000001",
+      "sourceToken": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": true,
+      "enabledAt": "2026-11-04T12:00:13Z",
+      "names": [
+        "daemon"
+      ],
+      "sourceMatches": true
+    },
+    "retentionDays": 30,
+    "revision": "1",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:33Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:31Z",
+        "captureStartedAt": "2026-11-04T12:00:30Z",
+        "generationId": "sample_00000000000000000000000000000003",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:32Z",
+        "sequence": "3",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:01:03Z"
+  },
+  "recovered": {
+    "canManage": true,
+    "checks": [
+      {
+        "activeCount": 1,
+        "condition": "present",
+        "failureCount": 0,
+        "name": "daemon",
+        "nonRunningCount": 0,
+        "successCount": 0
+      }
+    ],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [
+      {
+        "acknowledgedAt": "2026-11-04T12:00:33Z",
+        "closedAt": "2026-11-04T12:00:53Z",
+        "id": "processincident_0000000000000001",
+        "lastObservedAt": "2026-11-04T12:00:51Z",
+        "name": "daemon",
+        "openedAt": "2026-11-04T12:00:33Z",
+        "opening": {
+          "first": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:21Z",
+              "captureStartedAt": "2026-11-04T12:00:20Z",
+              "generationId": "sample_00000000000000000000000000000002",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:22Z",
+              "sequence": "2",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:31Z",
+              "captureStartedAt": "2026-11-04T12:00:30Z",
+              "generationId": "sample_00000000000000000000000000000003",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:32Z",
+              "sequence": "3",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "recovery": {
+          "first": {
+            "activeCount": 1,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:41Z",
+              "captureStartedAt": "2026-11-04T12:00:40Z",
+              "generationId": "sample_00000000000000000000000000000004",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:42Z",
+              "sequence": "4",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 1,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:51Z",
+              "captureStartedAt": "2026-11-04T12:00:50Z",
+              "generationId": "sample_00000000000000000000000000000005",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:52Z",
+              "sequence": "5",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "sourceCurrent": true,
+        "state": "recovered"
+      }
+    ],
+    "lastRequest": {
+      "incidentId": "processincident_0000000000000001",
+      "operation": "acknowledge",
+      "requestId": "processrequest_00000000000000000000000000000002",
+      "sourceToken": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": true,
+      "enabledAt": "2026-11-04T12:00:13Z",
+      "names": [
+        "daemon"
+      ],
+      "sourceMatches": true
+    },
+    "retentionDays": 30,
+    "revision": "2",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:53Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:51Z",
+        "captureStartedAt": "2026-11-04T12:00:50Z",
+        "generationId": "sample_00000000000000000000000000000005",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:52Z",
+        "sequence": "5",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:01:23Z"
+  },
+  "recovering": {
+    "canManage": true,
+    "checks": [
+      {
+        "activeCount": 1,
+        "condition": "incident",
+        "failureCount": 0,
+        "name": "daemon",
+        "nonRunningCount": 0,
+        "successCount": 1
+      }
+    ],
+    "clockReliable": true,
+    "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "earlierOmitted": 0,
+    "incidents": [
+      {
+        "acknowledgedAt": "2026-11-04T12:00:33Z",
+        "closedAt": null,
+        "id": "processincident_0000000000000001",
+        "lastObservedAt": "2026-11-04T12:00:41Z",
+        "name": "daemon",
+        "openedAt": "2026-11-04T12:00:33Z",
+        "opening": {
+          "first": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:21Z",
+              "captureStartedAt": "2026-11-04T12:00:20Z",
+              "generationId": "sample_00000000000000000000000000000002",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:22Z",
+              "sequence": "2",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "last": {
+            "activeCount": 0,
+            "generation": {
+              "captureFinishedAt": "2026-11-04T12:00:31Z",
+              "captureStartedAt": "2026-11-04T12:00:30Z",
+              "generationId": "sample_00000000000000000000000000000003",
+              "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "receivedAt": "2026-11-04T12:00:32Z",
+              "sequence": "3",
+              "totalRows": 10,
+              "unidentifiedRows": 0
+            },
+            "nonRunningCount": 0
+          },
+          "samples": 2
+        },
+        "recovery": null,
+        "sourceCurrent": true,
+        "state": "open"
+      }
+    ],
+    "lastRequest": {
+      "incidentId": "processincident_0000000000000001",
+      "operation": "acknowledge",
+      "requestId": "processrequest_00000000000000000000000000000002",
+      "sourceToken": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "maxIncidents": 128,
+    "maxRules": 8,
+    "policy": {
+      "consecutiveFailures": 2,
+      "enabled": true,
+      "enabledAt": "2026-11-04T12:00:13Z",
+      "names": [
+        "daemon"
+      ],
+      "sourceMatches": true
+    },
+    "retentionDays": 30,
+    "revision": "2",
+    "schemaVersion": "tracebolt.linux-process-watches.v1",
+    "serverNow": "2026-11-04T12:00:43Z",
+    "source": {
+      "generation": {
+        "captureFinishedAt": "2026-11-04T12:00:41Z",
+        "captureStartedAt": "2026-11-04T12:00:40Z",
+        "generationId": "sample_00000000000000000000000000000004",
+        "manifestHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "receivedAt": "2026-11-04T12:00:42Z",
+        "sequence": "4",
+        "totalRows": 10,
+        "unidentifiedRows": 0
+      },
+      "reason": "none",
+      "scope": "agent-visible-linux-namespaces",
+      "status": "available",
+      "token": "processsource_b15995856b0d02c6ccdd307a38d90847"
+    },
+    "validUntil": "2026-11-04T12:01:13Z"
+  }
+}
