@@ -11,6 +11,7 @@ import { WindowsIncidentReadOnlyRow } from './windows-incident-inbox';
 import { WINDOWS_INCIDENT_PAGE_SIZE } from './windows-incident-inbox-types';
 import { windowsDeviceLabel } from './windows-device-label';
 import { IncidentTimeline } from './incident-timeline';
+import { ManagerReadinessPanel } from './manager-readiness-panel';
 import { incidentTimeline } from './incident-timeline-model';
 import { QUEUE_SEARCH_LIMIT, filterIncidentQueue, incidentQueueRows, incidentQueueLifecycleCounts, queueSourceScopes } from './incident-work-queue-model';
 import type { QueueLifecycle, QueuePlatform, QueueScope, QueueSeen, QueueSource } from './incident-work-queue-model';
@@ -68,6 +69,7 @@ export function IncidentWorkQueue({ devices, sessionKey, linux, scope, onScope, 
     return <div className="incident-work-queue">
         <div className="page-heading"><h1>{c.title}</h1><button className="button small" disabled={linux.pending || windows.loading || linux.locked} onClick={refresh}><RefreshCw size={14}/>{c.refresh}</button></div>
         <p className="investigations-note">{c.intro}</p>
+        <ManagerReadinessPanel sessionKey={sessionKey}/>
         <div className="incident-queue-toolbar">
             <label>{c.scope}<select value={scope} onChange={event => { onScope(event.target.value as QueueScope); onLinuxPage(0); setWindowsOffset(0); }}><option value="active">{c.active}</option><option value="all">{c.all}</option></select></label>
             <label>{c.platform}<select value={platform} onChange={event => setPlatform(event.target.value as QueuePlatform)}><option value="all">{c.allPlatforms}</option><option value="linux">Linux</option><option value="windows">Windows</option></select></label>

@@ -1,5 +1,10 @@
 # Read-only cross-platform incident work queue
 
+The authenticated LAN queue also offers an on-demand, read-only
+[Manager status panel](manager-status-panel.md) for bounded core checks and
+loaded certificate expiry dates. Its separate evidence never changes an incident
+outcome or claims endpoint health.
+
 In LAN mode, **Investigations** (`#/cases`) brings together existing Linux Health
 incidents and the combined Windows incident inbox. The original Windows inbox
 under Devices remains available for separately authorized acknowledgement and
