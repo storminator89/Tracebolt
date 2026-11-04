@@ -59,12 +59,14 @@ type View struct {
 	Items           []Result  `json:"items"`
 }
 type Monitor struct {
-	config  Config
-	mu      sync.RWMutex
-	items   []Result
-	running atomic.Bool
-	check   func(context.Context, target, string, time.Time) Result
-	now     func() time.Time
+	config       Config
+	mu           sync.RWMutex
+	items        []Result
+	history      []targetHistory
+	historyClock time.Time
+	running      atomic.Bool
+	check        func(context.Context, target, string, time.Time) Result
+	now          func() time.Time
 	// A completion-based timer prevents catch-up bursts and overlap.
 	wait func(context.Context, time.Duration) bool
 }
@@ -90,6 +92,7 @@ func New(c Config) *Monitor {
 			}
 		}
 		m.items = append(m.items, r)
+		m.history = append(m.history, targetHistory{})
 	}
 	return m
 }
@@ -135,7 +138,13 @@ func (m *Monitor) Run(ctx context.Context) error {
 			r.Kind = wireKind(m.config, t)
 			r.ObservedAt = &start
 			m.mu.Lock()
+			if err := ctx.Err(); err != nil {
+				m.mu.Unlock()
+				return err
+			}
+			completed := m.now().UTC()
 			m.items[i] = clone(r)
+			m.recordHistory(i, t, r, start, completed)
 			m.mu.Unlock()
 		}
 		if !m.wait(ctx, m.config.interval) {

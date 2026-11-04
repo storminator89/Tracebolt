@@ -159,8 +159,10 @@ revision/generation lifecycle and audit boundaries.
 
 ## Scope and remaining gates
 
-Results exist only in memory. There is no history, alert delivery, incident
-creation, endpoint association, DB/backup check, content matching,
+Results exist only in memory. The [recent observation history](application-check-history.md)
+retains up to 32 completed outcomes per target for at most 24 hours; it is a
+sampled snapshot, not uptime or a durable incident archive. There is no alert
+delivery, incident creation, endpoint association, DB/backup check, content matching,
 credential support or automatic target discovery. Existing device pages, health incidents and
 external alarm behavior are unchanged.
 

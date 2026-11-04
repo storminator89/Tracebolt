@@ -10,6 +10,7 @@ import { applicationCheckEntryCopy, applicationCheckSetupRoute } from './applica
 import { ApplicationNetworkAI, NetworkReviewHistoryView } from './application-network-ai';
 import type { NetworkReviewHistory } from './application-network-ai';
 import './application-checks.css';
+import { ApplicationCheckHistory } from './application-check-history';
 
 const POLL_MS = 15000, TIMEOUT_MS = 10000;
 type Anchor = { mono: number; wall: number };
@@ -179,6 +180,7 @@ function ApplicationChecksContent({ canManage, canAnalyze }: { canManage: boolea
         {view?.enabled && <>
             <dl className="application-checks-timing"><div><dt>{t('Prüfintervall')}</dt><dd>{t('{0} s nach jedem Durchlauf', { 0: view.intervalSeconds })}</dd></div><div><dt>{t('Aktualitätsgrenze')}</dt><dd>{t('{0} s', { 0: view.maxAgeSeconds })}</dd></div></dl>
             <div className="application-checks-table"><table role="table"><thead role="rowgroup"><tr role="row"><th id="application-checks-application" scope="col" role="columnheader">{t('Anwendung')}</th><th id="application-checks-result" scope="col" role="columnheader">{t(view.schemaVersion === 'tracebolt.application-checks.v2' ? 'Prüfergebnis' : 'HTTP-Ergebnis')}</th><th id="application-checks-certificate" scope="col" role="columnheader">{t('Blattzertifikat')}</th><th id="application-checks-observed" scope="col" role="columnheader">{t('Beobachtet')}</th></tr></thead><tbody role="rowgroup">{view.items.map(row => <CheckRow key={row.id} row={row} view={view} elapsedMs={elapsed} canAnalyze={canAnalyze} onAICompleted={setAIHistory}/>)}</tbody></table></div>
+            <ApplicationCheckHistory/>
             <details className="application-checks-details"><summary>{t('Beobachtungsumfang')}</summary>
                 <p>{t('2xx ist ein HTTP-Status, kein Gesundheitsnachweis. Zertifikatsdaten stammen aus derselben Prüfung. Neu laden startet keine Prüfung.')}</p>
                 <p>{t('Intervall ab Rundenende. Veraltete Ergebnisse bleiben unbekannt; Erfassungszeiten bleiben erhalten.')}</p>
