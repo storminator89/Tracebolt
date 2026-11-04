@@ -5,6 +5,7 @@ import { useLocale } from './i18n';
 import { MetricValue } from './components';
 import { certificateExpiry } from './agent-certificate';
 import { useHealth } from './health';
+import { healthDashboardState } from './health-dashboard';
 import { useCompleteUpdates } from './complete-updates-resource';
 import { completeUpdatesGenerationVisible, completeUpdatesTransferExpired } from './complete-updates-types';
 import { inventoryAge } from './complete-packages-types';
@@ -20,9 +21,12 @@ const copy = {
 function Card({ title, icon: Icon, children, action, onOpen, busy = false }: { title: string; icon: typeof Radio; children: ReactNode; action?: string; onOpen?: () => void; busy?: boolean }) {
     return <section className="device-essential-card" aria-label={title} aria-busy={busy}><h2><Icon size={17} aria-hidden="true"/>{title}</h2>{children}{onOpen && <button type="button" className="text-button" onClick={onOpen}>{action}<ArrowRight size={13} aria-hidden="true"/></button>}</section>;
 }
-function WarningSummary({ deviceId, sessionKey, onOpen }: { deviceId: string; sessionKey: string | null; onOpen: () => void }) {
+export function WarningSummary({ deviceId, sessionKey, onOpen }: { deviceId: string; sessionKey: string | null; onOpen: () => void }) {
     const [locale] = useLocale(), c = copy[locale], { view, pending, failure } = useHealth(deviceId, sessionKey, false);
-    const open = view?.checks.filter(check => check.state === 'open').length ?? 0, waiting = view?.checks.filter(check => check.state === 'pending').length ?? 0, unknown = view?.checks.filter(check => check.state === 'unknown').length ?? 0;
+    // Match Health: an unresolved alert remains open when its current evidence
+    // becomes unknown. Only the existing guarded view supplies these counts.
+    const summary = view ? healthDashboardState(view) : null;
+    const open = summary?.open ?? 0, waiting = summary?.pending ?? 0, unknown = summary?.unknown ?? 0;
     return <Card title={c.warnings} icon={ShieldAlert} action={c.review} onOpen={onOpen} busy={pending || !view && !failure}>
         <strong className={`device-essential-value ${open || waiting ? 'caution' : ''}`}>{!view ? pending ? c.reading : c.unknown : open ? `${open} ${c.open}` : waiting ? `${waiting} ${c.pending}` : unknown || view.status === 'unknown' ? c.unknown : `0 ${c.open}`}</strong>
         <p>{c.scope}</p>{view && <>{open > 0 && waiting > 0 && <p className="caution">{waiting} {c.pending}</p>}{unknown > 0 && <p className="caution">{unknown} {c.unknownChecks}</p>}{view.status === 'maintenance' && <p className="caution">{c.maintenance}</p>}{view.evaluatedAt && <time dateTime={view.evaluatedAt} title={fullDate(view.evaluatedAt)}>{relativeTime(view.evaluatedAt)}</time>}</>}
