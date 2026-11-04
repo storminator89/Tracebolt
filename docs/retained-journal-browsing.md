@@ -1,5 +1,9 @@
 # Scoped retained service-log browsing
 
+The dashboard's [read-only page triage](journal-page-triage.md) summarizes,
+filters, orders and groups only already-loaded display rows. It does not change
+source search, continuation, grants or the original page expiry.
+
 Source candidate, not native acceptance or a permission grant. The new fresh
 full-admin installation must disclose this scope in its one combined approval.
 It must call the create-only adapter below and bind the exact resulting policy
