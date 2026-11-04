@@ -1,0 +1,13 @@
+.journal-triage{margin:16px 0;border-top:1px solid var(--line);padding-top:16px;min-width:0}
+.journal-triage>header{display:flex;gap:12px;align-items:center;justify-content:space-between}.journal-triage h4{margin:0;font-size:13px}
+.journal-triage-severities{display:flex;flex-wrap:wrap;gap:6px;border:0;padding:0;margin:14px 0}.journal-triage-severities legend{font-size:11px;color:var(--secondary);margin-bottom:8px}
+.journal-triage-severities .button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.journal-triage-controls{display:flex;flex-wrap:wrap;gap:12px}.journal-triage-controls label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--secondary)}
+.journal-triage-controls select{min-height:38px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:inherit;padding:8px 30px 8px 10px}
+.journal-triage button:focus-visible,.journal-triage select:focus-visible,.journal-triage summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.journal-triage-summary{font-size:12px;color:var(--secondary);line-height:1.6}.journal-message-groups{list-style:none;padding:0;margin:14px 0}
+.journal-message-groups>li{padding:14px;border:1px solid var(--line);border-radius:8px;margin:10px 0;min-width:0}.journal-message-group-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.journal-message-groups .journal-message{white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--mono,monospace);font-size:12px;line-height:1.7;margin:12px 0}
+.journal-message-groups dl{display:flex;flex-wrap:wrap;gap:10px 24px;font-size:11px;margin:8px 0;color:var(--secondary)}.journal-message-groups dt{margin-bottom:4px}.journal-message-groups dd{margin:0;overflow-wrap:anywhere}.journal-message-groups time{font-variant-numeric:tabular-nums}
+.journal-message-groups summary{cursor:pointer;font-size:12px;min-height:32px;line-height:32px;width:fit-content}.journal-message-groups ol{padding:0;list-style:none;margin:8px 0}.journal-message-groups ol li{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:11px;padding:5px 0;overflow-wrap:anywhere}.journal-message-groups ol li>span{color:var(--secondary)}
+@media(max-width:620px){.journal-triage>header{align-items:flex-start}.journal-triage-controls{display:grid;grid-template-columns:minmax(0,1fr)}.journal-triage-controls select{font-size:16px;width:100%}.journal-triage-severities .button{min-height:36px}.journal-message-groups>li{padding:12px}.journal-message-groups dl{display:block}.journal-message-groups dl>div{margin:8px 0}}

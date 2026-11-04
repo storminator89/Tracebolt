@@ -1,5 +1,9 @@
 # On-demand service log MVP boundary
 
+The dashboard's [read-only page triage](journal-page-triage.md) adds local severity
+filtering, exact time order and repeated-message review over the already-loaded
+display page. It leaves capture, source search, grants and expiry unchanged.
+
 Status: integration candidate with bounded reader, local helper, durable query
 authority/consumption, authenticated transport and operator pages. Synthetic
 checks are distinct from actual helper installation, effective journal access
