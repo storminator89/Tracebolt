@@ -200,3 +200,10 @@ passing these fixtures does not establish installed-host acceptance.
 Docker command semantics used by the adapter are documented in
 [Compose config](https://docs.docker.com/reference/cli/docker/compose/config/) and
 [Compose up](https://docs.docker.com/reference/cli/docker/compose/up/).
+
+## Read saved approvals
+
+The existing Linux Service action panel also offers a bounded, read-only
+[saved approval and result history](linux-service-action-history.md). It reuses
+this device's original action ledger and named `restart_service` access. Opening
+history never creates a preview, approves an action or retries an uncertain job.

@@ -111,5 +111,5 @@ export function useServiceActions(deviceId: string, access: ServiceActionAccess 
         if (actorId && sessionKey) void run('read');
         return () => { alive.current = false; clear(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', suspend); window.removeEventListener('popstate', suspend); document.removeEventListener('visibilitychange', visibility); };
     }, [actorId, clear, discardPreview, fail, run, scope, sessionKey]);
-    return { view, preview, selected, loading, error, canSelect, select, approve, close, refresh: () => { if (!pending.current) void run('read'); }, unresolved: unresolved.has(scope) };
+    return { historyAccess: actorId && sessionKey ? { deviceId, access: { actorId, sessionKey, insecureTestMode: insecure } } : null, view, preview, selected, loading, error, canSelect, select, approve, close, refresh: () => { if (!pending.current) void run('read'); }, unresolved: unresolved.has(scope) };
 }
