@@ -65,3 +65,10 @@ retention, clock rollback and queued-reader timing. DOM tests cover strict parsi
 explicit reads, EN/DE copy, expiry, interruption and late-response rejection.
 These checks use invented observations. They do not establish real-target
 reachability, production deployment, browser acceptance or native host support.
+
+## Separate durable local workflow
+
+The opt-in [local incident workflow](application-local-incidents.md) adds bounded
+persisted confirmation, recovery and mark-seen controls from new completed checks.
+It never replays these history samples, starts a probe or changes this memory-only
+history representation.

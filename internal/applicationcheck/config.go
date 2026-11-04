@@ -42,6 +42,7 @@ type target struct {
 // Config is an immutable validated snapshot. The settings controller alone may
 // create a managed snapshot from a separately saved, explicitly enabled draft.
 type Config struct {
+	incidentGeneration         string
 	schema                     string
 	external                   bool
 	enabled                    bool

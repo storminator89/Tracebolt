@@ -591,7 +591,7 @@ func prepareWithApplicationChecks(m lanconfig.Material, enrollment *enrollmentco
 	}
 	// The supervisor exists even for a disabled draft so an explicit browser
 	// enable can take effect without restart. Construction never probes targets.
-	applicationChecks, e := applicationcheck.NewSettings(c.StateDirectory, managerID, c.OperatorOrigin, c.Profile, checks)
+	applicationChecks, e := applicationcheck.NewSettings(c.StateDirectory, managerID, c.OperatorOrigin, c.Profile, checks, appStore)
 	if e != nil {
 		closeAll()
 		return nil, e

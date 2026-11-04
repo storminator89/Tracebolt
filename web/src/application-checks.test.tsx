@@ -139,3 +139,23 @@ describe('application retained-status lifecycle', () => {
         await start(); await advance(60000); expect(request).not.toHaveBeenCalled(); expect(screen.queryByRole('region')).not.toBeInTheDocument();
     });
 });
+
+
+describe('local incident panel entry', () => {
+    it('keeps incidents on demand and accessible when existing application probes are disabled', async () => {
+        vi.mocked(request).mockImplementation(async path => path === '/application-checks/status' ? disabledApplicationView() : {
+            schemaVersion: 'tracebolt.application-incidents.v1', serverNow: applicationNow, revision: '0', canManage: false, clockReliable: true, retentionDays: 30, maxIncidents: 128, earlierOmitted: false,
+            currentSource: { token: `appsource_${'a'.repeat(32)}`, mode: 'managed', checksEnabled: false, intervalSeconds: 0, maxAgeSeconds: 0, targets: [] },
+            policy: { enabled: false, sourceMatches: true, targetIds: [], consecutiveFailures: 2, enabledAt: null }, checks: [], incidents: [], lastRequest: null,
+        });
+        await start(); expect(request).toHaveBeenCalledTimes(1);
+        const entry = screen.getByText('Local application incidents').closest('details') as HTMLDetailsElement;
+        expect(entry.open).toBe(false); entry.open = true; fireEvent(entry, new Event('toggle')); await flush();
+        expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual(['/application-checks/status', '/application-checks/incidents']);
+        expect(within(entry).getByText(/Checks disabled\. No incident evaluation/)).toBeVisible();
+        expect(within(entry).getByText('No retained incidents.')).toBeVisible();
+        expect(screen.queryByRole('table')).toBeNull(); expect(entry.querySelector('form')).toBeNull();
+        entry.open = false; fireEvent(entry, new Event('toggle')); await flush();
+        expect(within(entry).queryByText('No retained incidents.')).toBeNull();
+    });
+});

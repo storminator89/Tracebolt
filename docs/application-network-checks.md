@@ -82,8 +82,10 @@ Both kinds retain the five-second whole-attempt deadline, private-LAN opt-in,
 permanent special/metadata exclusions, all-answer checking, sequential execution,
 completion-based 60–3600-second cadence, cancellation and memory-only retention.
 A successful dependency returning after the deadline cannot create success.
-Cancelled work never replaces an earlier observation. No SQLite transaction,
-health incident or alert delivery is involved.
+Cancelled work never replaces an earlier observation. Probe I/O holds no SQLite
+transaction. The separate opt-in [local incident workflow](application-local-incidents.md)
+can retain completed outcomes; device Health and external alert delivery remain
+separate.
 
 The existing authenticated read-only status route returns v1 for v1 configuration
 and `tracebolt.application-checks.v2` for v2, including disabled v2. The envelope,
