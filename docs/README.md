@@ -47,7 +47,9 @@ Historical packages remain linked separately below.
 - **Logs:** choose an exact [Linux service and time window](journal-content-mvp.md)
   or approved [retained service history](retained-journal-browsing.md). Windows
   offers [event-header browsing](windows-logs-sample-browser.md) and separately
-  approved [selected messages](windows-event-content-runtime.md).
+  approved [selected messages](windows-event-content-runtime.md). The separate
+  [sampled-event watch](windows-event-watches.md) records explicitly opted-in local
+  matches from existing periodic headers, without complete-event or recovery claims.
 - **Storage:** [drive-letter mappings and physical-disk provider context](windows-storage-context.md), plus separately consented [aggregate PerfDisk I/O](windows-storage-io.md), with independent source coverage and no inferred disk-health verdict.
 - **Updates and security:** inspect [cached APT candidates](complete-cached-updates-extension.md)
   and [Linux CVE coverage](linux-cve-warnings.md), or Windows
