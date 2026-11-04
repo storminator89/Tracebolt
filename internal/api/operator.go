@@ -823,6 +823,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.linuxProcessWatchesAPI(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/mount-watch") {
+		h.linuxMountWatchAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/health") {
 		h.healthAPI(w, r)
 		return
