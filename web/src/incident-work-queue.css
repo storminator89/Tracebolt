@@ -36,3 +36,21 @@
 .incident-timeline-source{margin:8px 0;padding:8px 12px;border-left:2px solid var(--line)}
 .incident-work-queue input:focus-visible,.incident-timeline summary:focus-visible,.incident-timeline a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:600px){.incident-queue-search{flex-basis:100%;flex-wrap:wrap}.incident-queue-search input{width:100%;min-width:0}.incident-timeline{margin:0 16px 16px;padding:12px}.incident-queue-toolbar input{min-height:38px}}
+.incident-comparison{padding:20px 24px;margin:16px 0;min-width:0;overflow-wrap:anywhere;font-size:12px;line-height:1.6}
+.incident-comparison>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.incident-comparison h2{font-size:15px;margin:0}.incident-comparison h3{font-size:13px;margin:0 0 12px}
+.incident-comparison p{color:var(--secondary)}
+.incident-comparison-selection{list-style:none;padding:0;display:grid;gap:8px}
+.incident-comparison-selection li{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.incident-comparison-actions{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.incident-comparison-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.incident-comparison-cards article{border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.incident-comparison-cards .incident-timeline{margin:16px 0 0;padding:10px}
+.incident-comparison-identity{overflow-wrap:anywhere}
+.incident-comparison-checkpoints{display:grid;gap:12px;padding-left:20px}
+.incident-comparison-checkpoints li{padding-left:4px}.incident-comparison-checkpoints li>span,.incident-comparison-checkpoints li>strong,.incident-comparison-checkpoints li>time{display:block}
+.incident-comparison-checkpoints li>span{color:var(--secondary);font-size:11px}
+.incident-comparison-toggle{display:flex;align-items:center;gap:8px;margin:16px 24px 0;font-size:12px;cursor:pointer}
+.incident-comparison-toggle:has(input:disabled){color:var(--secondary);cursor:default}
+@media(max-width:800px){.incident-comparison-cards{grid-template-columns:1fr}}
+@media(max-width:600px){.incident-comparison{padding:16px}.incident-comparison-toggle{margin:16px 16px 0}.incident-comparison-selection li{align-items:flex-start;flex-direction:column;gap:4px}}

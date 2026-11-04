@@ -46,6 +46,8 @@ const copy = {
     },
 };
 type Copy = typeof copy.en | typeof copy.de;
+export function timelineCheckpointLabel(kind: TimelineKind, locale: 'en' | 'de'): string { return copy[locale][kind]; }
+export function timelineCurrentLabel(state: TimelineCurrentState, locale: 'en' | 'de'): string { return copy[locale][state]; }
 function Time({ at, c }: { at: string | null; c: Copy }) { return at ? <time dateTime={at} title={at}>{fullDate(at)} <span className="incident-timeline-exact">{at}</span></time> : <span>{c.unavailable}</span>; }
 function Source({ source, label, c }: { source: WindowsServiceHealthSource; label: string; c: Copy }) {
     return <details className="incident-timeline-source"><summary>{label}</summary><dl>
