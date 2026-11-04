@@ -317,6 +317,11 @@ func enqueueWindowsCompleteNotifications(ctx context.Context, tx *sql.Tx, before
 			continue
 		}
 		suppressed, e := notificationMaintenance(maintenance, completeNotificationMaintenanceTarget(target), at)
+		if e == nil {
+			var scheduled bool
+			scheduled, e = scheduledWindowsNotificationMuted(ctx, tx, completeNotificationMaintenanceTarget(target), at, at, false)
+			suppressed = suppressed || scheduled
+		}
 		if e != nil {
 			return e
 		}
@@ -513,6 +518,11 @@ func (s *Store) ClaimWindowsCompleteNotification(ctx context.Context, b alarmdel
 	}
 	maintenanceTarget := completeNotificationMaintenanceTarget(target)
 	muted, e := notificationMaintenance(maintenance, maintenanceTarget, now)
+	if e == nil {
+		var scheduled bool
+		scheduled, e = scheduledWindowsNotificationMuted(ctx, tx, maintenanceTarget, payload.TransitionAt, now, true)
+		muted = muted || scheduled
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -591,6 +601,11 @@ func (s *Store) ClaimWindowsCompleteNotification(ctx context.Context, b alarmdel
 			return err
 		}
 		muted, err := notificationMaintenance(maintenance, maintenanceTarget, at)
+		if err == nil {
+			var scheduled bool
+			scheduled, err = scheduledWindowsNotificationMuted(ctx, tx, maintenanceTarget, payload.TransitionAt, at, true)
+			muted = muted || scheduled
+		}
 		if err != nil {
 			return err
 		}
@@ -630,6 +645,12 @@ func (s *Store) ClaimWindowsCompleteNotification(ctx context.Context, b alarmdel
 		return nil, err
 	}
 	if !fresh {
+		return nil, ErrWindowsNotificationConflict
+	}
+	if muted, err := scheduledWindowsNotificationMuted(ctx, tx, maintenanceTarget, payload.TransitionAt, afterGuard, true); err != nil || muted {
+		if err != nil {
+			return nil, err
+		}
 		return nil, ErrWindowsNotificationConflict
 	}
 	if e = tx.Commit(); e != nil {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
@@ -78,12 +79,17 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 
 func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http.Request, groupID string) {
 	route := "/api/fleet/windows-maintenance"
+	scheduled := groupID == "" && strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance-schedule")
+	if scheduled {
+		route = "/api/fleet/windows-maintenance-schedule"
+	}
 	if groupID != "" {
 		route = "/api/fleet/groups/" + groupID + "/maintenance"
 	}
-	start := r.URL.Path == route+"/start"
+	start := !scheduled && r.URL.Path == route+"/start" || scheduled && r.URL.Path == route+"/schedule"
+	cancelSchedule := scheduled && r.URL.Path == route+"/cancel"
 	end := r.URL.Path == route+"/end"
-	mutation := start || end
+	mutation := start || end || cancelSchedule
 	if r.URL.Path != route && !mutation {
 		fail(w, 404, "not_found", "Windows maintenance is unavailable.")
 		return
@@ -111,7 +117,7 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 	}
 	var key, intent string
 	var revision, endID, groupRevision uint64
-	var endsAt time.Time
+	var startsAt, endsAt time.Time
 	if mutation {
 		operator, ok := operatorContext(r)
 		if !ok || operator.session.Named() {
@@ -127,9 +133,13 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 				Key           string `json:"key"`
 				Revision      uint64 `json:"revision"`
 				EndsAt        string `json:"endsAt"`
+				StartsAt      string `json:"startsAt"`
 				Intent        string `json:"intent"`
 			}
 			keys := []string{"key", "revision", "endsAt", "intent"}
+			if scheduled {
+				keys = append(keys, "startsAt")
+			}
 			if groupID != "" {
 				keys = append(keys, "groupRevision")
 			}
@@ -146,6 +156,13 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 			if err != nil || endsAt.Location() != time.UTC || endsAt.Format(time.RFC3339Nano) != body.EndsAt || !store.ValidWindowsMaintenanceIntent(body.Intent) {
 				fail(w, 400, "invalid_windows_maintenance", "Choose an explicit UTC end time and maintenance purpose.")
 				return
+			}
+			if scheduled {
+				startsAt, err = time.Parse(time.RFC3339Nano, body.StartsAt)
+				if err != nil || startsAt.Location() != time.UTC || startsAt.Format(time.RFC3339Nano) != body.StartsAt {
+					fail(w, 400, "invalid_windows_maintenance", "Choose the exact reviewed UTC start.")
+					return
+				}
 			}
 			key, revision, intent = body.Key, body.Revision, body.Intent
 		} else {
@@ -307,6 +324,16 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 				_, e := m.store.StartFleetGroupMaintenance(r.Context(), selection, target, revision, endsAt, intent, m.source.Now, guard)
 				return e
 			}
+			if scheduled {
+				action := "schedule"
+				if cancelSchedule {
+					action = "cancel"
+				} else if end {
+					action = "end"
+				}
+				_, e := m.store.ChangeWindowsMaintenanceSchedule(r.Context(), target, revision, action, endID, startsAt, endsAt, intent, m.source.Now, guard)
+				return e
+			}
 			_, e := m.store.ChangeWindowsMaintenance(r.Context(), target, revision, endsAt, intent, endID, m.source.Now, guard)
 			return e
 		})
@@ -323,6 +350,14 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 			return
 		}
 	}
+	var schedules []store.WindowsMaintenanceScheduleState
+	if scheduled {
+		schedules, err = m.store.WindowsMaintenanceSchedules(r.Context(), m.source.Now)
+		if err != nil {
+			fail(w, 503, "windows_maintenance_unavailable", "Scheduled maintenance is unavailable.")
+			return
+		}
+	}
 	states, err := m.store.WindowsMaintenance(r.Context())
 	if err != nil {
 		fail(w, 503, "windows_maintenance_unavailable", "Retained maintenance metadata is unavailable.")
@@ -334,7 +369,11 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 	now := m.source.Now().UTC()
 	var response any
 	var authorityExpiresAt time.Time
-	if groupRead != nil {
+	if scheduled {
+		var view windowsMaintenanceScheduleView
+		view, err = projectWindowsMaintenanceSchedules(schedules, states, authority, now)
+		response, authorityExpiresAt = view, view.AuthorityExpiresAt
+	} else if groupRead != nil {
 		var view fleetGroupMaintenanceView
 		view, err = projectFleetGroupMaintenance(states, *groupRead, authority, now)
 		response, authorityExpiresAt = view, view.AuthorityExpiresAt

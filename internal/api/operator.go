@@ -634,7 +634,7 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsNotificationsAPI(w, r)
 		return
 	}
-	if r.URL.Path == "/api/fleet/windows-maintenance" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance/") {
+	if r.URL.Path == "/api/fleet/windows-maintenance" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance/") || r.URL.Path == "/api/fleet/windows-maintenance-schedule" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance-schedule/") {
 		h.windowsMaintenanceAPI(w, r)
 		return
 	}

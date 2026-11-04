@@ -229,6 +229,13 @@ func (s *Store) changeWindowsMaintenance(ctx context.Context, target WindowsMain
 		return next, ErrLimit
 	}
 	if start {
+		scheduled, e := readWindowsMaintenanceSchedules(ctx, tx)
+		if e != nil {
+			return next, e
+		}
+		if e = schedulesOverlapImmediate(scheduled, target, now, endsAt); e != nil {
+			return next, e
+		}
 		if endsAt.Sub(now) < time.Minute || endsAt.Sub(now) > 24*time.Hour {
 			return next, ErrWindowsMaintenanceConflict
 		}

@@ -78,16 +78,27 @@ func Open(path string) (*Store, error) {
 	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 1 {
+	if version > 2 {
 		return fail(fmt.Errorf("unsupported database schema version %d", version))
+	}
+	if version == 2 {
+		var schedules int
+		if err = db.QueryRow(`SELECT count(*) FROM windows_maintenance_schedules`).Scan(&schedules); err != nil || schedules == 0 {
+			return fail(fmt.Errorf("scheduled maintenance compatibility state is missing"))
+		}
 	}
 	tx, err := db.Begin()
 	if err != nil {
 		return fail(err)
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, linuxMountWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsProcessWatchSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema, `PRAGMA user_version=1`} {
+	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, linuxMountWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsProcessWatchSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsMaintenanceScheduleSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema} {
 		if _, err = tx.Exec(q); err != nil {
+			return fail(err)
+		}
+	}
+	if version == 0 {
+		if _, err = tx.Exec(`PRAGMA user_version=1`); err != nil {
 			return fail(err)
 		}
 	}
