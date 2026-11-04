@@ -17,3 +17,9 @@
 .process-watch-name { white-space: pre-wrap; }
 .process-watch-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
 @media (max-width: 600px) { .linux-process-watches dl > div { grid-template-columns: 1fr; gap: .15rem; } .linux-process-watches label { align-items: flex-start; } }
+
+.linux-process-watches fieldset { min-width: 0; border: 0; padding: 0; margin: 0; display: grid; gap: .75rem; }
+.process-watch-options { list-style: none; padding: 0; max-height: 18rem; overflow-y: auto; }
+.process-watch-options li { padding: .35rem 0; }
+.process-watch-chooser { min-width: 0; display: grid; gap: .5rem; }
+.process-watch-chooser > input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; }
