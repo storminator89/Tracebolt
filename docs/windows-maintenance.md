@@ -11,7 +11,9 @@ consumes queued matching work; an already in-flight request cannot be recalled, 
 its accepted or uncertain result remains truthful. Early end or expiry never sends
 a backlog. Linux Health, alarms and AI admission remain unchanged. Maintenance
 never grants host actions, changes a source policy or reports recovery or health.
-There is no recurrence, future-start calendar, automatic response or generic scheduler.
+A separate [one-time scheduled workflow](windows-scheduled-maintenance.md) adds
+fixed future UTC windows. The immediate v1 contract below is unchanged.
+There is no recurrence, automatic response or generic host scheduler.
 
 A separate [reviewed group-maintenance flow](fleet-group-maintenance.md) selects
 exact current Windows members from one original-identity group projection. It

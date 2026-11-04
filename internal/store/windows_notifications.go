@@ -313,6 +313,11 @@ func enqueueWindowsNotifications(ctx context.Context, tx *sql.Tx, before, after 
 			continue
 		}
 		suppressed, e := notificationMaintenance(maintenance, target, at)
+		if e == nil {
+			var scheduled bool
+			scheduled, e = scheduledWindowsNotificationMuted(ctx, tx, target, at, at, false)
+			suppressed = suppressed || scheduled
+		}
 		if e != nil {
 			return e
 		}
