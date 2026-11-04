@@ -107,7 +107,7 @@ func (s *Store) WindowsFleetSoftwarePage(ctx context.Context, q windowsfullsoftw
 		return zero, e
 	}
 	defer release()
-	if windowsfullsoftware.ValidateFleetQuery(q) != nil || !validStoreTime(now) {
+	if q.View != "" || windowsfullsoftware.ValidateFleetQuery(q) != nil || !validStoreTime(now) {
 		return zero, windowsfullsoftware.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)

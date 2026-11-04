@@ -28,6 +28,12 @@ type FleetCursor struct {
 const fleetCursorDomain = "tracebolt.windows-complete-machine-software.fleet-cursor.v1\x00"
 
 func SealFleetCursor(ctx context.Context, tx Transaction, c FleetCursor) (string, error) {
+	return sealFleetCursor(ctx, tx, c, fleetCursorDomain)
+}
+func SealFleetHistoryCursor(ctx context.Context, tx Transaction, c FleetCursor) (string, error) {
+	return sealFleetCursor(ctx, tx, c, "tracebolt.windows-machine-software-history.fleet-cursor.v1\x00")
+}
+func sealFleetCursor(ctx context.Context, tx Transaction, c FleetCursor, domain string) (string, error) {
 	key, e := cursorKey(ctx, tx)
 	if e != nil {
 		return "", e
@@ -37,7 +43,7 @@ func SealFleetCursor(ctx context.Context, tx Transaction, c FleetCursor) (string
 		return "", ErrStorage
 	}
 	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(fleetCursorDomain))
+	mac.Write([]byte(domain))
 	mac.Write(raw)
 	token := base64.RawURLEncoding.EncodeToString(raw) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	if len(token) > windowsfullsoftware.MaxCursorBytes {
@@ -47,6 +53,12 @@ func SealFleetCursor(ctx context.Context, tx Transaction, c FleetCursor) (string
 }
 
 func OpenFleetCursor(ctx context.Context, tx Transaction, token string) (FleetCursor, error) {
+	return openFleetCursor(ctx, tx, token, fleetCursorDomain)
+}
+func OpenFleetHistoryCursor(ctx context.Context, tx Transaction, token string) (FleetCursor, error) {
+	return openFleetCursor(ctx, tx, token, "tracebolt.windows-machine-software-history.fleet-cursor.v1\x00")
+}
+func openFleetCursor(ctx context.Context, tx Transaction, token, domain string) (FleetCursor, error) {
 	zero := FleetCursor{}
 	if len(token) > windowsfullsoftware.MaxCursorBytes {
 		return zero, windowsfullsoftware.ErrInvalid
@@ -68,7 +80,7 @@ func OpenFleetCursor(ctx context.Context, tx Transaction, token string) (FleetCu
 		return zero, e
 	}
 	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(fleetCursorDomain))
+	mac.Write([]byte(domain))
 	mac.Write(raw)
 	if !hmac.Equal(sig, mac.Sum(nil)) {
 		return zero, windowsfullsoftware.ErrInvalid

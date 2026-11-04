@@ -77,6 +77,10 @@ The existing 32,768-row / 8 MiB generation, 64 KiB per signed software request,
 construction sizes the complete history-authorized envelope before splitting.
 No new data enters the ordinary telemetry frame.
 
+The [private fleet history view](windows-fleet-software-history.md) also searches
+these existing retained changes across current authorized identities, with the
+same consent and original retention. It adds no monitor or alert authority.
+
 ## Private Software UI
 
 Protected read-only POST

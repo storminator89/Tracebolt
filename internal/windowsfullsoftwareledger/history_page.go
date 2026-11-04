@@ -56,6 +56,20 @@ func decodeHistoryCursor(token string, key []byte) (cursor, error) {
 	return c, nil
 }
 func QueryHistory(ctx context.Context, tx Transaction, device string, r Record, q windowsfullsoftware.Query, now, authorityUntil time.Time, session string, sessionUntil time.Time) (windowsfullsoftware.HistoryPage, error) {
+	return queryHistory(ctx, tx, device, r, q, now, authorityUntil, session, sessionUntil, true, 0)
+}
+
+// QueryHistoryReadOnly projects the same explicitly granted history without
+// saving pruning or creating durable records. The offset is server-owned and
+// authenticated by the separate fleet-history cursor, never client JSON.
+func QueryHistoryReadOnly(ctx context.Context, tx Transaction, device string, r Record, q windowsfullsoftware.Query, now, authorityUntil time.Time, session string, sessionUntil time.Time, offset int) (windowsfullsoftware.HistoryPage, error) {
+	if q.Cursor != "" || offset < 0 || offset > windowsfullsoftware.MaxHistoryRows || windowsfullsoftware.ValidateHistoryQuery(q) != nil {
+		return windowsfullsoftware.HistoryPage{}, windowsfullsoftware.ErrInvalid
+	}
+	return queryHistory(ctx, tx, device, r, q, now, authorityUntil, session, sessionUntil, false, offset)
+}
+
+func queryHistory(ctx context.Context, tx Transaction, device string, r Record, q windowsfullsoftware.Query, now, authorityUntil time.Time, session string, sessionUntil time.Time, persistPruning bool, offset int) (windowsfullsoftware.HistoryPage, error) {
 	zero := windowsfullsoftware.HistoryPage{}
 	out := windowsfullsoftware.HistoryPage{SchemaVersion: windowsfullsoftware.HistoryPageVersion, DeviceID: device, ServerNow: now, Status: "not_configured", AuthorityUntil: &authorityUntil, Search: q.Search, Limit: q.Limit, Rows: []windowsfullsoftware.HistoryChange{}}
 	if r.Consent.Revision == 0 || r.Consent.HistoryScope == "" {
@@ -79,7 +93,7 @@ func QueryHistory(ctx context.Context, tx Transaction, device string, r Record, 
 	if e != nil {
 		return zero, e
 	}
-	if PruneHistory(&h, now) {
+	if PruneHistory(&h, now) && persistPruning {
 		if e = SaveHistory(ctx, tx, device, h); e != nil {
 			return zero, e
 		}
@@ -109,7 +123,7 @@ func QueryHistory(ctx context.Context, tx Transaction, device string, r Record, 
 	if e != nil {
 		return zero, e
 	}
-	c := cursor{Version: 1, Device: device, Grant: grant, Revision: revision, Generation: out.HistoryDigest, Manifest: windowsfullsoftware.HistoryScope, Search: q.Search, Sort: "observed-desc", Limit: q.Limit, Session: session, ExpiresAt: now.Add(windowsfullsoftware.CursorLifetime)}
+	c := cursor{Version: 1, Offset: offset, Device: device, Grant: grant, Revision: revision, Generation: out.HistoryDigest, Manifest: windowsfullsoftware.HistoryScope, Search: q.Search, Sort: "observed-desc", Limit: q.Limit, Session: session, ExpiresAt: now.Add(windowsfullsoftware.CursorLifetime)}
 	bound := func(t time.Time) {
 		if !t.IsZero() && t.Before(c.ExpiresAt) {
 			c.ExpiresAt = t.UTC()
@@ -174,7 +188,7 @@ func QueryHistory(ctx context.Context, tx Transaction, device string, r Record, 
 		return zero, ErrStorage
 	}
 	c.Offset += len(out.Rows)
-	if c.Offset < len(matches) {
+	if c.Offset < len(matches) && persistPruning {
 		out.NextCursor = signHistoryCursor(c, key)
 	}
 	raw, _ := json.Marshal(out)
