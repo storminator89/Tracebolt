@@ -92,7 +92,7 @@ describe('complete-generation policy workflow', () => {
     it.each(['blur', 'hashchange', 'pagehide'])('clears private drafts and rows on %s', async event => {
         server(); render(<Harness/>); await flush(); settings(); await review(); pick('FixtureService0001'); act(() => window.dispatchEvent(new Event(event))); await flush(); expect(screen.queryByRole('button', { name: 'Remove service: FixtureService0001' })).toBeNull(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0);
     });
-    it('displays v1 incompatibility without falling back or posting', async () => { const s = server(); (s.state.view as unknown as { schemaVersion: string }).schemaVersion = 'tracebolt.windows-service-view.v1'; render(<Harness/>); await flush(); expect(screen.getByText(/previously used bounded-preview policy is not converted automatically/)).toBeVisible(); expect(s.state.writes).toEqual([]); expect(s.state.queries).toEqual([]); });
+    it('rejects an incompatible v1 response without falling back or posting', async () => { const s = server(); (s.state.view as unknown as { schemaVersion: string }).schemaVersion = 'tracebolt.windows-service-view.v1'; render(<Harness/>); await flush(); expect(screen.getByText(/The policy response could not be verified/)).toBeVisible(); expect(s.state.writes).toEqual([]); expect(s.state.queries).toEqual([]); });
 });
 
 describe('bounded reusable complete picker', () => {
