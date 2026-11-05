@@ -31,7 +31,7 @@ describe('Compact patch context in the existing Updates tab', () => {
         expect(screen.getByText('Synthetic cumulative update')).not.toBeVisible(); expect(details().open).toBe(false);
         fireEvent.click(details().querySelector('summary')!); expect(screen.getByRole('table', { name: de ? 'Gespeicherter Updateverlauf' : 'Retained update history' })).toBeVisible();
         expect(screen.getByText(de ? 'Dateioperationen' : 'File operations')).toBeVisible(); expect(within(screen.getByRole('region', { name: de ? 'Patch-Kontext' : 'Patch context' })).getByText(de ? 'Nicht verfügbar' : 'Unavailable')).toBeVisible();
-        expect(screen.getByText(de ? 'Deinstallation' : 'Uninstallation')).toBeVisible(); expect(screen.getByText('HRESULT: 80240022')).toBeVisible();
+        expect(within(screen.getByRole('table', { name: de ? 'Gespeicherter Updateverlauf' : 'Retained update history' })).getByText(de ? 'Deinstallation' : 'Uninstallation')).toBeVisible(); expect(screen.getByText('HRESULT: 80240022')).toBeVisible();
         expect(screen.getByText(de ? /kein aktueller Installationsbestand/ : /not current installed inventory/)).toBeVisible();
         const headers = screen.getAllByRole('columnheader').map(cell => cell.textContent); for (const row of screen.getAllByRole('row').slice(1)) expect(within(row).getAllByRole('cell').map(cell => cell.dataset.label)).toEqual(headers);
         expectOnlySetupGuide(); expect(screen.queryByRole('button', { name: /install|reboot|enable|grant|scan|apply/i })).toBeNull();

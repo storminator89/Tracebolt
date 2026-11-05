@@ -109,6 +109,11 @@ No public/basic, provider/AI, health policy or action permission is expanded.
 The EN/DE Updates panel shows a compact build line and checked reboot status;
 source reasons and retained history are available in collapsed details.
 
+The [retained-event review controls](windows-update-history-review.md) filter
+only the already visible history by literal title/ID/HRESULT, exact result and
+operation, and inclusive UTC dates, with twenty rows per page. They add no
+requests, retention or actions and keep source bounds and original expiry.
+
 See [combined context fairness](windows-context-fairness.md) for alternating
 fresh-cycle source priority and separately dated previous captures beside the
 latest unavailable attempt. This does not change grants or telemetry versions.

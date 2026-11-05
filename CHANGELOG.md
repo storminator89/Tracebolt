@@ -6,6 +6,11 @@ remaining work. Source changes are not automatically included in published asset
 
 ## Current development
 
+Windows Updates has a private [retained-event review](docs/windows-update-history-review.md)
+with title/ID/HRESULT search, exact result/operation filters, inclusive UTC dates
+and twenty-row pages. It uses only existing authorized rows, keeps original
+source coverage and expiry, and adds no collection, retention, export or action.
+
 A separate default-off [Linux mount-capacity watch](docs/linux-mount-capacity-watch.md)
 uses already accepted complete volume generations for one selected non-root local
 mount per device. Two advancing samples confirm warnings/recovery; missing data
