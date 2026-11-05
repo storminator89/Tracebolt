@@ -71,7 +71,7 @@ func serviceActionRoute(r *http.Request) (string, string, bool) {
 	op := ""
 	if len(parts) == 6 {
 		op = parts[5]
-		if op != "preview" && op != "approve" {
+		if op != "preview" && op != "approve" && op != "history" {
 			return "", "", false
 		}
 	}
@@ -83,12 +83,16 @@ func (h *operatorHandler) serviceActions(w http.ResponseWriter, r *http.Request)
 		fail(w, 404, "not_found", "Service action is unavailable.")
 		return
 	}
-	if op == "" && r.Method != "GET" || op != "" && r.Method != "POST" {
+	if (op == "" || op == "history") && r.Method != "GET" || (op == "preview" || op == "approve") && r.Method != "POST" {
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
 		return
 	}
 	if op == "" {
 		h.writeServiceActions(w, r, device)
+		return
+	}
+	if op == "history" {
+		h.writeServiceActionHistory(w, r, device)
 		return
 	}
 	actor, release, ok := h.app.beginOperatorCapability(w, r, operatorauth.RestartService)

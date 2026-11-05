@@ -1,0 +1,16 @@
+.network-interval { margin-top: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.network-interval h3 { margin: 0 0 8px; }
+.network-interval p { font-size: 12px; line-height: 1.6; color: var(--secondary); }
+.network-interval-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.network-interval-controls button { white-space: normal; text-align: start; }
+.network-interval-provenance, .network-interval-counts { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; }
+.network-interval-provenance > div { flex: 1 1 250px; min-width: 0; }
+.network-interval dt { color: var(--secondary); }
+.network-interval dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.network-interval-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin: 16px 0; }
+.network-interval-filter input { max-width: 100%; min-width: 0; }
+.network-interval-scroll { overflow-x: auto; max-width: 100%; }
+.network-interval table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.network-interval th, .network-interval td { text-align: start; padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.network-interval tbody th { overflow-wrap: anywhere; max-width: 200px; }
+.network-interval thead th { min-width: 110px; }

@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use fs2::FileExt;
 use rusqlite::{Connection, OpenFlags, params};
 use std::{
@@ -11,6 +11,17 @@ pub struct State {
     _lock: File,
 }
 
+/// Do not publish a failed foreground open as the active service's health.
+/// This marker carries no private path or OS error prose.
+#[derive(Debug)]
+pub(crate) struct LockUnavailable;
+impl std::fmt::Display for LockUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("authoritative state lock unavailable")
+    }
+}
+impl std::error::Error for LockUnavailable {}
+
 impl State {
     pub fn enrolled(directory: &Path, binding: &str) -> Result<Self> {
         let lock = OpenOptions::new()
@@ -19,7 +30,7 @@ impl State {
             .create(true)
             .truncate(false)
             .open(directory.join("sender.lock"))?;
-        lock.try_lock_exclusive()?;
+        lock.try_lock_exclusive().context(LockUnavailable)?;
         let mut connection = Connection::open_with_flags(
             directory.join("enrollment.db"),
             OpenFlags::SQLITE_OPEN_READ_WRITE,
@@ -53,7 +64,7 @@ impl State {
             .create(true)
             .truncate(false)
             .open(directory.join("sender.lock"))?;
-        lock.try_lock_exclusive()?;
+        lock.try_lock_exclusive().context(LockUnavailable)?;
         let path = directory.join("sender.db");
         if initialize {
             // Never adopt or reset existing state, even an incomplete initialization.

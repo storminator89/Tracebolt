@@ -15,6 +15,18 @@ beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset(); vi.mo
 afterEach(() => { cleanup(); vi.restoreAllMocks(); setLocale('en', false); });
 
 describe('customer catalog', () => {
+    it('shows explicit read-only records without any create or rename controls', async () => {
+        vi.mocked(request).mockResolvedValue(view);
+        render(<Customers sessionExpiresAt={future} readOnly/>);
+        expect(await screen.findByText('Acme')).toBeVisible();
+        expect(screen.getByText('Read-only: customer records and assignments cannot be changed.')).toBeVisible();
+        expect(screen.queryByLabelText('Customer name')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Edit Acme'})).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name: 'Create customer'})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name: 'Refresh customers'}));
+        expect(await screen.findByText('Acme')).toBeVisible();
+        expect(mutate).not.toHaveBeenCalled();
+    });
     it('strictly validates schema, identities, names, revisions and bounds', () => {
         expect(validCustomerCatalog(view)).toBe(true);
         for (const invalid of [null, { ...view, extra: 1 }, { ...view, schemaVersion: 'wrong' }, { ...view, customers: [record, record] }, { ...view, customers: [{ ...record, id: `customer_${'0'.repeat(32)}` }] }, { ...view, customers: [{ ...record, revision: 0 }] }, { ...view, customers: [{ ...record, name: ' Acme' }] }, { ...view, customers: [{ ...record, name: 'A\u0000' }] }, { ...view, customers: new Array(26).fill(record) }]) expect(validCustomerCatalog(invalid)).toBe(false);

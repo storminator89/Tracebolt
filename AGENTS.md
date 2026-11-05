@@ -86,6 +86,12 @@ missing material rather than inventing credentials or weakening protection.
   identity guard, explicit full-scope disclosure, independent durable floors and
   original capture age. No automatic collection, re-enrollment, manager reset or
   host permission grant follows from a manager upgrade or schema initialization.
+- Linux process watches reuse already-consented complete process generations and
+  remain default-off manager policies. Read `docs/linux-process-watches.md` before
+  changing opt-in, post-consent evidence, consecutive source floors, API or derived
+  retention. Preserve source-independent terminal-history cleanup, open incidents,
+  per-device outage isolation and GET-only uncertain reconciliation. No collection,
+  process control, AI/notification grant or native acceptance follows from tests.
 - Complete cached APT update rows are a separate default-off local scope;
   preview consent never authorizes the full generation. Before enabling or
   changing it, read `docs/complete-cached-updates-extension.md`. Preserve the
@@ -424,3 +430,11 @@ See `docs/proactive-service-log-ai.md` for bounds and the native fixture boundar
   unchanged. Unresolved A cannot retire, but does not grant or block unrelated B.
   Shared storage integrity failures still fail closed. No migrations, runtime
   grants, deferred queue or native acceptance follow from these source fixtures.
+
+- Windows process presence watches are a separate default-off manager policy.
+  Read `docs/windows-process-presence-watches.md` before modifying the source
+  lease, exact-name count or saved-selection UI. Toolhelp presence is neither
+  execution state nor application health. Keep complete-source integrity, original
+  capture/receipt age, unavailable-name uncertainty, exact original identity/grant,
+  explicit saved-selection consent and uncertain-write read reconciliation. This
+  live view adds no incidents, host collection, CPU/RAM policy, actions or export.

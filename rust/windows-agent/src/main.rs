@@ -15,7 +15,7 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
-    /// Validate public installer inputs without creating files, keys or enrollment state.
+    /// Validate installer inputs without creating files, keys or enrollment state.
     ValidateConfig {
         /// Also require a matching manager over the selected TLS trust.
         #[arg(long)]
@@ -35,6 +35,9 @@ enum Command {
         /// Public invitation bootstrap; required only for invitation mode.
         #[arg(long)]
         bootstrap: Option<PathBuf>,
+        /// Existing client.pem/client.key, required only for preprovided mode.
+        #[arg(long)]
+        credential_directory: Option<PathBuf>,
     },
     /// Validate protected configuration and credentials without sending data.
     Check {
@@ -112,6 +115,7 @@ fn run() -> anyhow::Result<()> {
             interval_seconds,
             server_ca_file,
             bootstrap,
+            credential_directory,
         } => {
             let enrollment_mode: EnrollmentMode =
                 serde_json::from_value(serde_json::Value::String(mode))?;
@@ -136,6 +140,18 @@ fn run() -> anyhow::Result<()> {
                 .transpose()?
                 .unwrap_or_default();
             tls_builder(&ca)?.build()?;
+            match (enrollment_mode, credential_directory) {
+                (EnrollmentMode::Preprovided, Some(directory)) => {
+                    tracebolt_windows_agent::credentials::validate_preprovided(
+                        &config, &directory, &ca,
+                    )?;
+                }
+                (EnrollmentMode::Preprovided, None) => {
+                    anyhow::bail!("preprovided mode requires credential directory");
+                }
+                (_, Some(_)) => anyhow::bail!("credentials require preprovided mode"),
+                (_, None) => {}
+            }
             if check_manager {
                 tracebolt_windows_agent::compatibility::check(&config, &ca)?;
                 println!(

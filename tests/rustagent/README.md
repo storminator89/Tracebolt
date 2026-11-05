@@ -7,6 +7,11 @@ source-order contracts only, not PowerShell/SCM execution. Portable Rust
 `tests/installer_preflight.rs` checks bounded public bootstrap semantics and
 rejection before enrollment state/key creation using disposable local inputs;
 see [the bounded preflight contract](../../docs/rust-installer-preflight.md).
+Portable Rust `tests/credential_preflight.rs` similarly checks local preprovided
+certificate/key semantics and exact preservation before CLI/library sender-state
+creation. Its source-order regression checks credential validation placement in
+the installer/CLI/library without executing PowerShell or Windows SCM. It does
+not establish chain approval or native installation acceptance.
 
 `cmd/nativefixture` is a **test-only loopback protocol peer**, not a production
 manager. It uses the production Go enrollment cryptography, issuer, state engine
@@ -25,8 +30,10 @@ Rust package built from the same source:
   -PackageArchive .\artifacts\windows-rust.zip
 ```
 
-This rejects archives outside the exact five-file root allowlist, verifies all
-four payload hashes, and extracts the immutable ZIP into a new temporary path.
+This rejects archives outside the exact six-file root allowlist, verifies all
+five payload hashes, and extracts the immutable ZIP into a new temporary path.
+The developer `-Executable` entry point first packages the independently trusted
+same-source build through `Write-Package.ps1`, then uses the same package path.
 It invokes that package's own default tokenless installer/EXE/removal script and installs
 `TraceboltRustAgent` as restricted LocalService. It checks the installer's local
 public key against the pending request before permitting fixture approval,
@@ -50,6 +57,12 @@ checks the exact package allowlist, ZIP bytes/checksums and preservation of
 pre-existing directories/nested foreign files/archives. `Build-Package.ps1`
 refuses an existing output directory or ZIP; select a new `-OutputDirectory` for
 a repeat build rather than deleting or reusing retained files automatically.
+It also runs `Test-InstallerPackagePreflight.ps1`, which inspects inert PE-shaped
+bytes without executing them and checks exact manifests, hashes, architecture,
+links, unchanged rejected inputs and disposal. Its Windows-only checks exercise
+read-only writer/rename exclusion and in-memory parent-ACL decisions, never SCM,
+the installer or directory-ACL mutation. These are not native installation
+negative-matrix acceptance. Source-order Go tests remain a distinct evidence class.
 
 The separate `runtime_stop_fixture` Rust example uses this same disposable Go
 peer on Linux: real enrollment/issuance/activation and mutual TLS, but invented

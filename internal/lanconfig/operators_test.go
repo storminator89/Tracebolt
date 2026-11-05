@@ -148,3 +148,20 @@ func TestManageSessionsRequiresExplicitNamedGrant(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomerReadRequiresExplicitNamedGrant(t *testing.T) {
+	valid := strings.Replace(namedAuthJSON(), `"read","restart_service"`, `"read","read_customers"`, 1)
+	_, operators, err := loadOperatorAuth([]byte(valid), HTTPTest)
+	if err != nil || len(operators) != 1 || len(operators[0].Capabilities) != 2 || operators[0].Capabilities[1] != operatorauth.ReadCustomers {
+		t.Fatal("explicit customer-read grant rejected")
+	}
+	for _, invalid := range []string{
+		strings.Replace(valid, `"read","read_customers"`, `"read_customers"`, 1),
+		strings.Replace(valid, `"read_customers"`, `"read_customers","read_customers"`, 1),
+		strings.Replace(valid, `"read_customers"`, `"Read_customers"`, 1),
+	} {
+		if _, _, err := loadOperatorAuth([]byte(invalid), HTTPTest); err == nil {
+			t.Fatal("implicit or ambiguous customer-read authority accepted")
+		}
+	}
+}

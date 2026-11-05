@@ -42,7 +42,7 @@ func (m *healthMonitor) evaluate(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		_, e = m.store.EvaluateHealth(ctx, input, now)
+		_, e = m.store.EvaluateHealth(health.WithMaintenanceClock(ctx, m.source.Now), input, now)
 		if e != nil {
 			return e
 		}
@@ -53,8 +53,15 @@ func (m *healthMonitor) evaluate(ctx context.Context) error {
 // RunHealthMonitor evaluates accepted data independently of browser visibility.
 // It exits before operator-store shutdown and never executes endpoint actions.
 func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
+	return s.RunHealthMonitorObserved(ctx, warn, nil)
+}
+
+// RunHealthMonitorObserved reports completion of each health evaluation. The
+// observer does not cover separate proactive or mount-watch monitors and must not block.
+func (s *Server) RunHealthMonitorObserved(ctx context.Context, warn func(), observed func(time.Time, error)) error {
 	s.mu.RLock()
 	m := s.health
+	processWatches := s.linuxProcessWatches
 	s.mu.RUnlock()
 	if m == nil {
 		return nil
@@ -69,12 +76,21 @@ func (s *Server) RunHealthMonitor(ctx context.Context, warn func()) error {
 	for {
 		step, cancel := context.WithTimeout(ctx, 10*time.Second)
 		e := m.evaluate(step)
+		mountErr := s.evaluateLinuxMountWatches(step, m)
 		cancel()
+		if processWatches != nil && ctx.Err() == nil {
+			processStep, processCancel := context.WithTimeout(ctx, 10*time.Second)
+			e = errors.Join(e, processWatches.evaluate(processStep))
+			processCancel()
+		}
 		if ctx.Err() != nil {
 			return nil
 		}
 		now := m.source.Now()
-		if e != nil && warn != nil && (lastWarning.IsZero() || now.Sub(lastWarning) >= time.Minute) {
+		if observed != nil {
+			observed(now, e)
+		}
+		if (e != nil || mountErr != nil) && warn != nil && (lastWarning.IsZero() || now.Sub(lastWarning) >= time.Minute) {
 			warn()
 			lastWarning = now
 		}
@@ -89,6 +105,10 @@ func (h *operatorHandler) healthAPI(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
 	if (len(parts) != 5 && len(parts) != 6) || parts[1] != "api" || parts[2] != "devices" || !enrollmentcrypto.ValidID(parts[3], "agent_") || parts[4] != "health" {
 		fail(w, 404, "not_found", "Device health checks are unavailable.")
+		return
+	}
+	if len(parts) == 6 && parts[5] == "maintenance-schedule" {
+		h.healthMaintenanceSchedule(w, r, parts[3])
 		return
 	}
 	action := ""
@@ -183,9 +203,21 @@ func (h *operatorHandler) healthAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	var state health.State
 	if mutate != nil {
-		state, e = m.store.UpdateHealth(r.Context(), parts[3], func(s *health.State) error { return mutate(s, now) })
+		state, e = m.store.UpdateHealth(r.Context(), parts[3], func(s *health.State) error {
+			fresh := m.source.Now().UTC()
+			if fresh.Before(now) {
+				return health.ErrInvalid
+			}
+			now = fresh
+			if s.Schedule != nil {
+				if err := s.ObserveMaintenance(now); err != nil {
+					return err
+				}
+			}
+			return mutate(s, now)
+		})
 	} else {
-		state, e = m.store.HealthState(r.Context(), parts[3])
+		state, e = m.store.HealthStateAt(r.Context(), parts[3], now, m.source.Now)
 	}
 	if errors.Is(e, health.ErrInvalid) {
 		fail(w, 409, "health_conflict", "Health state changed or is unavailable; refresh before retrying.")
@@ -197,6 +229,9 @@ func (h *operatorHandler) healthAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if !operatorStillActive(w, r) {
 		return
+	}
+	if state.Schedule != nil && state.Schedule.ClockFloor.After(now) {
+		now = state.Schedule.ClockFloor
 	}
 	write(w, 200, state.View(parts[3], now))
 }

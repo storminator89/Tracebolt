@@ -1,0 +1,14 @@
+.health-maintenance-schedule { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 16px; min-width: 0; font-size: 12px; }
+.health-maintenance-schedule > header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+.health-maintenance-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.health-maintenance-fields label { display: grid; gap: 6px; }
+.health-maintenance-fields input { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); color: var(--text); padding: 9px; font: inherit; font-size: 12px; }
+.health-maintenance-schedule dl { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 12px 0; }
+.health-maintenance-schedule dt { color: var(--secondary); margin-bottom: 4px; }
+.health-maintenance-schedule dd { margin: 0; overflow-wrap: anywhere; }
+.health-maintenance-window, .health-maintenance-review, .health-maintenance-uncertain { border: 1px solid var(--line); padding: 14px; border-radius: 8px; margin: 12px 0; min-width: 0; overflow-wrap: anywhere; }
+.health-maintenance-window details { margin-bottom: 12px; }
+.health-maintenance-uncertain { border-color: var(--warning); }
+.health-controls .health-maintenance-consent { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; line-height: 1.5; }
+.health-maintenance-consent input { flex: 0 0 auto; margin-top: 3px; }
+.health-maintenance-schedule time { overflow-wrap: anywhere; }

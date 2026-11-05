@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceCommit": "fccc4b00cd8a144afd58e4b995747afab7a10022",
-  "goSourceSha256": "08d15b3617e94b6dd63e66cdacae2db08a8d15a445d6fa347d3d0a14b947e822",
+  "goSourceSha256": "c3dd115f7285d3bf06ea44ed25ac32d053a6dc12de538339694cced851764f66",
   "packages": {
     "localrmm/cmd/action-setup": [
       "TestCapabilitiesInertAndModesExclusive"
@@ -160,6 +160,12 @@
       "TestMacOSManagerRouteFamilyNeverFallsThrough",
       "TestManagedServiceObservationRequiresPostActionCollection",
       "TestManagerFixtureTLSWorksWithPythonVerification",
+      "TestManagerRequestDrainCleanStopCleansSynchronously",
+      "TestManagerRequestDrainSharedAdmissionAndPanic",
+      "TestManagerRequestDrainTimeoutRetainsLeaseWithoutBlockingRun",
+      "TestManagerWriterLeaseBlocksBeforeProfileOrDatabase",
+      "TestManagerWriterLeasePreparationFailureReleasesAfterStoreClose",
+      "TestManagerWriterLeaseStartupFilesystemCompatibilityOnly",
       "TestOperationalThreeBinaryEnrollmentAndForeground",
       "TestPackagePositiveEvidenceAcceptsBoundedObservations",
       "TestPackagePositiveEvidenceAcceptsMixedOperationalMeasurements",
@@ -1196,6 +1202,8 @@
       "TestNamedAdministrationContractDenials",
       "TestNamedAdministrationContractReadsRemainDistinct",
       "TestNamedCapabilitySeamRequiresCSRFCurrentSessionAndServerActor",
+      "TestNamedCustomerReadRechecksRevocationAndIssuer",
+      "TestNamedCustomerReadRequiresExactGrantAndNeverWrites",
       "TestNamedHTTPTestKeepsSeparateCookieAndPlaintextWarning",
       "TestNamedLANLoginMetadataAndLegacyCompatibility",
       "TestNamedReadRouteShapeAndCapabilityExpiry",
@@ -1523,6 +1531,14 @@
       "TestSnapshotJSONDepthAndArrayBounds",
       "TestSnapshotStrictBoundsAndFields",
       "TestUnknownFreshnessDominatesStaleWithoutFalseFixedZero"
+    ],
+    "localrmm/internal/backupmanifest": [
+      "TestBackupManifestCancellation",
+      "TestBackupManifestClosedRosterAndSidecars",
+      "TestBackupManifestExactBindingBeforeReads",
+      "TestBackupManifestExactInventoryIntegrityOnly",
+      "TestBackupManifestStreamsAndFixedDiagnostics",
+      "TestBackupManifestStrictClosedJSON"
     ],
     "localrmm/internal/bootstrapfetch": [
       "TestFetchDoesNotUseEnvironmentProxy",
@@ -3650,6 +3666,7 @@
     ],
     "localrmm/internal/lanconfig": [
       "TestCoordinatedWindowsMutationActivationKeepsBothReferences",
+      "TestCustomerReadRequiresExplicitNamedGrant",
       "TestDarwinReadProtectedUsesDescriptorAndACLPolicy",
       "TestLoadConfigReadsOnlyTheStrictConfiguration",
       "TestMacOSInventoryConfigurationDefaultOffTLSOnly",
@@ -3669,6 +3686,11 @@
       "TestDevicesCertificateExpiryUsesApprovalWithoutRenewing",
       "TestDurableApprovalReplayAndRevocation",
       "TestFrameStrictnessAndVersionCompatibility",
+      "TestManagerWriterLeaseExclusiveWithoutStateFiles",
+      "TestManagerWriterLeaseFilesystemBoundary",
+      "TestManagerWriterLeaseProcessHelper",
+      "TestManagerWriterLeaseProtectedPathsAndQuarantine",
+      "TestManagerWriterLeaseSubprocessConflictAndCrash",
       "TestOriginalEnvelopeBoundaryIsDeterministic",
       "TestPackageFrameCanonicalOperationsReservationAndOlderLimit",
       "TestPackageFrameCanonicalReservationsAndAge",
@@ -4082,6 +4104,7 @@
       "TestConfigurationFailClosedAndBounded",
       "TestConfiguredAbsentActorsReserveBeforeExhaustion",
       "TestCredentialFailureRateAndConcurrencyBounds",
+      "TestCustomerReadIsIndependentExplicitGrant",
       "TestExpiredAdmittedMutationRetainsActorQuotaUntilDrain",
       "TestExpiryRejectsAdmissionAndCannotReactivateOnClockRollback",
       "TestExpiryReleasesActorAndGlobalCapacityWithoutExtendingTimeout",
@@ -4208,7 +4231,8 @@
       "TestNativeCurrentAuthorityAndLostPreparation",
       "TestNativeSQLiteExactDispatchResultsAndReopen",
       "TestNativeStaleCapabilitiesAndWrongExactApproval",
-      "TestOfflinePreparationRetainsExpiredPreviewWithoutApproval"
+      "TestOfflinePreparationRetainsExpiredPreviewWithoutApproval",
+      "TestParsePackageConfigInventoriesWithoutOpeningDependencies"
     ],
     "localrmm/internal/packagehelper": [
       "TestAgentReplacementDoesNotHideAlreadyAdmittedCompletion",
@@ -6343,7 +6367,8 @@
       "TestRustCompatibilityPrecedesPersistentInitialization",
       "TestRustEnrollmentProofsAcceptedByGo",
       "TestRustFrameAcceptedByManager",
-      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations"
+      "TestRustInvitationBootstrapPrecedesInstallerAndEnrollmentMutations",
+      "TestRustPackageVerificationPrecedesExecutionAndPersistentStaging"
     ],
     "localrmm/tests/rustagent/cmd/nativefixture": [
       "TestCompatibilityGETDoesNotEnterEnrollment"

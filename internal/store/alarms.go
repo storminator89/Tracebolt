@@ -181,6 +181,10 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 		return nil, e
 	}
 	defer tx.Rollback()
+	now, e = health.MaintenanceNow(ctx, now)
+	if e != nil {
+		return nil, e
+	}
 	key := b.Key()
 	var active string
 	var enabled int
@@ -190,6 +194,9 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 	}
 	if enabled == 0 || active != key {
 		return nil, nil
+	}
+	if e = observeScheduledHealthAlarms(ctx, tx, now); e != nil {
+		return nil, e
 	}
 	ms := now.UnixMilli()
 	if _, e = tx.ExecContext(ctx, `UPDATE alarm_outbox SET state='failed',code='queue_expired',finished=? WHERE state='queued' AND created<=?`, ms, now.Add(-alarmdelivery.MaxQueueAge).UnixMilli()); e != nil {
@@ -220,6 +227,10 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 		return nil, closeErr
 	}
 	for _, r := range candidates {
+		now, e = health.MaintenanceNow(ctx, now)
+		if e != nil {
+			return nil, e
+		}
 		if r.rule != alarmdelivery.TestRule {
 			var raw []byte
 			if e = tx.QueryRowContext(ctx, `SELECT body FROM health_devices WHERE id=?`, r.device).Scan(&raw); e != nil {
@@ -237,10 +248,24 @@ func (s *Store) ClaimAlarm(ctx context.Context, b alarmdelivery.Binding, now tim
 				}
 			}
 			suppress := ""
+			if hs.Schedule != nil {
+				if e = observeHealthMaintenance(ctx, tx, r.device, &hs, now); e != nil {
+					return nil, e
+				}
+				if e = consumeScheduledOpenings(ctx, tx, r.device, hs, now); e != nil {
+					return nil, e
+				}
+			}
 			if r.transition == "opened" {
-				if incident == nil || incident.ResolvedAt != nil {
+				var original alarmdelivery.Payload
+				if json.Unmarshal(r.body, &original) != nil || original.EventID != r.id || original.DeviceID != r.device || original.Transition != "opened" || original.TransitionAt.IsZero() {
+					return nil, alarmdelivery.ErrInvalid
+				}
+				if hs.ScheduledOpeningSuppressed(original.TransitionAt, now) {
+					suppress = "maintenance"
+				} else if incident == nil || incident.ResolvedAt != nil {
 					suppress = "no_longer_open"
-				} else if hs.MaintenanceUntil != nil && now.Before(*hs.MaintenanceUntil) {
+				} else if hs.MaintenanceEnd(now) != nil {
 					suppress = "maintenance"
 				}
 				if suppress == "" {

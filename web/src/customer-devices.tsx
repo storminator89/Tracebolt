@@ -30,7 +30,7 @@ const copy = {
 } as const;
 
 /** The backend revalidates current identity, customer revision and session at commit. */
-export function CustomerDevices({ sessionExpiresAt }: { sessionExpiresAt: string }) {
+export function CustomerDevices({ sessionExpiresAt, readOnly = false }: { sessionExpiresAt: string; readOnly?: boolean }) {
     const [locale] = useLocale(), c = copy[locale];
     const [view, setView] = useState<View | null>(null);
     const [state, setState] = useState<'loading' | 'ready' | 'error' | 'expired' | 'uncertain'>('loading');
@@ -84,7 +84,7 @@ export function CustomerDevices({ sessionExpiresAt }: { sessionExpiresAt: string
     const device = view?.devices.find(d => d.deviceId === deviceId && d.customerId === ''), customer = view?.customers.find(c => c.id === customerId);
     const save = async (event: FormEvent) => {
         event.preventDefault();
-        if (writing.current || uncertainSessions.has(sessionExpiresAt) || state !== 'ready' || !view || !device || !customer || !acknowledged || !fresh()) return;
+        if (readOnly || writing.current || uncertainSessions.has(sessionExpiresAt) || state !== 'ready' || !view || !device || !customer || !acknowledged || !fresh()) return;
         writing.current = true; setBusy(true);
         const controller = new AbortController(), run = ++generation.current, epoch = getProtectedRequestEpoch(), selectedDevice = device, selectedCustomer = customer, startMono = performance.now(), startWall = Date.now(); active.current = controller; writeTarget.current = {deviceId:device.deviceId, identity:device.identity};
         try {
@@ -105,18 +105,19 @@ export function CustomerDevices({ sessionExpiresAt }: { sessionExpiresAt: string
             if (!controller.signal.aborted && run === generation.current && epoch === getProtectedRequestEpoch() && live()) { setView(null); resetSelection(); setFenced(true); setState('uncertain'); }
         } finally { if (active.current === controller) { active.current = null; writing.current = false; writeTarget.current = null; setBusy(false); } }
     };
-    return <section className="panel customer-devices-panel" aria-label={c.title}>
-        <div className="customer-devices-heading"><h3>{c.title}</h3><button className="button" type="button" disabled={busy} onClick={() => void refresh()}>{c.refresh}</button></div>
-        <p>{c.scope}</p><CustomerOrganizationNotice/><p>{c.pending} {locale === 'de' ? 'Der Prüfstand kann sich jederzeit ändern; der Manager prüft beim Speichern erneut.' : 'The snapshot can change at any time; the manager checks again when saving.'}</p>
+    const title = readOnly ? (locale === 'de' ? 'Windows-Kundenzuordnungen' : 'Customer Windows assignments') : c.title;
+    return <section className="panel customer-devices-panel" aria-label={title}>
+        <div className="customer-devices-heading"><h3>{title}</h3><button className="button" type="button" disabled={busy} onClick={() => void refresh()}>{c.refresh}</button></div>
+        <p>{c.scope}</p><CustomerOrganizationNotice/><p>{readOnly ? (locale === 'de' ? 'Nur lesend: Kunden und Zuordnungen können nicht geändert werden.' : 'Read-only: customer records and assignments cannot be changed.') : <>{c.pending} {locale === 'de' ? 'Der Prüfstand kann sich jederzeit ändern; der Manager prüft beim Speichern erneut.' : 'The snapshot can change at any time; the manager checks again when saving.'}</>}</p>
         {state === 'loading' && <p role="status">{c.loading}</p>}
         {state !== 'loading' && state !== 'ready' && <p role="alert">{c[state]}</p>}
         {state === 'ready' && view && <>
             <p>{c.asOf}: <time dateTime={view.serverNow}>{new Date(view.serverNow).toLocaleString(locale)}</time></p>
-            {fenced && <p role="alert">{c.fenced}</p>}
+            {!readOnly && fenced && <p role="alert">{c.fenced}</p>}
             {view.unavailableAssignments > 0 && <p role="status">{c.unavailable} {view.unavailableAssignments}</p>}
-            {view.customers.length === 0 && <p>{c.noneCustomers}</p>}
+            {view.customers.length === 0 && <p>{readOnly ? (locale === 'de' ? 'Keine Kundenstammdaten vorhanden.' : 'No customer records available.') : c.noneCustomers}</p>}
             {view.devices.length === 0 ? <p>{c.noneDevices}</p> : <ul className="customer-devices-list" aria-label={c.recorded}>{view.devices.map(item => <li key={item.deviceId}><span><strong>{item.deviceId}</strong><br/>{c.identity}: <code>{item.identity}</code></span><span>{view.customers.find(x => x.id === item.customerId)?.name ?? c.unassigned}</span></li>)}</ul>}
-            {!fenced && view.customers.length > 0 && view.devices.some(d => d.customerId === '') && <form className="customer-devices-form" onSubmit={event => void save(event)}>
+            {!readOnly && !fenced && view.customers.length > 0 && view.devices.some(d => d.customerId === '') && <form className="customer-devices-form" onSubmit={event => void save(event)}>
                 <label>{c.chooseDevice}<select value={deviceId} disabled={busy} onChange={event => { setDeviceId(event.target.value); setAcknowledged(false); }}><option value="">{c.choose}</option>{view.devices.filter(d => d.customerId === '').map(d => <option value={d.deviceId} key={d.deviceId}>{d.deviceId}</option>)}</select></label>
                 <label>{c.chooseCustomer}<select value={customerId} disabled={busy} onChange={event => { setCustomerId(event.target.value); setAcknowledged(false); }}><option value="">{c.choose}</option>{view.customers.map(x => <option value={x.id} key={x.id}>{x.name} ({x.id})</option>)}</select></label>
                 {device && customer && <><p>{c.device}: <strong>{device.deviceId}</strong><br/>{c.identity}: <code>{device.identity}</code><br/>{c.customer}: <strong>{customer.name}</strong> ({customer.id})</p><label className="customer-devices-confirm"><input type="checkbox" checked={acknowledged} disabled={busy} onChange={event => setAcknowledged(event.target.checked)}/>{c.acknowledge}</label></>}

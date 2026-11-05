@@ -121,7 +121,13 @@ state must be inventoried from the actual selected profile; this list is not an
 exhaustive copy allowlist. Secrets remain separately protected under custodian
 control; a public report must not contain backup data or secret values.
 
-The manifest needs exact schema/build/profile/UID/config/issuer/immutable-instance
+The [offline manifest integrity contract](backup-manifest-contract.md) now provides
+a bounded, read-only source verifier for independently expected inventories and
+streams. No production call site, inventory generator, atomic capture, protected
+filesystem adapter or restore integration exists yet; it does not complete this
+recovery contract or establish freshness.
+
+The complete manifest workflow needs exact schema/build/profile/UID/config/issuer/immutable-instance
 bindings and bounded file integrity metadata, with interrupted/partial capture
 rejected. It must distinguish **integrity** from independently authenticated
 **freshness**. A release mechanism needs current revocation, action-consumption,

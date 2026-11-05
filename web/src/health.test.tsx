@@ -7,6 +7,7 @@ import { useOperator } from './auth';
 import type { Device } from './types';
 import { parseHealthServices, validHealthView } from './health-types';
 import type { HealthView } from './health-types';
+import type { MaintenanceRequest, MaintenanceScheduleView } from './health-maintenance-schedule-types';
 import { setLocale } from './i18n';
 import goFixture from './health-go-fixture.json';
 
@@ -131,6 +132,18 @@ describe('selected health checks and controls', () => {
         expect(within(select).getAllByRole('option').map(x => (x as HTMLOptionElement).value)).toEqual(['15', '60', '240', '0']);
         fireEvent.change(select, { target: { value: '240' } }); fireEvent.click(screen.getByRole('button', { name: 'Apply' })); await screen.findAllByText('Maintenance active');
         expect(mutate).toHaveBeenCalledWith(`/devices/${id}/health/maintenance`, { minutes: 240 }, expect.any(AbortSignal));
+    });
+    it('opens the separate schedule only deliberately and refreshes original Health v1 after exact confirmation', async () => {
+        const schedule: MaintenanceScheduleView = { schemaVersion: 'tracebolt.linux-maintenance-schedule-view.v1', deviceId: id, serverNow: now, revision: '0', remainingSlots: 64, canManage: true, legacyMaintenanceUntil: null, window: null, lastRequest: null };
+        vi.mocked(request).mockImplementation(async path => path.endsWith('/maintenance-schedule') ? schedule : fixture());
+        vi.mocked(mutate).mockImplementation(async (_path, input) => { const body = input as MaintenanceRequest; return { ...schedule, revision: '1', remainingSlots: 63, window: { id: body.windowId, createdAt: now, startsAt: body.startsAt, endsAt: body.endsAt, state: 'pending', closedAt: null }, lastRequest: { requestId: body.requestId, action: body.action, windowId: body.windowId } }; });
+        render(<HealthPanel deviceId={id}/>); await screen.findByRole('list', { name: 'Current checks' }); const settings = screen.getByText('Checks & settings').closest('details')!; settings.open = true; fireEvent(settings, new Event('toggle')); expect(request).toHaveBeenCalledTimes(1);
+        await screen.findByRole('textbox', { name: 'Add service manually' });
+        expect(screen.getByText(/These immediate controls cannot replace or end it/)).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: 'Plan a one-time maintenance window' })); await screen.findByLabelText('Start (UTC)');
+        fireEvent.change(screen.getByLabelText('Start (UTC)'), { target: { value: '2026-10-05T00:10' } }); fireEvent.click(screen.getByRole('button', { name: 'Review fixed window' })); fireEvent.click(screen.getByRole('checkbox', { name: /I approve suppressing new incident openings/ })); fireEvent.click(screen.getByRole('button', { name: 'Save this one-time window' }));
+        await screen.findByText('The manager confirmed this exact change.'); await waitFor(() => expect(vi.mocked(request).mock.calls.filter(([path]) => path === `/devices/${id}/health`)).toHaveLength(2));
+        expect(mutate).toHaveBeenCalledOnce(); expect(vi.mocked(mutate).mock.calls[0][0]).toBe(`/devices/${id}/health/maintenance-schedule`); expect(screen.getByRole('list', { name: 'Current checks' })).toHaveTextContent('Root disk /');
     });
     it('validates service edits and submits the explicit sorted selection', async () => {
         const view = fixture(); view.monitoredServices = ['nginx.service', 'sshd.service']; view.checks.push({ key: 'service:nginx.service', kind: 'service', target: 'nginx.service', state: 'unknown', observedAt: null, value: null }); vi.mocked(mutate).mockResolvedValue(view);

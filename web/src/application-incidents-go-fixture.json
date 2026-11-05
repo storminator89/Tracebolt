@@ -1,0 +1,76 @@
+{
+  "canManage": true,
+  "checks": [
+    {
+      "completedAt": "2026-11-04T15:54:22.309064266Z",
+      "condition": "incident",
+      "failureCount": 2,
+      "httpStatus": 503,
+      "id": "fixture",
+      "kind": "http",
+      "observedAt": "2026-11-04T15:54:22.309064266Z",
+      "reason": "http_status",
+      "successCount": 0,
+      "targetScheme": "https"
+    }
+  ],
+  "clockReliable": true,
+  "currentSource": {
+    "checksEnabled": true,
+    "intervalSeconds": 60,
+    "maxAgeSeconds": 70,
+    "mode": "managed",
+    "targets": [
+      {
+        "id": "fixture",
+        "kind": "http",
+        "targetScheme": "https"
+      }
+    ],
+    "token": "appsource_3f93fe1504c1a4275c34e947dc71cc86"
+  },
+  "earlierOmitted": false,
+  "incidents": [
+    {
+      "acknowledgedAt": null,
+      "closedAt": null,
+      "id": "appincident_0000000000000001",
+      "kind": "http",
+      "lastCompletedAt": "2026-11-04T15:54:22.309064266Z",
+      "lastObservedAt": "2026-11-04T15:54:22.309064266Z",
+      "opening": {
+        "completedAt": "2026-11-04T15:54:22.309064266Z",
+        "firstObservedAt": "2026-11-04T15:54:22.308494614Z",
+        "httpStatus": 503,
+        "observedAt": "2026-11-04T15:54:22.309064266Z",
+        "reason": "http_status",
+        "samples": 2
+      },
+      "recovery": null,
+      "sourceCurrent": true,
+      "state": "open",
+      "targetId": "fixture",
+      "targetScheme": "https"
+    }
+  ],
+  "lastRequest": {
+    "incidentId": null,
+    "operation": "enable",
+    "requestId": "apprequest_00000000000000000000000000000001",
+    "sourceToken": "appsource_3f93fe1504c1a4275c34e947dc71cc86"
+  },
+  "maxIncidents": 128,
+  "policy": {
+    "consecutiveFailures": 2,
+    "enabled": true,
+    "enabledAt": "2026-11-04T15:54:22.306923872Z",
+    "sourceMatches": true,
+    "targetIds": [
+      "fixture"
+    ]
+  },
+  "retentionDays": 30,
+  "revision": "1",
+  "schemaVersion": "tracebolt.application-incidents.v1",
+  "serverNow": "2026-11-04T15:54:22.30987149Z"
+}

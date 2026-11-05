@@ -26,7 +26,7 @@ func TestRustCompatibilityPrecedesPersistentInitialization(t *testing.T) {
 			previous = at
 		}
 	}
-	requireOrder(script, "if ($mode -ne 'preprovided') { $validationArguments += '--check-manager' }", "& $Executable @validationArguments", "if ($LASTEXITCODE -ne 0)", "New-Service -Name", "New-Item -ItemType Directory")
+	requireOrder(script, "if ($mode -ne 'preprovided') { $validationArguments += '--check-manager' }", "& $Executable @validationArguments", "if ($LASTEXITCODE -ne 0)", "New-TraceboltProtectedDirectory $bin", "New-Service -Name")
 	source := read("rust/windows-agent/src/enrollment.rs")
 	requireOrder(source, "if initialize {\n            crate::compatibility::check(&config, &ca)?;", ".open(state.join(\"enrollment.lock\"))?", "Connection::open_with_flags", "let key = KeyPair::generate_for")
 	source = read("rust/windows-agent/src/main.rs")

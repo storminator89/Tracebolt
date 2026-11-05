@@ -36,6 +36,7 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
     let client_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::new(vec![]).unwrap();
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
+    params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
     let client_cert = params.signed_by(&client_key, &issuer).unwrap();
     fs::write(dir.path().join("client.pem"), client_cert.pem()).unwrap();
     fs::write(dir.path().join("client.key"), client_key.serialize_pem()).unwrap();
@@ -59,7 +60,7 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
     fs::write(dir.path().join("config.json"),serde_json::to_vec(&json!({"schemaVersion":"tracebolt.rust-windows-basic.v1","managerOrigin":format!("https://localhost:{port}"),"agentId":"fixture","enrollmentMode":"preprovided","basicMetricsAcknowledged":true,"intervalSeconds":30})).unwrap()).unwrap();
     let server = thread::spawn(move || {
         let mut bodies = Vec::new();
-        for attempt in 0..4 {
+        for attempt in 0..5 {
             let (socket, _) = listener.accept().unwrap();
             socket
                 .set_read_timeout(Some(Duration::from_secs(10)))
@@ -98,13 +99,21 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
             let mut body = vec![0; length];
             stream.read_exact(&mut body).unwrap();
             if attempt == 0 {
+                // A successful HTTP status with an interrupted receipt body is
+                // not acceptance. Keep the original frame pending for retry.
+                stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 128\r\nConnection: close\r\n\r\n{\"schemaVersion\":").unwrap();
+                stream.flush().unwrap();
+                bodies.push(body);
+                continue;
+            }
+            if attempt == 1 {
                 write!(stream,"HTTP/1.1 307 Temporary Redirect\r\nLocation: https://localhost:{port}/must-not-follow\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
                 stream.flush().unwrap();
                 bodies.push(body);
                 continue;
             }
             let frame: Value = serde_json::from_slice(&body).unwrap();
-            let receipt=serde_json::to_vec(&json!({"schemaVersion":"tracebolt.agent-receipt.v1","agentId":if attempt==1 {"wrong-identity"} else {"fixture"},"sequence":frame["sequence"],"collectedAt":frame["observation"]["observation"]["lastSeen"],"receivedAt":Utc::now(),"duplicate":attempt==2})).unwrap();
+            let receipt=serde_json::to_vec(&json!({"schemaVersion":"tracebolt.agent-receipt.v1","agentId":if attempt==2 {"wrong-identity"} else {"fixture"},"sequence":frame["sequence"],"collectedAt":frame["observation"]["observation"]["lastSeen"],"receivedAt":Utc::now(),"duplicate":attempt==3})).unwrap();
             write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",receipt.len()).unwrap();
             stream.write_all(&receipt).unwrap();
             stream.flush().unwrap();
@@ -112,8 +121,9 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
         }
         assert_eq!(bodies[0], bodies[1]);
         assert_eq!(bodies[1], bodies[2]);
+        assert_eq!(bodies[2], bodies[3]);
         assert_eq!(
-            serde_json::from_slice::<Value>(&bodies[3]).unwrap()["sequence"],
+            serde_json::from_slice::<Value>(&bodies[4]).unwrap()["sequence"],
             2
         );
     });
@@ -140,7 +150,17 @@ fn mutual_tls_retries_exact_bytes_after_bad_receipt_and_restart() {
     assert!(sender.cycle(sample).is_err());
     let first = health::status(dir.path(), Utc::now());
     assert!(first.last_accepted_receipt.is_none());
-    assert_eq!(first.state, health::Code::ManagerRejected);
+    assert_eq!(first.state, health::Code::TransportUnclassified);
+    drop(sender);
+    let mut sender = Runtime::open(dir.path()).unwrap();
+    assert!(
+        sender
+            .cycle(|| panic!("interrupted receipt must not recollect"))
+            .is_err()
+    );
+    let rejected = health::status(dir.path(), Utc::now());
+    assert!(rejected.last_accepted_receipt.is_none());
+    assert_eq!(rejected.state, health::Code::ManagerRejected);
     drop(sender);
     let mut sender = Runtime::open(dir.path()).unwrap();
     assert!(sender.cycle(|| panic!("retry must not recollect")).is_err());

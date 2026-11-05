@@ -101,10 +101,11 @@ describe('Security coverage in the real device drawer', () => {
         expect(screen.getByRole('heading', { name: 'Ältere Inventarbelege' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Sicherheitsabdeckung aktualisieren' })).toBeInTheDocument();
     });
-    it('includes coverage in keyboard navigation without moving the operational tab', async () => {
+    it('includes patch evidence and coverage in keyboard navigation after inventory', async () => {
         renderDetail(); const overview = await screen.findByRole('tab', { name: 'Overview' });
         fireEvent.keyDown(overview, { key: 'ArrowRight' }); const inventory = screen.getByRole('tab', { name: 'Inventory' }); expect(inventory).toHaveFocus();
-        fireEvent.keyDown(inventory, { key: 'ArrowRight' }); const security = screen.getByRole('tab', { name: 'Security coverage' }); expect(security).toHaveFocus(); expect(security).toHaveAttribute('aria-selected', 'true');
+        fireEvent.keyDown(inventory, { key: 'ArrowRight' }); const patches = screen.getByRole('tab', { name: 'Patch evidence' }); expect(patches).toHaveFocus(); expect(patches).toHaveAttribute('aria-selected', 'true');
+        fireEvent.keyDown(patches, { key: 'ArrowRight' }); const security = screen.getByRole('tab', { name: 'Security coverage' }); expect(security).toHaveFocus(); expect(security).toHaveAttribute('aria-selected', 'true');
         fireEvent.keyDown(security, { key: 'Home' }); expect(overview).toHaveFocus(); expect(overview).toHaveAttribute('aria-selected', 'true');
     });
     it.each(['tab', 'device', 'close', 'auth'] as const)('aborts a coverage read and suppresses late data after %s transition', async transition => {

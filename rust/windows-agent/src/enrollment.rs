@@ -2,7 +2,7 @@ use crate::{
     config::{Config, EnrollmentMode},
     enrollment_wire as wire,
 };
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use fs2::FileExt;
@@ -159,14 +159,18 @@ impl Enrollment {
             config.enrollment_mode != EnrollmentMode::Preprovided,
             "preprovided identity mode"
         );
-        let ca = crate::config::read_ca(directory)?;
+        let ca =
+            crate::config::read_ca(directory).context(crate::health::Code::ConfigurationInvalid)?;
         if initialize {
             validate_initial_bootstrap(&config, bootstrap.as_ref())?;
         }
         if initialize {
             crate::compatibility::check(&config, &ca)?;
         }
-        let client = crate::config::tls_builder(&ca)?.build()?;
+        let client = crate::config::tls_builder(&ca)
+            .context(crate::health::Code::ConfigurationInvalid)?
+            .build()
+            .context(crate::health::Code::ConfigurationInvalid)?;
         let state = directory.join("state");
         let lock = OpenOptions::new()
             .read(true)
@@ -174,7 +178,8 @@ impl Enrollment {
             .create(true)
             .truncate(false)
             .open(state.join("enrollment.lock"))?;
-        lock.try_lock_exclusive()?;
+        lock.try_lock_exclusive()
+            .context(crate::state::LockUnavailable)?;
         let path = state.join("enrollment.db");
         if initialize {
             OpenOptions::new()

@@ -1,6 +1,6 @@
 # Customer records and device approvals
 
-Current source adds an administrator-only customer catalog to the LAN Devices
+Current source adds a customer catalog to the LAN Devices
 setup area. Customers are organizational records, not tenants: they do not
 isolate access, grant collection or identify an installer.
 Existing fleet groups and enrollment identities are unchanged. This is a first
@@ -10,7 +10,9 @@ An explicitly authenticated shared administrator may create or rename up to
 25 records. A record has a server-generated `customer_` ID and a revision;
 names are 1–80 UTF-8 bytes without leading/trailing whitespace or control
 characters. IDs are not reused, and deletion is not provided. Named operators
-cannot read or change this catalog. The private API checks the manager binding
+may read the existing whole-manager catalog and Windows assignments only with
+the separately explicit [`read_customers` grant](named-customer-read.md); they
+cannot create, rename or assign records. The private API checks the manager binding
 and current issuer, same-origin/CSRF for writes, exact expected revision and a
 live operator lease again before commit. Corrupt data and unavailable manager
 binding fail closed. A conflict or unconfirmed POST requires a fresh GET and

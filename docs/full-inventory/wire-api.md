@@ -10,6 +10,17 @@ Requests are at most72KiB; manifests4KiB and chunks64KiB retain their independen
 
 The authenticated operator reads GET /api/devices/{agentID}/inventory/packages and pages with POST to its /query suffix. Page input is exactly generationId, cursor, search and limit; no query-string transport is accepted. The read-only POST still requires Origin/CSRF and a current post-body session lease. Up to100 rows are returned per page with a bounded2048-row search scan; an empty nonexhausted page is a continuation, not evidence of no packages. Cursors are generation/search/order/limit-bound. Expired generations return a conflict, never an empty successful list.
 
+The package browser offers Previous page and First page within the existing
+selected generation and search. Each navigation rereads a bounded page through
+the same protected API; previous package rows are not cached. At most 128 recent
+cursor/counter checkpoints and the first checkpoint remain in component memory.
+At the oldest retained checkpoint, First page lets the operator start browsing
+earlier pages again. Counts describe the scan through the displayed page, not
+the furthest page previously visited. Revisiting First preserves the original
+forward cursor and earliest browsing expiry, even if the manager returns a newer
+first-page token. Search, generation, device or access changes discard the trail.
+This is navigation only, with no new collection, retention or monitoring scope.
+
 The status view distinguishes awaiting, old completed generation, pending transfer and fixed source-failure metadata. It preserves original collection/completion times. UI-visible sequence values are canonical decimal strings. Source failures do not create zero-row inventory; a valid residual-only dpkg source can explicitly complete zero rows. Package/checkpoint/source metadata remain excluded from AI via the trusted instance-level policy.
 
 Owner tests use generated keys, invented package rows and actual loopback TLS/explicit HTTP. They exercise513 rows, all chunks, partial invisibility, exact retries, receipt binding, zero-versus-failed source, revocation and operator pagination. This is not an actual host/service, full-capacity or reboot result. The native batch sender and combined runtime acceptance are separate gates.

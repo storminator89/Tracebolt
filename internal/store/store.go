@@ -15,13 +15,23 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 var ErrNotFound = errors.New("not found")
 var ErrLimit = errors.New("note limit reached")
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db                         *sql.DB
+	linuxProcessWatchBlocked   atomic.Bool
+	linuxMountWatchBlocked     atomic.Bool
+	linuxMountWatchStarted     sync.Map
+	applicationIncidentBlocked atomic.Bool
+	applicationIncidentActive  atomic.Bool
+	applicationIncidentLoaded  atomic.Bool
+}
 
 func Open(path string) (*Store, error) {
 	absolute, err := filepath.Abs(path)
@@ -68,16 +78,27 @@ func Open(path string) (*Store, error) {
 	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 1 {
+	if version > 2 {
 		return fail(fmt.Errorf("unsupported database schema version %d", version))
+	}
+	if version == 2 {
+		var schedules int
+		if err = db.QueryRow(`SELECT count(*) FROM windows_maintenance_schedules`).Scan(&schedules); err != nil || schedules == 0 {
+			return fail(fmt.Errorf("scheduled maintenance compatibility state is missing"))
+		}
 	}
 	tx, err := db.Begin()
 	if err != nil {
 		return fail(err)
 	}
 	defer tx.Rollback()
-	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema, `PRAGMA user_version=1`} {
+	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, linuxMountWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsProcessWatchSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsMaintenanceScheduleSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema} {
 		if _, err = tx.Exec(q); err != nil {
+			return fail(err)
+		}
+	}
+	if version == 0 {
+		if _, err = tx.Exec(`PRAGMA user_version=1`); err != nil {
 			return fail(err)
 		}
 	}
@@ -95,7 +116,7 @@ func Open(path string) (*Store, error) {
 	if err = tx.Commit(); err != nil {
 		return fail(err)
 	}
-	return &Store{db}, nil
+	return &Store{db: db}, nil
 }
 func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Seed(devices []model.Device, cases []model.Case) error {

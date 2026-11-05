@@ -1,0 +1,17 @@
+.patch-evidence { display: grid; gap: 14px; min-width: 0; }
+.patch-evidence p { margin: 0; line-height: 1.55; }
+.patch-evidence-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.patch-evidence h2, .patch-evidence h3 { margin: 0; }
+.patch-evidence > .text-button { justify-self: start; }
+.patch-evidence-boundary { color: var(--secondary); }
+.patch-evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.patch-evidence-card { display: grid; align-content: start; gap: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.patch-evidence-facts { display: grid; gap: 10px; margin: 0; }
+.patch-evidence-facts > div { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 12px; }
+.patch-evidence-facts dt { color: var(--secondary); }
+.patch-evidence-facts dd { margin: 0; overflow-wrap: anywhere; }
+.patch-evidence-caution { font-weight: 600; }
+@media (max-width: 600px) {
+    .patch-evidence-facts > div { grid-template-columns: 1fr; gap: 3px; }
+    .patch-evidence-heading .button { white-space: normal; text-align: start; }
+}

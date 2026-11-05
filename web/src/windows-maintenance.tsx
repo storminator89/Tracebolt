@@ -9,6 +9,7 @@ import type { WindowsMaintenanceDomain, WindowsMaintenanceEnd, WindowsMaintenanc
 import { windowsDeviceLabel } from './windows-device-label';
 import { WindowsLocalTime } from './windows-local-time';
 import './windows-maintenance.css';
+import { WindowsMaintenanceSchedule } from './windows-maintenance-schedule';
 
 const copy = {
     en: {
@@ -56,7 +57,7 @@ export function WindowsMaintenance({ devices, sessionKey, admin }: { devices: De
         const endsAt = windowsMaintenanceEndTime(view.serverNow, resource.age, minutes);
         if (endsAt) setReview({ generation: resource.generation, kind: 'start', body: { key: target.key, revision: target.revision, endsAt, intent } });
     };
-    return <section className="windows-maintenance" aria-label={c.title}>
+    return <><section className="windows-maintenance" aria-label={c.title}>
         <button className="text-button windows-maintenance-toggle" aria-expanded={opened} onClick={() => { setReview(null); setOpened(value => !value); }}><Clock3 size={15}/><span>{c.title}</span>{opened ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}</button>
         {opened && <div className="windows-maintenance-content">
             <p>{c.explanation}</p>
@@ -96,5 +97,5 @@ export function WindowsMaintenance({ devices, sessionKey, admin }: { devices: De
                 <details className="windows-maintenance-about"><summary>{c.about}</summary><p>{c.fleet}</p></details>
             </>}
         </div>}
-    </section>;
+    </section><WindowsMaintenanceSchedule devices={devices} sessionKey={sessionKey} admin={admin}/></>;
 }

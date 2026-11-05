@@ -17,8 +17,8 @@ const copy = {
     de: { title: 'Kunden', scope: 'Nur organisatorische Kundenstammdaten. Sie trennen keine Zugriffe und ordnen weder Geräte noch Installer zu.', loading: 'Kunden werden geladen …', empty: 'Noch keine Kunden vorhanden.', error: 'Kunden sind nicht verfügbar. Vor Änderungen aktualisieren.', conflict: 'Der Kunde wurde geändert. Vor einer weiteren Bearbeitung aktualisieren und erneut prüfen.', uncertain: 'Die Änderung konnte nicht bestätigt werden und wurde möglicherweise gespeichert. Vor einer weiteren Änderung aktualisieren; sie wird nicht automatisch wiederholt.', refresh: 'Kunden aktualisieren', name: 'Kundenname', create: 'Kunde erstellen', edit: 'Bearbeiten', save: 'Name speichern', cancel: 'Abbrechen', saving: 'Wird gespeichert …', limit: 'Das Limit von 25 Kunden ist erreicht.', invalid: 'Einen Namen mit 1–80 UTF-8-Bytes ohne äußere Leerzeichen oder Steuerzeichen eingeben.', expired: 'Kundendaten sind in dieser Sitzung nicht mehr verfügbar. Nach bestätigtem Zugriff aktualisieren.' },
 } as const;
 
-/** Shared-admin-only organizational records; never selects or authorizes enrollment. */
-export function Customers({ sessionExpiresAt }: { sessionExpiresAt: string }) {
+/** Shared writes or explicitly granted named reads; never authorizes enrollment. */
+export function Customers({ sessionExpiresAt, readOnly = false }: { sessionExpiresAt: string; readOnly?: boolean }) {
     const [locale] = useLocale(), c = copy[locale];
     const [catalog, setCatalog] = useState<Catalog | null>(null);
     const [state, setState] = useState<'loading' | 'ready' | 'error' | 'conflict' | 'uncertain' | 'expired'>('loading');
@@ -56,7 +56,7 @@ export function Customers({ sessionExpiresAt }: { sessionExpiresAt: string }) {
     }, [deadline, invalidate, refresh]);
     const save = async (event: FormEvent) => {
         event.preventDefault();
-        if (writing.current || state !== 'ready' || !catalog || !validFleetGroupName(name) || !live() || (!editing && catalog.customers.length >= 25)) return;
+        if (readOnly || writing.current || state !== 'ready' || !catalog || !validFleetGroupName(name) || !live() || (!editing && catalog.customers.length >= 25)) return;
         writing.current = true; setBusy(true);
         const controller = new AbortController(), run = ++generation.current, epoch = getProtectedRequestEpoch(), selected = editing; active.current = controller;
         try {
@@ -78,13 +78,13 @@ export function Customers({ sessionExpiresAt }: { sessionExpiresAt: string }) {
     };
     return <section className="panel customers-panel" aria-label={c.title}>
         <div className="customers-heading"><h3>{c.title}</h3><button className="button" type="button" disabled={busy} onClick={() => void refresh()}>{c.refresh}</button></div>
-        <p>{c.scope}</p><CustomerOrganizationNotice/>
+        <p>{c.scope}</p><CustomerOrganizationNotice/>{readOnly && <p>{locale === 'de' ? 'Nur lesend: Kunden und Zuordnungen können nicht geändert werden.' : 'Read-only: customer records and assignments cannot be changed.'}</p>}
         {state === 'loading' && <p role="status">{c.loading}</p>}
         {state !== 'loading' && state !== 'ready' && <p role="alert">{c[state]}</p>}
         {state === 'ready' && catalog && <>
-            {catalog.customers.length === 0 ? <p>{c.empty}</p> : <ul className="customers-list">{catalog.customers.map(customer => <li key={customer.id}><span>{customer.name}</span><button className="button" type="button" disabled={busy} onClick={() => { setEditing(customer); setName(customer.name); }}>{c.edit} {customer.name}</button></li>)}</ul>}
-            {!editing && catalog.customers.length >= 25 && <p role="status">{c.limit}</p>}
-            {(editing || catalog.customers.length < 25) && <form className="customers-form" onSubmit={event => void save(event)}>
+            {catalog.customers.length === 0 ? <p>{c.empty}</p> : <ul className="customers-list">{catalog.customers.map(customer => <li key={customer.id}><span>{customer.name}</span>{!readOnly && <button className="button" type="button" disabled={busy} onClick={() => { setEditing(customer); setName(customer.name); }}>{c.edit} {customer.name}</button>}</li>)}</ul>}
+            {!readOnly && !editing && catalog.customers.length >= 25 && <p role="status">{c.limit}</p>}
+            {!readOnly && (editing || catalog.customers.length < 25) && <form className="customers-form" onSubmit={event => void save(event)}>
                 <label><span>{c.name}</span><input value={name} onChange={event => setName(event.target.value)} disabled={busy} maxLength={80}/></label>
                 {name && !validFleetGroupName(name) && <p role="status">{c.invalid}</p>}
                 <button className="button primary" type="submit" disabled={busy || !validFleetGroupName(name)}>{busy ? c.saving : editing ? c.save : c.create}</button>

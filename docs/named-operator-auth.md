@@ -71,7 +71,7 @@ TB-06. It documents current denials, not new administration grants or migration.
 
 - `read`: supported authenticated read views admitted by `namedReadRoute`, still
   subject to route-specific restrictions. Customer catalog/Windows-assignment
-  GETs explicitly require shared administration; privileged application-check
+  GETs require the additional explicit `read_customers` grant; privileged application-check
   settings require their separate capability. GET/HEAD classifier admission does
   not make HEAD a supported API method. Read also admits exact read-only JSON
   POST queries, including `/api/devices/{agentId}/journal/query` and
@@ -90,6 +90,13 @@ TB-06. It documents current denials, not new administration grants or migration.
 - `manage_sessions`: explicit permission to list/revoke other accounts' current
   manager sessions through the bounded [session API](manager-session-limits.md).
   It does not change accounts, credentials, capabilities or future login rights.
+- `read_customers`: optional read-only access to the exact customer catalog and
+  current Windows organizational-assignment GET projections. Ordinary `read`
+  and all other grants do not imply it. It exposes the existing whole-manager
+  bounded views, not tenant isolation; no customer/assignment writes, account
+  changes, enrollment or export permission follows. See
+  [named customer reads](named-customer-read.md). Existing startup files are not
+  rewritten and live accounts receive no automatic grant.
 - `manage_application_checks`: explicit access to application-check destinations and
   browser configuration. Existing read, alarm, update and service grants do not imply
   it. Save persists a disabled draft; a separate enable requires current-revision

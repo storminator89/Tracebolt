@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::{Context, Result, ensure};
 use chrono::{DateTime, Utc};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -38,6 +39,7 @@ pub enum Code {
     ClockInvalid,
     CollectionFailed,
     TransportTimeout,
+    TransportDnsFailed,
     TransportTlsFailed,
     TransportConnectionRefused,
     TransportUnreachable,
@@ -71,6 +73,7 @@ impl Code {
             Self::ClockInvalid => "clock-invalid",
             Self::CollectionFailed => "collection-failed",
             Self::TransportTimeout => "transport-timeout",
+            Self::TransportDnsFailed => "transport-dns-failed",
             Self::TransportTlsFailed => "transport-tls-failed",
             Self::TransportConnectionRefused => "transport-connection-refused",
             Self::TransportUnreachable => "transport-unreachable",
@@ -129,6 +132,9 @@ impl Code {
             Self::TransportTlsFailed => {
                 "The selected TLS connection failed. Review approved trust, peer identity, certificate validity and TLS policy locally; never disable verification or infer enrollment revocation."
             }
+            Self::TransportDnsFailed => {
+                "The system resolver failed during this attempt. Review approved DNS and network configuration locally; this does not establish that the endpoint or manager is offline."
+            }
             Self::TransportConnectionRefused => {
                 "The connection was refused at this attempt. Review the approved listener, port and network policy locally; refusal does not establish that the endpoint is offline."
             }
@@ -181,7 +187,15 @@ pub fn classify(error: &anyhow::Error) -> Code {
     if let Some(code) = error.downcast_ref::<Code>() {
         return *code;
     }
-    if let Some(e) = error.downcast_ref::<reqwest::Error>() {
+    // Blocking Response implements Read by retaining reqwest::Error inside an
+    // io::Error. Recognize that exact transport wrapper for bounded body reads,
+    // without interpreting unrelated file/SQLite I/O as network evidence.
+    if let Some(e) = error.downcast_ref::<reqwest::Error>().or_else(|| {
+        error
+            .downcast_ref::<std::io::Error>()?
+            .get_ref()?
+            .downcast_ref::<reqwest::Error>()
+    }) {
         return if e.is_timeout() {
             Code::TransportTimeout
         } else {
@@ -201,6 +215,12 @@ pub fn classify(error: &anyhow::Error) -> Code {
 /// connection refusal or unreachability never establishes an offline endpoint.
 fn transport_cause(mut cause: &(dyn std::error::Error + 'static)) -> Option<Code> {
     for _ in 0..32 {
+        if cause
+            .downcast_ref::<crate::dns::ResolutionFailure>()
+            .is_some()
+        {
+            return Some(Code::TransportDnsFailed);
+        }
         if cause.downcast_ref::<rustls::Error>().is_some() {
             return Some(Code::TransportTlsFailed);
         }
@@ -343,20 +363,22 @@ fn view(snapshot: Snapshot, now: DateTime<Utc>, interval: u64) -> Status {
     let clock_allowance = now
         .checked_add_signed(chrono::Duration::seconds(30))
         .unwrap_or(DateTime::<Utc>::MAX_UTC);
+    // Both timestamps are local observations. A clock rollback can follow a
+    // pending/failed attempt even when there has never been an accepted receipt.
+    // next_attempt_at is a future scheduling hint, not an observation.
+    let clock_invalid = !valid_time(now)
+        || [snapshot.last_attempt_at, snapshot.receipt_observed_at]
+            .into_iter()
+            .flatten()
+            .any(|at| at > clock_allowance);
     let certificate_status = match snapshot.certificate_not_after {
-        Some(at) if at <= now => {
-            state = Code::CertificateExpired;
-            "expired"
-        }
+        Some(at) if at <= now => "expired",
         Some(at) if at <= within_day => "expiring",
         Some(_) => "within-recorded-validity",
         None => "unknown",
     };
     let receipt_freshness = match snapshot.receipt_observed_at {
-        Some(at) if at > clock_allowance => {
-            state = Code::ClockInvalid;
-            "clock-unknown"
-        }
+        Some(_) if clock_invalid => "clock-unknown",
         Some(at)
             if now.signed_duration_since(at).num_seconds()
                 <= (interval.saturating_mul(3).clamp(120, 7200)) as i64 =>
@@ -366,11 +388,13 @@ fn view(snapshot: Snapshot, now: DateTime<Utc>, interval: u64) -> Status {
         Some(_) => "stale-validated-receipt",
         None => "no-accepted-receipt-recorded",
     };
-    if !valid_time(now) {
+    if clock_invalid {
         state = Code::ClockInvalid;
     }
     if state == Code::Accepted {
-        if receipt_freshness == "stale-validated-receipt" {
+        if certificate_status == "expired" {
+            state = Code::CertificateExpired;
+        } else if receipt_freshness == "stale-validated-receipt" {
             state = Code::ReceiptStale;
         } else if certificate_status == "expiring" {
             state = Code::CertificateExpiring;
@@ -395,8 +419,8 @@ fn view(snapshot: Snapshot, now: DateTime<Utc>, interval: u64) -> Status {
         evidence: "Acceptance metadata is recorded only after an identity/sequence/time-bound TLS manager receipt and durable local sequence advance. Receipt receivedAt is manager UTC; receiptObservedAt and attempt times are local UTC.",
         limitations: [
             "Derived diagnostics are not identity, revocation or replay authority; backup rollback and same-account tampering are not detected.",
-            "No live network, SCM, provider or authoritative ledger inspection is performed by status/support-bundle. Startup failures before the first recorded attempt can remain unknown.",
-            "DNS versus TLS failures are not guessed from raw error strings; unclassified transport failures remain explicit. Native Windows event integration and full Windows/Linux/browser acceptance are separate gates.",
+            "No live network, SCM, provider or authoritative ledger inspection is performed by status/support-bundle. Startup failures are recorded only when valid configuration-bound diagnostics are writable.",
+            "DNS versus TLS failures are not guessed from raw error strings; unclassified transport failures remain explicit. Native Windows event delivery and full Windows/Linux/browser acceptance are separate gates.",
         ],
     }
 }
@@ -440,6 +464,7 @@ fn load(path: &Path, binding: &str) -> Result<Snapshot> {
 pub struct Tracker {
     state: PathBuf,
     snapshot: Snapshot,
+    _writer_lock: Option<fs::File>,
 }
 impl Tracker {
     /// Missing derived metadata means unobserved, never fresh/healthy. Invalid
@@ -453,7 +478,48 @@ impl Tracker {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Snapshot::new(binding),
             Err(e) => return Err(e.into()),
         };
-        Ok(Self { state, snapshot })
+        Ok(Self {
+            state,
+            snapshot,
+            _writer_lock: None,
+        })
+    }
+    /// A runtime retains a single optional diagnostics writer. Read-only status
+    /// never opens or creates this lock. The lock is not sender/enrollment
+    /// authority; inability to obtain it disables diagnostics only.
+    pub(crate) fn open_runtime(directory: &Path, config: &Config) -> Result<Self> {
+        let state = state_directory(directory)?;
+        let path = state.join("health-v1.lock");
+        match fs::symlink_metadata(&path) {
+            Ok(meta) => ensure!(
+                meta.is_file() && !meta.file_type().is_symlink(),
+                "invalid diagnostic lock"
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(path)?;
+        let meta = file.metadata()?;
+        ensure!(meta.is_file(), "invalid diagnostic lock");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            ensure!(
+                meta.nlink() == 1 && meta.mode() & 0o077 == 0,
+                "shared diagnostic lock"
+            );
+        }
+        file.try_lock_exclusive()?;
+        let mut tracker = Self::open(directory, config)?;
+        tracker._writer_lock = Some(file);
+        Ok(tracker)
     }
     pub fn last_code(&self) -> Code {
         self.snapshot.last_attempt_result
@@ -461,6 +527,32 @@ impl Tracker {
     pub fn attempt(&mut self, at: DateTime<Utc>) -> Result<()> {
         self.snapshot.last_attempt_at = Some(at);
         self.snapshot.last_attempt_result = Code::AttemptInProgress;
+        self.snapshot.next_attempt_at = None;
+        self.persist()
+    }
+    /// Record a failed local runtime open without inventing a cycle, receipt or
+    /// scheduled retry. Failure of this optional write never repairs state or
+    /// masks the original startup failure.
+    pub fn startup_failure(&mut self, code: Code, at: DateTime<Utc>) -> Result<()> {
+        ensure!(
+            !matches!(
+                code,
+                Code::Accepted
+                    | Code::CertificateExpiring
+                    | Code::ReceiptStale
+                    | Code::NotObserved
+                    | Code::AttemptInProgress
+                    | Code::AttemptInterrupted
+                    | Code::RegistrationPending
+                    | Code::PendingApproval
+            ),
+            "invalid startup failure class"
+        );
+        self.snapshot.last_attempt_at = Some(at);
+        self.snapshot.last_attempt_result = code;
+        self.snapshot.consecutive_failures =
+            self.snapshot.consecutive_failures.saturating_add(1).min(16);
+        self.snapshot.retry_delay_seconds = 0;
         self.snapshot.next_attempt_at = None;
         self.persist()
     }

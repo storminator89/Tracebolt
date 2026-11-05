@@ -37,7 +37,8 @@ describe('read-only application-check setup guidance', () => {
         expect(details).toHaveTextContent('exact targets and IPs');
         expect(details).toHaveTextContent('private LAN and plaintext HTTP need separate approval');
         expect(details).toHaveTextContent('Side-effect-free targets without credentials');
-        expect(details).toHaveTextContent('no alarms');
+        expect(details).toHaveTextContent('Only separately approved local incident metadata is retained for 30 days');
+        expect(details).toHaveTextContent('no external notifications');
         expect(panel().querySelector('input,select,textarea,form,table,dl')).toBeNull();
         expect(within(panel()).getAllByRole('button')).toHaveLength(1);
         fireEvent.click(details.querySelector('summary')!); fireEvent.click(details.querySelector('summary')!);
@@ -121,7 +122,9 @@ describe('retained cadence, freshness and reason explanations', () => {
         const mounted = await start(); expect(panel().querySelector('dl')).not.toBeNull(); expect(panel().querySelector('.application-checks-help')).not.toBeNull();
         vi.mocked(request).mockRejectedValueOnce(new Error('fixture'));
         fireEvent.click(screen.getByRole('button', { name: 'Reload application status' })); await flush();
-        expect(panel().querySelector('dl,.application-checks-help,.application-checks-details')).toBeNull();
+        expect(panel().querySelector('dl,.application-checks-help,.application-checks-details:not(.application-incidents)')).toBeNull();
+        expect(panel().querySelector('.application-incidents')).not.toHaveAttribute('open');
+        expect(request).toHaveBeenCalledTimes(2);
         expect(within(panel()).getByRole('link', { name: 'Add check' })).toHaveAttribute('href', '#/settings/application-checks');
         vi.mocked(useOperator).mockReturnValue({ ...operator, authenticated: false }); mounted.rerender(<ApplicationChecksPanel/>);
         expect(screen.queryByRole('region')).toBeNull();

@@ -27,6 +27,9 @@ func (s *Store) NextWindowsNotification(ctx context.Context, b alarmdelivery.Bin
 	if !b.Valid() || !validMaintenanceTime(now) {
 		return nil, ErrWindowsNotification
 	}
+	if _, err := s.WindowsMaintenanceSchedules(ctx, func() time.Time { return now }); err != nil {
+		return nil, err
+	}
 	var v WindowsNotificationCandidate
 	var raw, body []byte
 	var domain string
@@ -236,6 +239,11 @@ func (s *Store) ClaimWindowsNotification(ctx context.Context, b alarmdelivery.Bi
 		return nil, e
 	}
 	muted, e := notificationMaintenance(maintenance, target, now)
+	if e == nil {
+		var scheduled bool
+		scheduled, e = scheduledWindowsNotificationMuted(ctx, tx, target, payload.TransitionAt, now, true)
+		muted = muted || scheduled
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -313,6 +321,11 @@ func (s *Store) ClaimWindowsNotification(ctx context.Context, b alarmdelivery.Bi
 	}
 	// Re-evaluate freshness and bounded windows at the final sampled clock.
 	muted, e = notificationMaintenance(maintenance, target, final)
+	if e == nil {
+		var scheduled bool
+		scheduled, e = scheduledWindowsNotificationMuted(ctx, tx, target, payload.TransitionAt, final, true)
+		muted = muted || scheduled
+	}
 	if e != nil || muted {
 		if e != nil {
 			return nil, e
@@ -343,14 +356,24 @@ func (s *Store) ClaimWindowsNotification(ctx context.Context, b alarmdelivery.Bi
 	if e = guard(commitAt); e != nil {
 		return nil, e
 	}
+	afterGuard := clock().UTC()
+	if !validMaintenanceTime(afterGuard) || afterGuard.Before(commitAt) || !afterGuard.Before(in.AuthorityUntil) || !afterGuard.Before(payload.TransitionAt.Add(alarmdelivery.MaxQueueAge)) {
+		return nil, ErrWindowsNotificationConflict
+	}
 	if payload.Transition == "opened" {
-		_, fresh, err := notificationCurrent(ctx, tx, c.Target, in, commitAt, since)
+		_, fresh, err := notificationCurrent(ctx, tx, c.Target, in, afterGuard, since)
 		if err != nil {
 			return nil, err
 		}
 		if !fresh {
 			return nil, ErrWindowsNotificationConflict
 		}
+	}
+	if muted, err := scheduledWindowsNotificationMuted(ctx, tx, target, payload.TransitionAt, afterGuard, true); err != nil || muted {
+		if err != nil {
+			return nil, err
+		}
+		return nil, ErrWindowsNotificationConflict
 	}
 	if e = tx.Commit(); e != nil {
 		return nil, e

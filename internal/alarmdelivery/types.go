@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"localrmm/internal/health"
 	"regexp"
 	"sync"
 	"time"
@@ -108,7 +109,7 @@ func (w *Worker) Step(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	a, e := w.queue.ClaimAlarm(ctx, w.binding, w.now().UTC())
+	a, e := w.queue.ClaimAlarm(health.WithMaintenanceClock(ctx, w.now), w.binding, w.now().UTC())
 	if e != nil || a == nil {
 		return e
 	}

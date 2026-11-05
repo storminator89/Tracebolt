@@ -1,3 +1,4 @@
+import { WindowsProcessWatches } from './windows-process-watches';
 import { memo, useId, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { useOperator } from './auth';
@@ -77,6 +78,7 @@ function FullProcesses({ deviceId, sessionKey, enabled, children }: { deviceId: 
                 {page && <>{page.rows.length ? <WindowsFullProcessesTable page={page} locale={locale}/> : <p className="windows-inventory-empty">{complete.manifest.rowCount === 0 ? c.healthyEmpty : c.noMatches}</p>}<nav className="windows-full-processes-pagination" aria-label={c.pages}><span>{c.page(page.offset, page.rows.length, page.matchingCount)}</span><button type="button" className="button small" aria-label={c.previous} disabled={page.offset === 0} onClick={resource.previous}><ChevronLeft size={16} aria-hidden="true"/></button><button type="button" className="button small" aria-label={c.next} disabled={!page.nextCursor} onClick={resource.next}><ChevronRight size={16} aria-hidden="true"/></button></nav></>}
             </>}
         </>}
+        <WindowsProcessWatches deviceId={deviceId} sessionKey={sessionKey} page={page} enabled={enabled} onRefreshInventory={resource.restart}/>
         <details className="windows-inventory-scope windows-full-processes-details"><summary>{c.details}</summary><p>{c.coverage}</p><p>{c.identity}</p><p>{c.lifetime}</p>{complete && <dl>{time(c.start, complete.manifest.captureStartedAt)}{time(c.finish, complete.manifest.captureFinishedAt)}{time(c.received, complete.receivedAt)}{time(c.expiry, complete.manifest.expiresAt)}{view?.cursorExpiresAt && time(c.cursorExpiry, view.cursorExpiresAt)}<div><dt>{c.generation}</dt><dd>{complete.manifest.generationId}</dd></div><div><dt>{c.sequence}</dt><dd>{complete.manifest.sequence}</dd></div><div><dt>{c.scope}</dt><dd>{complete.manifest.scope} · {complete.manifest.source}</dd></div></dl>}{attempt && <dl>{time(c.latest, attempt.attemptedAt)}<div><dt>{c.sequence}</dt><dd>{attempt.sequence}</dd></div></dl>}</details>
         {children && <details className="windows-inventory-scope windows-full-processes-preview" open={!complete}><summary>{c.preview}</summary>{children}</details>}
     </section>;

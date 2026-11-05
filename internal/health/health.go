@@ -62,13 +62,14 @@ type Incident struct {
 	ClosedReason   string     `json:"closedReason,omitempty"`
 }
 type State struct {
-	Version           int        `json:"version"`
-	MonitoredServices []string   `json:"monitoredServices"`
-	MaintenanceUntil  *time.Time `json:"maintenanceUntil"`
-	EvaluatedAt       *time.Time `json:"evaluatedAt"`
-	Checks            []Check    `json:"checks"`
-	Incidents         []Incident `json:"incidents"`
-	NextID            uint64     `json:"nextId"`
+	Schedule          *MaintenanceSchedule `json:"maintenanceSchedule,omitempty"`
+	Version           int                  `json:"version"`
+	MonitoredServices []string             `json:"monitoredServices"`
+	MaintenanceUntil  *time.Time           `json:"maintenanceUntil"`
+	EvaluatedAt       *time.Time           `json:"evaluatedAt"`
+	Checks            []Check              `json:"checks"`
+	Incidents         []Incident           `json:"incidents"`
+	NextID            uint64               `json:"nextId"`
 }
 type View struct {
 	SchemaVersion     string     `json:"schemaVersion"`
@@ -137,10 +138,22 @@ func (s *State) SetServices(in []string, now time.Time) error {
 	return nil
 }
 func (s *State) Maintain(minutes int, now time.Time) error {
-	if s.EvaluatedAt != nil && now.Before(*s.EvaluatedAt) {
+	if minutes != 0 && minutes != 15 && minutes != 60 && minutes != 240 {
 		return ErrInvalid
 	}
-	if minutes != 0 && minutes != 15 && minutes != 60 && minutes != 240 {
+	if s.Schedule != nil {
+		if !s.MaintenanceClockValid(now) {
+			return ErrInvalid
+		}
+		last := s.Schedule.Windows[len(s.Schedule.Windows)-1]
+		if last.Status(now) == "pending" || last.Status(now) == "active" {
+			return ErrInvalid
+		}
+		if err := s.ObserveMaintenance(now); err != nil {
+			return err
+		}
+	}
+	if s.EvaluatedAt != nil && now.Before(*s.EvaluatedAt) {
 		return ErrInvalid
 	}
 	s.MaintenanceUntil = nil
@@ -185,7 +198,7 @@ func (s *State) Evaluate(in Input, now time.Time) {
 func (s *State) EvaluateTransitions(in Input, now time.Time) []Incident {
 	transitions := []Incident{}
 	now = now.UTC()
-	if s.EvaluatedAt != nil && now.Before(*s.EvaluatedAt) {
+	if !s.MaintenanceClockValid(now) {
 		for i := range s.Checks {
 			s.Checks[i].State = "unknown"
 			s.Checks[i].BadSince = nil
@@ -193,8 +206,9 @@ func (s *State) EvaluateTransitions(in Input, now time.Time) []Incident {
 		}
 		return nil
 	}
+	_ = s.ObserveMaintenance(now)
 	gap := s.EvaluatedAt == nil || now.Before(*s.EvaluatedAt) || now.Sub(*s.EvaluatedAt) > 3*Interval
-	maintenance := s.MaintenanceUntil != nil && now.Before(*s.MaintenanceUntil)
+	maintenance := s.MaintenanceEnd(now) != nil
 	for i := range s.Checks {
 		c := &s.Checks[i]
 		prior := c.ObservedAt
@@ -286,6 +300,17 @@ func (s *State) EvaluateTransitions(in Input, now time.Time) []Incident {
 				c.State = "unknown"
 				continue
 			}
+			if s.Schedule != nil {
+				for _, w := range s.Schedule.Windows {
+					end := w.EndsAt
+					if w.ClosedAt != nil && w.ClosedAt.Before(end) {
+						end = *w.ClosedAt
+					}
+					if w.ClosedReason != "canceled" && !now.Before(end) && c.BadSince != nil && c.BadSince.Before(end) {
+						c.BadSince = nil
+					}
+				}
+			}
 			if c.BadSince == nil {
 				c.BadSince = stamp(now)
 			}
@@ -358,7 +383,7 @@ func (s State) View(id string, now time.Time) View {
 		checks[i].BadSince = nil
 		checks[i].GoodSince = nil
 		sourceStale := checks[i].ObservedAt != nil && (checks[i].Kind != "offline" || checks[i].State == "ok") && !Fresh(*checks[i].ObservedAt, now)
-		if s.EvaluatedAt == nil || !Fresh(*s.EvaluatedAt, now) || sourceStale {
+		if !s.MaintenanceClockValid(now) || s.EvaluatedAt == nil || !Fresh(*s.EvaluatedAt, now) || sourceStale {
 			checks[i].State = "unknown"
 			checks[i].Value = nil
 		}
@@ -371,17 +396,14 @@ func (s State) View(id string, now time.Time) View {
 			status = "attention"
 		}
 	}
-	if s.MaintenanceUntil != nil && now.Before(*s.MaintenanceUntil) {
+	maintenanceUntil := s.MaintenanceEnd(now)
+	if maintenanceUntil != nil {
 		status = "maintenance"
-	}
-	maintenanceUntil := s.MaintenanceUntil
-	if maintenanceUntil != nil && !now.Before(*maintenanceUntil) {
-		maintenanceUntil = nil
 	}
 	return View{"tracebolt.health-view.v1", id, now.UTC(), status, s.EvaluatedAt, maintenanceUntil, s.MonitoredServices, checks, s.Incidents}
 }
 func (s State) Validate() error {
-	if s.Version != 1 || s.NextID > 1<<53-1 || len(s.Incidents) > MaxIncidents {
+	if (s.Version != 1 && s.Version != 2) || (s.Version == 1 && s.Schedule != nil) || (s.Version == 2 && (s.Schedule == nil || s.Schedule.validate() != nil)) || s.NextID > 1<<53-1 || len(s.Incidents) > MaxIncidents {
 		return ErrInvalid
 	}
 	services, e := Services(s.MonitoredServices)

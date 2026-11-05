@@ -19,6 +19,18 @@ async function selectBoth() {
     fireEvent.change(screen.getByLabelText('Select a customer'), { target:{value:customer.id} });
 }
 describe('customer assignment for activated Windows identities', () => {
+    it('shows read-only identity/customer bindings without an assignment form or POST', async () => {
+        render(<CustomerDevices sessionExpiresAt="2098-01-01T00:00:00Z" readOnly/>);
+        expect(await screen.findByText(device.identity)).toBeVisible();
+        expect(screen.getByRole('region', {name:'Customer Windows assignments'})).toBeVisible();
+        expect(screen.getByText('Read-only: customer records and assignments cannot be changed.')).toBeVisible();
+        expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', {name:'Assign reviewed identity'})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', {name:'Refresh assignments'}));
+        expect(await screen.findByText(device.identity)).toBeVisible();
+        expect(mutate).not.toHaveBeenCalled();
+    });
     it('rejects malformed, duplicate, unbound or oversized projections', () => {
         expect(validCustomerDeviceView(view)).toBe(true);
         expect(validCustomerDeviceView({...view,unavailableAssignments:100})).toBe(true);

@@ -1,0 +1,42 @@
+{
+  "canManage": true,
+  "check": {
+    "bad": 0,
+    "condition": "unknown",
+    "good": 0,
+    "mountId": "",
+    "observedAt": null,
+    "usedPercent": null
+  },
+  "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "earlierOmitted": 0,
+  "expiresAt": "2026-11-04T12:02:00Z",
+  "generation": {
+    "capturedAt": "2026-11-04T12:00:00Z",
+    "id": "sample_dddddddddddddddddddddddddddddddd",
+    "receivedAt": "2026-11-04T12:00:00Z",
+    "sequence": "1"
+  },
+  "incidents": [],
+  "lastRequest": null,
+  "moreOptions": false,
+  "options": [
+    {
+      "filesystem": "ext4",
+      "filesystemGroup": "fs_8_1",
+      "mountPoint": "/var"
+    }
+  ],
+  "policy": {
+    "enabled": false,
+    "enabledAt": null,
+    "recovery": 0,
+    "target": null,
+    "threshold": 0
+  },
+  "revision": "0",
+  "schemaVersion": "tracebolt.linux-mount-watch.v1",
+  "serverNow": "2026-11-04T12:00:00Z",
+  "sourceStatus": "none",
+  "sourceToken": "mountsource_cccccccccccccccccccccccccccccccc"
+}

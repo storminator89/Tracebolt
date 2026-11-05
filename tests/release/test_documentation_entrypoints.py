@@ -21,6 +21,37 @@ def section(text, heading):
     return text.split(marker, 1)[1].split('\n## ', 1)[0]
 
 
+def check_release_status(documents):
+    """Compare navigation with existing canonical guides, never live releases."""
+    changelog = documents['CHANGELOG.md']
+    published = section(changelog, 'Published endpoint prereleases')
+    windows = documents['docs/windows-prerelease-changelog.md']
+    macos = documents['docs/macos-status.md']
+    windows_release = next(target for target in LINK.findall(documents['docs/windows-status.md'])
+                           if '/releases/tag/' in target)
+    macos_release = next(target for target in LINK.findall(documents['README.md'])
+                         if '/releases/tag/' in target and '-macos-preview.' in target)
+    for body, required in [
+        (published, {windows_release, macos_release, 'docs/windows-status.md',
+                     'docs/macos-prerelease.md', 'docs/macos-status.md'}),
+        (windows, {windows_release, 'windows-status.md'}),
+        (macos, {macos_release, 'macos-prerelease.md'}),
+    ]:
+        if not required.issubset(set(LINK.findall(body))):
+            raise ValueError('Release navigation must agree with canonical platform guides')
+    for body, obsolete in [
+        (changelog, ['the next [preview.3 candidate]']),
+        (windows, ['**release preparation.**', 'must succeed before publication',
+                   'full validate remains required', 'verify release availability separately']),
+        (macos, ['this is an unreleased source candidate.',
+                 'there is no published mac installer or verified download command.',
+                 'before any macos release']),
+    ]:
+        normalized = ' '.join(body.lower().split())
+        if any(claim in normalized for claim in obsolete):
+            raise ValueError('Obsolete blanket release-availability claim')
+
+
 def check_entrypoints(documents):
     index, web = documents['docs/README.md'], documents['web/README.md']
     setup = section(index, 'Setup')
@@ -45,6 +76,7 @@ def check_entrypoints(documents):
     for obsolete in ['setup preview is unreleased', 'macos enrollment remains unavailable']:
         if obsolete in normalized:
             raise ValueError('Obsolete enrollment availability claim')
+    check_release_status(documents)
     # Validate local guide destinations and the changed demo fragment from the
     # actual supplied documents. No network or published-asset verification.
     for name, body in [('docs/README.md', index), ('web/README.md', enrollment)]:
@@ -65,7 +97,9 @@ def check_entrypoints(documents):
 class DocumentationEntrypoints(unittest.TestCase):
     def setUp(self):
         self.documents = {name: (ROOT / name).read_text() for name in
-                          ['docs/README.md', 'web/README.md', 'README.md']}
+                          ['docs/README.md', 'web/README.md', 'README.md', 'CHANGELOG.md',
+                           'docs/windows-status.md', 'docs/windows-prerelease-changelog.md',
+                           'docs/macos-status.md']}
 
     def test_current_entrypoints_use_canonical_guides_and_preserve_history(self):
         check_entrypoints(self.documents)
@@ -109,6 +143,36 @@ class DocumentationEntrypoints(unittest.TestCase):
     def test_existing_full_validation_discovers_this_inert_suite(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text()
         self.assertEqual(workflow.count("python3 -B -m unittest discover -s tests/release -p 'test_*.py' -v"), 1)
+
+    def test_release_status_follows_canonical_guides_without_network(self):
+        check_release_status(self.documents)
+
+    def test_stale_release_links_and_missing_status_guides_fail(self):
+        for name, old, new in [
+            ('CHANGELOG.md', '/releases/tag/v0.1.0-windows-preview.3', '/releases/tag/unknown-windows'),
+            ('CHANGELOG.md', '(docs/macos-prerelease.md)', '(docs/macos-status.md)'),
+            ('docs/windows-prerelease-changelog.md', '(windows-status.md)', '(missing-guide.md)'),
+            ('docs/macos-status.md', '/releases/tag/v0.1.0-macos-preview.1', '/releases/tag/unknown-macos'),
+        ]:
+            changed = deepcopy(self.documents)
+            self.assertIn(old, changed[name])
+            changed[name] = changed[name].replace(old, new)
+            with self.subTest(name=name, old=old), self.assertRaises(ValueError):
+                check_release_status(changed)
+
+    def test_obsolete_prepublication_claims_fail_beside_correct_release_links(self):
+        for name, claim in [
+            ('CHANGELOG.md', 'The next [preview.3 candidate] is being prepared.'),
+            ('docs/windows-prerelease-changelog.md', '**Release preparation.**'),
+            ('docs/windows-prerelease-changelog.md', 'Full Validate remains required.'),
+            ('docs/macos-status.md', 'This is an unreleased source candidate.'),
+            ('docs/macos-status.md', 'There is no published Mac installer or verified download command.'),
+            ('docs/macos-status.md', 'Before any macOS release, native tests must pass.'),
+        ]:
+            changed = deepcopy(self.documents)
+            changed[name] += '\n' + claim + '\n'
+            with self.subTest(name=name, claim=claim), self.assertRaises(ValueError):
+                check_release_status(changed)
 
 
 if __name__ == '__main__':

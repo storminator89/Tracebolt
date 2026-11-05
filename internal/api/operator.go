@@ -36,6 +36,8 @@ import (
 )
 
 type LANOperatorConfig struct {
+	ManagerReadiness ManagerReadinessSource
+
 	MacOSInventoryEnrollment          *enrollmentservice.Service
 	MacOSInventoryEnrollmentBootstrap EnrollmentBootstrap
 	MacOSEnrollment                   *enrollmentservice.Service
@@ -73,6 +75,8 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
+	managerReadiness ManagerReadinessSource
+
 	windowsManagedMSI         *windowsmanagedmsimanager.Manager
 	windowsManagedMSIRegistry *windowsmanagedmsimanager.Registry
 	windowsUpdateJobs         *windowsupdatejob.Manager
@@ -223,6 +227,13 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.ApplicationChecks != nil && c.ApplicationCheckSettings != nil || !c.ApplicationChecks.Matches(managerID, c.Origin, profile) || !c.ApplicationCheckSettings.Matches(managerID, c.Origin, profile) {
 		return nil, applicationcheck.ErrConfiguration
 	}
+	var processWatches *linuxProcessWatchMonitor
+	if c.Enrollment != nil && c.Enrollment.Binding().CollectionProfile == enrollmentcrypto.CollectionProfileComplete {
+		processWatches, err = newLinuxProcessWatchMonitor(app.store, c.Enrollment)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var windowsContact *windowsContactMonitor
 	var windowsCapacity *windowsCapacityMonitor
 	if c.WindowsEnrollment != nil {
@@ -238,6 +249,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.mu.Lock()
 	app.lanOnly = true
 	app.guidedEnrollment = c.Enrollment != nil
+	app.automaticCertificateRenewal = c.Enrollment.AutomaticRenewal()
 	app.insecureHTTPTest = c.InsecureHTTPTest
 	app.managedPreview = nil
 	app.sample = model.Device{}
@@ -245,6 +257,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	app.lanOperational = nil
 	app.lanPackages = nil
 	app.health = nil
+	app.linuxProcessWatches = processWatches
 	app.windowsContact = windowsContact
 	app.windowsCapacity = windowsCapacity
 	app.journalAI = nil
@@ -295,7 +308,7 @@ func NewLANOperatorHandler(app *Server, c LANOperatorConfig) (http.Handler, erro
 	if c.PackageActions != nil {
 		packages = c.PackageActions
 	}
-	h := &operatorHandler{packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
+	h := &operatorHandler{managerReadiness: c.ManagerReadiness, packageUpdatesManager: packages, alarmSettings: c.AlarmSettings, applicationChecks: c.ApplicationChecks, applicationCheckSettings: c.ApplicationCheckSettings, actions: actions, app: app, origin: c.Origin, authority: u.Host, auth: c.Auth, registry: c.Registry, insecureHTTPTest: c.InsecureHTTPTest, cookieName: cookieName, enrollment: c.Enrollment, enrollmentBootstrap: c.EnrollmentBootstrap}
 	h.windowsUpdateJobs = c.WindowsUpdateJobs
 	h.windowsSoftwareJobs = c.WindowsSoftwareJobs
 	h.windowsManagedMSI = c.WindowsManagedMSI
@@ -601,6 +614,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.alarmSettingsAPI(w, r)
 		return
 	}
+	if r.URL.Path == "/api/application-checks/incidents" {
+		h.applicationIncidentsAPI(w, r)
+		return
+	}
 	if r.URL.Path == "/api/application-checks/settings" {
 		h.applicationCheckSettingsAPI(w, r)
 		return
@@ -609,11 +626,15 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
 		return
 	}
+	if r.URL.Path == "/api/manager/readiness" {
+		h.managerReadinessAPI(w, r)
+		return
+	}
 	if r.URL.Path == "/api/fleet/windows-notifications" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-notifications/") {
 		h.windowsNotificationsAPI(w, r)
 		return
 	}
-	if r.URL.Path == "/api/fleet/windows-maintenance" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance/") {
+	if r.URL.Path == "/api/fleet/windows-maintenance" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance/") || r.URL.Path == "/api/fleet/windows-maintenance-schedule" || strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance-schedule/") {
 		h.windowsMaintenanceAPI(w, r)
 		return
 	}
@@ -714,6 +735,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.windowsFullSoftwareQuery(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-process-watches") {
+		h.windowsProcessWatchesAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/windows-full-processes") {
 		h.windowsFullProcessesQuery(w, r)
 		return
@@ -796,6 +821,14 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/inventory/system") {
 		h.systemInventory(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/linux-process-watches") {
+		h.linuxProcessWatchesAPI(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/mount-watch") {
+		h.linuxMountWatchAPI(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/health") {

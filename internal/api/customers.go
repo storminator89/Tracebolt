@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"localrmm/internal/enrollmentcrypto"
+	"localrmm/internal/operatorauth"
 	"localrmm/internal/store"
 )
 
@@ -56,10 +57,38 @@ func projectCustomers(items []store.Customer) customersView {
 	return result
 }
 
+// Customer reads are a separate explicit named grant, never implied by ordinary
+// read or maintenance authority. Shared administration retains its old mapping.
+// Release the short admission before source/store I/O: every response still
+// rechecks the same immutable session's lifetime and current source authority.
+func authorizeCustomerAccess(w http.ResponseWriter, r *http.Request) bool {
+	op, ok := operatorContext(r)
+	if !ok {
+		fail(w, 403, "operator_capability_required", "An authorized operator is required for customer records.")
+		return false
+	}
+	if !op.session.Named() {
+		return true
+	}
+	if r.Method != http.MethodGet {
+		fail(w, 403, "operator_capability_required", "This customer permission allows reads only.")
+		return false
+	}
+	release, err := op.session.BeginCapability(r.Context(), operatorauth.ReadCustomers)
+	if err != nil {
+		if errors.Is(err, operatorauth.ErrUnauthenticated) {
+			fail(w, 401, "authentication_required", "Operator session expired or was revoked.")
+		} else {
+			fail(w, 403, "operator_capability_required", "The customer-read permission is not granted.")
+		}
+		return false
+	}
+	release()
+	return true
+}
+
 func (h *operatorHandler) customersAPI(w http.ResponseWriter, r *http.Request) {
-	operator, ok := operatorContext(r)
-	if !ok || operator.session.Named() {
-		fail(w, 403, "operator_capability_required", "A shared administrator is required for customer records.")
+	if !authorizeCustomerAccess(w, r) {
 		return
 	}
 	parts := strings.Split(r.URL.Path, "/")

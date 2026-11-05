@@ -18,6 +18,7 @@ COPY tests/fixtures/windows-contact-view.json /src/tests/fixtures/windows-contac
 COPY tests/fixtures/windows-capacity-view.json /src/tests/fixtures/windows-capacity-view.json
 COPY tests/fixtures/windows-resource-view.json /src/tests/fixtures/windows-resource-view.json
 COPY tests/fixtures/windows-maintenance-view.json /src/tests/fixtures/windows-maintenance-view.json
+COPY tests/fixtures/windows-maintenance-schedule-view.json /src/tests/fixtures/windows-maintenance-schedule-view.json
 COPY tests/fixtures/windows-notifications-view.json /src/tests/fixtures/windows-notifications-view.json
 COPY tests/fixtures/windows-complete-notifications-view.json /src/tests/fixtures/windows-complete-notifications-view.json
 COPY tests/fixtures/windows-service-health-view.json /src/tests/fixtures/windows-service-health-view.json
@@ -42,6 +43,7 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/manager ./cmd/lan-manager \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/manager-setup ./cmd/manager-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/action-setup ./cmd/action-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/windows-action-manager-setup ./cmd/windows-action-manager-setup \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/windows-update-manager-setup ./cmd/windows-update-manager-setup \
@@ -54,6 +56,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false
 # A static Go executable needs no shell, package manager or root account.
 FROM scratch AS runtime
 COPY --from=build /out/manager /tracebolt/manager
+COPY --from=build /out/manager-setup /tracebolt/manager-setup
 COPY --from=build /out/action-setup /tracebolt/action-setup
 COPY --from=build /out/windows-action-manager-setup /tracebolt/windows-action-manager-setup
 COPY --from=build /out/windows-update-manager-setup /tracebolt/windows-update-manager-setup

@@ -42,7 +42,7 @@ describe('existing Windows OS evidence in the shared device view', () => {
         it.each(['healthy', 'stale', 'unknown', 'denied'] as const)(`retains source, original capture and %s quality in ${locale}`, async quality => {
             setLocale(locale, false); current = device(quality);
             render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>); await flush();
-            fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? /Belege/ : /Evidence/ })); await flush();
+            fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? 'Belege' : 'Evidence' })); await flush();
             const card = document.querySelector<HTMLElement>('#evidence-local-windows-os')!;
             expect(card).not.toBeNull(); expect(within(card).getByText(source)).toBeVisible();
             expect(card.querySelector(`.quality-${quality}`)).not.toBeNull();
@@ -57,7 +57,7 @@ describe('existing Windows OS evidence in the shared device view', () => {
     }
     it('replaces successful OS evidence with denial and clears it when operator access ends', async () => {
         render(<DeviceDetail id={windowsDeviceId} onClose={vi.fn()} onCase={vi.fn()}/>); await flush();
-        fireEvent.click(screen.getByRole('tab', { name: /Evidence/ })); await flush();
+        fireEvent.click(screen.getByRole('tab', { name: 'Evidence' })); await flush();
         current = device('denied');
         fireEvent.click(screen.getByRole('button', { name: 'Refresh device metadata' })); await flush();
         const card = document.querySelector<HTMLElement>('#evidence-local-windows-os')!;

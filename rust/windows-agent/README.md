@@ -15,7 +15,12 @@ preview packages remain separate releases.
 
 ## Install: no token by default
 
-Extract the release ZIP. In an administrator PowerShell:
+Independently verify/review the selected unsigned release, then extract its whole
+ZIP into a trusted location where no other process is writing. Keep exactly its
+six package files together, including `Package-Preflight.ps1` and `SHA256SUMS.txt`;
+put CA/credential/bootstrap inputs outside that directory. A standalone EXE or
+an `-Executable` outside the package is not supported by this installer. In an
+administrator PowerShell:
 
 ```powershell
 .\Install-Tracebolt.ps1 `
@@ -41,6 +46,16 @@ opening state, and the enrollment initializer also enforces this for library
 callers. Preflight proves current protocol support, not enrollment, approval,
 continued availability or accepted telemetry. See the
 [compatibility contract](../../docs/rust-manager-compatibility.md).
+
+Before any EXE invocation it checks the bounded exact checksum manifest, all
+package payload hashes and AMD64 PE format, and rejects reparse paths or unsafe
+installation-parent ownership/ACLs without changing those parents. Read-only
+native package handles are retained through initialization; the installed EXE
+is copied from the checked handle and rehashed. Fresh target directories are
+created exclusively with protected initial ACLs before disabled service staging;
+existing paths are never adopted. These are consistency/path checks, not signer
+authentication or a code-safety/DLL-search guarantee. See the
+[exact boundary and native evidence gates](../../docs/rust-installer-preflight.md).
 
 The installer generates a fresh Ed25519 key locally, creates the restricted
 `TraceboltRustAgent` Windows service, and starts automatic onboarding. There is
@@ -74,8 +89,12 @@ prompt. Tokens never go in command arguments, environment variables or files.
 Existing server invitation workflows remain supported. Advanced provisioning
 can instead use `-CredentialDirectory`, `-AgentId` and `-FreshApprovedIdentity`
 with a fresh, approved, never-used TLS identity; it is not the default and its
-distinct legacy telemetry-origin semantics are outside the new compatibility
-preflight. Do not treat that unchanged advanced mode as newly verified.
+distinct legacy telemetry-origin semantics remain outside the new compatibility
+preflight. Before staging, local preflight now checks bounded certificate/key
+syntax, current dedicated client-auth use and the sender's actual TLS key-pair
+construction. Direct fresh initialization repeats these checks before state.
+This does not prove chain trust/revocation, exact manager approval or never-used
+identity status; it is not native preprovided-installation acceptance.
 
 For a local-only, nonmutating invitation-input check (no manager request), use
 `tracebolt-windows-agent.exe validate-config --manager-origin <HTTPS-origin>
@@ -142,7 +161,7 @@ Studio C++ Build Tools:
 ```
 
 Output: `artifacts/windows-rust.zip`, containing EXE, installation/removal scripts,
-this guide and SHA256 hashes. Packaging uses a fresh allowlisted staging area
+this guide, preflight helper and SHA256 hashes. Packaging uses a fresh allowlisted staging area
 and refuses any existing output directory or ZIP without changing it. For a
 repeat build, select a new `-OutputDirectory`; no automatic cleanup is performed.
 Packages are unsigned; normal Windows execution

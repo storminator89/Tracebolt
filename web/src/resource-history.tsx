@@ -4,6 +4,8 @@ import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import { useResourceHistory } from './resource-history-resource';
 import { resourceSegments, type ResourceHistory, type ResourceKey, type ResourceMetric } from './resource-history-types';
+import { historyHours, historyIntervals, inHistoryInterval, type HistoryHours, type HistoryInterval } from './resource-history-analysis';
+import { ResourceHistorySummary } from './resource-history-summary';
 import './resource-history.css';
 
 const copy = {
@@ -13,15 +15,15 @@ const copy = {
 const W = 360, H = 154, LEFT = 29, RIGHT = 7, TOP = 12, BOTTOM = 25, width = W - LEFT - RIGHT, height = H - TOP - BOTTOM;
 // Metadata age ticks do not change the history snapshot. Reuse its SVG render;
 // new snapshots, locale subscriptions and local inspection still update it.
-const ResourceChart = memo(function ResourceChart({ view, metric, label }: { view: ResourceHistory; metric: ResourceKey; label: string }) {
+const ResourceChart = memo(function ResourceChart({ view, metric, label, interval, periodLabel }: { view: ResourceHistory; metric: ResourceKey; label: string; interval: HistoryInterval; periodLabel: string }) {
     const [locale] = useLocale(), c = copy[locale], description = useId(), [selected, setSelected] = useState<ResourceMetric | null>(null);
-    const segments = useMemo(() => resourceSegments(view, metric), [view, metric]), points = useMemo(() => segments.flat(), [segments]);
-    const start = Date.parse(view.windowStart), end = Date.parse(view.serverNow), x = (at: string) => LEFT + (Date.parse(at) - start) / (end - start) * width, y = (value: number) => TOP + (100 - value) / 100 * height;
+    const segments = useMemo(() => resourceSegments(view, metric).map(segment => segment.filter(point => inHistoryInterval(point.collectedAt, interval))).filter(segment => segment.length), [view, metric, interval]), points = useMemo(() => segments.flat(), [segments]);
+    const start = Date.parse(interval.start), end = Date.parse(interval.end), x = (at: string) => LEFT + (Date.parse(at) - start) / (end - start) * width, y = (value: number) => TOP + (100 - value) / 100 * height;
     const sample = selected && points.find(point => point.collectedAt === selected.collectedAt) || null;
     const time = (at: number) => new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(at);
     const line = (segment: ResourceMetric[]) => segment.map((point, i) => `${i ? 'L' : 'M'}${x(point.collectedAt).toFixed(2)},${y(point.value!).toFixed(2)}`).join(' ');
     return <figure className={`resource-history-chart ${metric}`}><figcaption><span>{label}</span><span className="resource-history-unit">%</span></figcaption>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label} · ${c.title}. ${points.length} ${c.valid}. ${c.keyboard}`} aria-describedby={description} tabIndex={points.length ? 0 : undefined}
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${label} · ${periodLabel}. ${points.length} ${c.valid}. ${c.keyboard}`} aria-describedby={description} tabIndex={points.length ? 0 : undefined}
             onPointerMove={event => { const rect = event.currentTarget.getBoundingClientRect(), target = start + (((event.clientX - rect.left) / rect.width * W - LEFT) / width) * (end - start); const nearest = points.reduce<ResourceMetric | null>((best, point) => !best || Math.abs(Date.parse(point.collectedAt) - target) < Math.abs(Date.parse(best.collectedAt) - target) ? point : best, null); setSelected(nearest && Math.abs(Date.parse(nearest.collectedAt) - target) <= 120000 ? nearest : null); }}
             onPointerLeave={() => setSelected(null)} onBlur={() => setSelected(null)} onKeyDown={event => { if (!points.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) return; event.preventDefault(); if (event.key === 'Escape') { setSelected(null); return; } const index = sample ? points.indexOf(sample) : points.length; setSelected(points[event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1 : event.key === 'ArrowLeft' ? Math.max(0, index - 1) : Math.min(points.length - 1, index + 1)]); }}>
             {[0, 50, 100].map(value => <g key={value} className="resource-chart-grid"><line x1={LEFT} x2={W - RIGHT} y1={y(value)} y2={y(value)}/><text x={LEFT - 7} y={y(value) + 3} textAnchor="end">{value}</text></g>)}
@@ -40,7 +42,29 @@ export function ResourceHistoryCharts({ deviceId, sessionKey, ready, platform }:
     if (operator?.mode !== 'lan' || !operator.authenticated) return null;
     return <section className="resource-history" aria-label={c.title} aria-busy={loading}>
         <header><h3>{c.title}</h3></header>
-        {error ? <div className="resource-history-message" role="status"><span>{c[error]}</span>{error !== 'session' && <button type="button" className="text-button" onClick={retry}>{c.retry}</button>}</div> : !view ? <p className="resource-history-message" role="status">{c.loading}</p> : ['revoked', 'expired', 'not_configured'].includes(view.status) ? <p className="resource-history-message" role="status">{c[view.status as 'revoked' | 'expired' | 'not_configured']}</p> : <><div className="resource-history-grid">{(['cpu', 'memory', 'disk'] as const).map(metric => <ResourceChart key={metric} view={view} metric={metric} label={metric === 'cpu' ? 'CPU' : metric === 'disk' && platform === 'windows' ? locale === 'de' ? 'Systemvolume' : 'System volume' : c[metric]}/>)}</div>{view.status === 'awaiting' && <p className="resource-history-message">{c.empty}</p>}</>}
+        {error ? <div className="resource-history-message" role="status"><span>{c[error]}</span>{error !== 'session' && <button type="button" className="text-button" onClick={retry}>{c.retry}</button>}</div> : !view ? <p className="resource-history-message" role="status">{c.loading}</p> : ['revoked', 'expired', 'not_configured'].includes(view.status) ? <p className="resource-history-message" role="status">{c[view.status as 'revoked' | 'expired' | 'not_configured']}</p> : <ResourceHistoryExplorer key={`${deviceId}:${sessionKey}`} view={view} platform={platform}/>}
         <details className="resource-history-note"><summary>{c.detail}</summary><p>{c.note}</p><p>{platform === 'windows' ? locale === 'de' ? 'Belegung des Windows-Systemvolumes, keine Datenträgeraktivität.' : 'Windows system-volume usage, not disk activity.' : c.diskNote}</p></details>
     </section>;
+}
+
+/** Local investigation controls transform only the already-verified snapshot.
+ * They neither refresh the reader nor change its session/authority lifetime. */
+function ResourceHistoryExplorer({ view, platform }: { view: ResourceHistory; platform?: 'windows' }) {
+    const [locale] = useLocale(), c = copy[locale];
+    const [hours, setHours] = useState<HistoryHours>(24), [compare, setCompare] = useState(false);
+    const intervals = useMemo(() => historyIntervals(view, hours), [view, hours]);
+    const periodLabel = locale === 'de' ? hours === 1 ? 'Letzte Stunde' : `Letzte ${hours} Stunden` : hours === 1 ? 'Last hour' : `Last ${hours} hours`;
+    return <>
+        <div className="resource-history-controls">
+            <label>{locale === 'de' ? 'Zeitraum' : 'Time window'}<select aria-label={locale === 'de' ? 'Verlauf-Zeitraum' : 'History time window'} value={hours} onChange={event => { const next = Number(event.target.value); if ((historyHours as readonly number[]).includes(next)) { setHours(next as HistoryHours); if (next === 24) setCompare(false); } }}>
+                {historyHours.map(value => <option key={value} value={value}>{locale === 'de' ? value === 1 ? '1 Stunde' : `${value} Stunden` : value === 1 ? '1 hour' : `${value} hours`}</option>)}
+            </select></label>
+            <label className="resource-history-compare"><input type="checkbox" checked={compare && intervals.previous !== null} disabled={!intervals.previous} onChange={event => setCompare(event.target.checked)}/>{locale === 'de' ? 'Mit vorherigem Zeitraum vergleichen' : 'Compare with previous interval'}</label>
+        </div>
+        {!intervals.previous && <p className="resource-history-message">{locale === 'de' ? 'Für einen Vergleich 1, 6 oder 12 Stunden wählen. Der vorherige 24-Stunden-Zeitraum ist nicht gespeichert.' : 'Choose 1, 6 or 12 hours to compare. The preceding 24-hour interval is not retained.'}</p>}
+        <p className="resource-history-snapshot"><strong>{periodLabel}. </strong>{locale === 'de' ? 'Zeitfenster endet am ursprünglichen Manager-Abruf: ' : 'Window ends at the original manager snapshot: '}<time dateTime={view.serverNow}>{view.serverNow}</time></p>
+        <div className="resource-history-grid">{(['cpu', 'memory', 'disk'] as const).map(metric => <ResourceChart key={metric} view={view} metric={metric} interval={intervals.current} periodLabel={periodLabel} label={metric === 'cpu' ? 'CPU' : metric === 'disk' && platform === 'windows' ? locale === 'de' ? 'Systemvolume' : 'System volume' : c[metric]}/>)}</div>
+        {view.status === 'awaiting' && <p className="resource-history-message">{c.empty}</p>}
+        <ResourceHistorySummary view={view} current={intervals.current} previous={compare ? intervals.previous : null} platform={platform}/>
+    </>;
 }

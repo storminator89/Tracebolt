@@ -33,6 +33,7 @@ type Server struct {
 	journalAI           *journalAIState
 	linuxCVE            *linuxCVEState
 	health              *healthMonitor
+	linuxProcessWatches *linuxProcessWatchMonitor
 	windowsContact      *windowsContactMonitor
 	windowsCapacity     *windowsCapacityMonitor
 	store               *store.Store
@@ -56,6 +57,8 @@ type Server struct {
 	catalogReviews      chan struct{}
 	reviewComparator    assessment.VersionComparator
 	catalogNow          func() time.Time
+
+	automaticCertificateRenewal bool // Immutable manager policy, not endpoint renewal status.
 }
 
 func New(s *store.Store, port int, web string, sample model.Device) (*Server, error) {
