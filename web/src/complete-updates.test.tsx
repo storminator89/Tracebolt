@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
@@ -159,4 +160,49 @@ describe('complete known cached update rows', () => {
         expect(request).toHaveBeenCalledTimes(reads + (deadline === 'staging lease' ? 1 : 0)); expect(mutateRaw).toHaveBeenCalledTimes(pages); expect(JSON.stringify(view)).toBe(original);
     });
     it('renders German state and hold labels', async () => { setLocale('de', false); await open(); expect(screen.getByText('Bekannte neuere Kandidaten')).toBeVisible(); expect(screen.getAllByText('Von dpkg zurückgehalten').length).toBeGreaterThan(0); });
+});
+
+
+it.each(['en', 'de'] as const)('explains an unapplied APT search and clears locally with keyboard focus (%s)', async locale => {
+    setLocale(locale, false); const de = locale === 'de', user = userEvent.setup(); await open();
+    const input = screen.getByRole('searchbox'), hint = de ? 'Suche geändert. Absenden, um passende Kandidaten zu lesen.' : 'Search changed. Submit to read matching candidates.';
+    const reads = vi.mocked(request).mock.calls.length, queries = vi.mocked(mutateRaw).mock.calls.length;
+    await user.type(input, 'fixture');
+    expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(hint)).toBeVisible(); expect(input).toHaveAccessibleDescription(hint);
+    expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(queries);
+    const clear = screen.getByRole('button', { name: de ? 'Suche leeren' : 'Clear search' }); clear.focus(); await user.keyboard(de ? ' ' : '{Enter}');
+    expect(input).toHaveFocus(); expect(input).toHaveValue(''); expect(clear).not.toBeInTheDocument(); expect(screen.getByText(hint)).toBeVisible();
+    expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(queries);
+    await user.keyboard('{Enter}'); await screen.findByRole('table'); expect(screen.queryByText(hint)).toBeNull();
+    expect(mutateRaw).toHaveBeenCalledTimes(queries + 1); expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({ cursor: '', search: '', limit: 100 });
+});
+it.each(['loading', 'error', 'expired', 'auth'] as const)('keeps %s ahead of APT draft feedback', async state => {
+    const mono = vi.spyOn(performance, 'now').mockReturnValue(1000), wall = vi.spyOn(Date, 'now').mockReturnValue(100000); await open();
+    const input = screen.getByRole('searchbox'); fireEvent.change(input, { target: { value: 'fixture' } });
+    expect(screen.getByText('Search changed. Submit to read matching candidates.')).toBeVisible();
+    if (state === 'auth') act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+    else {
+        if (state === 'loading') vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(() => {}));
+        if (state === 'error') vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('failed', 503));
+        if (state === 'expired') { mono.mockReturnValue(86401000); wall.mockReturnValue(86500000); }
+        fireEvent.click(screen.getByRole('button', { name: 'Search' })); await act(async () => {});
+    }
+    expect(screen.queryByText('Search changed. Submit to read matching candidates.')).toBeNull(); expect(screen.queryByRole('table')).toBeNull();
+    if (state === 'error') expect(screen.getByRole('alert')).toBeVisible();
+    if (state === 'auth' || state === 'expired') expect(screen.queryByRole('searchbox')).toBeNull();
+});
+
+it('clears a pending APT query locally and ignores its late response', async () => {
+    await open(); const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'fixture' } });
+    let finish!: (value: CompleteUpdatePage) => void, pendingBody = '', signal: AbortSignal | undefined;
+    vi.mocked(mutateRaw).mockImplementationOnce(async (_path, raw, _headers, supplied) => { pendingBody = raw; signal = supplied; return new Promise(resolve => { finish = resolve; }); });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' })); await waitFor(() => expect(signal).toBeDefined());
+    const reads = vi.mocked(request).mock.calls.length, queries = vi.mocked(mutateRaw).mock.calls.length;
+    const clear = screen.getByRole('button', { name: 'Clear search' }); clear.focus(); fireEvent.click(clear);
+    expect(signal!.aborted).toBe(true); expect(input).toHaveFocus(); expect(input).toHaveValue('');
+    await act(async () => finish(updatePage(view, rows, pendingBody)));
+    expect(screen.queryByRole('table')).toBeNull(); expect(input).toHaveFocus(); expect(input).toHaveValue('');
+    expect(screen.getByText('Search changed. Submit to read matching candidates.')).toBeVisible();
+    expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(queries);
 });
