@@ -34,6 +34,25 @@ beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset(); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('bounded captured service/software rows', () => {
+    it.each([['services','en'],['services','de'],['software','en'],['software','de']] as const)('clears a %s search in %s without losing sorting or rereading',async(kind,locale)=>{
+        setLocale(locale,false);vi.mocked(request).mockResolvedValue(tableView());render(<Harness/>);await flush();select(kind,locale);
+        const search=screen.getByRole('searchbox'), sort=screen.getByRole('combobox');
+        const label=locale==='de'?'Suche leeren':'Clear search';expect(screen.queryByRole('button',{name:label})).toBeNull();
+        fireEvent.change(sort,{target:{value:'name-desc'}});fireEvent.click(screen.getByRole('button',{name:locale==='de'?'Nächste Seite':'Next page'}));
+        fireEvent.change(search,{target:{value:'no-match'}});expect(screen.queryByRole('table')).toBeNull();
+        const reads=vi.mocked(request).mock.calls.length;const clear=screen.getByRole('button',{name:label});clear.focus();const user=userEvent.setup();await user.keyboard('{Enter}');
+        expect(search).toHaveValue('');expect(search).toHaveFocus();expect(sort).toHaveValue('name-desc');expect(names()[0]).toBe(kind==='services'?'Service-061':'Application-061');
+        expect(screen.getByText(locale==='de'?'Seite 1 von 3':'Page 1 of 3')).toBeVisible();expect(screen.queryByRole('button',{name:label})).toBeNull();
+        fireEvent.change(search,{target:{value:'   '}});fireEvent.click(screen.getByRole('button',{name:label}));expect(search).toHaveValue('');expect(search).toHaveFocus();expect(request).toHaveBeenCalledTimes(reads);
+    });
+    it.each(['services','software'] as const)('returns a broad %s search from page two to page one when cleared',async kind=>{
+        vi.mocked(request).mockResolvedValue(tableView());render(<Harness/>);await flush();select(kind);
+        const search=screen.getByRole('searchbox'), prefix=kind==='services'?'Service-':'Application-';
+        fireEvent.change(search,{target:{value:prefix}});fireEvent.click(screen.getByRole('button',{name:'Next page'}));
+        expect(screen.getByText('Page 2 of 3')).toBeVisible();expect(names()[0]).toBe(`${prefix}026`);
+        const reads=vi.mocked(request).mock.calls.length;fireEvent.click(screen.getByRole('button',{name:'Clear search'}));
+        expect(screen.getByText('Page 1 of 3')).toBeVisible();expect(names()[0]).toBe(`${prefix}001`);expect(search).toHaveValue('');expect(search).toHaveFocus();expect(request).toHaveBeenCalledTimes(reads);
+    });
     it('uses numeric PIDs and literal text versions, preserves duplicates and missing values, and never mutates the source', () => {
         const view = tableView(4), snapshot = view.snapshot!;
         [2, 100, 10, 0].forEach((pid, index) => { snapshot.services.rows[index].pid = pid; });

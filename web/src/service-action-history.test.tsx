@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
@@ -16,6 +17,32 @@ function mount() { return render(<ServiceActionHistoryPanel deviceId={actionDevi
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(actionNow); localStorage.clear(); sessionStorage.clear(); setLocale('en', false); vi.mocked(readServiceActionHistory).mockReset().mockResolvedValue(completedActionHistory()); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('deliberate retained Linux action investigation', () => {
+    it.each(['en', 'de'] as const)('shows readable UTC timestamps and linked receipts without changing state claims (%s)', async locale => {
+        setLocale(locale, false); const { container } = mount();
+        fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Saved service-action history' : 'Gespeicherte Dienstaktionshistorie' })); await flush();
+        expect(screen.getByRole('heading', { name: locale === 'en' ? 'Saved approvals: 1' : 'Gespeicherte Freigaben: 1' })).toBeVisible();
+        const cards = container.querySelector('.service-action-history-cards')!;
+        expect(cards).toHaveAttribute('role', 'list'); expect(cards.tagName).toBe('OL');
+        expect(cards.children).toHaveLength(1); expect(cards.firstElementChild?.tagName).toBe('LI');
+        const summary = container.querySelector('.service-action-history-state')!;
+        expect(summary).toHaveTextContent(locale === 'en' ? 'restart and service health unconfirmed' : 'Neustart und Dienstzustand unbestätigt');
+        const time = container.querySelector('time')!;
+        expect(time).toHaveAttribute('datetime', completedActionHistory().serverNow); expect(time).toHaveAttribute('title', completedActionHistory().serverNow);
+        expect(time.textContent).toContain('UTC'); expect(time.textContent).not.toContain('T12:');
+        const receipt = screen.getByRole('button', { name: locale === 'en' ? 'Read receipt #1' : 'Beleg lesen #1' });
+        fireEvent.click(receipt); expect(receipt).toHaveAttribute('aria-expanded', 'true');
+        expect(document.getElementById(receipt.getAttribute('aria-controls')!)).toBeVisible();
+        for (const stamp of container.querySelectorAll('time')) { expect(stamp).toHaveAttribute('title', stamp.getAttribute('datetime')); expect(stamp.textContent).toContain('UTC'); }
+        fireEvent.click(receipt); expect(document.getElementById(receipt.getAttribute('aria-controls')!)).toBeNull();
+        expect(readServiceActionHistory).toHaveBeenCalledTimes(1);
+    });
+    it('opens and closes a receipt with the keyboard without losing focus or fetching again', async () => {
+        mount(); await open(); vi.useRealTimers(); const user = userEvent.setup();
+        const receipt = screen.getByRole('button', { name: 'Read receipt #1' }); receipt.focus();
+        await user.keyboard('{Enter}'); expect(receipt).toHaveFocus(); expect(receipt).toHaveAttribute('aria-expanded', 'true');
+        await user.keyboard(' '); expect(receipt).toHaveFocus(); expect(receipt).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Delivery claimed:')).not.toBeInTheDocument(); expect(readServiceActionHistory).toHaveBeenCalledTimes(1);
+    });
     it('is integrated only into the authorized Linux service-action workflow and reads on demand', async () => {
         const workflow: ReturnType<typeof useServiceActions> = { historyAccess: { deviceId: actionDevice, access: actionAccess }, view: actionView(), preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), refresh: vi.fn() };
         const mounted = render(<ServiceActionPanel workflow={workflow} authorized={false}/>); expect(screen.queryByRole('button', { name: 'Saved service-action history' })).not.toBeInTheDocument();

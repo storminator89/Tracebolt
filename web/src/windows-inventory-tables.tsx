@@ -1,6 +1,6 @@
 import { serviceStartupCell, serviceStartupCopy } from './windows-service-startup';
 import type { WindowsServiceStartup } from './windows-service-startup-types';
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventorySnapshot } from './windows-inventory-types';
 import './windows-inventory-tables.css';
@@ -14,6 +14,7 @@ const sorts = {
 export type WindowsInventoryTableSort = typeof sorts[WindowsInventoryTableKind][number];
 const copy = {
     en: {
+        clearSearch: 'Clear search',
         services: 'Services', software: 'Software', name: 'Name', displayName: 'Display name', state: 'State', version: 'Version', publisher: 'Publisher', registry: 'Registry view', unknown: 'Not reported',
         servicesSearch: 'Filter captured services', softwareSearch: 'Filter captured software', servicesSort: 'Sort captured services', softwareSort: 'Sort captured software',
         'name-asc': 'Name: A to Z', 'name-desc': 'Name: Z to A', 'pid-asc': 'PID: lowest first', 'pid-desc': 'PID: highest first', 'state-asc': 'State: A to Z', 'state-desc': 'State: Z to A', 'startup-asc': 'Startup mode: A to Z', 'startup-desc': 'Startup mode: Z to A',
@@ -26,6 +27,7 @@ const copy = {
         stopped: 'Stopped', start_pending: 'Starting', stop_pending: 'Stopping', running: 'Running', continue_pending: 'Resuming', pause_pending: 'Pausing', paused: 'Paused',
     },
     de: {
+        clearSearch: 'Suche leeren',
         services: 'Dienste', software: 'Software', name: 'Name', displayName: 'Anzeigename', state: 'Zustand', version: 'Version', publisher: 'Herausgeber', registry: 'Registrierungsansicht', unknown: 'Nicht gemeldet',
         servicesSearch: 'Erfasste Dienste filtern', softwareSearch: 'Erfasste Software filtern', servicesSort: 'Erfasste Dienste sortieren', softwareSort: 'Erfasste Software sortieren',
         'name-asc': 'Name: A bis Z', 'name-desc': 'Name: Z bis A', 'pid-asc': 'PID: niedrigste zuerst', 'pid-desc': 'PID: höchste zuerst', 'state-asc': 'Zustand: A bis Z', 'state-desc': 'Zustand: Z bis A', 'startup-asc': 'Starttyp: A bis Z', 'startup-desc': 'Starttyp: Z bis A',
@@ -89,7 +91,8 @@ export function useWindowsInventoryTableControls(resource: WindowsInventoryResou
 
 /** All data comes from the already validated, admitted current inventory view. */
 export function WindowsInventoryTable({ snapshot, kind, locale, controls, onChange, serviceStartup = null }: { snapshot: WindowsInventorySnapshot; serviceStartup?: WindowsServiceStartup | null; kind: WindowsInventoryTableKind; locale: Locale; controls: TableControls; onChange: (controls: TableControls) => void }) {
-    const id = useId(), c = copy[locale], { query, sort, page } = controls;
+    const id = useId(), c = copy[locale], { query, sort, page } = controls, searchInput = useRef<HTMLInputElement>(null);
+    const clearSearch = () => { onChange({ ...controls, query: '', page: 0 }); searchInput.current?.focus({ preventScroll: true }); };
     // This component exists only while its owner admits the current snapshot.
     // Cache pure row work within that lifetime, never authority or freshness.
     const rows = useMemo(() => capturedInventoryTableRows(snapshot, kind, query, sort, locale, serviceStartup), [snapshot, kind, query, sort, locale, serviceStartup]);
@@ -99,7 +102,7 @@ export function WindowsInventoryTable({ snapshot, kind, locale, controls, onChan
     return <>
         <p className="windows-inventory-exclusions" id={`${id}-bounds`}>{c[`${kind}Bounded`]}</p>
         <div className="windows-inventory-table-controls">
-            <label className="windows-inventory-search" htmlFor={`${id}-search`}>{c[`${kind}Search`]}<input id={`${id}-search`} type="search" maxLength={256} value={query} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, query: event.target.value, page: 0 })}/></label>
+            <div className="windows-inventory-search-control"><label className="windows-inventory-search" htmlFor={`${id}-search`}>{c[`${kind}Search`]}<input ref={searchInput} id={`${id}-search`} type="search" maxLength={256} value={query} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, query: event.target.value, page: 0 })}/></label>{query && <button type="button" className="button small" onClick={clearSearch}>{c.clearSearch}</button>}</div>
             <div className="windows-inventory-table-sort"><label htmlFor={`${id}-sort`}>{c[`${kind}Sort`]}</label><select id={`${id}-sort`} value={sort} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, sort: event.target.value as WindowsInventoryTableSort, page: 0 })}>{sorts[kind].map(value => <option key={value} value={value}>{c[value]}</option>)}</select></div>
         </div>
         <p className="windows-inventory-count" role="status" aria-live="polite" aria-atomic="true">{c.count(visible.length ? start + 1 : 0, start + visible.length, rows.length, snapshot[kind].rows.length)}</p>

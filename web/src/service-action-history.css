@@ -6,3 +6,18 @@
 .service-action-history dl div { display: flex; flex-wrap: wrap; gap: .4rem; }
 .service-action-history dd { margin: 0; overflow-wrap: anywhere; }
 .service-action-history-receipt { margin-top: .6rem; padding: .7rem; border-left: 2px solid var(--line); }
+.service-action-history-count { font-size: 13px; margin-top: 16px; }
+.service-action-history .service-action-history-cards { display: grid; gap: 12px; list-style: none; padding: 0; }
+.service-action-history-cards > li { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; background: var(--panel); }
+.service-action-history-card-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.service-action-history-card-heading strong { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.service-action-history-card-heading span { flex-shrink: 0; font-size: 12px; color: var(--secondary); }
+.service-action-history-state { margin: 8px 0; padding: 8px 10px; background: var(--panel-soft); border-left: 3px solid var(--line-strong); border-radius: 4px; line-height: 1.6; font-size: 12px; }
+.service-action-history-date { color: var(--secondary); font-size: 12px; margin: 8px 0 12px; }
+.service-action-history-cards > li > button { min-height: 40px; }
+.service-action-history-receipt dl { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; margin-block: 12px; }
+.service-action-history-receipt dl div { display: block; min-width: 0; }
+.service-action-history-receipt dt { color: var(--secondary); font-size: 11px; margin-bottom: 4px; }
+.service-action-history-receipt dd { font-size: 12px; line-height: 1.6; }
+.service-action-history .service-action-history-reports { padding-left: 20px; }
+.service-action-history-reports > li { padding: 10px; background: var(--panel-soft); border-radius: 6px; font-size: 12px; line-height: 1.6; }
