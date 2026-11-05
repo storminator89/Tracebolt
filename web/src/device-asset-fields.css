@@ -1,0 +1,8 @@
+.device-asset-fields { margin-top: 1.5rem; }
+.device-asset-fields p { font-size: .875rem; line-height: 1.5; }
+.device-asset-fields dd { overflow-wrap: anywhere; }
+.device-asset-fields form { display: grid; gap: .8rem; margin-top: 1rem; }
+.device-asset-fields label { display: grid; gap: .3rem; }
+.device-asset-fields input { width: 100%; font: inherit; }
+.device-asset-fields label span { font-size: .8rem; }
+.asset-field-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
