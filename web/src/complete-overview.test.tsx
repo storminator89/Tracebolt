@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
@@ -204,7 +205,7 @@ describe('complete process and mount panels', () => {
     });
     it('clears expired retained rows while preserving historical metadata and original count', async () => {
         view.serverNow = '2026-10-05T18:30:00Z'; view.processes.status = view.volumes.status = view.status = 'expired'; view.processes.complete!.state = view.volumes.complete!.state = 'expired';
-        open(); await screen.findByText('Retained metadata only. Original observations have expired; no rows are shown.'); expect(mutateRaw).not.toHaveBeenCalled(); expect(screen.getByText('Complete enumeration rows').nextElementSibling).toHaveTextContent('350'); expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        open(); await screen.findByText('Retained metadata only. Original observations have expired; no rows are shown.'); expect(screen.queryByText('Search changed. Choose Search to read the saved capture.')).toBeNull(); expect(screen.queryByRole('button', {name:'Clear search'})).toBeNull(); expect(mutateRaw).not.toHaveBeenCalled(); expect(screen.getByText('Complete enumeration rows').nextElementSibling).toHaveTextContent('350'); expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
     it('rejects authoritative server-time regression on refresh', async () => {
         open(); await screen.findByRole('table'); view = structuredClone(view); view.serverNow = '2026-10-04T18:34:59Z'; fireEvent.click(screen.getByRole('button', { name: 'Refresh section and restart' }));
@@ -222,5 +223,36 @@ describe('complete process and mount panels', () => {
     });
     it('does not request private rows for an unauthenticated operator and retains German UI', async () => {
         operator.authenticated = false; const r = open(); expect(screen.getByText('Authenticated LAN operator access is required.')).toBeVisible(); expect(request).not.toHaveBeenCalled(); r.unmount(); operator.authenticated = true; setLocale('de', false); open(); await screen.findByRole('table'); expect(screen.getByRole('heading', { name: 'Prozesse' })).toBeVisible(); expect(screen.getByRole('button', { name: 'Nächste Seite' })).toBeVisible();
+    });
+});
+
+
+describe('overview search draft feedback', () => {
+    it.each([['en','processes'],['de','processes'],['en','volumes'],['de','volumes']] as const)('explains and clears only the draft without querying (%s, %s)', async (locale, section) => {
+        setLocale(locale,false); const user=userEvent.setup(); open(section); await screen.findByRole('table');
+        const input=screen.getByRole('searchbox'), before=vi.mocked(mutateRaw).mock.calls.length;
+        const hint=locale==='de'?'Suche geändert. Mit „Suchen“ die gespeicherte Erfassung durchsuchen.':'Search changed. Choose Search to read the saved capture.';
+        expect(screen.queryByText(hint)).toBeNull();
+        fireEvent.change(input,{target:{value:'fixture'}});
+        expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(hint)).toHaveAttribute('role','status'); expect(input).toHaveAccessibleDescription(hint);
+        expect(mutateRaw).toHaveBeenCalledTimes(before);
+        const clear=screen.getByRole('button',{name:locale==='de'?'Suche leeren':'Clear search'}); clear.focus(); await user.keyboard(' ');
+        expect(input).toHaveFocus(); expect(input).toHaveValue(''); expect(screen.getByText(hint)).toBeVisible(); expect(mutateRaw).toHaveBeenCalledTimes(before);
+        fireEvent.click(screen.getByRole('button',{name:locale==='de'?'Suchen':'Search'})); await screen.findByRole('table');
+        expect(screen.queryByText(hint)).toBeNull(); expect(input).not.toHaveAttribute('aria-describedby');
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({section,search:'',cursor:'',limit:100});
+        expect(mutateRaw).toHaveBeenCalledTimes(before+1);
+    });
+    it('does not substitute draft guidance for loading, failures or ended access', async () => {
+        open(); await screen.findByRole('table'); fireEvent.change(screen.getByRole('searchbox'),{target:{value:'fixture'}});
+        let reject!:(error:Error)=>void;
+        vi.mocked(mutateRaw).mockImplementationOnce(()=>new Promise((_resolve,no)=>{reject=no;}));
+        fireEvent.click(screen.getByRole('button',{name:'Search'}));
+        expect(screen.queryByText('Search changed. Choose Search to read the saved capture.')).toBeNull();
+        await act(async()=>reject(new APIError('Synthetic failure',503)));
+        expect(screen.queryByText('Search changed. Choose Search to read the saved capture.')).toBeNull();
+        expect(screen.getByRole('alert')).toBeVisible();
+        act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByRole('button',{name:'Clear search'})).toBeNull();
     });
 });

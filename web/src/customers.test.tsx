@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import type {} from 'vitest/jsdom';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,5 +124,51 @@ describe('customer catalog', () => {
         vi.mocked(request).mockResolvedValue({ ...view, extra: true }); render(<Customers sessionExpiresAt={future}/>);
         await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('unavailable'));
         expect(screen.queryByText('Acme')).not.toBeInTheDocument();
+    });
+});
+
+
+describe('customer edit focus', () => {
+    it.each(['en', 'de'] as const)('focuses the editor and returns on cancel without saving (%s)', async locale => {
+        setLocale(locale, false); vi.mocked(request).mockResolvedValue(view);
+        const user = userEvent.setup(); render(<Customers sessionExpiresAt={future}/>);
+        const edit = await screen.findByRole('button', { name: locale === 'de' ? 'Bearbeiten Acme' : 'Edit Acme' });
+        edit.focus(); await user.keyboard('{Enter}');
+        const input = screen.getByRole('textbox', { name: locale === 'de' ? 'Kundenname' : 'Customer name' });
+        expect(input).toHaveFocus(); expect(input).toHaveValue('Acme');
+        edit.focus(); await user.keyboard('{Enter}'); expect(input).toHaveFocus();
+        await user.type(input, ' draft');
+        const cancel = screen.getByRole('button', { name: locale === 'de' ? 'Abbrechen' : 'Cancel' });
+        cancel.focus(); await user.keyboard(' ');
+        expect(edit).toHaveFocus(); expect(input).toHaveValue('');
+        expect(mutate).not.toHaveBeenCalled(); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('focuses the newly mounted editor at the 25-customer limit and returns before it disappears', async () => {
+        const customers = Array.from({length:25}, (_,i)=>({id:`customer_${(i+1).toString(16).padStart(32,'0')}`,name:`Fixture ${i}`,revision:1}));
+        vi.mocked(request).mockResolvedValue({...view,customers}); render(<Customers sessionExpiresAt={future}/>);
+        const edit=await screen.findByRole('button',{name:'Edit Fixture 24'});
+        expect(screen.queryByRole('textbox')).toBeNull(); fireEvent.click(edit);
+        expect(screen.getByRole('textbox',{name:'Customer name'})).toHaveFocus();
+        fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
+        expect(edit).toHaveFocus(); expect(screen.queryByRole('textbox')).toBeNull(); expect(mutate).not.toHaveBeenCalled();
+    });
+    it('does not restore focus to an old customer after refresh removes that record', async () => {
+        vi.mocked(request).mockResolvedValueOnce(view).mockResolvedValueOnce(empty);
+        render(<Customers sessionExpiresAt={future}/>);
+        const edit=await screen.findByRole('button',{name:'Edit Acme'}); fireEvent.click(edit);
+        const refresh=screen.getByRole('button',{name:'Refresh customers'}); refresh.focus(); fireEvent.click(refresh);
+        await screen.findByText('No customers yet.');
+        expect(refresh).toHaveFocus(); expect(edit).not.toBeInTheDocument();
+        expect(screen.getByRole('textbox',{name:'Customer name'})).toHaveValue(''); expect(screen.queryByRole('button',{name:'Cancel'})).toBeNull(); expect(mutate).not.toHaveBeenCalled();
+    });
+    it('targets the latest selected customer and does not recreate an editor after read-only access', async () => {
+        vi.mocked(request).mockResolvedValue({...view,customers:[record,{...record,id:`customer_${'2'.repeat(32)}`,name:'Other'}]});
+        const mounted=render(<Customers sessionExpiresAt={future}/>);
+        fireEvent.click(await screen.findByRole('button',{name:'Edit Acme'}));
+        const other=screen.getByRole('button',{name:'Edit Other'}); fireEvent.click(other);
+        expect(screen.getByRole('textbox',{name:'Customer name'})).toHaveFocus(); expect(screen.getByRole('textbox')).toHaveValue('Other');
+        fireEvent.click(screen.getByRole('button',{name:'Cancel'})); expect(other).toHaveFocus();
+        fireEvent.click(other); mounted.rerender(<Customers sessionExpiresAt={future} readOnly/>);
+        expect(screen.queryByRole('textbox')).toBeNull(); expect(screen.queryByRole('button',{name:'Cancel'})).toBeNull(); expect(mutate).not.toHaveBeenCalled();
     });
 });
