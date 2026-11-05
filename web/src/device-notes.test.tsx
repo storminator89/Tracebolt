@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {APIError,AUTH_REQUIRED_EVENT,mutateRaw,request} from './api';
@@ -15,7 +16,66 @@ function accept(){const body=JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]);c
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(now);sessionStorage.clear();setLocale('en',false);vi.mocked(request).mockReset().mockResolvedValue(view());vi.mocked(mutateRaw).mockReset();});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();});
 describe('private device handover notes',()=>{
+ it('withholds hidden-at-mount reads until a deliberate visible reload',async()=>{
+  const visibility=vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden');
+  vi.mocked(request).mockResolvedValue(view(true));
+  render(<DeviceNotes {...props}/>);await flush();
+  expect(request).not.toHaveBeenCalled();expect(mutateRaw).not.toHaveBeenCalled();
+  expect(screen.queryByText('<img src=x onerror=alert(1)>')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Reload notes'}));await flush();
+  expect(request).not.toHaveBeenCalled();
+  visibility.mockReturnValue('visible');act(()=>document.dispatchEvent(new Event('visibilitychange')));await flush();
+  expect(request).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'Reload notes'}));await flush();
+  expect(request).toHaveBeenCalledTimes(1);expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeVisible();
+  expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it('rejects a late private read when already hidden even before a visibility event',async()=>{
+  const visibility=vi.spyOn(document,'visibilityState','get').mockReturnValue('visible');
+  let done!:(value:unknown)=>void;vi.mocked(request).mockReturnValueOnce(new Promise(resolve=>{done=resolve;}));
+  render(<DeviceNotes {...props}/>);await flush();expect(request).toHaveBeenCalledTimes(1);
+  visibility.mockReturnValue('hidden');await act(async()=>done(view(true)));
+  expect(screen.queryByText('<img src=x onerror=alert(1)>')).toBeNull();expect(screen.queryByRole('textbox')).toBeNull();
+  expect(mutateRaw).not.toHaveBeenCalled();
+ });
  it.each(['en','de'] as const)('has clear boundaries and localized controls in %s',async locale=>{setLocale(locale,false);render(<DeviceNotes {...props}/>);await flush();expect(screen.getByRole('heading',{name:locale==='en'?'Notes':'Notizen'})).toBeVisible();expect(screen.getByText(locale==='en'?/No passwords or secrets/:/Keine Passwörter/)).toBeVisible();expect(screen.getByRole('button',{name:locale==='en'?'Save note':'Notiz speichern'})).toBeDisabled();});
+ it.each(['en','de'] as const)('opens archived notes from the empty active view without a write in %s',async locale=>{
+  setLocale(locale,false);const v=view(true);v.notes[0].archived=true;v.revision=2;v.operations.push({id:`noteop_${'c'.repeat(32)}`,action:'archive',noteId,revision:2});vi.mocked(request).mockResolvedValue(v);
+  render(<DeviceNotes {...props} admin={false}/>);await flush();
+  const show=locale==='en'?'Show archived':'Archivierte anzeigen', empty=locale==='en'?'All notes are archived.':'Alle Notizen sind archiviert.';
+  expect(screen.getByText(empty)).toBeVisible();expect(screen.queryByText(v.notes[0].text)).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:show}));
+  expect(screen.getByRole('checkbox',{name:show})).toBeChecked();expect(screen.getByText(v.notes[0].text)).toBeVisible();expect(screen.getByText(locale==='en'?'Archived':'Archiviert')).toBeVisible();expect(screen.queryByText(empty)).toBeNull();
+  expect(screen.queryByRole('button',{name:/Restore|Wiederherstellen/})).toBeNull();expect(mutateRaw).not.toHaveBeenCalled();expect(request).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('checkbox',{name:show}));expect(screen.getByText(empty)).toBeVisible();expect(screen.queryByText(v.notes[0].text)).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:show}));act(()=>window.dispatchEvent(new Event('blur')));expect(screen.queryByText(v.notes[0].text)).toBeNull();expect(screen.queryByText(locale==='en'?'Archived':'Archiviert')).toBeNull();
+ });
+ it.each(['en','de'] as const)('keeps keyboard navigation at the archive setting in %s',async locale=>{
+  vi.useRealTimers();vi.spyOn(Date,'now').mockReturnValue(Date.parse(now));setLocale(locale,false);const user=userEvent.setup();const v=view(true);v.notes[0].archived=true;v.revision=2;v.operations.push({id:`noteop_${'c'.repeat(32)}`,action:'archive',noteId,revision:2});vi.mocked(request).mockResolvedValue(v);
+  render(<DeviceNotes {...props} admin={false}/>);await flush();const name=locale==='en'?'Show archived':'Archivierte anzeigen';const toggle=screen.getByRole('checkbox',{name});
+  for(const key of ['{Enter}',' ']){const button=screen.getByRole('button',{name});toggle.focus();await user.tab();expect(button).toHaveFocus();await user.keyboard(key);expect(toggle).toHaveFocus();expect(toggle).toBeChecked();expect(screen.queryByRole('button',{name})).toBeNull();await user.keyboard(' ');expect(toggle).not.toBeChecked();expect(toggle).toHaveFocus();}
+  expect(request).toHaveBeenCalledTimes(1);expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it.each(['hidden','blur','identity','device','disabled','expired','auth'] as const)('does not restore archive focus after %s loss',async loss=>{
+  const v=view(true);v.notes[0].archived=true;v.revision=2;v.operations.push({id:`noteop_${'c'.repeat(32)}`,action:'archive',noteId,revision:2});vi.mocked(request).mockResolvedValue(v);
+  const r=render(<><button>Outside</button><DeviceNotes {...props} admin={false}/></>);await flush();const button=screen.getByRole('button',{name:'Show archived'}),toggle=screen.getByRole('checkbox',{name:'Show archived'});button.focus();const focus=vi.spyOn(toggle,'focus');
+  if(loss==='hidden')vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden');
+  else if(loss==='blur')act(()=>window.dispatchEvent(new Event('blur')));
+  else if(loss==='auth')act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+  else if(loss==='expired')vi.setSystemTime(new Date(props.sessionKey).getTime()+1);
+  else {const changed=loss==='identity'?{identityKey:'new-identity'}:loss==='device'?{deviceId:`agent_${'d'.repeat(32)}`}:{enabled:false};r.rerender(<><button>Outside</button><DeviceNotes {...props} {...changed} admin={false}/></>);}
+  const outside=screen.getByRole('button',{name:'Outside'});outside.focus();fireEvent.click(button);await flush();expect(outside).toHaveFocus();expect(focus).not.toHaveBeenCalled();if(loss==='hidden'||loss==='expired')expect(toggle).not.toBeChecked();expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it.each(['wall-clock','monotonic'] as const)('does not reveal archived text after the data lease expires before its timer: %s',async clock=>{
+  const monotonic=vi.spyOn(performance,'now').mockReturnValue(1000);const v=view(true);v.notes[0].archived=true;v.revision=2;v.operations.push({id:`noteop_${'c'.repeat(32)}`,action:'archive',noteId,revision:2});vi.mocked(request).mockResolvedValue(v);
+  render(<DeviceNotes {...props} admin={false}/>);await flush();const button=screen.getByRole('button',{name:'Show archived'}),toggle=screen.getByRole('checkbox',{name:'Show archived'});button.focus();const focus=vi.spyOn(toggle,'focus');
+  if(clock==='wall-clock')vi.setSystemTime(v.validUntil);else monotonic.mockReturnValue(61000);
+  expect(Date.now()).toBeLessThan(Date.parse(props.sessionKey));expect(button).toBeVisible();expect(screen.getByText('All notes are archived.')).toBeVisible();
+  fireEvent.click(button);expect(toggle).not.toBeChecked();expect(screen.queryByText(v.notes[0].text)).toBeNull();expect(focus).not.toHaveBeenCalled();expect(button).toHaveFocus();expect(request).toHaveBeenCalledTimes(1);expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it('does not offer an archive shortcut for a genuinely empty notebook',async()=>{
+  render(<DeviceNotes {...props}/>);await flush();expect(screen.getByText('No notes yet.')).toBeVisible();expect(screen.queryByRole('button',{name:'Show archived'})).toBeNull();
+ });
  it('renders HTML as plain text and named operators read-only',async()=>{vi.mocked(request).mockResolvedValue(view(true));render(<DeviceNotes {...props} admin={false}/>);await flush();expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeVisible();expect(document.querySelector('img')).toBeNull();expect(screen.queryByRole('textbox')).toBeNull();expect(screen.queryByRole('button',{name:'Archive'})).toBeNull();expect(screen.getByText(/Shared administrator/)).toBeVisible();});
  it('posts exact trimmed bounded add once and confirms its receipt',async()=>{let done!:(v:unknown)=>void;vi.mocked(mutateRaw).mockReturnValue(new Promise(resolve=>{done=resolve;}));render(<DeviceNotes {...props}/>);await flush();add();fireEvent.click(screen.getByRole('button',{name:'Save note'}));expect(mutateRaw).toHaveBeenCalledTimes(1);const body=JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]);expect(Object.keys(body).sort()).toEqual(['action','binding','expectedRevision','noteId','operationId','text','validUntil']);expect(body.text).toBe('Handover ✓');expect(body.noteId.slice(5)).toBe(body.operationId.slice(7));expect(JSON.stringify(sessionStorage)).not.toContain('Handover');vi.mocked(request).mockResolvedValue(accept());await act(async()=>done({}));expect(screen.getByText('Saved operation confirmed.')).toBeVisible();expect(screen.getByText('Handover ✓')).toBeVisible();});
  it('blocks uncertain writes through unchanged GET and remount, then reconciles a later archive receipt',async()=>{vi.mocked(mutateRaw).mockImplementation(async (...args)=>{args[5]?.();throw new APIError('network');});const r=render(<DeviceNotes {...props}/>);await flush();add();await flush();expect(screen.getByRole('button',{name:'Save note'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Check saved result'}));await flush();expect(screen.getByRole('button',{name:'Save note'})).toBeDisabled();r.unmount();render(<DeviceNotes {...props}/>);await flush();expect(screen.getByRole('button',{name:'Check saved result'})).toBeVisible();const v=accept();v.notes[0].archived=true;v.revision=2;v.operations.push({id:`noteop_${'c'.repeat(32)}`,noteId:v.notes[0].id,action:'archive',revision:2});vi.mocked(request).mockResolvedValue(v);fireEvent.click(screen.getByRole('button',{name:'Check saved result'}));await flush();expect(screen.getByText('Saved operation confirmed.')).toBeVisible();expect(mutateRaw).toHaveBeenCalledTimes(1);});
