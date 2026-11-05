@@ -16,13 +16,14 @@ const copy = {
         readonly: 'Your account can read these settings. Changing settings and sending tests requires alarm-management permission.',
         external: 'Read-only here. Change the manager’s settings file through the CLI setup.',
         unavailable: 'Managed alarm setup is unavailable on this manager.', blocked: 'The manager has blocked alarm changes and stopped dispatch. Manager restart and configuration or storage review are required. Refreshing alone cannot unblock it.',
-        endpoint: 'New webhook URL (write-only)', urlHelp: 'Enter the full URL; it is never shown again. Blank leaves the saved destination unchanged. The manager verifies the public destination.',
+        endpoint: 'New webhook URL (write-only)', urlHelp: 'Enter the full URL; it is never shown again. To keep the saved destination, cancel this form. The manager verifies the public destination.',
         invalidEndpoint: 'Use a complete HTTPS URL on port 443, without a username, password, fragment, spaces or backslashes.',
         payload: 'I allow future alarm payloads to be shared with this destination: event, device and incident IDs; rule and target (agent, root filesystem or service); warning, opening/recovery, state, reason and timestamps. No logs, hostname, IP address or inventory are included.',
         plaintext: 'I understand this isolated HTTP-test connection exposes the webhook URL and its embedded secret between this browser and the manager. Outgoing webhook delivery still requires HTTPS.',
         future: 'Enables only future new health transitions. No backfill, provider contact or test on save.',
         enableNote: 'Enable the retained destination for future new health transitions only. Existing incidents are not backfilled and no test is sent.',
         disableNote: 'Disable future alarm delivery and retain the saved destination for later. Previously accepted messages cannot be recalled.',
+        needEndpoint: 'Enter a valid webhook URL to continue.', needPayload: 'Review and acknowledge the alarm-sharing permission to continue.', needPlaintext: 'Review and acknowledge the HTTP-test connection risk to continue.', needTest: 'Acknowledge the synthetic test before sending it.',
         save: 'Save and enable', confirmEnable: 'Confirm enable', confirmDisable: 'Confirm disable',
         testNote: 'This sends one fixed synthetic test payload, including its test time and event ID, to the saved destination. It contains no live device information. Only one test per minute is allowed.',
         testAck: 'Send this synthetic test to the saved destination now.', confirmTest: 'Confirm and send test',
@@ -42,13 +43,14 @@ const copy = {
         readonly: 'Dieses Konto kann die Einstellungen lesen. Änderungen und Testversand erfordern die Berechtigung zur Alarmverwaltung.',
         external: 'Hier schreibgeschützt. Die Einstellungsdatei des Managers über die CLI-Einrichtung ändern.',
         unavailable: 'Die verwaltete Alarmeinrichtung ist auf diesem Manager nicht verfügbar.', blocked: 'Der Manager hat Alarmänderungen gesperrt und den Versand gestoppt. Ein Manager-Neustart und die Prüfung von Konfiguration oder Speicher sind erforderlich. Aktualisieren allein hebt die Sperre nicht auf.',
-        endpoint: 'Neue Webhook-URL (nur Eingabe)', urlHelp: 'Vollständige URL eingeben; sie wird nicht erneut angezeigt. Leer lässt das Ziel unverändert. Der Manager prüft das öffentliche Ziel.',
+        endpoint: 'Neue Webhook-URL (nur Eingabe)', urlHelp: 'Vollständige URL eingeben; sie wird nicht erneut angezeigt. Um das gespeicherte Ziel beizubehalten, dieses Formular abbrechen. Der Manager prüft das öffentliche Ziel.',
         invalidEndpoint: 'Eine vollständige HTTPS-URL auf Port 443 ohne Benutzername, Passwort, Fragment, Leerzeichen oder Rückstriche verwenden.',
         payload: 'Ich erlaube die Weitergabe künftiger Alarminhalte an dieses Ziel: Ereignis-, Geräte- und Vorfall-IDs; Regel und Ziel (Agent, Root-Dateisystem oder Dienst); Warnung, Beginn/Erholung, Zustand, Grund und Zeitstempel. Keine Logs, Hostnamen, IP-Adressen oder Inventardaten sind enthalten.',
         plaintext: 'Ich verstehe, dass diese isolierte HTTP-Testverbindung die Webhook-URL und ihr eingebettetes Geheimnis zwischen diesem Browser und dem Manager offenlegt. Ausgehender Webhook-Versand erfordert weiterhin HTTPS.',
         future: 'Aktiviert nur künftige neue Zustandsübergänge. Kein Nachsenden, Anbieterkontakt oder Test beim Speichern.',
         enableNote: 'Das gespeicherte Ziel nur für künftige neue Zustandsübergänge aktivieren. Bestehende Vorfälle werden nicht nachgesendet; es wird kein Test gesendet.',
         disableNote: 'Künftigen Alarmversand deaktivieren und das gespeicherte Ziel für später behalten. Bereits angenommene Nachrichten können nicht zurückgerufen werden.',
+        needEndpoint: 'Zum Fortfahren eine gültige Webhook-URL eingeben.', needPayload: 'Zum Fortfahren die Freigabe der Alarminhalte prüfen und bestätigen.', needPlaintext: 'Zum Fortfahren das Risiko der HTTP-Testverbindung prüfen und bestätigen.', needTest: 'Vor dem Senden den synthetischen Test bestätigen.',
         save: 'Speichern und aktivieren', confirmEnable: 'Aktivierung bestätigen', confirmDisable: 'Deaktivierung bestätigen',
         testNote: 'Sendet einmalig feste synthetische Testdaten mit Testzeit und Ereignis-ID an das gespeicherte Ziel. Es sind keine echten Gerätedaten enthalten. Pro Minute ist nur ein Test zulässig.',
         testAck: 'Diesen synthetischen Test jetzt an das gespeicherte Ziel senden.', confirmTest: 'Bestätigen und Test senden',
@@ -140,7 +142,7 @@ function useAlarmSettings(canManage: boolean, clearForm: () => void, conceal: ()
 }
 
 function AlarmSettingsContent({ canManage, insecureTestMode }: { canManage: boolean; insecureTestMode: boolean }) {
-    const [locale] = useLocale(), labels = copy[locale], heading = useId(), body = useId(), urlId = useId(), urlHelp = useId();
+    const [locale] = useLocale(), labels = copy[locale], heading = useId(), body = useId(), urlId = useId(), urlHelp = useId(), requirementId = useId();
     const toggle = useRef<HTMLButtonElement>(null);
     const [expanded, setExpanded] = useState(false), [editor, setEditor] = useState<Editor>(null), [endpoint, setEndpoint] = useState('');
     const [payloadAck, setPayloadAck] = useState(false), [plaintextAck, setPlaintextAck] = useState(false), [testAck, setTestAck] = useState(false);
@@ -152,6 +154,10 @@ function AlarmSettingsContent({ canManage, insecureTestMode }: { canManage: bool
     const testTooSoon = !!view?.test && Date.now() - Date.parse(view.test.createdAt) < 60000;
     const canTest = editable && !!view?.configured && view.enabled && !testPending && !testTooSoon;
     const permitted = editable && editor !== null && (editor !== 'test' || canTest && testAck) && (editor !== 'replace' || validAlarmEndpoint(endpoint)) && (!enabling || payloadAck && (!insecureTestMode || plaintextAck));
+    const requirement = editor === 'replace' && !validAlarmEndpoint(endpoint) ? labels.needEndpoint
+        : enabling && !payloadAck ? labels.needPayload
+        : enabling && insecureTestMode && !plaintextAck ? labels.needPlaintext
+        : editor === 'test' && !testAck ? labels.needTest : null;
     const choose = (value: Editor) => { if (!editable) return; clearForm(); setEditor(value); };
     const submit = () => {
         if (!permitted || !view || !editor) return;
@@ -190,7 +196,8 @@ function AlarmSettingsContent({ canManage, insecureTestMode }: { canManage: bool
                 {enabling && <label className="alarm-settings-check"><input type="checkbox" checked={payloadAck} onChange={event => setPayloadAck(event.target.checked)}/><span>{labels.payload}</span></label>}
                 {enabling && insecureTestMode && <label className="alarm-settings-check"><input type="checkbox" checked={plaintextAck} onChange={event => setPlaintextAck(event.target.checked)}/><span>{labels.plaintext}</span></label>}
                 {editor === 'test' && <><p>{labels.testNote}</p><label className="alarm-settings-check"><input type="checkbox" checked={testAck} onChange={event => setTestAck(event.target.checked)}/><span>{labels.testAck}</span></label></>}
-                <div className="alarm-settings-actions"><button className="button primary" type="submit" disabled={!permitted}>{editor === 'replace' ? labels.save : editor === 'enable' ? labels.confirmEnable : editor === 'disable' ? labels.confirmDisable : labels.confirmTest}</button><button className="button" type="button" onClick={() => { setEndpoint(''); setPayloadAck(false); setPlaintextAck(false); setTestAck(false); }}>{labels.reset}</button><button className="button" type="button" onClick={dismiss}>{labels.cancel}</button></div>
+                {requirement && <p id={requirementId} role="status">{requirement}</p>}
+                <div className="alarm-settings-actions"><button className="button primary" type="submit" disabled={!permitted} aria-describedby={requirement ? requirementId : undefined}>{editor === 'replace' ? labels.save : editor === 'enable' ? labels.confirmEnable : editor === 'disable' ? labels.confirmDisable : labels.confirmTest}</button><button className="button" type="button" onClick={() => { setEndpoint(''); setPayloadAck(false); setPlaintextAck(false); setTestAck(false); }}>{labels.reset}</button><button className="button" type="button" onClick={dismiss}>{labels.cancel}</button></div>
             </form>}
             {view?.test && <div className="alarm-test-result"><dl><div><dt>{labels.testResult}</dt><dd>{labels[view.test.state]}</dd></div><div><dt>{labels.testEvent}</dt><dd>{view.test.eventId}</dd></div><div><dt>{labels.testTime}</dt><dd><time dateTime={view.test.createdAt}>{new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(view.test.createdAt))} UTC</time></dd></div></dl>{testPending ? <p>{labels.testPending}</p> : testTooSoon && <p>{labels.testLimit}</p>}</div>}
             {(editor === 'test' || view?.test) && <p>{labels.acceptance}</p>}

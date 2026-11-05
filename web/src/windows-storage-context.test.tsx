@@ -1,4 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { WindowsStorageContextPanel } from './windows-storage-context';
+import type { WindowsInventoryResource } from './windows-inventory-resource';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, request, mutate } from './api';
 import { setLocale } from './i18n';
@@ -13,6 +15,7 @@ function Harness({ session = 'fixture', device = windowsDeviceId, enabled = true
 const ready = async (locale = 'en') => { await flush(); fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? 'Speicher' : 'Storage' })); };
 const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh Windows inventory' }));
 const details = () => document.querySelector<HTMLDetailsElement>('.windows-storage-details')!;
+const diskDetails = () => Array.from(document.querySelectorAll<HTMLDetailsElement>('.windows-storage-provider-details'));
 const namesGone = () => { expect(screen.queryAllByText('Fixture NVMe')).toHaveLength(0); expect(screen.queryByText('provider-local-04')).toBeNull(); expect(document.querySelector('.windows-storage-details')).toBeNull(); };
 beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset().mockResolvedValue(windowsStorageContextView()); vi.mocked(mutate).mockReset(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -24,7 +27,7 @@ describe('Compact private Storage tab', () => {
         expect(screen.getByLabelText('9007199254740993 ' + (de ? 'Bytes' : 'bytes'))).toBeVisible(); expect(screen.getByLabelText('18446744073709551615 ' + (de ? 'Bytes' : 'bytes'))).toBeVisible();
         expect(details().open).toBe(false); expect(screen.getByText('provider-local-04')).not.toBeVisible();
         expect(panel.querySelector('time')).toHaveAttribute('datetime', windowsView().snapshot!.collectedAt); fireEvent.click(details().querySelector('summary')!);
-        expect(screen.getByText('provider-local-04')).toBeVisible(); expect(screen.getByText('32768')).toBeVisible(); expect(details()).toHaveTextContent(de ? 'keine Datenträgernummer' : 'not an OS disk number');
+        expect(screen.getByText('provider-local-04')).not.toBeVisible(); fireEvent.click(diskDetails()[0].querySelector('summary')!); expect(screen.getByText('provider-local-04')).toBeVisible(); expect(screen.getByText('32768')).not.toBeVisible(); fireEvent.click(diskDetails()[1].querySelector('summary')!); expect(screen.getByText('32768')).toBeVisible(); expect(details()).toHaveTextContent(de ? 'keine Datenträgernummer' : 'not an OS disk number');
         expect(panel).toHaveTextContent('SMART'); expect(panel).toHaveTextContent('Storage Spaces'); expect(panel.querySelector('a,img,iframe,button,form,input')).toBeNull(); expect(mutate).not.toHaveBeenCalled();
         expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([`/devices/${windowsDeviceId}/windows-inventory`]);
     });
@@ -78,10 +81,68 @@ describe('Storage original-age retained observation', () => {
         for (const row of disks.rows) Object.assign(row, { deviceId: { value: null, quality: 'unavailable' }, friendlyName: { value: null, quality: 'unavailable' }, sizeBytes: null, healthStatus: 5, busType: 0, mediaType: 0, operationalStatus: [0, 1, 65535] });
         v.storageContext.disks = disks; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready();
         const current = document.querySelector('.windows-storage-context')!; expect(current).toHaveTextContent('Unknown (5)'); expect(current).toHaveTextContent('Unspecified (0)'); expect(current).not.toHaveTextContent('Fixture NVMe');
-        expect(current.querySelector('time')).toHaveAttribute('datetime', '2026-10-07T12:00:00Z'); fireEvent.click(details().querySelector('summary')!); expect(within(details()).getAllByText('0, 1, 65535')[0]).toBeVisible();
+        expect(current.querySelector('time')).toHaveAttribute('datetime', '2026-10-07T12:00:00Z'); fireEvent.click(diskDetails()[0].querySelector('summary')!); expect(within(diskDetails()[0]).getByText('0, 1, 65535')).toBeVisible();
         fireEvent.click(screen.getByText('Show previous capture')); expect(screen.getAllByText('Fixture NVMe')[0]).toBeVisible(); expect(document.querySelector('details.windows-inventory-bounds time')).toHaveAttribute('datetime', '2026-10-07T11:00:00Z');
     });
     it('expires the older capture independently while keeping current failure visible', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); vi.mocked(request).mockResolvedValue(retained('2026-10-06T12:00:11Z')); render(<Harness/>); await ready(); expect(screen.getByText('Show previous capture')).toBeVisible(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText('Show previous capture')).toBeNull(); expect(screen.queryByText('provider-local-04')).toBeNull(); expect(document.querySelector('.windows-storage-context')).toHaveTextContent('Unavailable');
+    });
+});
+
+
+describe('Provider details beside their disk', () => {
+    it.each(['en', 'de'] as const)('keeps disk disclosures keyboard-focusable and independently expandable in %s', async locale => {
+        setLocale(locale, false);
+        render(<Harness/>); await ready(locale);
+        const [first, second] = diskDetails();
+        expect(first.closest('article')).toHaveTextContent('Fixture NVMe');
+        expect(first.open).toBe(false); expect(second.open).toBe(false);
+        const summary = first.querySelector('summary')!;
+        expect(summary).toHaveTextContent(locale === 'de' ? 'Provider-Details' : 'Provider details');
+        summary.focus(); expect(summary).toHaveFocus();
+        // jsdom does not implement native summary keyboard activation.
+        fireEvent.click(summary);
+        expect(first.open).toBe(true); expect(second.open).toBe(false);
+        expect(within(first).getByText('provider-local-04')).toBeVisible();
+        expect(details().open).toBe(false);
+        expect(screen.getByText(/SMART/)).toBeVisible();
+        fireEvent.click(summary); expect(first.open).toBe(false); expect(summary).toHaveFocus();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it.each(['en', 'de'] as const)('distinguishes matching disk labels in disclosure names in %s', locale => {
+        setLocale(locale, false);
+        const view = windowsStorageContextView();
+        view.storageContext.disks.rows[1].friendlyName.value = 'Fixture NVMe';
+        render(<WindowsStorageContextPanel resource={{ view, storageContext: view.storageContext } as WindowsInventoryResource}/>);
+        const [first, second] = diskDetails().map(detail => detail.querySelector('summary')!);
+        const prefix = locale === 'de' ? 'Provider-Details: Provider-Zeile' : 'Provider details: Provider row';
+        expect(first).toHaveAccessibleName(`${prefix} 1 · Fixture NVMe`);
+        expect(second).toHaveAccessibleName(`${prefix} 2 · Fixture NVMe`);
+        fireEvent.click(second);
+        expect(diskDetails()[0].open).toBe(false);
+        expect(diskDetails()[1].open).toBe(true);
+        expect(screen.getByText('32768')).toBeVisible();
+        expect(screen.getByText('provider-local-04')).not.toBeVisible();
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it.each(['device', 'grant', 'generation', 'capture'] as const)('closes disk details on direct %s replacement', scope => {
+        const makeResource = () => {
+            const view = windowsStorageContextView();
+            return { view, storageContext: view.storageContext } as WindowsInventoryResource;
+        };
+        const result = render(<WindowsStorageContextPanel resource={makeResource()}/>);
+        fireEvent.click(diskDetails()[0].querySelector('summary')!);
+        expect(diskDetails()[0].open).toBe(true);
+        const replacement = makeResource();
+        if (scope === 'device') replacement.view!.deviceId = `agent_${'8'.repeat(32)}`;
+        if (scope === 'grant') replacement.storageContext!.grantId = 'd'.repeat(32);
+        if (scope === 'generation') replacement.storageContext!.generationId = `sample_${'9'.repeat(32)}`;
+        if (scope === 'capture') replacement.storageContext!.collectedAt = '2026-10-07T12:00:09Z';
+        result.rerender(<WindowsStorageContextPanel resource={replacement}/>);
+        expect(diskDetails().every(detail => !detail.open)).toBe(true);
+        expect(screen.getByText('provider-local-04')).not.toBeVisible();
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
     });
 });

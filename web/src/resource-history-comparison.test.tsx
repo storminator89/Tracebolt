@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLocale } from './i18n';
 import { useOperator } from './auth';
+import { historyIntervals, summarizeResource } from './resource-history-analysis';
 import { ResourceHistoryCharts } from './resource-history';
 import { useResourceHistory } from './resource-history-resource';
 import { historyDevice, historyFixture } from './resource-history-fixture';
@@ -18,6 +19,35 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe('read-only resource interval exploration', () => {
+    it.each(['en', 'de'] as const)('aligns original statistics in accessible comparison columns (%s)', locale => {
+        setLocale(locale, false); const view = historyFixture([-7200, -3660, -3600, -60, 0]);
+        render(<ResourceHistoryCharts deviceId={historyDevice} sessionKey="session" ready/>);
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '1' } }); fireEvent.click(screen.getByRole('checkbox')); openStatistics();
+        const table = screen.getByRole('table', { name: locale === 'en' ? 'CPU usage' : 'CPU-Auslastung' });
+        const headers = within(table).getAllByRole('columnheader'); expect(headers).toHaveLength(3);
+        expect(headers.map(h => h.textContent)).toEqual(locale === 'en' ? ['Statistic', 'Selected interval', 'Previous equal interval'] : ['Kennzahl', 'Ausgewählter Zeitraum', 'Vorheriger gleich langer Zeitraum']);
+        for (const header of headers) expect(header).toHaveAttribute('scope', 'col');
+        const ranges = historyIntervals(view, 1), current = summarizeResource(view, 'cpu', ranges.current), previous = summarizeResource(view, 'cpu', ranges.previous!);
+        const row = within(table).getByRole('rowheader', { name: 'Median' }); expect(row).toHaveAttribute('scope', 'row');
+        expect(within(row.closest('tr')!).getAllByRole('cell').map(cell => cell.textContent)).toEqual([`${current.median}%`, `${previous.median}%`]);
+        const count = within(table).getByRole('rowheader', { name: locale === 'en' ? 'Usable samples' : 'Verwendbare Messwerte' });
+        expect(within(count.closest('tr')!).getAllByRole('cell').map(cell => cell.textContent)).toEqual([String(current.usable), String(previous.usable)]);
+        fireEvent.click(screen.getByRole('checkbox')); expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.queryByText(locale === 'en' ? 'Previous equal interval' : 'Vorheriger gleich langer Zeitraum')).toBeNull();
+        expect(retry).not.toHaveBeenCalled();
+    });
+    it('keeps missing prior values unknown while showing genuine zero counts', () => {
+        vi.mocked(useResourceHistory).mockReturnValue({ view: historyFixture(), loading: false, error: '', retry });
+        render(<ResourceHistoryCharts deviceId={historyDevice} sessionKey="session" ready/>);
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '6' } }); fireEvent.click(screen.getByRole('checkbox')); openStatistics();
+        const table = screen.getByRole('table', { name: 'CPU usage' });
+        expect(within(table).getByRole('columnheader', { name: 'Previous equal interval · No usable samples' })).toBeVisible();
+        const median = within(table).getByRole('rowheader', { name: 'Median' }).closest('tr')!;
+        expect(within(median).getAllByRole('cell')[1]).toHaveTextContent('—');
+        const count = within(table).getByRole('rowheader', { name: 'Usable samples' }).closest('tr')!;
+        expect(within(count).getAllByRole('cell')[1]).toHaveTextContent('0');
+        expect(screen.queryByText(/percentage points$/)).toBeNull();
+    });
     it('selects shorter charts and compares prior samples without any extra read or retry', () => {
         const fetch = vi.spyOn(globalThis, 'fetch');
         render(<ResourceHistoryCharts deviceId={historyDevice} sessionKey="session" ready/>);
