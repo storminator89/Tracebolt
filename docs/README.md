@@ -64,6 +64,10 @@ Historical packages remain linked separately below.
   reviewed opt-ins for exact existing members and metrics. Check the
   [exact release boundary](windows-status.md) before using it with a published
   package. Group membership alone never enables a policy.
+- **Planned Windows maintenance:** [one-time windows](windows-scheduled-maintenance.md)
+  and the separate [finite weekly series source candidate](windows-maintenance-series.md).
+  Series require explicit review and operator database version 3; they suppress
+  only separately approved notifications and never run host actions.
 - **Optional settings:** [application checks](application-checks.md),
   [DNS/TCP checks](application-network-checks.md), [webhook alarms](alarm-delivery.md),
   [Health AI](proactive-ai-diagnostics.md) and [service-log AI](proactive-service-log-ai.md).

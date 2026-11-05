@@ -75,7 +75,8 @@ type LANOperatorConfig struct {
 	CVEProgress *linuxcveprogress.Cache
 }
 type operatorHandler struct {
-	managerReadiness ManagerReadinessSource
+	maintenanceSeriesTokens maintenanceSeriesTokenKey
+	managerReadiness        ManagerReadinessSource
 
 	windowsManagedMSI         *windowsmanagedmsimanager.Manager
 	windowsManagedMSIRegistry *windowsmanagedmsimanager.Registry

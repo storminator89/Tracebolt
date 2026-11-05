@@ -36,6 +36,12 @@ Pending/active schedules block immediate and group-immediate starts for the same
 overlapping scope. An active immediate window blocks planning there. This first
 slice does not offer multiple future bookings, recurrence or group scheduling.
 
+The separate [finite weekly series](windows-maintenance-series.md) source option
+requires its own exact review and an explicit operator-database version-3 opt-in.
+It does not reinterpret or promote the one-time v1 records described here.
+Pending/active series reservations also block overlapping one-time and immediate
+maintenance, including gaps between the series occurrences.
+
 ## Suppression preserves Windows evidence
 
 Only separately approved Windows notification delivery is muted. Contact,

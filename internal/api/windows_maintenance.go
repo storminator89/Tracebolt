@@ -78,6 +78,10 @@ func (h *operatorHandler) windowsMaintenanceAPI(w http.ResponseWriter, r *http.R
 }
 
 func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http.Request, groupID string) {
+	if groupID == "" && strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance-schedule/series") {
+		h.windowsMaintenanceSeriesAPI(w, r)
+		return
+	}
 	route := "/api/fleet/windows-maintenance"
 	scheduled := groupID == "" && strings.HasPrefix(r.URL.Path, "/api/fleet/windows-maintenance-schedule")
 	if scheduled {
@@ -348,6 +352,30 @@ func (h *operatorHandler) serveWindowsMaintenance(w http.ResponseWriter, r *http
 		if err != nil {
 			fail(w, 503, "windows_maintenance_unavailable", "The maintenance change could not be confirmed. Refresh without repeating it.")
 			return
+		}
+	}
+	// The legacy projection cannot represent simultaneous series occurrences.
+	// Refuse an incomplete view rather than truncate live planning truth.
+	if scheduled && !mutation {
+		series, e := m.store.WindowsMaintenanceSeries(r.Context(), m.source.Now)
+		if e != nil {
+			fail(w, 503, "windows_maintenance_unavailable", "Scheduled maintenance is unavailable.")
+			return
+		}
+		for _, state := range series {
+			in, ok := authority[state.Target.DeviceID]
+			if !ok || !in.Authorized || maintenanceTarget(in, state.Target.Domain) != state.Target {
+				continue
+			}
+			for _, occurrence := range state.Occurrences {
+				if occurrence.Pending(m.source.Now().UTC()) || occurrence.Active(m.source.Now().UTC()) {
+					if !recheck() {
+						return
+					}
+					fail(w, 409, "windows_maintenance_series_client_required", "Live maintenance series require a series-compatible client.")
+					return
+				}
+			}
 		}
 	}
 	var schedules []store.WindowsMaintenanceScheduleState

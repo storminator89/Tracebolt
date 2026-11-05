@@ -233,6 +233,11 @@ func (s *Store) changeWindowsMaintenance(ctx context.Context, target WindowsMain
 		if e != nil {
 			return next, e
 		}
+		series, e := readWindowsMaintenanceSeries(ctx, tx)
+		if e != nil {
+			return WindowsMaintenanceState{}, e
+		}
+		scheduled = append(scheduled, seriesScheduleAdapter(series)...)
 		if e = schedulesOverlapImmediate(scheduled, target, now, endsAt); e != nil {
 			return next, e
 		}

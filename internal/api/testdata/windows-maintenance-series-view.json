@@ -1,0 +1,760 @@
+{
+  "active": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-11-05T13:00:00Z",
+    "authorityExpiresAt": "2026-11-05T13:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 1,
+        "changedAt": "2026-11-05T12:00:00Z",
+        "retiredOccurrences": 0,
+        "remainingSlots": 12,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": [
+          {
+            "id": 4,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-26T13:00:00Z",
+            "endsAt": "2026-11-26T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 3,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-19T13:00:00Z",
+            "endsAt": "2026-11-19T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 2,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-12T13:00:00Z",
+            "endsAt": "2026-11-12T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 1,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-05T13:00:00Z",
+            "endsAt": "2026-11-05T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      }
+    ]
+  },
+  "cancelledSibling": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-11-05T12:01:00Z",
+    "authorityExpiresAt": "2026-11-05T12:03:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 2,
+        "changedAt": "2026-11-05T12:01:00Z",
+        "retiredOccurrences": 0,
+        "remainingSlots": 12,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": [
+          {
+            "id": 4,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-26T13:00:00Z",
+            "endsAt": "2026-11-26T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 3,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-19T13:00:00Z",
+            "endsAt": "2026-11-19T14:00:00Z",
+            "cancelledAt": "2026-11-05T12:01:00Z",
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 2,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-12T13:00:00Z",
+            "endsAt": "2026-11-12T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 1,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-05T13:00:00Z",
+            "endsAt": "2026-11-05T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      }
+    ]
+  },
+  "empty": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-11-05T12:00:00Z",
+    "authorityExpiresAt": "2026-11-05T12:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      }
+    ]
+  },
+  "endedSibling": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-11-05T13:30:00Z",
+    "authorityExpiresAt": "2026-11-05T13:32:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 3,
+        "changedAt": "2026-11-05T13:30:00Z",
+        "retiredOccurrences": 0,
+        "remainingSlots": 12,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": [
+          {
+            "id": 4,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-26T13:00:00Z",
+            "endsAt": "2026-11-26T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 3,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-19T13:00:00Z",
+            "endsAt": "2026-11-19T14:00:00Z",
+            "cancelledAt": "2026-11-05T12:01:00Z",
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 2,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-12T13:00:00Z",
+            "endsAt": "2026-11-12T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 1,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-05T13:00:00Z",
+            "endsAt": "2026-11-05T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": "2026-11-05T13:30:00Z",
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      }
+    ]
+  },
+  "expired": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-12-04T12:00:00Z",
+    "authorityExpiresAt": "2026-12-04T12:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 3,
+        "changedAt": "2026-11-05T13:30:00Z",
+        "retiredOccurrences": 0,
+        "remainingSlots": 12,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": [
+          {
+            "id": 4,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-26T13:00:00Z",
+            "endsAt": "2026-11-26T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 3,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-19T13:00:00Z",
+            "endsAt": "2026-11-19T14:00:00Z",
+            "cancelledAt": "2026-11-05T12:01:00Z",
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 2,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-12T13:00:00Z",
+            "endsAt": "2026-11-12T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 1,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-05T13:00:00Z",
+            "endsAt": "2026-11-05T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": "2026-11-05T13:30:00Z",
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      }
+    ]
+  },
+  "legacyReserved": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-11-05T12:00:00Z",
+    "authorityExpiresAt": "2026-11-05T12:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 15,
+        "immediateActive": false,
+        "legacyReserved": true,
+        "occurrences": []
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": true,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": true,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": true,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": true,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": true,
+        "occurrences": []
+      }
+    ]
+  },
+  "pending": {
+    "schemaVersion": "tracebolt.windows-maintenance-series.v1",
+    "serverNow": "2026-11-05T12:00:00Z",
+    "authorityExpiresAt": "2026-11-05T12:02:00Z",
+    "targets": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "all",
+        "revision": 1,
+        "changedAt": "2026-11-05T12:00:00Z",
+        "retiredOccurrences": 0,
+        "remainingSlots": 12,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": [
+          {
+            "id": 4,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-26T13:00:00Z",
+            "endsAt": "2026-11-26T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 3,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-19T13:00:00Z",
+            "endsAt": "2026-11-19T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 2,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-12T13:00:00Z",
+            "endsAt": "2026-11-12T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          },
+          {
+            "id": 1,
+            "seriesId": 1,
+            "createdAt": "2026-11-05T12:00:00Z",
+            "startsAt": "2026-11-05T13:00:00Z",
+            "endsAt": "2026-11-05T14:00:00Z",
+            "cancelledAt": null,
+            "endedAt": null,
+            "intent": "planned-work"
+          }
+        ]
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "contact",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "cpu",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "disk",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "memory",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "domain": "service",
+        "revision": 0,
+        "changedAt": null,
+        "retiredOccurrences": 0,
+        "remainingSlots": 16,
+        "immediateActive": false,
+        "legacyReserved": false,
+        "occurrences": []
+      }
+    ]
+  }
+}
