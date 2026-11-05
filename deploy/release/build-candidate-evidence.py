@@ -5,14 +5,18 @@ Inspect Go build metadata without executing a candidate binary. This is not an
 attestation verifier, release publisher, complete source SBOM or runtime gate.
 """
 import argparse
+from contextlib import ExitStack
+import ctypes
 import importlib.util
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import selectors
 import stat
 import subprocess
+import sys
 import tarfile
 import time
 from urllib.parse import quote
@@ -181,6 +185,95 @@ def sbom(info, name, entry, version, source_commit, go_version, sums):
             "compositions": [{"aggregate": "incomplete", "assemblies": [component["bom-ref"]]}]}
 
 
+def atomic_rename():
+    """Require Linux no-replace rename; ordinary rename may destroy an empty target."""
+    b.require(sys.platform == "linux", "Atomic evidence publication requires Linux renameat2 support.")
+    try:
+        rename = ctypes.CDLL(None, use_errno=True).renameat2
+    except (AttributeError, OSError):
+        raise b.Rejected("Atomic evidence publication is unavailable; no replacing fallback is allowed.") from None
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    return rename
+
+
+def publish_documents(output, documents):
+    """Publish a complete private directory atomically, never replacing a target.
+
+    Failed staging is deliberately retained, not recursively cleaned or resumed.
+    A rename is the visibility commit point; a later fsync failure never rolls it back.
+    """
+    rename = atomic_rename()
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    b.require(output.name not in {"", ".", ".."}, "Evidence output directory name rejected.")
+    published = False
+    try:
+        with ExitStack() as descriptors:
+            parent_fd = os.open(output.parent, directory_flags)
+            descriptors.callback(os.close, parent_fd)
+            parent = os.fstat(parent_fd)
+            # An attacker who can rename entries in the parent could substitute
+            # staging after its last identity check. Sticky parents such as /tmp
+            # protect entries owned by this user; other writable parents do not.
+            b.require(parent.st_uid in {0, os.geteuid()} and
+                      (not stat.S_IMODE(parent.st_mode) & 0o022 or parent.st_mode & stat.S_ISVTX),
+                      "Evidence output parent must be owned by this user or root and protected from foreign renames.")
+            try:
+                os.stat(output.name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise b.Rejected("Evidence output already exists; it was not replaced.")
+            for _ in range(8):
+                stage_name = ".tracebolt-evidence-" + secrets.token_hex(12)
+                try:
+                    os.mkdir(stage_name, mode=0o700, dir_fd=parent_fd)
+                    break
+                except FileExistsError:
+                    continue
+            else:
+                raise b.Rejected("Could not create a new private evidence staging directory.")
+            stage_fd = os.open(stage_name, directory_flags, dir_fd=parent_fd)
+            descriptors.callback(os.close, stage_fd)
+            stage = os.fstat(stage_fd)
+            b.require(stage.st_uid == os.geteuid() and stat.S_IMODE(stage.st_mode) == 0o700 and
+                      not os.listdir(stage_fd), "Private evidence staging directory rejected.")
+            for name, document in sorted(documents.items()):
+                b.require(name not in {"", ".", ".."} and Path(name).name == name, "Evidence filename rejected.")
+                fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                             0o600, dir_fd=stage_fd)
+                with os.fdopen(fd, "wb") as stream:
+                    b.require(stream.write(document) == len(document), "Incomplete evidence write rejected.")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            os.fsync(stage_fd)
+            current_parent = output.parent.stat(follow_symlinks=False)
+            current_stage = os.stat(stage_name, dir_fd=parent_fd, follow_symlinks=False)
+            b.require((current_parent.st_dev, current_parent.st_ino) == (parent.st_dev, parent.st_ino) and
+                      (current_stage.st_dev, current_stage.st_ino) == (stage.st_dev, stage.st_ino),
+                      "Evidence directory binding changed; private staging was retained.")
+            # RENAME_NOREPLACE (1) rejects every existing target, including empty
+            # directories and dangling symlinks, in the same atomic operation.
+            if rename(parent_fd, os.fsencode(stage_name), parent_fd, os.fsencode(output.name), 1) != 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error))
+            published = True
+            os.fsync(parent_fd)
+            current_parent = output.parent.stat(follow_symlinks=False)
+            current_output = os.stat(output.name, dir_fd=parent_fd, follow_symlinks=False)
+            b.require((current_parent.st_dev, current_parent.st_ino) == (parent.st_dev, parent.st_ino) and
+                      (current_output.st_dev, current_output.st_ino) == (stage.st_dev, stage.st_ino),
+                      "Complete evidence was published, but its path binding changed. Inspect it without automatic replacement.")
+    except OSError:
+        if published:
+            raise b.Rejected("Complete evidence was published, but directory durability is unconfirmed. "
+                             "Preserve the output; no rollback or automatic replacement was attempted.") from None
+        # An unusual rename I/O error may have an uncertain outcome. Do not
+        # claim absence, retry it or delete either directory to force success.
+        raise b.Rejected("Evidence publication did not finish with confirmation. Inspect the output and any private "
+                         ".tracebolt-evidence-* staging directory; nothing was automatically removed or replaced.") from None
+
+
 def generate(candidate, output, version, source_commit, inspector=inspect):
     b.require(b.VERSION.fullmatch(version) and len(version) <= 64 and b.COMMIT.fullmatch(source_commit), "Invalid candidate identity.")
     b.require(candidate.is_absolute() and candidate == candidate.resolve() and candidate.is_dir() and
@@ -215,10 +308,7 @@ def generate(candidate, output, version, source_commit, inspector=inspect):
     documents["candidate-evidence.json"] = canonical({"schema": "tracebolt.linux-candidate-evidence.v1", "repository": b.REPOSITORY,
         "version": version, "sourceCommit": source_commit, "manifestSHA256": b.digest(raw), "dependencyLocks": locks,
         "assets": inventory, "trust": "unsigned candidate review evidence; not release verification or runtime acceptance"})
-    output.mkdir(mode=0o700)
-    for name, document in sorted(documents.items()):
-        with b.open_private(output / name) as stream:
-            stream.write(document)
+    publish_documents(output, documents)
 
 
 def main():

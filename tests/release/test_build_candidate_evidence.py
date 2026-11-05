@@ -1,6 +1,7 @@
 """Inert SBOM fixtures: no release, native program, credential or network action."""
 import copy
 from contextlib import contextmanager
+import errno
 import importlib.util
 import io
 import json
@@ -8,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import stat
 import tarfile
 import tempfile
 import unittest
@@ -233,6 +235,291 @@ class CandidateEvidence(unittest.TestCase):
                 self.assertFalse(self.output.exists())
                 self.manifest[key] = original
                 self.write_manifest()
+
+
+class AtomicOutput(unittest.TestCase):
+    """Only private temporary fixture files; no candidates, tools or host changes."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="tracebolt-atomic-evidence-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.output = self.root / "evidence"
+        self.documents = {"candidate-evidence.json": b'{"inert":true}\n',
+                          **{f"asset-{i}.cdx.json": (f"inert {i}\n").encode() for i in range(8)}}
+
+    def stages(self, parent=None):
+        return list((parent or self.root).glob(".tracebolt-evidence-*"))
+
+    def assert_complete(self, output=None):
+        output = output or self.output
+        self.assertEqual({p.name: p.read_bytes() for p in output.iterdir()}, self.documents)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o700)
+        for path in output.iterdir():
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_all_files_sync_before_atomic_visibility_and_parent_sync_after(self):
+        original_sync, original_rename = os.fsync, e.atomic_rename()
+        operations = []
+
+        def sync(fd):
+            metadata = os.fstat(fd)
+            operations.append("directory" if stat.S_ISDIR(metadata.st_mode) else "file")
+            if not self.output.exists():
+                self.assertLessEqual(len(operations), 10)
+            original_sync(fd)
+
+        def rename(*args):
+            self.assertFalse(self.output.exists())
+            self.assertEqual(args[0], args[2])
+            self.assertEqual(args[4], 1)
+            self.assert_complete(self.stages()[0])
+            operations.append("rename")
+            result = original_rename(*args)
+            self.assertEqual(result, 0)
+            self.assert_complete()
+            return result
+
+        with mock.patch.object(e.os, "fsync", side_effect=sync), \
+                mock.patch.object(e, "atomic_rename", return_value=rename), \
+                mock.patch.object(e.os, "unlink", side_effect=AssertionError("No deletion allowed")), \
+                mock.patch.object(e.os, "rmdir", side_effect=AssertionError("No deletion allowed")):
+            e.publish_documents(self.output, self.documents)
+        self.assertEqual(operations, ["file"] * 9 + ["directory", "rename", "directory"])
+        self.assert_complete()
+        self.assertEqual(self.stages(), [])
+
+    def test_failure_writing_each_file_retains_private_staging_without_partial_output(self):
+        original = os.fdopen
+        for failed_index in range(9):
+            with self.subTest(failed_index=failed_index):
+                writes = 0
+
+                @contextmanager
+                def failing_file(fd, mode):
+                    nonlocal writes
+                    with original(fd, mode) as stream:
+                        wrapped = mock.Mock(wraps=stream)
+                        if writes == failed_index:
+                            wrapped.write.side_effect = OSError(errno.ENOSPC, "inert disk full")
+                        writes += 1
+                        yield wrapped
+
+                before = set(self.stages())
+                with mock.patch.object(e.os, "fdopen", side_effect=failing_file):
+                    with self.assertRaisesRegex(e.b.Rejected, "Inspect the output"):
+                        e.publish_documents(self.output, self.documents)
+                self.assertFalse(self.output.exists())
+                stage, = set(self.stages()) - before
+                self.assertEqual(stage.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(len(list(stage.iterdir())), failed_index + 1)
+                for path in stage.iterdir():
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        # An explicit retry uses a fresh directory, never adopts/deletes old staging.
+        retained = {p: p.stat().st_ino for p in self.stages()}
+        e.publish_documents(self.output, self.documents)
+        self.assert_complete()
+        self.assertEqual({p: p.stat().st_ino for p in self.stages()}, retained)
+
+    def test_file_and_stage_sync_failures_never_publish(self):
+        original = os.fsync
+        for failed_sync in range(10):
+            with self.subTest(failed_sync=failed_sync):
+                calls = 0
+
+                def sync(fd):
+                    nonlocal calls
+                    current = calls
+                    calls += 1
+                    if current == failed_sync:
+                        raise OSError(errno.EIO, "inert sync failure")
+                    original(fd)
+
+                with mock.patch.object(e.os, "fsync", side_effect=sync):
+                    with self.assertRaisesRegex(e.b.Rejected, "Inspect the output"):
+                        e.publish_documents(self.output, self.documents)
+                self.assertFalse(self.output.exists())
+        self.assertEqual(len(self.stages()), 10)
+
+    def test_parent_sync_failure_retains_complete_published_output(self):
+        original = os.fsync
+
+        def sync(fd):
+            if self.output.exists():
+                raise OSError(errno.EIO, "inert parent sync failure")
+            original(fd)
+
+        with mock.patch.object(e.os, "fsync", side_effect=sync):
+            with self.assertRaisesRegex(e.b.Rejected, "published.*durability is unconfirmed"):
+                e.publish_documents(self.output, self.documents)
+        self.assert_complete()
+        self.assertEqual(self.stages(), [])
+
+    def test_existing_and_raced_targets_are_never_replaced(self):
+        original_rename = e.atomic_rename()
+        for race in (False, True):
+            for kind in ("file", "empty", "nonempty", "symlink", "dangling"):
+                with self.subTest(race=race, kind=kind):
+                    parent = self.root / f"{race}-{kind}"
+                    parent.mkdir(mode=0o700)
+                    output, sentinel = parent / "evidence", parent / "sentinel"
+                    sentinel.write_bytes(b"existing user bytes")
+                    before = None
+
+                    def create_target():
+                        nonlocal before
+                        if kind == "file":
+                            output.write_bytes(b"existing output")
+                        elif kind in ("empty", "nonempty"):
+                            output.mkdir()
+                            if kind == "nonempty":
+                                (output / "user").write_bytes(b"existing content")
+                        else:
+                            output.symlink_to(sentinel if kind == "symlink" else parent / "absent")
+                        before = output.lstat()
+
+                    def rename(*args):
+                        create_target()
+                        return original_rename(*args)
+
+                    if not race:
+                        create_target()
+                    with mock.patch.object(e, "atomic_rename", return_value=rename if race else original_rename):
+                        with self.assertRaises(e.b.Rejected):
+                            e.publish_documents(output, self.documents)
+                    self.assertEqual(output.lstat(), before)
+                    self.assertEqual(sentinel.read_bytes(), b"existing user bytes")
+                    if kind == "file":
+                        self.assertEqual(output.read_bytes(), b"existing output")
+                    if kind == "nonempty":
+                        self.assertEqual((output / "user").read_bytes(), b"existing content")
+                    self.assertEqual(len(self.stages(parent)), int(race))
+
+    def test_missing_symbol_and_unsupported_filesystem_have_no_rename_fallback(self):
+        with mock.patch.object(e.ctypes, "CDLL", return_value=object()), \
+                mock.patch.object(e.os, "rename", side_effect=AssertionError("No replacing fallback")):
+            with self.assertRaisesRegex(e.b.Rejected, "unavailable"):
+                e.publish_documents(self.output, self.documents)
+        self.assertEqual(self.stages(), [])
+        for code in (errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP):
+            with self.subTest(code=code):
+                def unavailable(*args):
+                    e.ctypes.set_errno(code)
+                    return -1
+                with mock.patch.object(e, "atomic_rename", return_value=unavailable), \
+                        mock.patch.object(e.os, "rename", side_effect=AssertionError("No replacing fallback")):
+                    with self.assertRaises(e.b.Rejected):
+                        e.publish_documents(self.output, self.documents)
+                self.assertFalse(self.output.exists())
+        self.assertEqual(len(self.stages()), 3)
+
+    def test_uncertain_rename_result_never_deletes_completed_output(self):
+        original = e.atomic_rename()
+
+        def uncertain(*args):
+            self.assertEqual(original(*args), 0)
+            raise OSError(errno.EIO, "inert uncertain response")
+
+        with mock.patch.object(e, "atomic_rename", return_value=uncertain):
+            with self.assertRaisesRegex(e.b.Rejected, "did not finish with confirmation"):
+                e.publish_documents(self.output, self.documents)
+        self.assert_complete()
+        self.assertEqual(self.stages(), [])
+
+    def test_foreign_writable_parent_rejected_but_owned_sticky_parent_supported(self):
+        parent = self.root / "writable"
+        parent.mkdir()
+        parent.chmod(0o777)
+        with self.assertRaisesRegex(e.b.Rejected, "protected from foreign renames"):
+            e.publish_documents(parent / "evidence", self.documents)
+        self.assertEqual(list(parent.iterdir()), [])
+        parent.chmod(0o1777)
+        e.publish_documents(parent / "evidence", self.documents)
+        self.assert_complete(parent / "evidence")
+
+    def test_short_write_and_flush_failure_retain_staging(self):
+        original = os.fdopen
+        for failure in ("short", "flush"):
+            with self.subTest(failure=failure):
+                @contextmanager
+                def failed_file(fd, mode):
+                    with original(fd, mode) as stream:
+                        wrapped = mock.Mock(wraps=stream)
+                        if failure == "short":
+                            wrapped.write.side_effect = lambda data: stream.write(data[:1])
+                        else:
+                            wrapped.flush.side_effect = OSError(errno.EIO, "inert flush error")
+                        yield wrapped
+                with mock.patch.object(e.os, "fdopen", side_effect=failed_file):
+                    with self.assertRaises(e.b.Rejected):
+                        e.publish_documents(self.output, self.documents)
+                self.assertFalse(self.output.exists())
+        self.assertEqual(len(self.stages()), 2)
+
+    def test_staging_identity_substitution_is_rejected_without_deleting_either_directory(self):
+        original_sync = os.fsync
+        moved = self.root / "retained-original"
+        replacement = None
+
+        def sync(fd):
+            nonlocal replacement
+            original_sync(fd)
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                replacement, = self.stages()
+                replacement.rename(moved)
+                replacement.mkdir()
+                (replacement / "user").write_bytes(b"do not delete")
+
+        rename = mock.Mock(wraps=e.atomic_rename())
+        with mock.patch.object(e.os, "fsync", side_effect=sync), \
+                mock.patch.object(e, "atomic_rename", return_value=rename):
+            with self.assertRaisesRegex(e.b.Rejected, "binding changed"):
+                e.publish_documents(self.output, self.documents)
+        rename.assert_not_called()
+        self.assertFalse(self.output.exists())
+        self.assert_complete(moved)
+        self.assertEqual((replacement / "user").read_bytes(), b"do not delete")
+
+    def test_parent_path_substitution_is_reported_before_or_after_commit(self):
+        original_sync, original_rename = os.fsync, e.atomic_rename()
+        for after_check in (False, True):
+            with self.subTest(after_check=after_check):
+                parent = self.root / f"parent-{after_check}"
+                moved = self.root / f"moved-{after_check}"
+                parent.mkdir(mode=0o700)
+                output = parent / "evidence"
+                moved_once = False
+
+                def move_parent():
+                    nonlocal moved_once
+                    if not moved_once:
+                        moved_once = True
+                        parent.rename(moved)
+                        parent.mkdir(mode=0o700)
+                        (parent / "user").write_bytes(b"untouched replacement parent")
+
+                def sync(fd):
+                    original_sync(fd)
+                    if not after_check and stat.S_ISDIR(os.fstat(fd).st_mode):
+                        move_parent()
+
+                def rename(*args):
+                    if after_check:
+                        move_parent()
+                    return original_rename(*args)
+
+                with mock.patch.object(e.os, "fsync", side_effect=sync), \
+                        mock.patch.object(e, "atomic_rename", return_value=rename):
+                    with self.assertRaisesRegex(e.b.Rejected, "binding changed"):
+                        e.publish_documents(output, self.documents)
+                self.assertFalse(output.exists())
+                self.assertEqual((parent / "user").read_bytes(), b"untouched replacement parent")
+                if after_check:
+                    self.assert_complete(moved / "evidence")
+                else:
+                    self.assertFalse((moved / "evidence").exists())
+                    stage, = self.stages(moved)
+                    self.assert_complete(stage)
 
 
 class InspectorPipes(unittest.TestCase):
