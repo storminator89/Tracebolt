@@ -1,10 +1,34 @@
-.windows-event-watches { border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; margin-block: 1rem; }
-.windows-event-watches-boundary { font-weight: 600; }
-.windows-event-watches fieldset { margin-block: 1rem; min-width: 0; }
-.windows-event-watches-choice { display: flex; align-items: flex-start; gap: .6rem; margin-block: .65rem; overflow-wrap: anywhere; }
-.windows-event-watches-choice input { flex-shrink: 0; margin-top: .2rem; }
+.windows-event-watches { border: 1px solid var(--line); border-radius: 10px; margin-block: 1rem; background: var(--panel); overflow-wrap: anywhere; }
+.windows-event-watches-toggle { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 14px 16px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.windows-event-watches-toggle > span { flex: 1; }
+.windows-event-watches-toggle > svg { flex-shrink: 0; }
+.windows-event-watches-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+.windows-event-watches-toggle:hover { background: var(--panel-soft); }
+.windows-event-watches-toggle:focus-visible, .windows-event-watches summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.windows-event-watches-body { padding: 0 16px 16px; }
+.windows-event-watches-boundary { color: var(--secondary); font-size: 12px; line-height: 1.6; }
+.windows-event-watches-status { padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--panel-soft); border-radius: 4px; }
+.windows-event-watches fieldset { margin-block: 1rem; padding: 12px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.windows-event-watches legend { padding-inline: 6px; font-weight: 600; font-size: 13px; }
+.windows-event-watches-choice { display: flex; align-items: flex-start; gap: 10px; margin-block: 10px; line-height: 1.6; }
+.windows-event-watches-choice input { flex-shrink: 0; margin-top: 4px; accent-color: var(--accent); }
+.windows-event-watches-option { min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.windows-event-watches-option.is-selected { border-color: var(--accent); background: var(--panel-soft); }
+.windows-event-watches-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.windows-event-watches-option:has(input:disabled) { cursor: default; }
+.windows-event-watches-selector { display: grid; gap: 4px; min-width: 0; }
+.windows-event-watches-selector > span { color: var(--secondary); font-size: 12px; }
+.windows-event-watches-selection { font-weight: 600; font-size: 12px; }
 .windows-event-watches bdi { white-space: pre-wrap; overflow-wrap: anywhere; }
-.windows-event-watches-incidents { list-style: none; padding: 0; }
-.windows-event-watches-incidents > li { border-top: 1px solid var(--border); padding-block: 1rem; }
-.windows-event-watches dl { display: flex; flex-wrap: wrap; gap: 1rem; }
-.windows-event-watches dd { margin: 0; overflow-wrap: anywhere; }
+.windows-event-watches-retention { margin-block: 16px; color: var(--secondary); font-size: 12px; }
+.windows-event-watches summary { cursor: pointer; padding-block: 8px; }
+.windows-event-watches-count { margin-left: 6px; color: var(--secondary); font-weight: 400; }
+.windows-event-watches-incidents { list-style: none; padding: 0; display: grid; gap: 10px; }
+.windows-event-watches-incidents > li { border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.windows-event-watches-incidents p, .windows-event-watches-incidents details { font-size: 12px; line-height: 1.6; }
+.windows-event-watches-incidents .button { margin-top: 8px; }
+.windows-event-watches dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+.windows-event-watches dt { color: var(--secondary); }
+.windows-event-watches dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+.windows-event-watches-disable { display: grid; gap: 8px; justify-items: start; font-size: 12px; line-height: 1.6; }
