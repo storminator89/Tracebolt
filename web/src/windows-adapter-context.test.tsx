@@ -107,3 +107,25 @@ describe('Adapter context privacy and original-capture lifecycle', () => {
         vi.mocked(request).mockResolvedValue({ ...view(), adapterContext: { ...view().adapterContext, extra: 'private-raw-secret' } }); render(<Harness/>); await network(); expect(screen.getByRole('alert')).toHaveTextContent('inconsistent'); expect(document.body).not.toHaveTextContent('private-raw-secret'); expect(screen.queryByRole('table')).toBeNull();
     });
 });
+
+
+describe('Distinct adapter-address disclosures', () => {
+    it.each(['en', 'de'] as const)('distinguishes equal adapter names and exposes address lists in %s', async locale => {
+        setLocale(locale, false); const data = view();
+        data.adapterContext.rows[1].name = data.adapterContext.rows[0].name;
+        vi.mocked(request).mockResolvedValue(data); render(<Harness/>); await flush();
+        fireEvent.click(screen.getByRole('tab', { name: locale === 'de' ? 'Netzwerk' : 'Network' }));
+        const disclosures = Array.from(document.querySelectorAll<HTMLDetailsElement>('.windows-adapter-addresses'));
+        const prefix = locale === 'de' ? 'DNS & Gateways: Fixture Ethernet · Erfasste Zeile' : 'DNS & gateways: Fixture Ethernet · Captured row';
+        expect(disclosures[0].querySelector('summary')).toHaveAccessibleName(`${prefix} 1`);
+        expect(disclosures[1].querySelector('summary')).toHaveAccessibleName(`${prefix} 2`);
+        const summary = disclosures[0].querySelector('summary')!;
+        summary.focus(); fireEvent.click(summary); expect(summary).toHaveFocus();
+        expect(disclosures[0].open).toBe(true); expect(disclosures[1].open).toBe(false);
+        for (const list of within(disclosures[0]).getAllByRole('list')) {
+            expect(list.tagName).toBe('UL'); expect(list).toHaveAttribute('role', 'list');
+            expect(within(list).getAllByRole('listitem').length).toBeGreaterThan(0);
+        }
+        expect(request).toHaveBeenCalledTimes(1);
+    });
+});

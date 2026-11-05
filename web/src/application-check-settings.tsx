@@ -16,6 +16,7 @@ const copy = {
         readonly: 'Application-check setup requires administrator permission.', external: 'Read-only targets from the manager’s startup file.', unavailable: 'Managed application-check setup is unavailable on this manager.',
         blocked: 'The manager has stopped checks and blocked changes. Review its configuration and storage before restarting.',
         interval: 'Interval (seconds)', intervalHelp: '60–3600 seconds after each completed round.', target: 'Target', id: 'Target ID', kind: 'Type', url: 'URL', dnsHost: 'Hostname', tcpHost: 'Hostname or IP address', port: 'Port', ips: 'Allowed IP addresses',
+        idHelp: '1–48 characters: lowercase a–z, 0–9, _ or -. Use a different ID for each target.',
         ipsHelp: '1–16 exact IPs; commas or new lines, no ranges. Every resolved address must match.', targetHelp: 'Use a fixed, side-effect-free target. No credentials, query strings, headers or request bodies.',
         privateAck: 'I approve private-LAN access to this exact target and its listed IP addresses.', httpAck: 'I accept unencrypted HTTP requests to this exact target.', add: 'Add target', remove: 'Remove target',
         saveNote: 'Saves a validated draft and stops previous checks. Checks stay off.',
@@ -38,6 +39,7 @@ const copy = {
         readonly: 'Die Einrichtung von Anwendungsprüfungen erfordert Administratorrechte.', external: 'Schreibgeschützte Ziele aus der Startdatei des Managers.', unavailable: 'Die verwaltete Einrichtung von Anwendungsprüfungen ist auf diesem Manager nicht verfügbar.',
         blocked: 'Der Manager hat Prüfungen gestoppt und Änderungen gesperrt. Vor einem Neustart Konfiguration und Speicher prüfen.',
         interval: 'Intervall (Sekunden)', intervalHelp: '60–3600 Sekunden nach jeder abgeschlossenen Prüfrunde.', target: 'Ziel', id: 'Ziel-ID', kind: 'Typ', url: 'URL', dnsHost: 'Hostname', tcpHost: 'Hostname oder IP-Adresse', port: 'Port', ips: 'Erlaubte IP-Adressen',
+        idHelp: '1–48 Zeichen: Kleinbuchstaben a–z, 0–9, _ oder -. Für jedes Ziel eine andere ID verwenden.',
         ipsHelp: '1–16 exakte IPs; Kommas oder Zeilenumbrüche, keine Bereiche. Jede aufgelöste Adresse muss übereinstimmen.', targetHelp: 'Ein festes Ziel ohne Seiteneffekte verwenden. Keine Zugangsdaten, Abfrageparameter, Header oder Anfrageinhalte.',
         privateAck: 'Ich erlaube den Zugriff auf dieses genaue Ziel und seine aufgeführten IP-Adressen im privaten LAN.', httpAck: 'Ich akzeptiere unverschlüsselte HTTP-Anfragen an dieses genaue Ziel.', add: 'Ziel hinzufügen', remove: 'Ziel entfernen',
         saveNote: 'Speichert einen geprüften Entwurf und stoppt bisherige Prüfungen. Prüfungen bleiben aus.',
@@ -129,8 +131,9 @@ function TargetForm({ draft, index, count, labels, change, remove }: { draft: Dr
     const help = useId();
     const patch = (field: keyof Draft, value: string) => change({ ...draft, [field]: value, privateAck: false, httpAck: false });
     return <fieldset className="check-settings-target"><legend>{labels.target} {index + 1}</legend><div className="check-settings-fields">
-        <label>{labels.id}<input value={draft.id} maxLength={48} spellCheck={false} autoCapitalize="none" onChange={event => patch('id', event.target.value)}/></label>
+        <label>{labels.id}<input value={draft.id} aria-describedby={`${help}-id`} maxLength={48} spellCheck={false} autoCapitalize="none" onChange={event => patch('id', event.target.value)}/></label>
         <label>{labels.kind}<select value={draft.kind} onChange={event => change(emptyTarget(event.target.value as Draft['kind'], draft.id))}><option value="http">HTTP / HTTPS</option><option value="dns">DNS</option><option value="tcp">TCP</option></select></label>
+        <p className="check-settings-wide" id={`${help}-id`}>{labels.idHelp}</p>
         {draft.kind === 'http' ? <label className="check-settings-wide">{labels.url}<input type="text" value={draft.url} maxLength={1024} spellCheck={false} autoCapitalize="none" onChange={event => patch('url', event.target.value)}/></label> : <label className={draft.kind === 'dns' ? 'check-settings-wide' : ''}>{draft.kind === 'dns' ? labels.dnsHost : labels.tcpHost}<input value={draft.host} maxLength={253} spellCheck={false} autoCapitalize="none" onChange={event => patch('host', event.target.value)}/></label>}
         {draft.kind === 'tcp' && <label>{labels.port}<input type="text" inputMode="numeric" value={draft.port} maxLength={5} onChange={event => patch('port', event.target.value)}/></label>}
         <label className="check-settings-wide">{labels.ips}<textarea value={draft.ips} maxLength={1024} rows={2} spellCheck={false} autoCapitalize="none" aria-describedby={help} onChange={event => patch('ips', event.target.value)}/></label>
