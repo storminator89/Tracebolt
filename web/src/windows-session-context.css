@@ -22,3 +22,10 @@
 .windows-session-note{font-size:12px;line-height:1.6;color:var(--secondary);margin:14px 0 0}
 @media(max-width:600px){.windows-session-membership{padding:12px;gap:8px 12px}.windows-session-membership h4{flex-basis:100%}.windows-session-table th{width:auto}.windows-session-table td{grid-template-columns:minmax(90px,34%) minmax(0,1fr)}.windows-session-details dl{grid-template-columns:1fr 1fr}}
 @media(max-width:360px){.windows-session-details dl{grid-template-columns:1fr}}
+
+.windows-session-search{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:14px 0;max-width:100%}
+.windows-session-search label{display:grid;gap:6px;flex:1;min-width:min(100%,14rem);max-width:28rem;font-size:12px;color:var(--secondary)}
+.windows-session-search input{width:100%;min-width:0;box-sizing:border-box;padding:9px 10px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit}
+.windows-session-search input:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.windows-session-search .button{min-height:36px}
+@media(max-width:600px){.windows-session-search input,.windows-session-search .button{min-height:44px}}
