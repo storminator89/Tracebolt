@@ -1,0 +1,10 @@
+/* Saved, discrete outcomes: no continuous health or recovery styling. */
+.application-history-samples{display:grid;gap:10px;list-style:none;padding:0;margin:12px 0 20px}
+.application-history-samples>li{border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0;overflow-wrap:anywhere}
+.application-history-outcome{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.application-history-outcome strong{color:var(--text);font-size:12px}
+.application-history-times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px;margin:12px 0 0}
+.application-history-times dt{color:var(--secondary)}
+.application-history-times dd{margin:3px 0 0;color:var(--text);font-variant-numeric:tabular-nums}
+.application-check-history .application-history-gap{margin:0 0 10px;padding:0 0 8px;border-bottom:1px solid var(--line)}
+@media(max-width:600px){.application-history-times{grid-template-columns:minmax(0,1fr)}}

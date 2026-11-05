@@ -5,6 +5,7 @@ import { setLocale } from './i18n';
 import { WindowsInventoryWorkspace } from './windows-inventory';
 import { useWindowsInventory } from './windows-inventory-resource';
 import { windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
+import { hardwareRemainingTime } from './windows-hardware-context';
 import { windowsHardwareContextView } from './windows-hardware-context-fixture';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
 const flush = () => act(async () => {});
@@ -71,5 +72,38 @@ describe('Hardware original-age retained observation', () => {
     });
     it('expires the older capture independently while keeping current failure visible', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); vi.mocked(request).mockResolvedValue(retained('2026-10-06T12:00:11Z')); render(<Harness/>); await ready(); expect(screen.getByText('Show previous capture')).toBeVisible(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText('Show previous capture')).toBeNull(); expect(screen.queryByText('FIXTURE-CHASSIS-0042')).toBeNull(); expect(document.querySelector('.windows-hardware-context')).toHaveTextContent('Unavailable');
+    });
+});
+
+
+describe('Readable original battery estimate', () => {
+    it.each([
+        [0, '0 s', '0 s'], [59, '59 s', '59 s'], [60, '1 min', '1 min'],
+        [3599, '59 min 59 s', '59 min 59 s'], [3600, '1 h', '1 Std.'],
+        [3661, '1 h 1 min 1 s', '1 Std. 1 min 1 s'],
+        [4294967294, '1,193,046 h 28 min 14 s', '1.193.046 Std. 28 min 14 s'],
+    ])('preserves every source second for %s', (seconds, en, de) => {
+        expect(hardwareRemainingTime(seconds as number, 'en')).toBe(en);
+        expect(hardwareRemainingTime(seconds as number, 'de')).toBe(de);
+    });
+    it.each(['en', 'de'] as const)('shows a readable estimate and keeps exact source seconds in %s', async locale => {
+        setLocale(locale, false);
+        const v = windowsHardwareContextView();
+        Object.assign(v.hardwareContext.power, { acLineStatus: 'offline', charging: 'no', estimatedSeconds: 3661 });
+        vi.mocked(request).mockResolvedValue(v);
+        render(<Harness/>); await ready(locale);
+        const power = screen.getByRole('region', { name: locale === 'de' ? 'Stromversorgung' : 'Power' });
+        expect(within(power).getByText(locale === 'de' ? '1 Std. 1 min 1 s' : '1 h 1 min 1 s')).toBeVisible();
+        expect(within(power).getByText(locale === 'de' ? 'Geschätzte Restlaufzeit' : 'Estimated time remaining')).toBeVisible();
+        const source = screen.getByText(locale === 'de' ? '3.661 s' : '3,661 s');
+        expect(source).not.toBeVisible(); fireEvent.click(details().querySelector('summary')!); expect(source).toBeVisible();
+        expect(details()).toHaveTextContent(locale === 'de' ? 'Schätzwerte der Quelle' : 'source estimates');
+        expect(request).toHaveBeenCalledTimes(1); expect(mutate).not.toHaveBeenCalled();
+    });
+    it('keeps an unknown estimate unknown rather than showing zero', async () => {
+        render(<Harness/>); await ready();
+        const term = within(screen.getByRole('region', { name: 'Power' })).getByText('Estimated time remaining');
+        expect(term.nextElementSibling).toHaveTextContent('Unknown');
+        expect(screen.queryByText('Estimated time remaining (source seconds)')).toBeNull();
     });
 });
