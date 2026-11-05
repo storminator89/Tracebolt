@@ -39,6 +39,35 @@ describe('resource history render work', () => {
         act(() => setLocale('de', false)); expect(screen.getByRole('img', { name: /^CPU · Letzte 24 Stunden/ })).toBeVisible();
         fireEvent.keyDown(cpu, { key: 'Escape' }); expect(document.querySelector('.resource-chart-inspection.visible')).toBeNull();
     });
+    it.each([['en', '2026-10-25'], ['de', '2026-10-25'], ['en', '2026-03-29'], ['de', '2026-03-29']] as const)('labels original UTC inspection across DST in %s on %s', (locale, date) => {
+        setLocale(locale, false);
+        const view = historyFixture([-3600, 0]);
+        view.serverNow = `${date}T01:30:00Z`; view.windowStart = new Date(Date.parse(view.serverNow) - 86400000).toISOString();
+        const times = [`${date}T00:30:00.123Z`, `${date}T01:30:00Z`];
+        view.points.forEach((point, index) => {
+            point.collectedAt = times[index]; point.receivedAt = times[index];
+            for (const key of ['cpu', 'memory', 'disk'] as const) point[key].collectedAt = times[index];
+        });
+        // Both originals correspond to 02:30 across Europe's autumn clock change.
+        const berlin = new Intl.DateTimeFormat('de', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
+        if (date === '2026-10-25') expect(berlin.format(Date.parse(times[0]))).toBe(berlin.format(Date.parse(times[1])));
+        else { expect(berlin.format(Date.parse(times[0]))).toBe('01:30'); expect(berlin.format(Date.parse(times[1]))).toBe('03:30'); }
+        vi.mocked(useResourceHistory).mockReturnValue({ view, loading: false, error: '', retry: vi.fn() });
+        const original = JSON.stringify(view), NativeDateTimeFormat = Intl.DateTimeFormat;
+        const formats = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (...args: Parameters<typeof Intl.DateTimeFormat>) {
+            const [lang, options] = args;
+            return new NativeDateTimeFormat(lang, { timeZone: 'Europe/Berlin', ...options });
+        } as typeof Intl.DateTimeFormat);
+        render(panel());
+        expect(screen.getByText(locale === 'en' ? 'Chart times: UTC.' : 'Diagrammzeiten: UTC.')).toBeVisible();
+        expect(formats.mock.calls.filter(([, options]) => options?.hour).every(([, options]) => options?.timeZone === 'UTC')).toBe(true);
+        const cpu = screen.getByRole('img', { name: /^CPU/ }); expect(cpu).toHaveAccessibleName(/UTC/);
+        fireEvent.keyDown(cpu, { key: 'Home' });
+        expect(screen.getByText(`${date} 00:30:00.123 UTC`)).toHaveAttribute('datetime', times[0]);
+        fireEvent.keyDown(cpu, { key: 'End' });
+        expect(screen.getByText(`${date} 01:30:00 UTC`)).toHaveAttribute('title', times[1]);
+        expect(JSON.stringify(view)).toBe(original);
+    });
     it.each(['cleared', 'revoked', 'session'] as const)('removes chart paths immediately when history is %s', kind => {
         const mounted = render(panel()); expect(screen.getAllByRole('img')).toHaveLength(3);
         const previous = vi.mocked(useResourceHistory).mock.results.at(-1)!.value;

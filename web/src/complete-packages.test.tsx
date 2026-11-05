@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
@@ -18,6 +19,33 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('complete dpkg inventory browsing', () => {
+    it.each(['en', 'de'] as const)('distinguishes package drafts and resets page two without reading in %s', async locale => {
+        setLocale(locale, false); const user = userEvent.setup(); render(<CompletePackagesPanel deviceId={completeDevice} inline/>); await screen.findByRole('table');
+        const input = screen.getByRole('searchbox'), submit = locale === 'en' ? 'Search' : 'Suchen', clear = locale === 'en' ? 'Clear search' : 'Suche leeren';
+        const hint = locale === 'en' ? 'Search changed. Choose Search to read the saved generation.' : 'Suche geändert. Mit „Suchen“ die gespeicherte Generation durchsuchen.';
+        expect(screen.queryByText(hint)).toBeNull(); fireEvent.change(input, {target:{value:'fixture'}});
+        expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(hint)).toBeVisible(); expect(input).toHaveAccessibleDescription(new RegExp(hint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button',{name:submit,exact:true})); await screen.findByRole('table'); expect(screen.queryByText(hint)).toBeNull();
+        fireEvent.click(screen.getByRole('button',{name:locale === 'en' ? 'Continue search' : 'Suche fortsetzen'})); await screen.findByText('fixture-000100',{selector:'th'});
+        const calls=vi.mocked(mutateRaw).mock.calls.length; screen.getByRole('button',{name:clear}).focus(); await user.keyboard(' ');
+        expect(input).toHaveValue(''); expect(input).toHaveFocus(); expect(screen.getByText(hint)).toBeVisible(); expect(screen.queryByRole('table')).toBeNull(); expect(mutateRaw).toHaveBeenCalledTimes(calls); expect(request).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button',{name:submit,exact:true})); await screen.findByText('fixture-000000',{selector:'th'}); expect(screen.getByRole('button',{name:locale === 'en' ? 'Previous page' : 'Vorherige Seite'})).toBeDisabled();
+        expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1])).toMatchObject({search:'',cursor:'',generationId:view.complete!.binding.generationId,limit:100});
+        expect(vi.mocked(mutateRaw).mock.calls.every(call=>call[0]===`/devices/${completeDevice}/inventory/packages/query`)).toBe(true);
+    });
+    it('keeps loading and failed query states distinct from a package draft',async()=>{
+        await open(); const input=screen.getByRole('searchbox'); fireEvent.change(input,{target:{value:'fixture'}});
+        let reject!:(e:unknown)=>void; vi.mocked(mutateRaw).mockReturnValueOnce(new Promise((_resolve,r)=>{reject=r;})); fireEvent.click(screen.getByRole('button',{name:'Search',exact:true}));
+        expect(screen.queryByText(/Search changed/)).toBeNull(); expect(screen.getByRole('button',{name:'Clear search'})).toBeDisabled();
+        await act(async()=>reject(new APIError('failed',500))); expect(screen.getByRole('alert')).toBeVisible(); expect(screen.queryByText(/Search changed/)).toBeNull();
+    });
+    it.each(['blur','auth','session','device','expiry'] as const)('removes draft feedback on %s loss without retaining package rows',async loss=>{
+        vi.useFakeTimers({toFake:['setInterval','clearInterval']}); const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);
+        const r=render(<CompletePackagesPanel deviceId={completeDevice} sessionKey="first" inline/>);await screen.findByRole('table');fireEvent.change(screen.getByRole('searchbox'),{target:{value:'fixture'}});expect(screen.getByText(/Search changed/)).toBeVisible();
+        if(loss==='blur')act(()=>window.dispatchEvent(new Event('blur')));else if(loss==='auth')act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));else if(loss==='expiry'){mono.mockReturnValue(86401000);wall.mockReturnValue(86500000);act(()=>vi.advanceTimersByTime(1000));}else{vi.mocked(request).mockReturnValue(new Promise(()=>{}));r.rerender(<CompletePackagesPanel deviceId={loss==='device'?'agent_other':completeDevice} sessionKey={loss==='session'?'new':'first'} inline/>);}
+        expect(screen.queryByText(/Search changed/)).toBeNull();expect(screen.queryByRole('button',{name:'Clear search'})).toBeNull();expect(screen.queryByRole('table')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
     it.each(['en', 'de'] as const)('puts package search and result counts before reachable capture details and rows without changing reads in %s', async locale => {
         setLocale(locale, false); render(<CompletePackagesPanel deviceId={completeDevice} inline/>);
         const table = await screen.findByRole('table'), disclosure = document.querySelector('.inventory-capture-details')!, summary = disclosure.querySelector('summary')!;

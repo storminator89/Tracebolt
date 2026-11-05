@@ -51,3 +51,29 @@ it.each(['pending','claimed','accepted'] as const)('keeps same-unit %s work that
  const r=resource({view:v});render(<JournalContent resource={r} insecureTestMode={false} initialUnit="fixture.service"/>);
  expect(r.create).not.toHaveBeenCalled();expect(r.cancelRequest).not.toHaveBeenCalled();
 });
+
+it.each(['en','de'] as const)('distinguishes draft filters from the loaded query without reading (%s)',locale=>{
+ setLocale(locale,false);const v=view('accepted'),p:JournalPage={...journalPage([]),schemaVersion:'tracebolt.journal-page.v2',query:v.request!.description.query,searchScope:'retained_source_page',coverage:'complete',reason:'none',countExact:true,nextCursor:null};
+ const r=resource({view:v,page:p}),mounted=render(<JournalContent resource={r} insecureTestMode={false} initialUnit="fixture.service"/>);
+ const message=locale==='en'?'Displayed results use different filters than the fields above.':'Die angezeigten Ergebnisse verwenden andere Filter als die Eingaben oben.';
+ expect(screen.queryByText(message)).toBeNull();
+ expect(screen.getByText(locale==='en'?'Applied severity through: 7 · Debug':'Angewandte Schweregrade bis: 7 · Debug')).toBeVisible();
+ const severity=screen.getByLabelText(locale==='en'?'Severity through':'Schweregrade bis');
+ fireEvent.change(severity,{target:{value:'3'}});expect(screen.getByText(message)).toBeVisible();
+ expect(screen.getByText(locale==='en'?'Applied severity through: 7 · Debug':'Angewandte Schweregrade bis: 7 · Debug')).toBeVisible();
+ fireEvent.change(severity,{target:{value:'7'}});expect(screen.queryByText(message)).toBeNull();
+ const all=screen.getByLabelText(locale==='en'?'All retained':'Alle aufbewahrten Logs');
+ fireEvent.click(all);expect(screen.getByText(message)).toBeVisible();
+ fireEvent.click(all);expect(screen.queryByText(message)).toBeNull();
+ const exact=screen.getByLabelText(locale==='en'?'Exact service unit':'Exakte Service-Unit');
+ fireEvent.change(exact,{target:{value:'other.service'}});expect(screen.getByText(message)).toBeVisible();
+ fireEvent.change(exact,{target:{value:'fixture.service'}});expect(screen.queryByText(message)).toBeNull();
+ const search=screen.getByLabelText(locale==='en'?'Search retained messages':'Aufbewahrte Nachrichten durchsuchen');
+ fireEvent.change(search,{target:{value:'new filter'}});expect(screen.getByText(message)).toBeVisible();
+ expect(r.create).not.toHaveBeenCalled();expect(r.refreshWindow).not.toHaveBeenCalled();expect(r.search).not.toHaveBeenCalled();
+ mounted.rerender(<JournalContent resource={{...r,failure:'load'}} insecureTestMode={false} initialUnit="fixture.service"/>);
+ expect(screen.getByText(message)).toBeVisible();expect(screen.getByRole('alert')).toHaveTextContent(locale==='en'?'The read could not be confirmed':'Das Lesen konnte nicht bestätigt werden');
+
+ mounted.rerender(<JournalContent resource={{...r,page:null,view:null,paused:true,reset:1}} insecureTestMode={false} initialUnit="fixture.service"/>);
+ expect(screen.queryByText(message)).toBeNull();expect(screen.queryByText(/Applied severity through|Angewandte Schweregrade bis/)).toBeNull();
+});

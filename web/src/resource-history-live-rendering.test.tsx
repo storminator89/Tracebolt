@@ -31,7 +31,7 @@ it('does not rebuild chart axes during actual device metadata age ticks and stil
     const formats = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (...args: Parameters<typeof Intl.DateTimeFormat>) { return new NativeDateTimeFormat(...args); } as typeof Intl.DateTimeFormat);
     render(<DeviceDetail id={historyDevice} onClose={vi.fn()} onCase={vi.fn()}/>); await act(async () => {});
     expect(screen.getAllByRole('img')).toHaveLength(3);
-    const axisCalls = () => formats.mock.calls.filter(([, options]) => options?.hour === '2-digit' && options.minute === '2-digit' && Object.keys(options).length === 2);
+    const axisCalls = () => formats.mock.calls.filter(([, options]) => options?.hour === '2-digit' && options.minute === '2-digit' && options.timeZone === 'UTC' && Object.keys(options).length === 3);
     expect(axisCalls()).toHaveLength(15); formats.mockClear();
     for (let tick = 0; tick < 10; tick++) await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(axisCalls()).toHaveLength(0); expect(screen.getAllByRole('img')).toHaveLength(3);
