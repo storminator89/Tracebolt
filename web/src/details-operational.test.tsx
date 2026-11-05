@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { completeView, completeRows, completePage } from './complete-packages-fixtures';
 import { overviewView, processRows, volumeRows, overviewPage } from './complete-overview-fixtures';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -128,4 +129,19 @@ it.each(['en', 'de'] as const)('both capability destinations finish only their b
   expect(screen.queryByText(source === 'packages' ? 'fixture-000000' : 'fixture-process-000000', { selector: source === 'packages' ? 'th' : 'td' })).toBeNull();
   expect(vi.mocked(mutateRaw).mock.calls.map(([path]) => path)).toEqual([endpoint]);
  }
+});
+
+describe('package shortcut keyboard continuity',()=>{
+ it.each(['en','de'] as const)('preserves destination focus and read-only query from both entrypoints (%s)',async locale=>{
+  for(const source of ['details','security'] as const){
+   cleanup();vi.mocked(request).mockReset();vi.mocked(mutateRaw).mockReset();setLocale(locale,false);const user=userEvent.setup();
+   const packages=completeView(1);packages.deviceId=id;const endpoint=`/devices/${id}/inventory/packages/query`;
+   vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?{...session,serverNow:packages.serverNow,expiresAt:'2026-10-05T00:00:00Z'}:path.endsWith('/inventory/packages')?packages:selected);
+   vi.mocked(mutateRaw).mockImplementation(async(path,raw)=>{expect(path).toBe(endpoint);expect(JSON.parse(raw)).toMatchObject({cursor:'',search:'',limit:100,generationId:packages.complete!.binding.generationId});return completePage(packages,completeRows(1),raw);});
+   render(detail());fireEvent.click(await screen.findByRole('tab',{name:source==='details'?'Details':locale==='de'?/Sicherheitsabdeckung/:/Security coverage/}));
+   const open=await screen.findByRole('button',{name:/^(Open Packages|Open packages|Pakete öffnen)$/});open.focus();expect(open).toHaveFocus();expect(mutateRaw).not.toHaveBeenCalled();await user.keyboard(source==='details'?'{Enter}':' ');
+   await screen.findByText('fixture-000000',{selector:'th'});const destination=screen.getByRole('tab',{name:locale==='de'?'Pakete':'Packages'});expect(destination).toHaveAttribute('aria-selected','true');expect(destination).toHaveFocus();expect(open).not.toBeInTheDocument();expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([endpoint]);
+   act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));await screen.findByLabelText(locale==='de'?'Operator-Passwort':'Operator password');expect(destination).not.toBeInTheDocument();expect(screen.queryByText('fixture-000000',{selector:'th'})).toBeNull();expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([endpoint]);
+  }
+ });
 });
