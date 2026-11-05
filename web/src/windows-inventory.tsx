@@ -10,7 +10,7 @@ import { WindowsNetworkPanel } from './windows-network';
 import { WindowsProcessMetricsNote } from './windows-process-metrics';
 import { WindowsProcessTable, useWindowsProcessControls } from './windows-processes';
 import { WindowsStoragePanel } from './windows-volumes';
-import { useId, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowRight, Clock3, HardDrive, Info, MemoryStick, RefreshCw, Terminal } from 'lucide-react';
 import { useLocale } from './i18n';
 import { MetricValue } from './components';
@@ -55,6 +55,24 @@ function dataRows(snapshot: WindowsInventorySnapshot, key: 'hostname' | 'network
 }
 export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }: { resource: WindowsInventoryResource; initialTab?: 'storage' | 'updates'; fullServices?: { deviceId: string; sessionKey: string | null; enabled: boolean } }) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), [selected, setSelected] = useState<TabKey>(initialTab ?? 'processes'), [query, setQuery] = useState('');
+    const [compact, setCompact] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 640px)').matches);
+    const compactRef = useRef(compact), restoreNavigationFocus = useRef(false);
+    useLayoutEffect(() => {
+        if (!restoreNavigationFocus.current) return;
+        restoreNavigationFocus.current = false;
+        document.getElementById(`${id}-${compact ? 'section' : selected}`)?.focus({ preventScroll: true });
+    }, [compact, id, selected]);
+    useEffect(() => {
+        if (typeof window.matchMedia !== 'function') return;
+        const media = window.matchMedia('(max-width: 640px)'), update = () => {
+            if (media.matches === compactRef.current) return;
+            const focusedId = document.activeElement?.id;
+            restoreNavigationFocus.current = focusedId === `${id}-section` || tabs.some(key => focusedId === `${id}-${key}`);
+            compactRef.current = media.matches; setCompact(media.matches);
+        };
+        update(); media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, [id]);
     const [processControls, setProcessControls] = useWindowsProcessControls(resource, selected === 'processes');
     const tableKind = selected === 'services' || selected === 'software' ? selected : null;
     const [tableControls, setTableControls] = useWindowsInventoryTableControls(resource, tableKind);
@@ -76,8 +94,13 @@ export function WindowsInventoryWorkspace({ resource, initialTab, fullServices }
             </Section>;
     return <section className="windows-inventory" aria-label={c.title}>
         {!fullSoftware && !fullProcesses && <InventoryState resource={resource}/>}
-        <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>
-        <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${selected}`}>
+        {compact ? <label className="windows-inventory-section-picker" htmlFor={`${id}-section`}>
+            <span>{locale === 'de' ? 'Inventarbereich' : 'Inventory section'}</span>
+            <select id={`${id}-section`} value={selected} aria-controls={`${id}-panel`} onChange={event => { const key = tabs.find(key => key === event.target.value); if (key) select(key); }}>
+                {tabs.map(key => <option key={key} value={key}>{c[key]}</option>)}
+            </select>
+        </label> : <div className="windows-inventory-tabs" role="tablist" aria-label={c.source}>{tabs.map((key, index) => <button type="button" key={key} id={`${id}-${key}`} role="tab" aria-selected={selected === key} aria-controls={`${id}-panel`} tabIndex={selected === key ? 0 : -1} onClick={() => select(key)} onKeyDown={event => { const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); select(tabs[next]); document.getElementById(`${id}-${tabs[next]}`)?.focus(); } }}>{c[key]}</button>)}</div>}
+        <div role={compact ? "region" : "tabpanel"} id={`${id}-panel`} aria-label={compact ? c[selected] : undefined} aria-labelledby={compact ? undefined : `${id}-${selected}`}>
             {selected === 'services' && fullServices && <><WindowsServiceActionsPanel {...fullServices}/><WindowsFullServicesPanel {...fullServices}/><h3 className="windows-full-services-preview-label">{locale === 'de' ? 'Begrenzte Dienstvorschau: getrennte Quelle, höchstens 128 Zeilen' : 'Bounded service preview: separate source, at most 128 rows'}</h3></>}
             {fullSoftware && <WindowsSoftwareWorkspace key={`${fullSoftware.deviceId}:${fullSoftware.sessionKey}`} {...fullSoftware}/>}
             {fullProcesses && <WindowsFullProcessesPanel {...fullProcesses}>{legacySection ?? <InventoryState resource={resource}/>}</WindowsFullProcessesPanel>}

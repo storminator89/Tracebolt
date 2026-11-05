@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, APIError, hasPendingAPIRequests, request } from './api';
@@ -89,13 +90,13 @@ describe('retained cadence, freshness and reason explanations', () => {
         expect(timing).toHaveTextContent(`Freshness limit${intervalSeconds + 15}s`);
         expect(panel()).toHaveTextContent('Interval starts after each round');
         expect(panel()).toHaveTextContent('original times are preserved');
-        expect(panel().querySelector('.application-checks-help')).toBeNull();
+        expect(panel().querySelector('.application-result-help')).toBeNull();
     });
 
-    it('explains blocked destinations once without exposing destination data or adding controls', async () => {
+    it('places blocked-destination guidance beside each affected result without exposing destination data', async () => {
         const row = { ...applicationTCPRow(), state: 'unknown' as const, reason: 'destination_blocked' as const };
         vi.mocked(request).mockResolvedValue(applicationViewV2([row, { ...row, id: 'second-blocked' }])); await start();
-        const hints = panel().querySelectorAll('.application-checks-help li'); expect(hints).toHaveLength(1);
+        const hints = panel().querySelectorAll('.application-result-help p'); expect(hints).toHaveLength(2);
         expect(hints[0]).toHaveTextContent('all resolved IP addresses must match the exact allowlist and LAN approval');
         expect(panel().querySelector('input,select,textarea,form')).toBeNull();
         expect(within(panel()).getAllByRole('button')).toHaveLength(1);
@@ -104,7 +105,7 @@ describe('retained cadence, freshness and reason explanations', () => {
 
     it('updates stale explanation locally without rejuvenating original results', async () => {
         await start(); vi.mocked(hasPendingAPIRequests).mockReturnValue(true);
-        expect(panel().querySelector('.application-checks-help')).toBeNull();
+        expect(panel().querySelector('.application-result-help')).toBeNull();
         await act(async () => { await vi.advanceTimersByTimeAsync(71000); });
         expect(panel()).toHaveTextContent('Stale or inconsistent observation times remain unknown. Reload does not start a check.');
         expect(panel().querySelector('td:last-child time')).toHaveAttribute('datetime', applicationNow);
@@ -113,20 +114,52 @@ describe('retained cadence, freshness and reason explanations', () => {
 
     it('explains existing TLS verification rather than offering a bypass', async () => {
         vi.mocked(request).mockResolvedValue(applicationView([applicationRow({ state: 'tls_error', reason: 'tls_verification_failed', httpStatus: null, tls: { state: 'unknown', expiresAt: null } })])); await start();
-        expect(panel().querySelector('.application-checks-help')).toHaveTextContent('review the hostname, certificate validity and existing manager trust store');
+        expect(panel().querySelector('.application-result-help')).toHaveTextContent('review the hostname, certificate validity and existing manager trust store');
         expect(panel()).not.toHaveTextContent('disable verification');
     });
 
     it('clears cadence and reason help when a read fails or the session ends', async () => {
         vi.mocked(request).mockResolvedValue(applicationViewV2([{ ...applicationTCPRow(), state: 'network_error', reason: 'tcp_failed' }]));
-        const mounted = await start(); expect(panel().querySelector('dl')).not.toBeNull(); expect(panel().querySelector('.application-checks-help')).not.toBeNull();
+        const mounted = await start(); expect(panel().querySelector('dl')).not.toBeNull(); expect(panel().querySelector('.application-result-help')).not.toBeNull();
         vi.mocked(request).mockRejectedValueOnce(new Error('fixture'));
         fireEvent.click(screen.getByRole('button', { name: 'Reload application status' })); await flush();
-        expect(panel().querySelector('dl,.application-checks-help,.application-checks-details:not(.application-incidents)')).toBeNull();
+        expect(panel().querySelector('dl,.application-result-help,.application-checks-details:not(.application-incidents)')).toBeNull();
         expect(panel().querySelector('.application-incidents')).not.toHaveAttribute('open');
         expect(request).toHaveBeenCalledTimes(2);
         expect(within(panel()).getByRole('link', { name: 'Add check' })).toHaveAttribute('href', '#/settings/application-checks');
         vi.mocked(useOperator).mockReturnValue({ ...operator, authenticated: false }); mounted.rerender(<ApplicationChecksPanel/>);
         expect(screen.queryByRole('region')).toBeNull();
+    });
+});
+
+describe('inline result help', () => {
+    it.each(['en', 'de'] as const)('reveals the matching hint with a focusable native disclosure without requests or approvals (%s)', async locale => {
+        vi.useRealTimers(); setLocale(locale, false);
+        vi.mocked(useOperator).mockReturnValue({ ...operator, loginMode: 'named', actorId: `operator_${'a'.repeat(32)}`, capabilities: ['read'] });
+        vi.mocked(request).mockResolvedValue(applicationViewV2([applicationDNSRow(), { ...applicationTCPRow(), state: 'network_error', reason: 'tcp_failed' }]));
+        await start(); const user = userEvent.setup();
+        const row = screen.getByText('fixture-tcp').closest('tr')!, healthy = screen.getByText('fixture-dns').closest('tr')!;
+        const details = row.querySelector('details')!, summary = details.querySelector('summary')!;
+        const label = locale === 'de' ? 'Was prüfen?' : 'What to check';
+        expect(summary).toHaveTextContent(label); expect(summary).toHaveAccessibleName(`${label}: fixture-tcp`);
+        expect(details).not.toHaveAttribute('open'); expect(healthy.querySelector('.application-result-help')).toBeNull();
+        const storage = JSON.stringify([localStorage, sessionStorage]);
+        summary.focus(); expect(summary).toHaveFocus(); await user.click(summary); expect(details).toHaveAttribute('open');
+        expect(details.querySelector('p')).toBeVisible();
+        expect(details).toHaveTextContent(locale === 'de' ? 'Erreichbarkeit des freigegebenen Ziels' : 'reachability of the approved destination');
+        await user.click(summary); expect(details).not.toHaveAttribute('open');
+        expect(request).toHaveBeenCalledTimes(1); expect(JSON.stringify([localStorage, sessionStorage])).toBe(storage);
+        expect(row.querySelector('time')).toHaveAttribute('datetime', applicationNow);
+    });
+    it('closes an old explanation when freshness changes the displayed result', async () => {
+        vi.mocked(request).mockResolvedValue(applicationViewV2([{ ...applicationTCPRow(), state: 'network_error', reason: 'tcp_failed' }]));
+        await start(); vi.mocked(hasPendingAPIRequests).mockReturnValue(true);
+        const old = document.querySelector('.application-result-help')!;
+        fireEvent.click(old.querySelector('summary')!); expect(old).toHaveAttribute('open');
+        await act(async () => { await vi.advanceTimersByTimeAsync(71000); });
+        const current = document.querySelector('.application-result-help')!;
+        expect(current).not.toBe(old); expect(current).not.toHaveAttribute('open');
+        expect(current).toHaveTextContent('Stale or inconsistent observation times remain unknown');
+        expect(current).not.toHaveTextContent('TCP failed'); expect(request).toHaveBeenCalledTimes(1);
     });
 });

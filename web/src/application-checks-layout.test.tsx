@@ -81,7 +81,7 @@ describe('single responsive application table semantics', () => {
         vi.mocked(hasPendingAPIRequests).mockReturnValue(true);
         await act(async () => { await vi.advanceTimersByTimeAsync(71000); });
         expect(rowFor('fixture-app')).toBe(row);
-        expect(cells[0]).toHaveAccessibleName('Unknown · stale');
+        expect(cells[0]).toHaveAccessibleName(/Unknown · stale.*What to check/);
         expect(cells[1]).toHaveAccessibleName('Unknown');
         expect(cells[1].querySelector('.application-expiry')).toBeNull();
         expect(cells[2]).toHaveAccessibleName('1m ago');
@@ -98,7 +98,7 @@ describe('single responsive application table semantics', () => {
         expect(within(rowFor('fixture-plain')).getByRole('rowheader')).toHaveAccessibleName(/fixture-plain\s*HTTP · plaintext/);
         expect(within(rowFor('fixture-plain')).getAllByRole('cell')[1]).toHaveAccessibleName('No TLS');
         const unchecked = within(rowFor('fixture-unchecked')).getAllByRole('cell');
-        expect(unchecked[0]).toHaveAccessibleName('Not observed yet');
+        expect(unchecked[0]).toHaveAccessibleName(/Not observed yet.*What to check/);
         expect(unchecked[2]).toHaveAccessibleName('—');
         expect(rowFor('fixture-unchecked').querySelector('time')).toBeNull();
     });

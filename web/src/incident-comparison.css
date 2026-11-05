@@ -1,0 +1,18 @@
+.incident-comparison-help { margin: 8px 0 16px; color: var(--secondary); font-size: 12px; }
+.incident-comparison summary { cursor: pointer; padding-block: 6px; }
+.incident-comparison .incident-comparison-selection li { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+.incident-comparison-selected-item { display: flex; gap: 12px; min-width: 0; }
+.incident-comparison-selected-item > div { min-width: 0; display: grid; gap: 5px; overflow-wrap: anywhere; }
+.incident-comparison-selected-item > div > span { font-size: 12px; color: var(--secondary); }
+.incident-comparison-number { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--text); font-weight: 600; }
+.incident-comparison-selected-item details, .incident-comparison-identities { font-size: 12px; color: var(--secondary); }
+.incident-comparison .incident-comparison-outcome { color: var(--text); font-weight: 600; }
+.incident-comparison-selected-item dl, .incident-comparison-identities dl { display: grid; gap: 8px; margin: 4px 0; }
+.incident-comparison-selected-item dt, .incident-comparison-identities dt { color: var(--secondary); }
+.incident-comparison-selected-item dd, .incident-comparison-identities dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--text); }
+.incident-comparison-target { display: block; font-size: 15px; overflow-wrap: anywhere; margin-bottom: 6px; }
+.incident-comparison-states { display: grid; gap: 8px; margin: 14px 0; }
+.incident-comparison-states > div { display: grid; gap: 5px; border-left: 3px solid var(--line-strong); border-radius: 4px; padding: 10px 12px; background: var(--panel-soft); }
+.incident-comparison-states span { font-size: 11px; line-height: 1.5; color: var(--secondary); }
+.incident-comparison-states strong { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.incident-comparison .incident-comparison-selection button { min-height: 40px; flex-shrink: 0; }

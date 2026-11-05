@@ -17,7 +17,7 @@ function Harness({ id = windowsDeviceId, enabled = true, session = 'fixture' }: 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { resolve, promise }; }
 const flush = () => act(async () => {});
 beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset().mockResolvedValue(windowsView()); vi.mocked(mutate).mockReset(); vi.mocked(useOperator).mockReturnValue(operator); });
-afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('Windows inventory within the shared device UI', () => {
     it('renders all five read-only subviews with original capture and accepted times', async () => {
@@ -27,6 +27,24 @@ describe('Windows inventory within the shared device UI', () => {
         fireEvent.click(screen.getByRole('tab', { name: 'Hostname' })); expect(screen.getByText('fixture-windows')).toBeVisible();
         fireEvent.click(screen.getByRole('tab', { name: 'Interfaces' })); expect(screen.getByText('192.0.2.40')).toBeVisible(); expect(screen.getByText('2001:db8::40')).toBeVisible(); expect(screen.queryByRole('link')).toBeNull();
         expect(request).toHaveBeenCalledWith(`/devices/${windowsDeviceId}/windows-inventory`, { signal: expect.any(AbortSignal) }, WINDOWS_INVENTORY_VIEW_BYTES); expect(mutate).not.toHaveBeenCalled();
+    });
+    it.each(['en','de'] as const)('keeps compact section selection synchronized without extra reads (%s)', async locale => {
+        let compact=true;const listeners=new Set<()=>void>();vi.stubGlobal('matchMedia',()=>({get matches(){return compact;},addEventListener:(_type:string,listener:()=>void)=>listeners.add(listener),removeEventListener:(_type:string,listener:()=>void)=>listeners.delete(listener)}));
+        setLocale(locale,false);render(<Harness/>);await screen.findByText('fixture.exe');
+        const picker=screen.getByLabelText(locale==='de'?'Inventarbereich':'Inventory section');
+        expect(screen.queryByRole('tablist')).toBeNull();expect(picker.querySelectorAll('option')).toHaveLength(11);expect(picker).toHaveValue('processes');
+        const calls=vi.mocked(request).mock.calls.length;
+        fireEvent.change(picker,{target:{value:'services'}});expect(screen.getByText('FixtureService')).toBeVisible();
+        expect(screen.getByRole('region',{name:locale==='de'?'Dienste':'Services'})).toBeVisible();
+        expect(picker).toHaveAttribute('aria-controls',screen.getByRole('region',{name:locale==='de'?'Dienste':'Services'}).id);
+        picker.focus();act(()=>{compact=false;listeners.forEach(listener=>listener());});expect(screen.getByRole('tab',{name:locale==='de'?'Dienste':'Services'})).toHaveFocus();expect(screen.queryByLabelText(locale==='de'?'Inventarbereich':'Inventory section')).toBeNull();expect(screen.getByRole('tab',{name:locale==='de'?'Dienste':'Services'})).toHaveAttribute('aria-selected','true');
+        fireEvent.click(screen.getByRole('tab',{name:'Hostname'}));screen.getByRole('tab',{name:'Hostname'}).focus();act(()=>{compact=true;listeners.forEach(listener=>listener());});
+        const resizedPicker=screen.getByLabelText(locale==='de'?'Inventarbereich':'Inventory section');expect(resizedPicker).toHaveValue('hostname');expect(resizedPicker).toHaveFocus();
+        fireEvent.change(screen.getByRole('searchbox'),{target:{value:'unmatched'}});
+        fireEvent.change(resizedPicker,{target:{value:'network'}});expect(screen.getByRole('searchbox')).toHaveValue('');expect(screen.getByText('192.0.2.40')).toBeVisible();
+        fireEvent.change(resizedPicker,{target:{value:'hostname'}});expect(screen.getByText('fixture-windows')).toBeVisible();
+        const filter=screen.getByRole('searchbox');filter.focus();act(()=>{compact=false;listeners.forEach(listener=>listener());});expect(filter).toHaveFocus();act(()=>{compact=true;listeners.forEach(listener=>listener());});expect(filter).toHaveFocus();
+        expect(request).toHaveBeenCalledTimes(calls);expect(mutate).not.toHaveBeenCalled();
     });
     it('shows truncated exact and lower-bound counts, and keeps denied separate from healthy empty', async () => {
         const v = windowsView(); v.snapshot!.processes = { ...v.snapshot!.processes, quality: 'partial', observedCount: 180, truncated: true, complete: false }; v.snapshot!.services = { ...windowsSection([]), quality: 'denied', complete: false, countExact: false }; v.snapshot!.software = windowsSection([]); vi.mocked(request).mockResolvedValue(v);
