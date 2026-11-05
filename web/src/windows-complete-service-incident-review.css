@@ -1,0 +1,5 @@
+.windows-complete-review-contexts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-block:14px}
+.windows-complete-review-contexts>section{min-width:0;padding:12px;border:1px solid var(--line);border-radius:8px;overflow-wrap:anywhere}
+.windows-complete-review-contexts h4{font-size:12px;margin:0 0 8px;color:var(--secondary)}
+.windows-complete-review-contexts p{margin:0;line-height:1.6}
+@media(max-width:600px){.windows-complete-review-contexts{grid-template-columns:minmax(0,1fr)}}
