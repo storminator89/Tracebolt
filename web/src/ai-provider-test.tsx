@@ -77,6 +77,7 @@ export function AIProviderTest({ config, disabled, onBusy, onRefresh }: { config
     };
     const help = busy || stale || config.busy ? null : !config.configured
         ? locale === 'de' ? 'Zuerst eine Anbieterkonfiguration speichern. Speichern startet keinen Funktionstest.' : 'Save a provider configuration first. Saving does not start a test.'
+        : disabled && config.lanPrivateCaSha256 ? locale === 'de' ? 'Der Test verwendet die gespeicherte Konfiguration. Entwurfsänderungen zum Testen zurücknehmen. Für Änderungen bei aktiver privater CA zuerst den Anbieter ausdrücklich entfernen.' : 'The test uses the saved configuration. Revert draft changes to test it. To change a provider with an active private CA, explicitly remove the provider first.'
         : disabled ? locale === 'de' ? 'Der Test verwendet die gespeicherte Konfiguration. Ausstehende Änderungen zuerst speichern und laufende Vorgänge abwarten.' : 'The test uses the saved configuration. Save pending changes first and wait for running operations to finish.' : null;
     return <div className="ai-provider-test">
         <button className="button" type="button" disabled={disabled || !config.configured || config.busy || busy || stale} aria-describedby={help ? helpId : undefined} onClick={() => { setConfirm(true); setAcknowledged(false); setStatus(null); }}>{t('Gespeicherten Anbieter testen')}</button>
