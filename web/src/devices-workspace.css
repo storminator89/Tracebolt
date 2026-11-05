@@ -33,3 +33,6 @@
     .devices-workspace-index button:focus-visible,
     .devices-workspace-heading h2:focus { outline-color: Highlight; }
 }
+
+.devices-workspace-heading .devices-return-inventory{margin-inline-start:auto;min-height:44px;max-width:100%;white-space:normal;text-align:start}
+@media(max-width:760px){.devices-workspace-heading .devices-return-inventory{margin-inline-start:0}}

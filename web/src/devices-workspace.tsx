@@ -1,12 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useLocale } from './i18n';
 import type { EnrollmentAttention } from './enrollment-attention';
 import './devices-workspace.css';
 
 const copy = {
-    en: { index: 'Device workspaces', inventory: 'Inventory', setup: 'Setup', tools: 'Fleet tools', selected: 'Selected setup', checking: 'Checking status', unknown: 'Status unknown', unavailable: 'Setup unavailable', manual: 'Manual approval', pending: 'Awaiting review', unconfirmed: 'Action unconfirmed', expired: 'Invitation deadline passed', 'retained-review': 'Review retained invitations', profileUnknown: 'Profile not checked', platformUnknown: 'Platform not checked', local: 'Device setup requires a LAN manager.', toolsUnavailable: 'Fleet tools are unavailable in this context.', toolsScope: 'Each tool keeps its own scope and review controls.', inventoryScope: 'Search, compare and open devices.' },
-    de: { index: 'Gerätebereiche', inventory: 'Inventar', setup: 'Einrichten', tools: 'Flottentools', selected: 'Gewählte Einrichtung', checking: 'Status wird geprüft', unknown: 'Status unbekannt', unavailable: 'Einrichtung nicht verfügbar', manual: 'Manuelle Freigabe', pending: 'Prüfung ausstehend', unconfirmed: 'Aktion nicht bestätigt', expired: 'Einladungsfrist abgelaufen', 'retained-review': 'Gespeicherte Einladungen prüfen', profileUnknown: 'Profil nicht geprüft', platformUnknown: 'Betriebssystem nicht geprüft', local: 'Geräteeinrichtung erfordert einen LAN-Manager.', toolsUnavailable: 'Flottentools sind in diesem Kontext nicht verfügbar.', toolsScope: 'Jedes Werkzeug behält seinen eigenen Umfang und seine Prüfkontrollen.', inventoryScope: 'Geräte suchen, vergleichen und öffnen.' },
+    en: { returnInventory: 'Back to inventory', index: 'Device workspaces', inventory: 'Inventory', setup: 'Setup', tools: 'Fleet tools', selected: 'Selected setup', checking: 'Checking status', unknown: 'Status unknown', unavailable: 'Setup unavailable', manual: 'Manual approval', pending: 'Awaiting review', unconfirmed: 'Action unconfirmed', expired: 'Invitation deadline passed', 'retained-review': 'Review retained invitations', profileUnknown: 'Profile not checked', platformUnknown: 'Platform not checked', local: 'Device setup requires a LAN manager.', toolsUnavailable: 'Fleet tools are unavailable in this context.', toolsScope: 'Each tool keeps its own scope and review controls.', inventoryScope: 'Search, compare and open devices.' },
+    de: { returnInventory: 'Zum Inventar', index: 'Gerätebereiche', inventory: 'Inventar', setup: 'Einrichten', tools: 'Flottentools', selected: 'Gewählte Einrichtung', checking: 'Status wird geprüft', unknown: 'Status unbekannt', unavailable: 'Einrichtung nicht verfügbar', manual: 'Manuelle Freigabe', pending: 'Prüfung ausstehend', unconfirmed: 'Aktion nicht bestätigt', expired: 'Einladungsfrist abgelaufen', 'retained-review': 'Gespeicherte Einladungen prüfen', profileUnknown: 'Profil nicht geprüft', platformUnknown: 'Betriebssystem nicht geprüft', local: 'Geräteeinrichtung erfordert einen LAN-Manager.', toolsUnavailable: 'Flottentools sind in diesem Kontext nicht verfügbar.', toolsScope: 'Jedes Werkzeug behält seinen eigenen Umfang und seine Prüfkontrollen.', inventoryScope: 'Geräte suchen, vergleichen und öffnen.' },
 } as const;
 const profiles = {
     en: { 'basic-readonly-v1': 'Basic read-only', 'managed-operations-v1': 'Operational inventory', 'managed-operations-v2': 'Package inventory', 'managed-operations-v3': 'Complete inventory', 'windows-inventory-v1': 'Windows inventory', 'macos-read-inventory-v1': 'macOS inventory' },
@@ -53,7 +53,7 @@ export function DevicesWorkspace({ inventory, setup, tools, lan, toolsAvailable 
             {lan ? setup(setAttention) : <p className="devices-workspace-unavailable">{c.local}</p>}
         </section>
         <section className="devices-tools-section" aria-labelledby="devices-tools-heading">
-            <header className="devices-workspace-heading"><h2 ref={toolsHeading} id="devices-tools-heading" tabIndex={-1}>{c.tools}</h2><p>{toolsAvailable ? c.toolsScope : c.toolsUnavailable}</p></header>
+            <header className="devices-workspace-heading"><h2 ref={toolsHeading} id="devices-tools-heading" tabIndex={-1}>{c.tools}</h2><p>{toolsAvailable ? c.toolsScope : c.toolsUnavailable}</p><button type="button" className="button small devices-return-inventory" aria-controls="devices-inventory-heading" onClick={() => jump(inventoryHeading.current)}><ArrowUp size={14} aria-hidden="true"/>{c.returnInventory}</button></header>
             {tools}
         </section>
     </div>;

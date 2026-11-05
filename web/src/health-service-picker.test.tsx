@@ -68,6 +68,23 @@ describe('health service selection', () => {
         fireEvent.change(search, { target: { value: 'composing' } }); fireEvent.keyDown(search, { key: 'Enter', isComposing: true }); expect(mutateRaw).toHaveBeenCalledTimes(2);
     });
 
+    it.each(['en', 'de'] as const)('explains an unapplied search without reading or changing selection (%s)', async locale => {
+        setLocale(locale, false);
+        const rendered = await open([rows[0].name]);
+        const search = screen.getByRole('searchbox');
+        const message = locale === 'en' ? 'Choose “Search services” to apply this search.' : 'Mit „Dienste suchen“ diese Suche anwenden.';
+        fireEvent.change(search, { target: { value: '000001' } });
+        expect(screen.getByText(message)).toBeVisible(); expect(search).toHaveAccessibleDescription(new RegExp(locale === 'en' ? 'apply this search' : 'diese Suche anwenden'));
+        expect(mutateRaw).toHaveBeenCalledTimes(1); expect(change).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled();
+        fireEvent.change(search, { target: { value: 'forbidden\u200b' } }); expect(screen.queryByText(message)).not.toBeInTheDocument();
+        fireEvent.change(search, { target: { value: '' } }); expect(screen.getByText(message)).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Search services' : 'Dienste suchen' }));
+        await screen.findByRole('checkbox', { name: rows[0].name }); expect(screen.queryByText(message)).not.toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: rows[0].name })).toBeChecked();
+        fireEvent.change(search, { target: { value: 'again' } });
+        rendered.rerender(<Harness disabled initial={[rows[0].name]}/>);
+        expect(screen.queryByText(message)).not.toBeInTheDocument();
+    });
     it('preserves selected names across pages and search even when no longer in the current page', async () => {
         view = systemView(101); rows = serviceRows(101);
         await open(['missing-from-inventory.service']); fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name }));
@@ -150,6 +167,12 @@ describe('health service selection', () => {
         }
         await open(); expect(screen.getByText(/Stale \/ historical service observations/)).toBeVisible(); expect(screen.getByText(/original observation time is unchanged/)).toBeVisible(); expect(document.querySelector('time')).toHaveAttribute('datetime', '2026-10-04T00:00:00Z');
         fireEvent.click(screen.getByRole('checkbox', { name: rows[0].name })); expect(change).toHaveBeenCalledWith([rows[0].name]); expect(mutate).not.toHaveBeenCalled();
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'typed' } });
+        expect(screen.getByText('Choose “Search services” to apply this search.')).toBeVisible();
+        expect(screen.getByText(/Stale \/ historical service observations/)).toBeVisible();
+        expect(screen.getByText(/original observation time is unchanged/)).toBeVisible();
+        expect(document.querySelector('time')).toHaveAttribute('datetime', '2026-10-04T00:00:00Z');
+        expect(mutateRaw).toHaveBeenCalledTimes(1);
     });
 });
 

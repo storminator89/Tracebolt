@@ -23,6 +23,7 @@ function ServiceChoices({ deviceId, selected, disabled, onChange }: Props) {
     const visible = !!view && systemSectionVisible(view, 'services', resource.elapsed);
     const searchValid = validSystemSearch(resource.search), manualUnit = manual.trim();
     const capped = selected.length >= 8, locked = disabled || resource.error === 'session';
+    const searchPending = visible && !!complete && !page && !resource.loading && !resource.error && searchValid && !locked;
     const canAdd = (unit: string) => !locked && !capped && validHealthService(unit) && !selected.includes(unit);
     const add = (unit: string) => { if (canAdd(unit)) onChange([...selected, unit].sort()); };
     const remove = (unit: string) => { if (!locked) onChange(selected.filter(value => value !== unit)); };
@@ -47,8 +48,9 @@ function ServiceChoices({ deviceId, selected, disabled, onChange }: Props) {
             <p className="health-note">{systemAgeStatus(view!.serverNow, complete.meta.observedAt, resource.elapsed) === 'fresh' ? t('Dienste im Beobachtungszeitfenster') : t('Veraltete / historische Dienstbeobachtungen')}<br/>{t('Ursprünglich beobachtet:')} <time dateTime={complete.meta.observedAt}>{complete.meta.observedAt}</time><br/>{t('Gespeicherte Dienste insgesamt: {0}', { 0: number(complete.meta.observedCount!) })}</p>
             {view!.latest?.services.coverage === 'failed' && <p className="health-note">{t('Die neuere Erfassung ist fehlgeschlagen. Der ursprüngliche Beobachtungszeitpunkt bleibt unverändert.')}</p>}
             <label htmlFor={`${id}-search`}>{t('Beobachtete Dienste durchsuchen')}</label>
-            <div className="health-service-search"><input id={`${id}-search`} type="search" value={resource.search} disabled={locked} maxLength={128} autoComplete="off" spellCheck={false} aria-invalid={!searchValid} aria-describedby={`${id}-search-note`} onChange={event => resource.changeSearch(event.target.value)} onKeyDown={event => enter(event, () => { if (!locked && !resource.loading && searchValid) resource.startSearch(); })}/><button className="button small" type="button" disabled={locked || resource.loading || !searchValid} onClick={resource.startSearch}>{t('Dienste suchen')}</button></div>
+            <div className="health-service-search"><input id={`${id}-search`} type="search" value={resource.search} disabled={locked} maxLength={128} autoComplete="off" spellCheck={false} aria-invalid={!searchValid} aria-describedby={`${id}-search-note${searchPending ? ` ${id}-search-pending` : ''}`} onChange={event => resource.changeSearch(event.target.value)} onKeyDown={event => enter(event, () => { if (!locked && !resource.loading && searchValid) resource.startSearch(); })}/><button className="button small" type="button" disabled={locked || resource.loading || !searchValid} onClick={resource.startSearch}>{t('Dienste suchen')}</button></div>
             <p className="health-note" id={`${id}-search-note`}>{t('Namen und Zustände: bis zu 100 Treffer aus 2.048 Zeilen je Anfrage.')}</p>
+            {searchPending && <p className="health-note" role="status" id={`${id}-search-pending`}>{locale === 'de' ? 'Mit „Dienste suchen“ diese Suche anwenden.' : 'Choose “Search services” to apply this search.'}</p>}
             {!searchValid && <p className="health-failure" role="alert">{t('Höchstens 128 UTF-8-Bytes ohne Steuer- oder Formatierungszeichen verwenden.')}</p>}
             {page && <>
                 <p className="health-note">{t('Geprüft: {0} / {1} · Treffer bisher: {2}', { 0: number(resource.scanned), 1: number(page.totalRows), 2: number(resource.matches) })}</p>

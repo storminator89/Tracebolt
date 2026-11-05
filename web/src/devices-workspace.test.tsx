@@ -176,3 +176,35 @@ describe('local device workspaces', () => {
         expect(summary()).toBeNull(); expect(request).not.toHaveBeenCalled();
     });
 });
+
+
+describe('fleet tools return to inventory', () => {
+    it('keeps the existing LAN setup and active tools mounted on return', async () => {
+        render(<StableWorkspace/>); await waitFor(() => expect(summary()).toHaveTextContent('Awaiting review · 1'));
+        const enrollment = document.querySelector('.enrollment-panel'), job = screen.getByRole('button', { name: 'Existing active job control' });
+        const reads = vi.mocked(request).mock.calls.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Back to inventory' }));
+        expect(document.getElementById('devices-inventory-heading')).toHaveFocus();
+        expect(document.querySelector('.enrollment-panel')).toBe(enrollment); expect(job).toBeInTheDocument();
+        expect(summary()).toHaveTextContent('Awaiting review · 1'); expect(request).toHaveBeenCalledTimes(reads); expect(mutate).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('returns with keyboard while preserving mounted work and query (%s)', async locale => {
+        setLocale(locale, false); const user = userEvent.setup();
+        render(<main id="main-content">{developmentWorkspace()}</main>);
+        const query = screen.getByRole('textbox', { name: 'Inventory query' });
+        const tool = screen.getByRole('button', { name: 'Existing active job control' });
+        const main = document.getElementById('main-content')!, heading = document.getElementById('devices-inventory-heading')!;
+        main.scrollTop = 1000; heading.style.scrollMarginBlockStart = '16px';
+        vi.spyOn(main, 'getBoundingClientRect').mockReturnValue({ top: 50 } as DOMRect);
+        vi.spyOn(heading, 'getBoundingClientRect').mockReturnValue({ top: -750 } as DOMRect);
+        const hash = window.location.hash, history = window.history.length;
+        const back = screen.getByRole('button', { name: locale === 'de' ? 'Zum Inventar' : 'Back to inventory' });
+        expect(back).toHaveAttribute('aria-controls', heading.id);
+        back.focus(); await user.keyboard('{Enter}');
+        expect(heading).toHaveFocus(); expect(main.scrollTop).toBe(184);
+        expect(screen.getByRole('textbox', { name: 'Inventory query' })).toBe(query); expect(query).toHaveValue('Retained filter');
+        expect(screen.getByRole('button', { name: 'Existing active job control' })).toBe(tool);
+        expect(window.location.hash).toBe(hash); expect(window.history.length).toBe(history);
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
+});
