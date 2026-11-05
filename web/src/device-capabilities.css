@@ -10,3 +10,6 @@
 .capability-filter-scope{margin-bottom:14px}
 .capability-filter-empty{padding:16px;border:1px solid var(--line);border-radius:8px}
 .capability-observations .capability-row[hidden]{display:none}
+
+.capability-open-view{margin-top:10px;min-height:36px}
+@media(max-width:600px){.capability-open-view{min-height:44px}}

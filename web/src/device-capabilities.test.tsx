@@ -347,3 +347,39 @@ describe('local capability list filters', () => {
         expect(screen.queryByText(/^Healthy$/i)).not.toBeInTheDocument(); expect(request).not.toHaveBeenCalled();
     });
 });
+
+describe('bounded capability destinations', () => {
+    it.each(['en', 'de'] as const)('opens only verified package/process destinations by keyboard (%s)', async locale => {
+        setLocale(locale, false);
+        const d = device(); d.id = overviewView().deviceId; d.capabilities = [
+            { id: 'package_inventory', name: 'Packages', status: 'scope', detail: 'Fixture' },
+            { id: 'complete_process_inventory', name: 'Processes', status: 'scope', detail: 'Fixture' },
+            { id: 'remote_actions', name: 'Actions', status: 'unsupported', detail: 'Fixture' },
+        ];
+        const packages = completeView(); packages.deviceId = d.id;
+        const overview = overviewView(); overview.deviceId = d.id;
+        vi.mocked(request).mockImplementation(async path => path.endsWith('/packages') ? packages : overview);
+        const open = vi.fn(), user = userEvent.setup();
+        render(<DeviceCapabilities device={d} onOpenInventory={open}/>);
+        const button = await screen.findByRole('button', { name: locale === 'de' ? 'Pakete öffnen' : 'Open packages' });
+        const requests = vi.mocked(request).mock.calls.length;
+        button.focus(); await user.keyboard('{Enter}'); expect(open).toHaveBeenLastCalledWith('packages');
+        screen.getByRole('button', { name: locale === 'de' ? 'Prozesse öffnen' : 'Open processes' }).focus(); await user.keyboard(' ');
+        expect(open).toHaveBeenLastCalledWith('processes'); expect(request).toHaveBeenCalledTimes(requests);
+        expect(within(row('remote_actions') as HTMLElement).queryByRole('button')).not.toBeInTheDocument();
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(screen.queryByRole('button', { name: /öffnen|Open packages|Open processes/ })).not.toBeInTheDocument();
+    });
+    it.each(['windows', 'macos', 'unknown'] as const)('does not invent a destination for %s', async platform => {
+        const d = device(); d.platform = platform; d.capabilities = [{ id: 'package_inventory', name: 'Packages', status: 'scope', detail: 'Fixture' }];
+        const value = completeView(); value.deviceId = d.id; vi.mocked(request).mockResolvedValue(value);
+        render(<DeviceCapabilities device={d} onOpenInventory={vi.fn()}/>); await act(async () => {});
+        expect(screen.queryByRole('button', { name: 'Open packages' })).not.toBeInTheDocument();
+    });
+    it('does not offer failed or denied observations as data destinations', async () => {
+        const d = device(); d.capabilities = [{ id: 'package_inventory', name: 'Packages', status: 'scope', detail: 'Fixture' }];
+        vi.mocked(request).mockRejectedValue(new APIError('denied', 403));
+        render(<DeviceCapabilities device={d} onOpenInventory={vi.fn()}/>); await waitFor(() => expect(row('package_inventory')).toHaveAttribute('data-state', 'denied'));
+        expect(screen.queryByRole('button', { name: 'Open packages' })).not.toBeInTheDocument();
+    });
+});
