@@ -449,6 +449,23 @@ session fences. Unavailable authority is shown as unavailable, not stale success
 An expired/revoked registry member cannot prevent a different admitted member
 from starting; it receives no operation authority through registry membership.
 
+### Local review of saved jobs
+
+After explicitly reading saved jobs, the console can filter that loaded snapshot
+by a literal part of the job ID, update GUID or revision, by installation versus
+download purpose, and by the saved state or reported result. Result counts apply
+to the current text and purpose filters. A claim is not a confirmed result;
+success, failure, uncertainty and not-attempted remain distinct. Original order,
+exact identities, times, schedule and retirement evidence remain visible for
+matching rows. An empty match is not an empty history.
+
+These filters perform no requests or writes, join no current inventory, and
+create no alerts, exports, retries or durable records. They do not turn the
+bounded history into a complete audit log: legacy history admits at most 33
+summaries and the reusable profile at most nine. Explicit refresh resets the
+filters; existing navigation, focus and session-loss clearing also removes them.
+Opening a row still uses the existing exact-ID read and never restores approval.
+
 Closing, navigation, blur or session loss stops further UI requests. An in-flight
 POST may still commit, and a delivered permit is not canceled. Duplicate clicks
 are suppressed; an uncertain write keeps its exact job reference and permits only

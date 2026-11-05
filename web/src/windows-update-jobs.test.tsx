@@ -84,6 +84,47 @@ it('opens bounded saved summaries by exact ID without a POST',async()=>{
  const id=`update_${'7'.repeat(32)}`,history=validHistory(id);expect(validUpdateJobHistory(history,device,actor)).toBe(true);
  vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:path.endsWith('?history=1')?history:path.includes('?jobId=')?approved(id):view()) as never);await open();fireEvent.click(screen.getByText('Saved update jobs',{selector:'summary'}));fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();expect(screen.getByText('Lifetime approvals remaining: 31/32')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:`Open saved job · ${id}`}));await flush();expect(request).toHaveBeenCalledWith(`/devices/${device}/windows-update-jobs?jobId=${id}`,expect.anything(),16384);expect(mutateRaw).not.toHaveBeenCalled();expect(screen.queryByRole('checkbox')).toBeNull();
 });
+it('filters validated saved history locally and opens only the selected exact ID',async()=>{
+ const id=`update_${'7'.repeat(32)}`,other=`update_${'8'.repeat(32)}`,history=validHistory(id);
+ history.jobs.push({...validHistory(other).jobs[0],state:'claimed',claimedAt:seconds});history.remainingCapacity=30;
+ expect(validUpdateJobHistory(history,device,actor)).toBe(true);
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:path.endsWith('?history=1')?history:path.includes('?jobId=')?approved(id):view()) as never);
+ await open();fireEvent.click(screen.getByText('Saved update jobs',{selector:'summary'}));fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();
+ const reads=vi.mocked(request).mock.calls.length,storage=vi.spyOn(Storage.prototype,'setItem');
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'7777'}});
+ fireEvent.change(screen.getByRole('combobox',{name:'Job purpose'}),{target:{value:'install'}});
+ fireEvent.change(screen.getByRole('combobox',{name:'Saved status or result'}),{target:{value:'state:approved'}});
+ expect(screen.getByText('Showing 1 of 2 saved jobs')).toBeInTheDocument();expect(screen.queryByRole('button',{name:`Open saved job · ${other}`})).toBeNull();
+ expect(request).toHaveBeenCalledTimes(reads);expect(mutateRaw).not.toHaveBeenCalled();expect(storage).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:`Open saved job · ${id}`}));await flush();
+ expect(vi.mocked(request).mock.calls.slice(reads).map(([path])=>path)).toEqual(['/auth/session',`/devices/${device}/windows-update-jobs?jobId=${id}`]);
+ expect(mutateRaw).not.toHaveBeenCalled();expect(screen.queryByRole('checkbox')).toBeNull();
+});
+it('clears the local history filters on an explicit successful snapshot refresh',async()=>{
+ const id=`update_${'7'.repeat(32)}`,history=validHistory(id);
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:path.endsWith('?history=1')?history:view()) as never);
+ await open();fireEvent.click(screen.getByText('Saved update jobs',{selector:'summary'}));fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'not-present'}});expect(screen.getByText('Showing 0 of 1 saved jobs')).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();
+ expect(screen.getByRole('searchbox')).toHaveValue('');expect(screen.getByText('Showing 1 of 1 saved jobs')).toBeInTheDocument();expect(mutateRaw).not.toHaveBeenCalled();
+});
+it.each(['blur','pagehide','popstate','hashchange',AUTH_REQUIRED_EVENT,'visibilitychange','session-expiry'])('drops saved rows and local filters on %s',async event=>{
+ const id=`update_${'7'.repeat(32)}`,history=validHistory(id);
+ vi.mocked(request).mockImplementation(async path=>structuredClone(path==='/auth/session'?session:path.endsWith('?history=1')?history:view()) as never);
+ await open();fireEvent.click(screen.getByText('Saved update jobs',{selector:'summary'}));fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'private-filter'}});const reads=vi.mocked(request).mock.calls.length;
+ act(()=>{if(event==='session-expiry')vi.advanceTimersByTime(3600000);else (event==='visibilitychange'?document:window).dispatchEvent(new Event(event));});
+ expect(screen.queryByRole('searchbox')).toBeNull();expect(screen.queryByText(/Showing .* saved jobs/)).toBeNull();expect(screen.queryByText('private-filter')).toBeNull();
+ expect(request).toHaveBeenCalledTimes(reads);expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('does not restore a filtered history from a late read after privacy loss',async()=>{
+ const id=`update_${'7'.repeat(32)}`,history=validHistory(id);let delayed=false,resolve!:(value:unknown)=>void;
+ vi.mocked(request).mockImplementation(async path=>path.endsWith('?history=1')&&delayed?await new Promise(r=>{resolve=r}):structuredClone(path==='/auth/session'?session:path.endsWith('?history=1')?history:view()) as never);
+ await open();fireEvent.click(screen.getByText('Saved update jobs',{selector:'summary'}));fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'private-filter'}});delayed=true;fireEvent.click(screen.getByRole('button',{name:'Read saved jobs'}));await flush();
+ expect(screen.getByRole('searchbox')).toBeDisabled();act(()=>window.dispatchEvent(new Event('blur')));await act(async()=>resolve(history));
+ expect(screen.queryByRole('searchbox')).toBeNull();expect(screen.queryByRole('button',{name:`Open saved job · ${id}`})).toBeNull();expect(mutateRaw).not.toHaveBeenCalled();
+});
 it('rejects history envelopes, duplicate jobs, oversized lists and invented timestamps',()=>{
  const id=`update_${'7'.repeat(32)}`,h=validHistory(id);expect(validUpdateJobHistory(h,device,actor)).toBe(true);expect(validUpdateJobHistory({...h,permit:'bad'},device,actor)).toBe(false);expect(validUpdateJobHistory({...h,jobs:[...h.jobs,...h.jobs]},device,actor)).toBe(false);expect(validUpdateJobHistory({...h,jobs:Array(34).fill(h.jobs[0])},device,actor)).toBe(false);expect(validUpdateJobHistory({...h,jobs:[{...h.jobs[0],preview:preview(id)}]},device,actor)).toBe(false);expect(validUpdateJobHistory({...h,jobs:[{...h.jobs[0],claimedAt:seconds-1}]},device,actor)).toBe(false);
 });
