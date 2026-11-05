@@ -1,7 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AIAnalysisPanel, AIProviderSettings } from './ai';
-import { endpointInfo, safeAIError } from './ai-types';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { AIAnalysisPanel } from './ai';
 import type { AIConfig, AnalysisResult } from './ai-types';
 import type { Case } from './types';
 import { APIError, mutate, request } from './api';
