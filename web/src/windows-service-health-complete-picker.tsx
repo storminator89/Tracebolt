@@ -9,6 +9,33 @@ import { completeServiceHealthSource, sameWindowsServiceHealthSource, windowsSer
 import type { WindowsServiceHealthSource } from './windows-service-health-complete-types';
 import { compareWindowsServiceNames, sameWindowsServiceNames } from './windows-service-health-types';
 
+const pickerFailureCopy = {
+    en: {
+        invalid: 'The service response could not be verified. Review the latest generation again.',
+        unavailable: 'Service rows could not be read. Try again.',
+        timeout: 'The service request timed out. Try again.',
+        session: 'The session changed or could not be verified. Sign in again.',
+        clock: 'The time reference changed. Review the latest generation again.',
+        busy: 'The manager is busy. Try again in a moment.',
+        restart: 'The generation, grant or paging session changed or expired. Review the latest generation again.',
+        unauthorized: 'Current device access could not be verified. Refresh the device view and check access.',
+        expired: 'The original source, access or paging deadline expired. Review the latest generation again.',
+        searchInvalid: 'Shorten the search to at most 256 UTF-8 bytes and remove invalid characters.',
+    },
+    de: {
+        invalid: 'Die Dienstantwort konnte nicht verifiziert werden. Neueste Generation erneut prüfen.',
+        unavailable: 'Dienstzeilen konnten nicht gelesen werden. Erneut versuchen.',
+        timeout: 'Die Dienstanfrage hat das Zeitlimit überschritten. Erneut versuchen.',
+        session: 'Die Sitzung wurde geändert oder konnte nicht bestätigt werden. Erneut anmelden.',
+        clock: 'Der Zeitbezug hat sich geändert. Neueste Generation erneut prüfen.',
+        busy: 'Der Manager ist ausgelastet. Gleich erneut versuchen.',
+        restart: 'Generation, Freigabe oder Seitensitzung wurden geändert oder sind abgelaufen. Neueste Generation erneut prüfen.',
+        unauthorized: 'Der aktuelle Gerätezugriff konnte nicht bestätigt werden. Geräteansicht aktualisieren und Zugriff prüfen.',
+        expired: 'Die ursprüngliche Quellen-, Zugriffs- oder Seitenfrist ist abgelaufen. Neueste Generation erneut prüfen.',
+        searchInvalid: 'Suche auf höchstens 256 UTF-8-Bytes kürzen und ungültige Zeichen entfernen.',
+    },
+};
+
 export interface CompleteServiceSelectionEvidence { source: WindowsServiceHealthSource; names: string[] }
 type Reviewed = { source: WindowsServiceHealthSource; choices: { name: string; displayName: string }[] };
 /** At most eight selected identities survive paging. Page rows never accumulate;
@@ -50,9 +77,9 @@ export function WindowsServiceHealthCompletePicker({ deviceId, sessionKey, enabl
         <p role="status">{selected.length} {c.count}{selected.length >= 8 && <> · {c.maximum}</>}</p>
         {selected.length ? <ul className="windows-service-selections" aria-label={c.selected}>{selected.map(name => <li key={name}><span>{choices.find(r => r.name === name)?.displayName || name}<small>{c.name}: <code>{name}</code></small>{!choices.some(r => r.name === name) && <small>{c.unavailableSelection}</small>}</span><button type="button" className="text-button" disabled={disabled} aria-label={`${c.remove}: ${name}`} onClick={() => change(name)}>×</button></li>)}</ul> : <p>{c.noSelection}</p>}
         <fieldset><legend>{c.choose}</legend>
-            <div className="windows-capacity-actions"><label htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" aria-describedby={pendingSearch ? `${id}-pending-search` : undefined} autoComplete="off" spellCheck={false} maxLength={256} value={resource.controls.search} disabled={!enabled || resource.loading} onChange={event => resource.changeSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); resource.apply(); } }}/></label><button type="button" className="button small" disabled={!enabled || resource.loading || disabled} onClick={resource.apply}>{copy.apply}</button><button type="button" className="text-button" disabled={!enabled || resource.loading || resource.error === 'session' || disabled} onClick={() => { setReviewed(null); callback.current(null); resource.restart(); }}>{copy.restart}</button></div>
+            <div className="windows-capacity-actions"><label htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" aria-invalid={resource.error === 'searchInvalid' || undefined} aria-describedby={resource.error === 'searchInvalid' ? `${id}-search-error` : pendingSearch ? `${id}-pending-search` : undefined} autoComplete="off" spellCheck={false} maxLength={256} value={resource.controls.search} disabled={!enabled || resource.loading} onChange={event => resource.changeSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); resource.apply(); } }}/></label><button type="button" className="button small" disabled={!enabled || resource.loading || disabled} onClick={resource.apply}>{copy.apply}</button><button type="button" className="text-button" disabled={!enabled || resource.loading || resource.error === 'session' || disabled} onClick={() => { setReviewed(null); callback.current(null); resource.restart(); }}>{copy.restart}</button></div>
             {resource.loading && <p role="status">{c.refreshing}</p>}
-            {resource.error && <p role="status">{copy.changed}</p>}
+            {resource.error && <p id={resource.error === 'searchInvalid' ? `${id}-search-error` : undefined} role="status">{pickerFailureCopy[locale][resource.error]}</p>}
             {page && source && !fresh && <p role="status">{latestComplete ? copy.stale : copy.unavailable}</p>}
             {pendingSearch ? <p id={`${id}-pending-search`} role="status">{copy.pendingSearch}</p> : !resource.loading && !page && !resource.error && <p>{pendingSource && pendingLatest ? copy.stale : copy.unavailable}</p>}
             {fresh && page && source && <><p>{source.rowCount} {copy.total} · {page.matchingCount} {copy.matching} · {page.rows.length ? page.offset + 1 : 0}–{page.offset + page.rows.length}</p>

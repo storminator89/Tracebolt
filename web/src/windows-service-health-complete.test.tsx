@@ -169,6 +169,6 @@ describe('bounded reusable complete picker', () => {
         expect(evidence.mock.lastCall![0]).toBeNull(); expect(s.state.queries).toHaveLength(1); expect(s.state.writes).toEqual([]);
     });
     it('clears reviewed evidence on a generation restart instead of joining rows', async () => {
-        const s = server(), evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001'); s.state.restart = true; await next(); expect(evidence.mock.lastCall![0]).toBeNull(); expect(screen.getByText(/Generation or access changed/)).toBeVisible(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0); expect(screen.getByRole('button', { name: 'Remove service: FixtureService0001' })).toBeVisible();
+        const s = server(), evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001'); s.state.restart = true; await next(); expect(evidence.mock.lastCall![0]).toBeNull(); expect(screen.getByText(/The generation, grant or paging session changed or expired/)).toBeVisible(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0); expect(screen.getByRole('button', { name: 'Remove service: FixtureService0001' })).toBeVisible();
     });
 });
