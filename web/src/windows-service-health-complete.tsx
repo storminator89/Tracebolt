@@ -81,7 +81,7 @@ export function WindowsServiceHealthCompletePanel({ device, resource, sessionKey
         <p className="windows-capacity-scope">{c.scope}</p>
         <div className="windows-capacity-assessment"><span>{c.status}</span><strong>{c[status]}</strong></div>
         {!view && <p role="status">{resource.saving ? c.saving : resource.loading ? c.refreshing : resource.error ? completeServiceFailureCopy[locale][resource.error] : c.noAuthority}</p>}
-        {resource.notice && <p role="status">{c[resource.notice]}</p>}
+        {resource.notice && (resource.notice !== 'saved' || view) && <p role="status">{c[resource.notice]}</p>}
         {view && <>
             {view.evaluatedAt && <dl className="windows-capacity-times"><Timestamp label={c.evaluated} value={view.evaluatedAt}/></dl>}
             {status === 'unknown' && <p role="status">{c.stale}</p>}

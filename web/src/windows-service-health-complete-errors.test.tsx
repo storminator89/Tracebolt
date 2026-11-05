@@ -40,3 +40,34 @@ describe.each(['en', 'de'] as const)('complete service failure guidance (%s)', l
   expect(screen.getByRole('button', { name: windowsServiceHealthCompleteCopy[locale].refresh })).toBeDisabled(); expect(screen.getByText(text => text.startsWith(expected[locale][1]))).toBeVisible(); expect(fetch).not.toHaveBeenCalled();
  });
 });
+
+// A remembered write notice must not certify a later unavailable assessment.
+describe.each(['en', 'de'] as const)('saved notice authority (%s)', locale => {
+ it.each(failures)('hides saved after %s and restores only with verified view', error => {
+  setLocale(locale, false); const p = props(null), c = windowsServiceHealthCompleteCopy[locale];
+  const resource = { ...p.resource, notice: 'saved' as const };
+  const rendered = render(<WindowsServiceHealthCompletePanel {...p} resource={resource}/>);
+  expect(screen.getByText(c.saved)).toBeVisible();
+  rendered.rerender(<WindowsServiceHealthCompletePanel {...p} resource={{ ...resource, error }}/>);
+  expect(screen.queryByText(c.saved)).toBeNull();
+  rendered.rerender(<WindowsServiceHealthCompletePanel {...p} resource={resource}/>);
+  expect(screen.getByText(c.saved)).toBeVisible(); expect(fetch).not.toHaveBeenCalled(); expect(resource.save).not.toHaveBeenCalled();
+ });
+ it('hides saved during reads, writes, source loss and metadata/session invalidation', () => {
+  setLocale(locale, false); const p = props(null), c = windowsServiceHealthCompleteCopy[locale]; const resource = { ...p.resource, notice: 'saved' as const };
+  const rendered = render(<WindowsServiceHealthCompletePanel {...p} resource={resource}/>);
+  for (const change of [{ loading: true }, { saving: true }, { view: null }, { elapsedMS: Infinity }]) {
+   rendered.rerender(<WindowsServiceHealthCompletePanel {...p} resource={{ ...resource, ...change }}/>); expect(screen.queryByText(c.saved)).toBeNull();
+  }
+  rendered.rerender(<WindowsServiceHealthCompletePanel {...p} resource={resource} metadataReady={false}/>); expect(screen.queryByText(c.saved)).toBeNull();
+  rendered.rerender(<WindowsServiceHealthCompletePanel {...p} resource={resource} sessionKey={null}/>); expect(screen.queryByText(c.saved)).toBeNull(); expect(fetch).not.toHaveBeenCalled();
+ });
+ it.each(['uncertain', 'conflict'] as const)('preserves %s without a verified view', notice => {
+  setLocale(locale, false); const p = props(null), c = windowsServiceHealthCompleteCopy[locale];
+  const rendered = render(<WindowsServiceHealthCompletePanel {...p} resource={{ ...p.resource, notice, view: null }}/>);
+  for (const error of [null, ...failures]) {
+   rendered.rerender(<WindowsServiceHealthCompletePanel {...p} resource={{ ...p.resource, notice, error, view: null }}/>); expect(screen.getByText(c[notice])).toBeVisible();
+  }
+  expect(fetch).not.toHaveBeenCalled(); expect(p.resource.save).not.toHaveBeenCalled();
+ });
+});
