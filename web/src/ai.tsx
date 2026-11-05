@@ -222,11 +222,14 @@ export function AIAnalysisPanel({ item, onSettings }: {
         setResult(null);
         const current = new AbortController();
         operation.current = current;
+        let configurationCheckPending = false;
         try {
             const response = await mutate<AnalysisResult>(`/cases/${encodeURIComponent(item.id)}/analyze`, { configRevision: selected.revision }, current.signal);
             if (!alive.current || current.signal.aborted)
                 return;
+            configurationCheckPending = true;
             const latest = await request<AIConfig>('/ai/config', { signal: current.signal });
+            configurationCheckPending = false;
             if (!alive.current || current.signal.aborted)
                 return;
             setConfig(latest);
@@ -238,7 +241,10 @@ export function AIAnalysisPanel({ item, onSettings }: {
         }
         catch (err) {
             if (alive.current && !current.signal.aborted) {
-                setAnalysisError(safeAIError(err));
+                const accessError = err instanceof APIError && (err.status === 401 || err.status === 403);
+                setAnalysisError(configurationCheckPending && !accessError
+                    ? t("Antwort auf die Analyseanfrage erhalten. Die aktuelle Anbieter-Konfiguration konnte nicht geprüft werden; das Ergebnis wird nicht angezeigt.") + " " + safeAIError(err)
+                    : safeAIError(err));
                 if (err instanceof APIError && err.status === 409)
                     void refresh();
             }
