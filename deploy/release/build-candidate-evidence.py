@@ -10,9 +10,11 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import stat
 import subprocess
 import tarfile
+import time
 from urllib.parse import quote
 
 HERE = Path(__file__).resolve().parent
@@ -20,6 +22,8 @@ spec = importlib.util.spec_from_file_location("evidence_bootstrap", HERE / "linu
 b = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(b)
 MAX_METADATA = 1024 * 1024
+INSPECT_TIMEOUT = 30
+INSPECT_READ_SIZE = 64 * 1024
 MODULE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~+/-]{0,239}\Z")
 MODULE_VERSION = re.compile(r"v[0-9][A-Za-z0-9.+-]{0,127}\Z")
 SUM = re.compile(r"h1:[A-Za-z0-9+/]{43}=\Z")
@@ -79,9 +83,51 @@ def inspect(path):
     # 'go version' parses bytes; no candidate program is executed, no dependency
     # is fetched, and ambient workspace/toolchain selection is disabled.
     env = dict(os.environ, GOTOOLCHAIN="local", GOWORK="off", GOENV="off", GOFLAGS="", GOPROXY="off", GOSUMDB="off")
-    result = subprocess.run(["go", "version", "-m", "-json", str(path)], env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=30)
-    return parse(result.stdout)
+    command = ["go", "version", "-m", "-json", str(path)]
+    deadline = time.monotonic() + INSPECT_TIMEOUT
+    output = bytearray()
+    # Drain both pipes concurrently. A parse-time limit is too late: even stderr
+    # must be bounded while reading, and no error path may call communicate().
+    with subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0) as process:
+        try:
+            with selectors.DefaultSelector() as selector:
+                sizes = {"stdout": 0, "stderr": 0}
+                for name, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
+                    os.set_blocking(stream.fileno(), False)
+                    selector.register(stream, selectors.EVENT_READ, name)
+                while selector.get_map():
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(command, INSPECT_TIMEOUT)
+                    for key, _ in selector.select(remaining):
+                        if time.monotonic() >= deadline:
+                            raise subprocess.TimeoutExpired(command, INSPECT_TIMEOUT)
+                        # Read at most one excess byte to detect a cap violation.
+                        # Stderr is counted and discarded, never retained/logged.
+                        size = min(INSPECT_READ_SIZE, MAX_METADATA - sizes[key.data] + 1)
+                        try:
+                            chunk = os.read(key.fd, size)
+                        except BlockingIOError:
+                            continue
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                            continue
+                        sizes[key.data] += len(chunk)
+                        b.require(sizes[key.data] <= MAX_METADATA, "Inspector output size rejected.")
+                        if key.data == "stdout":
+                            output.extend(chunk)
+            # EOF does not prove process exit. Keep the same deadline for wait.
+            process.wait(timeout=max(0, deadline - time.monotonic()))
+            if process.returncode:
+                raise subprocess.CalledProcessError(process.returncode, command)
+        finally:
+            # On timeout, overflow, read failure or interruption, terminate and
+            # reap the inspector before the context closes both pipe descriptors.
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+    return parse(output)
 
 
 def sbom(info, name, entry, version, source_commit, go_version, sums):

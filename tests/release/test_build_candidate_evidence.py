@@ -1,10 +1,13 @@
 """Inert SBOM fixtures: no release, native program, credential or network action."""
 import copy
+from contextlib import contextmanager
 import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -202,14 +205,20 @@ class CandidateEvidence(unittest.TestCase):
                     e.archived_locks(path)
 
     def test_inspector_only_uses_read_only_go_version_with_no_network_selection(self):
-        with mock.patch.object(e.subprocess, "run", return_value=mock.Mock(stdout=e.canonical(self.info(self.candidate / self.binary)))) as run:
+        raw = e.canonical(self.info(self.candidate / self.binary))
+        with InspectorPipes.fixture(self, "import sys; sys.stdout.buffer.write(" + repr(raw) + ")") as (launch, _):
             e.inspect(self.candidate / self.binary)
-        args, kwargs = run.call_args
+        args, kwargs = launch.call_args
         self.assertEqual(args[0], ["go", "version", "-m", "-json", str(self.candidate / self.binary)])
         self.assertEqual(kwargs["env"]["GOTOOLCHAIN"], "local")
         self.assertEqual(kwargs["env"]["GOPROXY"], "off")
         self.assertEqual(kwargs["env"]["GOWORK"], "off")
-        self.assertEqual(kwargs["timeout"], 30)
+        self.assertEqual(kwargs["env"]["GOENV"], "off")
+        self.assertEqual(kwargs["env"]["GOFLAGS"], "")
+        self.assertEqual(kwargs["env"]["GOSUMDB"], "off")
+        self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(kwargs["bufsize"], 0)
+        self.assertEqual(e.INSPECT_TIMEOUT, 30)
 
     def test_wrong_manifest_source_or_version_is_rejected_before_binary_inspection(self):
         for key, wrong in (("sourceCommit", "b" * 40), ("version", "v0.1.0-other.1")):
@@ -224,6 +233,152 @@ class CandidateEvidence(unittest.TestCase):
                 self.assertFalse(self.output.exists())
                 self.manifest[key] = original
                 self.write_manifest()
+
+
+class InspectorPipes(unittest.TestCase):
+    """Real pipes from inert code under this test's existing Python interpreter.
+
+    Never run Go or a candidate. Substitute only process creation so the actual
+    selector, bounded reads, deadline, kill/reap and descriptor cleanup are tested.
+    """
+
+    @contextmanager
+    def fixture(self, source):
+        processes = []
+        original = subprocess.Popen
+
+        def launch(command, **kwargs):
+            process = original([sys.executable, "-I", "-c", source], **kwargs)
+            processes.append(process)
+            return process
+
+        try:
+            with mock.patch.object(e.subprocess, "Popen", side_effect=launch) as create:
+                yield create, processes
+            for process in processes:
+                self.assertIsNotNone(process.returncode)
+                self.assertTrue(process.stdout.closed)
+                self.assertTrue(process.stderr.closed)
+                with self.assertRaises(ChildProcessError):
+                    os.waitpid(process.pid, os.WNOHANG)
+        finally:
+            # Keep a broken implementation from leaking the inert test child.
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+                process.stdout.close()
+                process.stderr.close()
+
+    def test_exact_stdout_and_stderr_limits_with_interleaved_writes_are_supported(self):
+        source = f"""
+import sys
+out, err = sys.stdout.buffer, sys.stderr.buffer
+out.write(b'{{'); out.flush()
+for _ in range(15):
+    err.write(b'e' * 65536); err.flush()
+    out.write(b' ' * 65536); out.flush()
+err.write(b'e' * 65536); err.flush()
+out.write(b' ' * (65536 - 2) + b'}}'); out.flush()
+"""
+        with self.fixture(source):
+            self.assertEqual(e.inspect(Path("inert-candidate")), {})
+
+    def test_stderr_before_stdout_does_not_deadlock(self):
+        with self.fixture("import sys; sys.stderr.buffer.write(b'e' * 200000); sys.stderr.flush(); print('{}')"):
+            self.assertEqual(e.inspect(Path("inert-candidate")), {})
+
+    def test_overflow_on_either_pipe_stops_after_one_excess_byte_and_reaps(self):
+        for descriptor in (1, 2):
+            with self.subTest(descriptor=descriptor):
+                source = f"import os, time; os.write({descriptor}, b'x' * {e.MAX_METADATA + 100000}); time.sleep(60)"
+                with self.fixture(source) as (_, processes):
+                    read = os.read
+                    received, requested = [], []
+
+                    def bounded_read(fd, size):
+                        chunk = read(fd, size)
+                        if processes and fd in (processes[0].stdout.fileno(), processes[0].stderr.fileno()):
+                            received.append(len(chunk))
+                            requested.append(size)
+                        return chunk
+
+                    with mock.patch.object(e.os, "read", side_effect=bounded_read), \
+                            mock.patch.object(e, "parse") as parse:
+                        with self.assertRaisesRegex(e.b.Rejected, "Inspector output size rejected"):
+                            e.inspect(Path("inert-candidate"))
+                    parse.assert_not_called()
+                    self.assertEqual(sum(received), e.MAX_METADATA + 1)
+                    self.assertLessEqual(max(requested), e.INSPECT_READ_SIZE)
+                    self.assertLess(processes[0].returncode, 0)
+
+    def test_silent_child_times_out_and_is_reaped(self):
+        with self.fixture("import time; time.sleep(60)") as (_, processes), \
+                mock.patch.object(e, "INSPECT_TIMEOUT", 0.2):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                e.inspect(Path("inert-candidate"))
+            self.assertLess(processes[0].returncode, 0)
+
+    def test_closed_pipes_do_not_remove_process_exit_deadline(self):
+        with self.fixture("import os, time; os.close(1); os.close(2); time.sleep(60)") as (_, processes), \
+                mock.patch.object(e, "INSPECT_TIMEOUT", 0.2):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                e.inspect(Path("inert-candidate"))
+            self.assertLess(processes[0].returncode, 0)
+
+    def test_dripping_output_does_not_reset_total_deadline(self):
+        source = "import os, time\nwhile True:\n os.write(1, b' '); time.sleep(0.02)"
+        with self.fixture(source), mock.patch.object(e, "INSPECT_TIMEOUT", 0.2):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                e.inspect(Path("inert-candidate"))
+
+    def test_read_failure_and_interruption_reap_child(self):
+        for error in (OSError("inert read failure"), KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__):
+                with self.fixture("import time; print('{}', flush=True); time.sleep(60)") as (_, processes):
+                    original = os.read
+
+                    def failed_read(fd, size):
+                        if processes and fd == processes[0].stdout.fileno():
+                            raise error
+                        return original(fd, size)
+
+                    with mock.patch.object(e.os, "read", side_effect=failed_read):
+                        with self.assertRaises(type(error)):
+                            e.inspect(Path("inert-candidate"))
+                    self.assertLess(processes[0].returncode, 0)
+
+    def test_nonblocking_read_race_does_not_fail_valid_metadata(self):
+        with self.fixture("print('{}')") as (_, processes):
+            original = os.read
+            raced = False
+
+            def raced_read(fd, size):
+                nonlocal raced
+                if processes and fd == processes[0].stdout.fileno() and not raced:
+                    raced = True
+                    raise BlockingIOError()
+                return original(fd, size)
+
+            with mock.patch.object(e.os, "read", side_effect=raced_read):
+                self.assertEqual(e.inspect(Path("inert-candidate")), {})
+            self.assertTrue(raced)
+
+    def test_nonzero_exit_keeps_diagnostics_out_of_exception(self):
+        with self.fixture("import sys; print('{}'); print('private inspector error', file=sys.stderr); sys.exit(7)"):
+            with self.assertRaises(subprocess.CalledProcessError) as caught:
+                e.inspect(Path("inert-candidate"))
+            self.assertEqual(caught.exception.returncode, 7)
+            self.assertIsNone(caught.exception.output)
+            self.assertIsNone(caught.exception.stderr)
+            self.assertNotIn("private inspector error", str(caught.exception))
+
+    def test_empty_or_invalid_json_remains_rejected_after_clean_exit(self):
+        for source, error in (("pass", e.b.Rejected), ("print('not json')", ValueError),
+                              ("print('{\"duplicate\": 1, \"duplicate\": 2}')", e.b.Rejected)):
+            with self.subTest(source=source), self.fixture(source):
+                with self.assertRaises(error):
+                    e.inspect(Path("inert-candidate"))
 
 
 if __name__ == "__main__":
