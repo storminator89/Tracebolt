@@ -438,3 +438,9 @@ See `docs/proactive-service-log-ai.md` for bounds and the native fixture boundar
   capture/receipt age, unavailable-name uncertainty, exact original identity/grant,
   explicit saved-selection consent and uncertain-write read reconciliation. This
   live view adds no incidents, host collection, CPU/RAM policy, actions or export.
+
+- Private Windows device handover notes are manager-only authored records. Read
+  `docs/device-handover-notes.md` before changing their original-identity binding,
+  archive/restore, bounded receipt retention or uncertain-write reconciliation.
+  Keep existing shared-write/named-read permissions, no permanent text deletion,
+  no telemetry/AI/export join and no enrollment or endpoint grant expansion.

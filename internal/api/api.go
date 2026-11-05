@@ -30,6 +30,7 @@ import (
 )
 
 type Server struct {
+	deviceNotesClock    deviceNotesClock
 	journalAI           *journalAIState
 	linuxCVE            *linuxCVEState
 	health              *healthMonitor

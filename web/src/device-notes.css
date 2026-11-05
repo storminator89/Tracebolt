@@ -1,0 +1,8 @@
+.device-notes { margin-top: 1.5rem; }
+.device-notes > p, .device-notes-list li > p:not(.device-note-text) { font-size: .875rem; line-height: 1.5; }
+.device-notes-list { list-style: none; padding: 0; }
+.device-notes-list li { border-top: 1px solid var(--border); padding: 1rem 0; }
+.device-note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.device-notes form { display: grid; gap: .6rem; margin-top: 1rem; }
+.device-notes textarea { width: 100%; min-height: 7rem; resize: vertical; font: inherit; }
+.device-notes label { display: flex; gap: .5rem; align-items: center; }
