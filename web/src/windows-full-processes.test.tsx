@@ -2,6 +2,7 @@ import { WindowsInventoryWorkspace } from './windows-inventory';
 import { useWindowsInventory } from './windows-inventory-resource';
 import { DeviceDetail } from './details';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
@@ -11,6 +12,7 @@ import { fullProcessesRows, fullProcessesComplete, fullProcessesDevice, fullProc
 import { FULL_PROCESSES_PAGE_BYTES } from './windows-full-processes-types';
 import type { FullProcessesPage, FullProcessesQuery } from './windows-full-processes-types';
 import { windowsDevice, windowsView } from './windows-inventory-fixture';
+import watchFixtures from './windows-process-watches-go-fixture.json';
 
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -49,6 +51,68 @@ const search = (value: string) => fireEvent.change(screen.getByRole('searchbox')
 const apply = () => fireEvent.click(screen.getByRole('button', { name: /Apply|Anwenden/ }));
 beforeEach(() => { setLocale('en', false); vi.mocked(useOperator).mockReturnValue({ mode: 'lan', authenticated: true, expiresAt: 'synthetic-session', insecureTestMode: false, logout: vi.fn(), theme: 'light', setTheme: vi.fn() }); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe('complete process search feedback and local reset', () => {
+    it.each(['en', 'de'] as const)('explains drafts, preserves capture totals and resets without reading (%s)', async locale => {
+        setLocale(locale, false); const server = fixtureServer(); open(); await screen.findByRole('table');
+        const de = locale === 'de', input = screen.getByRole('searchbox'), sort = screen.getByRole('combobox'), reset = screen.getByRole('button', { name: de ? 'Prozesssuche und Sortierung zurücksetzen' : 'Reset process search and sort' });
+        const hint = de ? 'Filter geändert. Mit „Anwenden“ den gespeicherten Prozesssnapshot lesen.' : 'Filters changed. Apply to read the saved process snapshot.';
+        expect(reset).toBeDisabled(); expect(screen.queryByText(hint)).toBeNull();
+        search('0616'); fireEvent.change(sort, { target: { value: 'name-desc' } });
+        expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(hint)).toHaveAttribute('role', 'status');
+        for (const control of [input, sort]) expect(control).toHaveAttribute('aria-describedby', screen.getByText(hint).id);
+        expect(screen.getByText(de ? 'Erfasst' : 'Captured').nextElementSibling).toHaveTextContent('617'); expect(screen.getByText(de ? 'Treffer' : 'Matching').nextElementSibling).toHaveTextContent('—'); expect(screen.getByText(de ? 'Auf Seite' : 'On page').nextElementSibling).toHaveTextContent('—');
+        expect(document.querySelector('.windows-full-processes-age time')).toHaveAttribute('datetime', server.complete.manifest.captureStartedAt);
+        fireEvent.click(reset); expect(input).toHaveValue(''); expect(sort).toHaveValue('pid-asc'); expect(input).toHaveFocus(); expect(reset).toBeDisabled(); expect(screen.getByText(hint)).toBeVisible(); expect(screen.queryByRole('table')).toBeNull(); expect(server.state.requests).toHaveLength(1);
+        apply(); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(2); expect(server.state.requests[1]).toEqual(fullProcessesQuery); expect(names()[0]).toBe('Fixture Process 0000'); expect(screen.queryByText(hint)).toBeNull(); expect(screen.getByRole('searchbox')).not.toHaveAttribute('aria-describedby');
+        expect(server.fetch.mock.calls.every(([path]) => path === '/api/session' || path === `/api/devices/${fullProcessesDevice}/windows-full-processes/query`)).toBe(true);
+    });
+    it.each(['{Enter}', ' '])('resets by keyboard %s and reads only on a later deliberate submission', async key => {
+        const user = userEvent.setup(), server = fixtureServer(); open(); await screen.findByRole('table');
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'threads-desc' } }); const reset = screen.getByRole('button', { name: 'Reset process search and sort' }); reset.focus(); await user.keyboard(key);
+        expect(screen.getByRole('searchbox')).toHaveFocus(); expect(screen.getByRole('combobox')).toHaveValue('pid-asc'); expect(server.state.requests).toHaveLength(1);
+        await user.keyboard('{Enter}'); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(2); expect(server.state.requests[1]).toEqual(fullProcessesQuery);
+    });
+    it('clears UTF-8 validation errors locally while keeping the original captured count', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('😀'.repeat(65)); apply();
+        expect(screen.getByRole('alert')).toHaveTextContent('256 UTF-8 bytes'); expect(screen.queryByText(/Filters changed/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Reset process search and sort' })); expect(screen.queryByRole('alert')).toBeNull(); expect(screen.getByText(/Filters changed/)).toBeVisible(); expect(screen.getByText('Captured').nextElementSibling).toHaveTextContent('617'); expect(server.state.requests).toHaveLength(1);
+    });
+    it.each(['en', 'de'] as const)('keeps endpoint capture-pending and local filter-pending states distinct (%s)', async locale => {
+        setLocale(locale, false); const server = fixtureServer(); server.state.change = page => { page.latestAttempt = { sequence: 2, attemptedAt: '2026-10-11T06:00:09Z', status: 'pending', reason: '' }; }; open(); await screen.findByRole('table'); search('draft');
+        expect(screen.getByText(locale === 'de' ? /Neue Erfassung ausstehend/ : /New capture pending/)).toHaveTextContent(locale === 'de' ? 'Vorherige Erfassung angezeigt' : 'Showing earlier capture'); expect(screen.getByText(locale === 'de' ? /Filter geändert/ : /Filters changed/)).toBeVisible(); expect(server.state.requests).toHaveLength(1);
+    });
+    it('keeps the old generation pinned after reset until explicit restart', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('draft'); replaceFullProcessesGeneration(server.state.complete, server.state.rows);
+        fireEvent.click(screen.getByRole('button', { name: 'Reset process search and sort' })); expect(server.state.requests).toHaveLength(1); apply(); await screen.findByRole('alert');
+        expect(screen.getByRole('alert')).toHaveTextContent('Capture or access changed'); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByText(/Filters changed/)).toBeNull(); expect(server.state.requests).toHaveLength(2);
+        fireEvent.click(screen.getByRole('button', { name: 'Reload latest process capture' })); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(3); expect(screen.getByRole('button', { name: 'Reset process search and sort' })).toBeDisabled();
+    });
+    it('resets an applied later page to a pending first-page query without restoring stale rows', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('Fixture'); apply(); await screen.findByRole('table');
+        fireEvent.click(screen.getByRole('button', { name: 'Next process page' })); await waitFor(() => expect(names()[0]).toBe('Fixture Process 0100')); const count = server.state.requests.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Reset process search and sort' })); expect(server.state.requests).toHaveLength(count); expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('navigation', { name: 'Process inventory pages' })).toBeNull();
+        apply(); await screen.findByRole('table'); expect(server.state.requests.at(-1)).toEqual(fullProcessesQuery); expect(names()[0]).toBe('Fixture Process 0000');
+    });
+    it.each(['blur', 'pagehide', 'hashchange', AUTH_REQUIRED_EVENT])('removes draft feedback and reset on %s without reading', async event => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('draft'); expect(screen.getByText(/Filters changed/)).toBeVisible();
+        act(() => window.dispatchEvent(new Event(event))); expect(screen.queryByText(/Filters changed/)).toBeNull(); expect(screen.queryByRole('button', { name: 'Reset process search and sort' })).toBeNull(); expect(screen.queryByRole('table')).toBeNull(); expect(server.state.requests).toHaveLength(1);
+    });
+    it('does not extend original authority while a reset query is pending', async () => {
+        vi.useFakeTimers(); const server = fixtureServer(); server.state.change = page => { page.authorityUntil = page.cursorExpiresAt = '2026-10-11T06:00:11Z'; }; open(); await flush(); search('draft'); fireEvent.click(screen.getByRole('button', { name: 'Reset process search and sort' }));
+        await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText(/Filters changed/)).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.getByRole('alert')).toHaveTextContent('expired'); expect(server.state.requests).toHaveLength(1);
+    });
+    it('keeps watch draft names but clears approval during reset, with no watch read or write', async () => {
+        vi.mocked(useOperator).mockReturnValue({ ...vi.mocked(useOperator)()!, loginMode: 'shared' });
+        const server = fixtureServer(), original = server.fetch.getMockImplementation()!;
+        server.fetch.mockImplementation(async (path, options) => path === `/api/devices/${fullProcessesDevice}/windows-process-watches` ? response({ ...watchFixtures.disabled, deviceId: fullProcessesDevice, serverNow: fullProcessesNow, expiresAt: '2026-10-11T06:00:40Z' }) : original(path, options));
+        render(<WindowsFullProcessesPanel deviceId={fullProcessesDevice} sessionKey="search-reset-watch"/>); await screen.findByRole('table'); fireEvent.change(screen.getByRole('combobox'), { target: { value: 'name-desc' } }); apply(); await screen.findByRole('table');
+        fireEvent.click(screen.getByText('Process presence watches', { selector: 'summary' })); await screen.findByText('No presence watches enabled'); fireEvent.change(screen.getByLabelText('Choose a name from this inventory page'), { target: { value: 'Fixture Process 0616' } }); fireEvent.click(screen.getByRole('button', { name: 'Add name' })); fireEvent.click(screen.getByRole('checkbox'));
+        expect(screen.getByRole('button', { name: 'Save and enable watches' })).toBeEnabled(); const reads = server.fetch.mock.calls.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Reset process search and sort' })); expect(screen.getByRole('button', { name: 'Remove Fixture Process 0616' })).toBeVisible(); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(screen.getByRole('checkbox')).toBeDisabled(); expect(screen.getByRole('button', { name: 'Save and enable watches' })).toBeDisabled(); expect(server.fetch).toHaveBeenCalledTimes(reads);
+        apply(); await screen.findByRole('table'); expect(screen.getByRole('button', { name: 'Remove Fixture Process 0616' })).toBeVisible(); expect(screen.getByRole('checkbox')).not.toBeChecked(); expect(screen.getByRole('button', { name: 'Save and enable watches' })).toBeDisabled(); expect(server.fetch.mock.calls.filter(([path]) => path.endsWith('/windows-process-watches'))).toHaveLength(1); expect(server.fetch.mock.calls.some(([path]) => path.endsWith('/policy'))).toBe(false);
+    });
+});
 
 describe('complete Windows software browsing through released protected fetch', () => {
     it.each(['en', 'de'] as const)('browses all 617 invented rows in bounded pages with later search and literal labels (%s)', async locale => {
