@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
 import { setLocale } from './i18n';
-import { WindowsSoftwareHistoryPanel, WindowsSoftwareWorkspace } from './windows-software-history';
+import { WindowsSoftwareHistoryPanel, WindowsSoftwareHistoryTable, WindowsSoftwareWorkspace } from './windows-software-history';
 import { SOFTWARE_HISTORY_PAGE_BYTES, softwareHistoryVisible, validSoftwareHistoryPage } from './windows-software-history-types';
 import type { SoftwareHistoryPage, SoftwareHistoryQuery } from './windows-software-history-types';
-import { softwareHistoryDevice, softwareHistoryNow, softwareHistoryPage, softwareHistoryQuery, softwareHistoryScenario } from './windows-software-history-fixtures';
+import { softwareHistoryDevice, softwareHistoryNow, softwareHistoryPage, softwareHistoryQuery, softwareHistoryRows, softwareHistoryScenario } from './windows-software-history-fixtures';
 
 vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn() }));
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
@@ -53,8 +53,61 @@ describe('private bilingual software history', () => {
         fireEvent.click(screen.getByRole('button', { name: c.next })); await waitFor(() => expect(rows()[0]).toHaveTextContent('Fixture Software 0101')); expect(rows()).toHaveLength(100);
         fireEvent.click(screen.getByRole('button', { name: c.next })); await waitFor(() => expect(rows()).toHaveLength(5)); expect(screen.getByRole('button', { name: c.next })).toBeDisabled();
         fireEvent.click(screen.getByRole('button', { name: c.previous })); await waitFor(() => expect(rows()[0]).toHaveTextContent('Fixture Software 0101'));
-        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '[.*]' } }); expect(rows()).toHaveLength(0); fireEvent.click(screen.getByRole('button', { name: c.apply })); await waitFor(() => expect(rows()).toHaveLength(1)); fireEvent.click(within(rows()[0] as HTMLElement).getByText(c.details)); expect(screen.getByText(/<img src=x onerror=alert\(1\)>/)).toBeVisible(); expect(document.querySelector('.windows-software-history img,a,script:not([src])')).toBeNull();
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '[.*]' } }); expect(rows()).toHaveLength(0); fireEvent.click(screen.getByRole('button', { name: c.apply })); await waitFor(() => expect(rows()).toHaveLength(1)); fireEvent.click(within(rows()[0] as HTMLElement).getByText(c.details)); expect(within(rows()[0].querySelector('.windows-history-changes') as HTMLElement).getByText(/<img src=x onerror=alert\(1\)>/)).toBeVisible(); expect(document.querySelector('.windows-software-history img,a,script:not([src])')).toBeNull();
         expect(s.state.requests.at(-1)).toEqual({ ...softwareHistoryQuery, search: '[.*]' }); const call = s.fetch.mock.calls.filter(([p]) => p.endsWith('/query')).at(-1)!; expect(call[0]).toBe(`/api/devices/${softwareHistoryDevice}/windows-software-history/query`); expect(call[1]).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'synthetic-csrf' } });
+    });
+    it.each(['en', 'de'] as const)('shows only observed before/after changes without opening details or making extra reads (%s)', async locale => {
+        setLocale(locale, false); const de = locale === 'de', s = server(); open(); await screen.findByRole('table');
+        const changed = rows()[2] as HTMLElement, comparison = changed.querySelector('.windows-history-changes') as HTMLElement;
+        expect(comparison).toBeVisible(); expect(changed.querySelector('details')).not.toHaveAttribute('open');
+        expect(within(comparison).getByText('Version')).toBeVisible();
+        const values = Array.from(comparison.querySelectorAll('dd>span'));
+        expect(values[0]).toHaveTextContent(de ? 'Vorher1.0' : 'Before1.0');
+        expect(values[1]).toHaveTextContent(de ? 'Nachher2.0' : 'After2.0');
+        expect(within(comparison).queryByText(de ? 'Herausgeber' : 'Publisher')).toBeNull();
+        // Add/remove rows have no comparable field pair; missing data is not a change.
+        expect(rows()[0].querySelector('.windows-history-changes')).toBeNull();
+        expect(rows()[1].querySelector('.windows-history-changes')).toBeNull();
+        const rename = rows()[3].querySelector('.windows-history-changes') as HTMLElement;
+        expect(within(rename).getByText('Name')).toBeVisible(); expect(within(rename).queryByText('Version')).toBeNull();
+        expect(within(rename).getByText('Fixture Software 0004')).toBeVisible(); expect(within(rename).getByText('Renamed registration')).toBeVisible();
+        expect(within(rename).queryByText(de ? 'Nicht verfügbar' : 'Unavailable')).toBeNull();
+        const requests = s.state.requests.length;
+        fireEvent.click(within(changed).getByText('Details'));
+        expect(changed.querySelector('details')).toHaveAttribute('open'); expect(comparison).toBeVisible();
+        expect(changed.querySelector('time[datetime="2026-10-11T05:00:01Z"]')).toBeVisible();
+        expect(s.state.requests).toHaveLength(requests);
+        fireEvent.click(within(changed).getByText('Details')); expect(comparison).toBeVisible();
+    });
+    it.each(['en', 'de'] as const)('keeps every changed value literal, distinguishes empty values and preserves source bytes (%s)', locale => {
+        const de = locale === 'de', changed = softwareHistoryRows(5)[2];
+        Object.assign(changed.before!, { name: 'Old registration', version: '9.0', publisher: '' });
+        const literal = '<img src=x onerror=alert(1)> & 東京 '.repeat(3);
+        Object.assign(changed.after!, { name: literal, version: '2.0', publisher: 'New publisher' });
+        changed.changedFields = ['name', 'version', 'publisher'];
+        const page = softwareHistoryPage(softwareHistoryQuery, [changed]), before = JSON.stringify(page);
+        expect(validSoftwareHistoryPage(page, softwareHistoryDevice, softwareHistoryQuery, 0)).toBe(true);
+        render(<WindowsSoftwareHistoryTable page={page} locale={locale}/>);
+        const comparison = document.querySelector('.windows-history-changes') as HTMLElement;
+        expect(Array.from(comparison.querySelectorAll('dt')).map(element => element.textContent)).toEqual(['Name', 'Version', de ? 'Herausgeber' : 'Publisher']);
+        expect(Array.from(comparison.querySelectorAll('bdi')).map(element => element.textContent)).toEqual(['Old registration', literal, '9.0', '2.0', de ? 'Leerer Wert' : 'Empty value', 'New publisher']);
+        expect(within(comparison).getByText(literal.trim())).toBeVisible();
+        expect(document.querySelector('img, a, script')).toBeNull();
+        expect(comparison.textContent).not.toMatch(/upgrade|downgrade|uninstall|Aktualisierung|Deinstallation/i);
+        expect(JSON.stringify(page)).toBe(before);
+    });
+    it('keeps duplicate names in separate registration rows and each original before/after pair', () => {
+        const changes = softwareHistoryRows(5).slice(2, 4);
+        for (const row of changes) { row.before!.name = row.after!.name = 'Same name'; row.before!.version = '1.0'; row.before!.versionQuality = 'observed'; row.changedFields = ['version']; }
+        changes[1].after!.version = '3.0'; const page = softwareHistoryPage(softwareHistoryQuery, changes);
+        expect(validSoftwareHistoryPage(page, softwareHistoryDevice, softwareHistoryQuery, 0)).toBe(true);
+        render(<WindowsSoftwareHistoryTable page={page} locale="en"/>);
+        const displayed = Array.from(document.querySelectorAll('tbody>tr'));
+        expect(displayed).toHaveLength(2);
+        for (let i = 0; i < displayed.length; i++) {
+            expect(displayed[i]).toHaveAttribute('data-history-id', changes[i].id);
+            expect(Array.from(displayed[i].querySelectorAll('.windows-history-changes bdi')).map(element => element.textContent)).toEqual(['1.0', i === 0 ? '2.0' : '3.0']);
+        }
     });
     it.each(['not_configured', 'disabled', 'awaiting', 'baseline', 'resource_limit', 'source_gap', 'expired-counts'])('exposes %s without inventing changes or grants', async scenario => {
         const s = server(); s.state.scenario = scenario; open(); await waitFor(() => expect(document.querySelector('[aria-busy="false"]')).toBeTruthy());
@@ -73,13 +126,13 @@ describe('private bilingual software history', () => {
     it.each(['blur', 'pagehide', 'hashchange', 'visibility'])('clears rows, details, search and cursors at %s', async event => {
         const s = server(); open(); await screen.findByRole('table'); fireEvent.click(screen.getByRole('button', { name: 'Next history page' })); await waitFor(() => expect(rows()[0]).toHaveTextContent('Fixture Software 0101'));
         if (event === 'visibility') { vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); fireEvent(document, new Event('visibilitychange')); } else fireEvent(window, new Event(event));
-        expect(rows()).toHaveLength(0); expect(screen.queryByRole('searchbox')).toBeNull();
+        expect(rows()).toHaveLength(0); expect(document.querySelector('.windows-history-changes')).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull();
         if (event === 'visibility') { vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible'); fireEvent(document, new Event('visibilitychange')); } else fireEvent(window, new Event('focus'));
         await screen.findByRole('table'); expect(s.state.requests.at(-1)).toEqual(softwareHistoryQuery);
     });
     it('discards delayed responses after session/device changes and disabled views', async () => {
         const s = server(); const view = open(); await screen.findByRole('table'); let release!: () => void; s.state.hold = new Promise(resolve => { release = resolve; }); fireEvent.click(screen.getByRole('button', { name: 'Refresh software history' })); expect(rows()).toHaveLength(0);
-        view.rerender(<WindowsSoftwareHistoryPanel deviceId={`agent_${'b'.repeat(32)}`} sessionKey="session-b" enabled={false}/>); release(); await flush(); expect(rows()).toHaveLength(0); expect(screen.queryByRole('searchbox')).toBeNull();
+        view.rerender(<WindowsSoftwareHistoryPanel deviceId={`agent_${'b'.repeat(32)}`} sessionKey="session-b" enabled={false}/>); release(); await flush(); expect(rows()).toHaveLength(0); expect(document.querySelector('.windows-history-changes')).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull();
         s.state.hold = null; view.rerender(<WindowsSoftwareHistoryPanel deviceId={`agent_${'b'.repeat(32)}`} sessionKey="session-b"/>); await screen.findByRole('table'); expect(s.state.requests.at(-1)).toEqual(softwareHistoryQuery);
     });
     it.each([401, 403, 409, 429])('clears on protected HTTP %s without rendering private server errors', async status => {

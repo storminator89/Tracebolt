@@ -213,6 +213,32 @@ describe('loaded-page incident investigation workflow', () => {
         expect(screen.getByText('Windows incidents unavailable or expired. Their counts and rows are unknown.')).toBeInTheDocument();
         expect(screen.getByText('No matching rows from the available pages. Missing source rows and totals remain unknown.')).toBeInTheDocument();
     });
+    it.each(['en', 'de'] as const)('separates history from the current check and discloses exact identities in %s', locale => {
+        setLocale(locale, false);
+        const view = linuxFixture(), row = linuxRow(view), model = incidentTimeline(row, view, null, 0);
+        render(<IncidentTimeline model={model} platform="linux"/>);
+        fireEvent.click(screen.getByText(locale === 'en' ? 'Incident timeline' : 'Vorfall-Zeitverlauf'));
+        const identitySummary = screen.getByText(locale === 'en' ? 'Technical identities' : 'Technische Identitäten', { selector: 'summary' });
+        const identities = identitySummary.closest('details')!;
+        expect(identities.open).toBe(false);
+        expect(screen.getByText(model.target, { selector: '.incident-timeline-target strong' })).toBeVisible();
+        expect(within(identities).getByText(model.deviceId, { selector: 'dd' })).not.toBeVisible();
+        const history = screen.getByRole('region', { name: locale === 'en' ? 'Retained episode checkpoints' : 'Gespeicherte Eckpunkte der Episode' });
+        const current = screen.getByRole('region', { name: locale === 'en' ? 'Current check, separate from this episode' : 'Aktuelle Prüfung, getrennt von dieser Episode' });
+        expect(within(history).getByRole('list')).toBeVisible();
+        expect(history).not.toContainElement(current);
+        expect(current.querySelector('.incident-timeline-current-state')).toHaveTextContent(locale === 'en' ? 'Selected check needs attention' : 'Ausgewählte Prüfung benötigt Aufmerksamkeit');
+        expect(history.querySelectorAll('time')).toHaveLength(model.episode.length);
+        expect([...history.querySelectorAll('time')].map(time => time.dateTime)).toEqual(model.episode.map(event => event.at));
+        identitySummary.focus();
+        fireEvent.click(identitySummary);
+        expect(identities.open).toBe(true);
+        for (const value of [model.deviceId, model.incidentId, model.sourceKey]) expect(within(identities).getByText(value, { selector: 'dd' })).toBeVisible();
+        fireEvent.click(identitySummary);
+        expect(identities.open).toBe(false);
+        expect(identitySummary).toHaveFocus();
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
     it('updates current confidence independently of an expanded complete-source episode and supports locale changes', () => {
         windows = { ...windows, view: completeIncidentFixture('active'), age: 0 };
         const props = { devices: [], sessionKey: 'session', linux: resource(null), scope: 'active' as const, onScope: vi.fn(), linuxOffset: 0, onLinuxPage: vi.fn() };

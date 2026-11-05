@@ -1,0 +1,5 @@
+.windows-volume-sort{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:14px 0;font-size:12px}
+.windows-volume-sort select{max-width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit}
+.windows-volume-sort span{color:var(--secondary);font-size:11px;overflow-wrap:anywhere}
+.windows-volume-sort select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:600px){.windows-volume-sort{align-items:stretch;flex-direction:column}.windows-volume-sort select{width:100%;min-height:44px}}

@@ -1,0 +1,26 @@
+/* The retained episode and separate current check never share a status surface. */
+.incident-timeline .incident-timeline-history,
+.incident-timeline .incident-timeline-current {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    min-width: 0;
+}
+.incident-timeline .incident-timeline-history > h4,
+.incident-timeline .incident-timeline-current > h4 { margin-top: 0; }
+.incident-timeline .incident-timeline-current-state { font-weight: 600; color: var(--text); }
+.incident-timeline .incident-timeline-target strong { color: var(--text); }
+.incident-timeline-identity-details > summary {
+    cursor: pointer;
+    min-height: 44px;
+    align-content: center;
+}
+.incident-timeline-identity-details > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+@media (max-width: 600px) {
+    .incident-timeline .incident-timeline-history,
+    .incident-timeline .incident-timeline-current { padding: 12px; }
+}
