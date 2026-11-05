@@ -10,4 +10,9 @@
 .windows-patch-history-table small,.windows-patch-row-details span{display:block;margin-top:5px;font-size:11px;color:var(--secondary);overflow-wrap:anywhere}
 .windows-patch-row-details{margin-top:6px}
 .windows-patch-history-table th:first-child{width:35%}
+.windows-patch-history-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));align-items:end;gap:10px;margin:16px 0 8px}
+.windows-patch-history-controls label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.windows-patch-history-controls input,.windows-patch-history-controls select{width:100%;min-width:0;min-height:36px;padding:7px 9px;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;font:inherit}
+.windows-patch-history-controls input:focus-visible,.windows-patch-history-controls select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.windows-patch-history-pages{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px}
 @media(max-width:600px){.windows-patch-history-table td>details,.windows-patch-history-table td>time{min-width:0;overflow-wrap:anywhere}}
