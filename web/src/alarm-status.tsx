@@ -9,6 +9,7 @@ import './alarm-status.css';
 
 const copy = {
     en: {
+        savedCounts: 'Saved counts', acceptedHint: 'Not confirmed human receipt', failedHint: 'No provider acceptance', uncertainHint: 'May have been accepted', droppedHint: 'Rejected at queue capacity',
         title: 'Alarm delivery', on: 'On', off: 'Off', unknown: 'Unknown', refresh: 'Refresh alarm status', loading: 'Loading alarm status…', details: 'Details',
         accepted: 'Provider accepted', pending: 'Pending', failed: 'Failed', uncertain: 'Uncertain', dropped: 'Dropped', queued: 'Queued', inFlight: 'In flight', suppressed: 'Suppressed',
         error: 'Alarm status could not be confirmed. Refresh to try again.', invalid: 'The manager returned an unsupported alarm status. Refresh to try again.', timeout: 'The manager did not respond in time. Refresh to try again.',
@@ -22,6 +23,7 @@ const copy = {
         snapshot: 'Loaded time is this browser’s time, not an event or server observation. Refresh reads saved counts.',
     },
     de: {
+        savedCounts: 'Gespeicherte Zähler', acceptedHint: 'Kein bestätigter Empfang durch Personen', failedHint: 'Keine Anbieterannahme', uncertainHint: 'Möglicherweise angenommen', droppedHint: 'Wegen voller Warteschlange abgewiesen',
         title: 'Alarmversand', on: 'Ein', off: 'Aus', unknown: 'Unbekannt', refresh: 'Alarmstatus aktualisieren', loading: 'Alarmstatus wird geladen…', details: 'Details',
         accepted: 'Vom Anbieter angenommen', pending: 'Ausstehend', failed: 'Fehlgeschlagen', uncertain: 'Ungewiss', dropped: 'Verworfen', queued: 'Warteschlange', inFlight: 'In Übertragung', suppressed: 'Unterdrückt',
         error: 'Der Alarmstatus konnte nicht bestätigt werden. Zum Wiederholen aktualisieren.', invalid: 'Der Manager lieferte einen nicht unterstützten Alarmstatus. Zum Wiederholen aktualisieren.', timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Zum Wiederholen aktualisieren.',
@@ -117,15 +119,16 @@ function AlarmStatusContent() {
         {failure && <p className="alarm-notice" role={failure === 'paused' ? 'status' : 'alert'}>{labels[failure]}</p>}
         {loading && !view && <p className="alarm-notice" role="status">{labels.loading}</p>}
         {snapshot && <p className="alarm-snapshot">{previous && <strong>{labels.previous} · </strong>}{labels.loaded} <time dateTime={snapshot.loadedAt}>{new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(snapshot.loadedAt))} UTC</time></p>}
-        {showCounts && view && <><dl className={`alarm-counts${previous ? ' alarm-previous' : ''}`}>
-            <div><dt><Check size={14} aria-hidden="true"/>{labels.accepted}</dt><dd>{count(view.providerAccepted)}</dd></div>
-            <div><dt><Clock3 size={14} aria-hidden="true"/>{labels.pending}</dt><dd>{count(view.queued + view.inFlight)}</dd></div>
-            <div className={view.failed ? 'alarm-failed' : ''}><dt><XCircle size={14} aria-hidden="true"/>{labels.failed}</dt><dd>{count(view.failed)}</dd></div>
-            <div className={view.uncertain ? 'alarm-uncertain' : ''}><dt><CircleHelp size={14} aria-hidden="true"/>{labels.uncertain}</dt><dd>{count(view.uncertain)}</dd></div>
-            {view.dropped > 0 && <div className="alarm-failed"><dt><TriangleAlert size={14} aria-hidden="true"/>{labels.dropped}</dt><dd>{count(view.dropped)}</dd></div>}
+        {view && !view.enabled && <p className="alarm-disabled">{previous && <strong>{labels.previous} · </strong>}{labels.disabled}</p>}
+        {showCounts && view && <><h3 className="alarm-counts-title">{labels.savedCounts}</h3><dl className={`alarm-counts${previous ? ' alarm-previous' : ''}`}>
+            <div><dt><Check size={14} aria-hidden="true"/>{labels.accepted}</dt><dd>{count(view.providerAccepted)}</dd><dd className="alarm-count-hint">{labels.acceptedHint}</dd></div>
+            <div><dt><Clock3 size={14} aria-hidden="true"/>{labels.pending}</dt><dd>{count(view.queued + view.inFlight)}</dd><dd className="alarm-count-hint">{labels.queued}: {count(view.queued)} · {labels.inFlight}: {count(view.inFlight)}</dd></div>
+            <div className={view.failed ? 'alarm-failed' : ''}><dt><XCircle size={14} aria-hidden="true"/>{labels.failed}</dt><dd>{count(view.failed)}</dd><dd className="alarm-count-hint">{labels.failedHint}</dd></div>
+            <div className={view.uncertain ? 'alarm-uncertain' : ''}><dt><CircleHelp size={14} aria-hidden="true"/>{labels.uncertain}</dt><dd>{count(view.uncertain)}</dd><dd className="alarm-count-hint">{labels.uncertainHint}</dd></div>
+            {view.dropped > 0 && <div className="alarm-failed"><dt><TriangleAlert size={14} aria-hidden="true"/>{labels.dropped}</dt><dd>{count(view.dropped)}</dd><dd className="alarm-count-hint">{labels.droppedHint}</dd></div>}
         </dl><p className="alarm-acceptance">{labels.acceptance}</p></>}
         <details className="alarm-details"><summary>{labels.details}<ChevronDown size={14} aria-hidden="true"/></summary><div>
-            {view && <><dl className="alarm-breakdown"><div><dt>{labels.configuration}</dt><dd>{view.enabled ? labels.on : labels.off}</dd></div>{(['queued', 'inFlight', 'suppressed', 'dropped'] as const).map(key => <div key={key}><dt>{labels[key]}</dt><dd>{count(view[key])}</dd></div>)}</dl>{!view.enabled && <p>{labels.disabled}</p>}</>}
+            {view && <><dl className="alarm-breakdown"><div><dt>{labels.configuration}</dt><dd>{view.enabled ? labels.on : labels.off}</dd></div>{(['queued', 'inFlight', 'suppressed', 'dropped'] as const).map(key => <div key={key}><dt>{labels[key]}</dt><dd>{count(view[key])}</dd></div>)}</dl></>}
             <p>{labels.scope}</p><p>{labels.pendingNote}</p><p>{labels.failedNote}</p><p>{labels.suppressedNote}</p><p>{labels.snapshot}</p>
         </div></details>
     </section>;

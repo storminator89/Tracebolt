@@ -6,3 +6,7 @@
 .windows-updates-table th:first-child{width:28%}
 .windows-updates-table th:last-child{width:23%}
 @media(max-width:600px){.windows-updates-table td>span{min-width:0;overflow-wrap:anywhere}}
+.windows-updates-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px;align-items:end}
+.windows-updates-controls input,.windows-updates-controls select{width:100%;min-width:0;box-sizing:border-box}
+.windows-updates-controls>.button{justify-self:start;min-height:36px}
+.windows-updates-controls>.button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

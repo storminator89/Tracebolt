@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { useLocale } from './i18n';
 import { fullDate, relativeTime } from './utils';
 import { inventoryAge } from './complete-packages-types';
@@ -18,7 +18,7 @@ const copy = {
         observed: 'Cached result observed', bounded: 'Bounded cached result', partial: 'Partial cached result', denied: 'Access denied', unavailableQuality: 'Unavailable',
         retained: 'captured', observedCount: 'cached results observed', atLeast: 'at least', omitted: 'Some rows are omitted by collection, metadata-read or transfer limits.',
         empty: 'No non-hidden, not-installed software updates were returned from this caller-visible cache. This does not establish current patch coverage.', failed: 'No update rows are available. This does not establish an empty cache or a fully patched device.',
-        search: 'Filter captured updates', sort: 'Sort captured updates', noMatches: 'No captured updates match this filter.',
+        search: 'Filter captured updates', filterSeverity: 'Filter vendor severity', allSeverities: 'All vendor severities', filterDownloaded: 'Cached download status', allDownloads: 'All download states', downloadedOnly: 'Already downloaded', notDownloaded: 'Not downloaded', reset: 'Reset filters', sort: 'Sort captured updates', noMatches: 'No captured updates match this filter.',
         'title-asc': 'Title: A to Z', 'title-desc': 'Title: Z to A', 'severity-desc': 'Vendor severity: highest first', 'severity-asc': 'Vendor severity: lowest first', 'downloaded-desc': 'Already downloaded: first', 'downloaded-asc': 'Not downloaded: first',
         rowTitle: 'Title', kb: 'KB articles', severity: 'Vendor severity', downloaded: 'Already downloaded', identity: 'Update ID / revision', revision: 'Revision', yes: 'Yes', no: 'No', unspecified: 'Unspecified', critical: 'Critical', important: 'Important', moderate: 'Moderate', low: 'Low', noKB: 'None reported', shortened: 'Title or KB metadata shortened',
         bounds: 'Scope & limits', source: 'Windows Update Agent cache (wua-cache) · cache freshness: unknown', scope: 'Caller-visible cached Windows Update Agent results for non-hidden, not-installed software updates. Installed, hidden and driver updates are excluded; the configured source and default supersedence behavior are unchanged.',
@@ -40,7 +40,7 @@ const copy = {
         observed: 'Cache-Ergebnis beobachtet', bounded: 'Begrenztes Cache-Ergebnis', partial: 'Teilweises Cache-Ergebnis', denied: 'Zugriff verweigert', unavailableQuality: 'Nicht verfügbar',
         retained: 'erfasst', observedCount: 'Cache-Ergebnisse beobachtet', atLeast: 'mindestens', omitted: 'Einige Zeilen fehlen durch Erfassungs-, Metadatenlese- oder Übertragungsgrenzen.',
         empty: 'Aus diesem für den Aufrufer sichtbaren Cache wurden keine nicht ausgeblendeten, nicht installierten Softwareupdates zurückgegeben. Dies belegt keine aktuelle Patch-Abdeckung.', failed: 'Keine Updatezeilen verfügbar. Dies belegt weder einen leeren Cache noch ein vollständig gepatchtes Gerät.',
-        search: 'Erfasste Updates filtern', sort: 'Erfasste Updates sortieren', noMatches: 'Keine erfassten Updates entsprechen diesem Filter.',
+        search: 'Erfasste Updates filtern', filterSeverity: 'Hersteller-Schweregrad filtern', allSeverities: 'Alle Hersteller-Schweregrade', filterDownloaded: 'Downloadstatus im Cache', allDownloads: 'Alle Downloadstatus', downloadedOnly: 'Bereits heruntergeladen', notDownloaded: 'Nicht heruntergeladen', reset: 'Filter zurücksetzen', sort: 'Erfasste Updates sortieren', noMatches: 'Keine erfassten Updates entsprechen diesem Filter.',
         'title-asc': 'Titel: A bis Z', 'title-desc': 'Titel: Z bis A', 'severity-desc': 'Hersteller-Schweregrad: höchste zuerst', 'severity-asc': 'Hersteller-Schweregrad: niedrigste zuerst', 'downloaded-desc': 'Bereits heruntergeladen: zuerst', 'downloaded-asc': 'Nicht heruntergeladen: zuerst',
         rowTitle: 'Titel', kb: 'KB-Artikel', severity: 'Hersteller-Schweregrad', downloaded: 'Bereits heruntergeladen', identity: 'Update-ID / Revision', revision: 'Revision', yes: 'Ja', no: 'Nein', unspecified: 'Nicht angegeben', critical: 'Kritisch', important: 'Wichtig', moderate: 'Mittel', low: 'Niedrig', noKB: 'Keine gemeldet', shortened: 'Titel oder KB-Metadaten gekürzt',
         bounds: 'Umfang & Grenzen', source: 'Windows Update Agent-Cache (wua-cache) · Cache-Aktualität: unbekannt', scope: 'Für den Aufrufer sichtbare Cache-Ergebnisse des Windows Update Agent für nicht ausgeblendete, nicht installierte Softwareupdates. Installierte, ausgeblendete und Treiberupdates sind ausgeschlossen; konfigurierte Quelle und Standardverhalten für ersetzte Updates bleiben unverändert.',
@@ -58,28 +58,34 @@ export type WindowsUpdatesSort = typeof sorts[number];
 type Locale = 'en' | 'de';
 const severityRank = { unspecified: 0, low: 1, moderate: 2, important: 3, critical: 4 };
 const tie = (a: WindowsUpdate, b: WindowsUpdate) => a.updateId < b.updateId ? -1 : a.updateId > b.updateId ? 1 : a.revision - b.revision;
+interface ExactFilters { severity: 'all' | WindowsUpdate['severity']; downloaded: 'all' | 'yes' | 'no' }
+const allFilters: ExactFilters = { severity: 'all', downloaded: 'all' };
+const severityFilters = ['critical', 'important', 'moderate', 'low', 'unspecified'] as const;
 /** Pure local operations over accepted rows, never source lookups or joins. */
-export function capturedWindowsUpdateRows(updates: WindowsUpdates, query: string, sort: WindowsUpdatesSort, locale: Locale) {
+export function capturedWindowsUpdateRows(updates: WindowsUpdates, query: string, sort: WindowsUpdatesSort, locale: Locale, exact: ExactFilters = allFilters) {
     const c = copy[locale], filter = query.trim().toLocaleLowerCase(locale), compare = new Intl.Collator(locale).compare;
-    return updates.rows.filter(row => [row.title, row.updateId, String(row.revision), ...row.kbArticleIds, row.severity, c[row.severity], row.downloaded ? c.yes : c.no, row.metadataTruncated ? c.shortened : ''].some(value => value.toLocaleLowerCase(locale).includes(filter))).sort((a, b) => {
+    return updates.rows.filter(row => (exact.severity === 'all' || row.severity === exact.severity) && (exact.downloaded === 'all' || row.downloaded === (exact.downloaded === 'yes')) && [row.title, row.updateId, String(row.revision), ...row.kbArticleIds, row.severity, c[row.severity], row.downloaded ? c.yes : c.no, row.metadataTruncated ? c.shortened : ''].some(value => value.toLocaleLowerCase(locale).includes(filter))).sort((a, b) => {
         // An absent vendor label stays last in either severity direction.
         if (sort.startsWith('severity-') && (a.severity === 'unspecified' || b.severity === 'unspecified')) return a.severity === b.severity ? tie(a, b) : a.severity === 'unspecified' ? 1 : -1;
         const order = sort.startsWith('severity-') ? severityRank[a.severity] - severityRank[b.severity] : sort.startsWith('downloaded-') ? Number(a.downloaded) - Number(b.downloaded) : compare(a.title, b.title);
         return order * (sort.endsWith('-desc') ? -1 : 1) || tie(a, b);
     });
 }
-interface Controls { query: string; sort: WindowsUpdatesSort; page: number }
-const initialControls = (): Controls => ({ query: '', sort: 'title-asc', page: 0 });
+interface Controls extends ExactFilters { query: string; sort: WindowsUpdatesSort; page: number }
+const initialControls = (): Controls => ({ query: '', sort: 'title-asc', page: 0, ...allFilters });
 function UpdatesTable({ updates, locale, controls, onChange }: { updates: WindowsUpdates; locale: Locale; controls: Controls; onChange: (value: Controls) => void }) {
-    const id = useId(), c = copy[locale], { query, sort, page } = controls;
-    const rows = useMemo(() => capturedWindowsUpdateRows(updates, query, sort, locale), [updates, query, sort, locale]);
+    const id = useId(), searchRef = useRef<HTMLInputElement>(null), c = copy[locale], { query, sort, page, severity, downloaded } = controls;
+    const rows = useMemo(() => capturedWindowsUpdateRows(updates, query, sort, locale, { severity, downloaded }), [updates, query, sort, locale, severity, downloaded]);
     const pages = Math.max(1, Math.ceil(rows.length / 25)), current = Math.min(page, pages - 1), start = current * 25, visible = rows.slice(start, start + 25);
     const headers = [c.rowTitle, c.kb, c.severity, c.downloaded, c.identity], sortedColumn = sort.startsWith('severity-') ? 2 : sort.startsWith('downloaded-') ? 3 : 0;
     return <>
         <p className="windows-inventory-exclusions" id={`${id}-bounds`}>{c.tableScope}</p>
-        <div className="windows-inventory-table-controls">
-            <label className="windows-inventory-search" htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" value={query} maxLength={256} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, query: event.target.value, page: 0 })}/></label>
+        <div className="windows-inventory-table-controls windows-updates-controls">
+            <label className="windows-inventory-search" htmlFor={`${id}-search`}>{c.search}<input ref={searchRef} id={`${id}-search`} type="search" value={query} maxLength={256} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, query: event.target.value, page: 0 })}/></label>
+            <div className="windows-inventory-table-sort"><label htmlFor={`${id}-severity`}>{c.filterSeverity}</label><select id={`${id}-severity`} value={severity} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, severity: event.target.value as ExactFilters['severity'], page: 0 })}><option value="all">{c.allSeverities}</option>{severityFilters.map(value => <option key={value} value={value}>{c[value]}</option>)}</select></div>
+            <div className="windows-inventory-table-sort"><label htmlFor={`${id}-downloaded`}>{c.filterDownloaded}</label><select id={`${id}-downloaded`} value={downloaded} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, downloaded: event.target.value as ExactFilters['downloaded'], page: 0 })}><option value="all">{c.allDownloads}</option><option value="yes">{c.downloadedOnly}</option><option value="no">{c.notDownloaded}</option></select></div>
             <div className="windows-inventory-table-sort"><label htmlFor={`${id}-sort`}>{c.sort}</label><select id={`${id}-sort`} value={sort} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, sort: event.target.value as WindowsUpdatesSort, page: 0 })}>{sorts.map(value => <option key={value} value={value}>{c[value]}</option>)}</select></div>
+            <button type="button" className="button small" disabled={!query && severity === 'all' && downloaded === 'all' && sort === 'title-asc' && page === 0} onClick={() => { onChange(initialControls()); searchRef.current?.focus(); }}>{c.reset}</button>
         </div>
         <p className="windows-inventory-count" role="status" aria-live="polite" aria-atomic="true">{c.count(visible.length ? start + 1 : 0, start + visible.length, rows.length, updates.rows.length)}</p>
         {visible.length ? <div className="windows-inventory-table-wrap"><table className="windows-inventory-table windows-updates-table"><caption className="sr-only">{c.title}</caption><thead><tr>{headers.map((header, i) => <th scope="col" key={header} aria-sort={i === sortedColumn ? sort.endsWith('-desc') ? 'descending' : 'ascending' : undefined}>{header}</th>)}</tr></thead><tbody>{visible.map(row => <tr key={`${row.updateId}:${row.revision}`}>
