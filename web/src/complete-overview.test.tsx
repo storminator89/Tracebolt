@@ -1,5 +1,6 @@
+import { useCompleteOverview } from './complete-overview-resource';
 import userEvent from '@testing-library/user-event';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APIError, AUTH_REQUIRED_EVENT, mutateRaw, request } from './api';
 import { CompleteOverviewPanel } from './complete-overview';
@@ -255,4 +256,63 @@ describe('overview search draft feedback', () => {
         act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
         expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByRole('button',{name:'Clear search'})).toBeNull();
     });
+});
+
+describe('bounded Overview page navigation',()=>{
+    it.each([['en','processes'],['de','processes'],['en','volumes'],['de','volumes']] as const)('supports keyboard Previous and First with original counters (%s/%s)',async(locale,section)=>{
+        setLocale(locale,false);const user=userEvent.setup();view=overviewView(220,220);vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processRows(220),volumeRows(220),raw));open(section);await screen.findByRole('table');
+        const label=(en:string,de:string)=>locale==='en'?en:de, next=()=>screen.getByRole('button',{name:label('Next page','Nächste Seite')}),previous=()=>screen.getByRole('button',{name:label('Previous page','Vorherige Seite')}),first=()=>screen.getByRole('button',{name:label('First page','Erste Seite')});
+        expect(first()).toBeDisabled();expect(previous()).toBeDisabled();fireEvent.click(next());await screen.findByText('200 / 220');fireEvent.click(next());await screen.findByText('220 / 220');
+        previous().focus();await user.keyboard(' ');await screen.findByText('200 / 220');expect(previous()).toHaveFocus();first().focus();await user.keyboard('{Enter}');await screen.findByText('100 / 220');expect(first()).toHaveFocus();expect(previous()).toBeDisabled();
+        fireEvent.click(next());await screen.findByText('200 / 220');expect(vi.mocked(mutateRaw).mock.calls.map(([,raw])=>JSON.parse(raw).cursor)).toEqual(['','cursor_100','cursor_200','cursor_100','','cursor_100']);
+        expect(vi.mocked(mutateRaw).mock.calls.every(([path,raw])=>path===`/devices/${overviewDevice}/inventory/overview/query`&&JSON.parse(raw).section===section)).toBe(true);expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('retains the first token and earliest lease when First receives a renewed token',async()=>{
+        const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');
+        const deadline=overviewPage(view,processRows(),volumeRows(),query()).cursorExpiresAt;
+        vi.mocked(mutateRaw).mockImplementationOnce(async(_path,raw)=>({...overviewPage(view,processRows(),volumeRows(),raw),serverNow:new Date(Date.parse(view.serverNow)+1000).toISOString(),cursorExpiresAt:new Date(Date.parse(deadline)+1000).toISOString(),nextCursor:'renewed_100'}));
+        fireEvent.click(screen.getByRole('button',{name:'First page'}));await screen.findByText('100 / 350');expect(screen.getByText(`Paging deadline: ${deadline}`)).toBeVisible();
+        vi.mocked(mutateRaw).mockImplementationOnce(async(_path,raw)=>({...overviewPage(view,processRows(),volumeRows(),raw),serverNow:new Date(Date.parse(view.serverNow)+1000).toISOString()}));fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');expect(JSON.parse(vi.mocked(mutateRaw).mock.calls.at(-1)![1]).cursor).toBe('cursor_100');
+        mono.mockReturnValue(901000);wall.mockReturnValue(1000000);const count=vi.mocked(mutateRaw).mock.calls.length;fireEvent.click(screen.getByRole('button',{name:'Previous page'}));expect(mutateRaw).toHaveBeenCalledTimes(count);expect(screen.queryByRole('table')).toBeNull();expect(screen.getByRole('alert')).toHaveTextContent('expired');
+    });
+    it.each(['processes','volumes'] as const)('clears terminal %s rows at the original non-null cursor deadline before a navigation request',async section=>{
+        const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);view=overviewView(101,101);vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processRows(101),volumeRows(101),raw));open(section);await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('101 / 101');mono.mockReturnValue(901000);wall.mockReturnValue(1000000);fireEvent.click(screen.getByRole('button',{name:'First page'}));expect(mutateRaw).toHaveBeenCalledTimes(2);expect(screen.queryByRole('table')).toBeNull();expect(screen.getByRole('alert')).toHaveTextContent('expired');
+    });
+    it.each(['deadline','boundary','count','token'] as const)('rejects altered replay %s evidence',async kind=>{
+        open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('300 / 350');
+        vi.mocked(mutateRaw).mockImplementationOnce(async(_path,raw)=>{const p=overviewPage(view,processRows(),volumeRows(),raw);if(kind==='deadline')p.cursorExpiresAt=new Date(Date.parse(p.cursorExpiresAt)-1000).toISOString();else if(kind==='boundary')p.items=p.items.slice(1);else if(kind==='count')p.scannedRows++;else p.nextCursor='another_token';return p;});
+        fireEvent.click(screen.getByRole('button',{name:'Previous page'}));await screen.findByRole('alert');expect(screen.queryByRole('table')).toBeNull();expect(screen.queryByRole('group',{name:'Page navigation'})).toBeNull();
+    });
+    it('does not silently restart First after a generation replacement',async()=>{open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('changed',409));fireEvent.click(screen.getByRole('button',{name:'First page'}));await screen.findByRole('alert');expect(screen.queryByRole('table')).toBeNull();expect(request).toHaveBeenCalledTimes(1);expect(mutateRaw).toHaveBeenCalledTimes(3);});
+    it('rejects a late previous page after its original lease expires',async()=>{const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');mono.mockReturnValue(900500);wall.mockReturnValue(999500);let done!:(v:unknown)=>void;vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(resolve=>done=resolve));fireEvent.click(screen.getByRole('button',{name:'Previous page'}));mono.mockReturnValue(901000);wall.mockReturnValue(1000000);await act(async()=>done(overviewPage(view,processRows(),volumeRows(),query())));expect(screen.queryByRole('table')).toBeNull();expect(screen.getByRole('alert')).toHaveTextContent('expired');});
+});
+
+describe('Overview checkpoint retention and replay boundaries',()=>{
+    it('bounds the backward trail to128 checkpoints and reuses known signatures beyond eviction',async()=>{
+        view=overviewView(13000,1);const processes=processRows(13000),volumes=volumeRows(1);vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processes,volumes,raw));const {result}=renderHook(()=>useCompleteOverview(overviewDevice,'processes'));await waitFor(()=>expect(result.current.pageNumber).toBe(1));
+        for(let i=2;i<=130;i++){await act(async()=>result.current.next());expect(result.current.pageNumber).toBe(i);}
+        for(let i=129;i>=3;i--){await act(async()=>result.current.previous());expect(result.current.pageNumber).toBe(i);}
+        expect(result.current.canPrevious).toBe(false);expect(result.current.limitedBack).toBe(true);expect(result.current.canFirst).toBe(true);await act(async()=>result.current.first());expect(result.current.pageNumber).toBe(1);expect(result.current.scanned).toBe(100);
+        await act(async()=>result.current.next());expect(result.current.pageNumber).toBe(2);expect(result.current.scanned).toBe(200);expect(result.current.error).toBeNull();expect(request).toHaveBeenCalledTimes(1);
+    },20000);
+    it.each(['processes','volumes'] as const)('replays empty scan windows with correct %s progress',async section=>{
+        view=overviewView(2200,2200);const processes=processRows(2200),volumes=volumeRows(2200);vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processes,volumes,raw));const {result}=renderHook(()=>useCompleteOverview(overviewDevice,section));await waitFor(()=>expect(result.current.page).not.toBeNull());act(()=>result.current.changeSearch('002199'));await act(async()=>result.current.startSearch());expect(result.current.page?.items).toHaveLength(0);expect(result.current.scanned).toBe(2048);await act(async()=>result.current.next());expect(result.current.matches).toBe(1);await act(async()=>result.current.previous());expect(result.current.matches).toBe(0);expect(result.current.scanned).toBe(2048);await act(async()=>result.current.next());expect(result.current.matches).toBe(1);expect(result.current.scanned).toBe(2200);expect(result.current.error).toBeNull();
+    });
+    it('keeps numeric PID and mount root/UTF8 ordering during replay',async()=>{
+        for(const section of ['processes','volumes'] as const){cleanup();view=overviewView(102,102);const processes=processRows(102),volumes=volumeRows(102);volumes[100].volume!.mountPoint='/ä';volumes[101].volume!.mountPoint='/z';vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processes,volumes,raw));const {result}=renderHook(()=>useCompleteOverview(overviewDevice,section));await waitFor(()=>expect(result.current.page).not.toBeNull());await act(async()=>result.current.next());const tail=result.current.page!.items;expect(section==='processes'?tail[0].process!.pid:tail[0].volume!.mountPoint).toBe(section==='processes'?101:'/z');await act(async()=>result.current.previous());expect(section==='processes'?result.current.page!.items[0].process!.pid:result.current.page!.items[0].volume!.mountPoint).toBe(section==='processes'?1:'/');await act(async()=>result.current.next());expect(result.current.error).toBeNull();}
+    });
+    it.each(['blur','pagehide','hashchange','auth','section','device'] as const)('clears checkpoints and rejects late Previous on %s',async loss=>{
+        const {result,rerender}=renderHook(({device,section}:{device:string;section:OverviewSection})=>useCompleteOverview(device,section),{initialProps:{device:overviewDevice,section:'processes' as OverviewSection}});await waitFor(()=>expect(result.current.page).not.toBeNull());await act(async()=>result.current.next());let done!:(p:unknown)=>void;vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(resolve=>done=resolve));act(()=>result.current.previous());
+        if(loss==='section'||loss==='device'){vi.mocked(request).mockReturnValue(new Promise(()=>{}));rerender({device:loss==='device'?'agent_other':overviewDevice,section:loss==='section'?'volumes':'processes'});}else act(()=>window.dispatchEvent(new Event(loss==='auth'?AUTH_REQUIRED_EVENT:loss)));
+        await act(async()=>done(overviewPage(view,processRows(),volumeRows(),query())));expect(result.current.page).toBeNull();expect(result.current.hasNavigation).toBe(false);expect(result.current.canFirst).toBe(false);expect(result.current.canPrevious).toBe(false);
+    });
+});
+
+it('preserves mount group ordering and rejects a changed replay boundary',async()=>{
+    view=overviewView(1,101);const volumes=volumeRows(101);volumes[0].volume!.kind='memory';volumes[0].volume!.filesystem='tmpfs';
+    vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processRows(1),volumes,raw));const {result}=renderHook(()=>useCompleteOverview(overviewDevice,'volumes'));await waitFor(()=>expect(result.current.page).not.toBeNull());expect(result.current.page!.items[0].volume!.mountPoint).toBe('/fixture-000001');await act(async()=>result.current.next());expect(result.current.page!.items[0].volume!.mountPoint).toBe('/');await act(async()=>result.current.previous());expect(result.current.error).toBeNull();
+    vi.mocked(mutateRaw).mockImplementationOnce(async(_path,raw)=>{const p=overviewPage(view,processRows(1),volumes,raw);p.items=structuredClone(p.items);p.items[0].volume!.mountPoint='/changed';return p;});await act(async()=>result.current.next());expect(result.current.error).toBe('invalid');expect(result.current.page).toBeNull();
+});
+it('keeps Previous mounted and focused while its reread is pending',async()=>{
+    open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');let done!:(p:unknown)=>void;vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(resolve=>done=resolve));const previous=screen.getByRole('button',{name:'Previous page'});previous.focus();fireEvent.click(previous);expect(previous).toBeInTheDocument();expect(previous).toBeDisabled();expect(previous).toHaveFocus();expect(screen.queryByRole('table')).toBeNull();await act(async()=>done(overviewPage(view,processRows(),volumeRows(),query())));expect(previous).toBeInTheDocument();expect(previous).toHaveFocus();expect(previous).toBeDisabled();
 });
