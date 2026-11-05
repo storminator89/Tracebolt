@@ -20,6 +20,23 @@ afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();});
 describe('manual asset details',()=>{
  it.each(['en','de'] as const)('localizes its boundaries in %s',async locale=>{setLocale(locale,false);render(<DeviceAssetFields {...props}/>);await flush();expect(screen.getByRole('heading',{name:locale==='en'?'Asset details':'Inventardetails'})).toBeVisible();expect(screen.getByText(locale==='en'?/No passwords or secrets/:/Keine Passwörter/)).toBeVisible();expect(screen.getByText(locale==='en'?/Previous values remain/:/Frühere Werte bleiben/)).toBeInTheDocument();});
  it('edits, cancels, and clears only the draft until explicit Save',async()=>{render(<DeviceAssetFields {...props}/>);await flush();edit();click('Cancel');expect(screen.queryByRole('textbox')).toBeNull();edit();click('Clear fields');expect(screen.getByLabelText(/Asset tag/)).toHaveValue('');expect(mutateRaw).not.toHaveBeenCalled();expect(screen.getByRole('button',{name:'Save'})).toBeDisabled();});
+ it.each(['en','de'] as const)('links precise field errors and allows correction in %s',async locale=>{
+  setLocale(locale,false);render(<DeviceAssetFields {...props}/>);await flush();
+  click(locale==='en'?'Edit':'Bearbeiten');
+  const tag=screen.getByLabelText(/Asset tag|Inventarnummer/), location=screen.getByLabelText(/Location|Standort/), date=screen.getByLabelText(/Warranty end|Garantieende/);
+  fireEvent.change(tag,{target:{value:' laptop'}});
+  expect(tag).toHaveAttribute('aria-invalid','true');expect(location).toHaveAttribute('aria-invalid','false');
+  expect(tag).toHaveAccessibleDescription(locale==='en'?'7 / 80 UTF-8 bytes Remove spaces at the beginning or end.':'7 / 80 UTF-8 bytes Entferne Leerzeichen am Anfang oder Ende.');
+  fireEvent.change(tag,{target:{value:'Laptop'}});fireEvent.change(date,{target:{value:'2026-02-30'}});
+  expect(date).toHaveAttribute('aria-invalid','true');expect(screen.getByRole('button',{name:locale==='en'?'Save':'Speichern'})).toBeDisabled();
+  fireEvent.change(date,{target:{value:'2028-02-29'}});expect(screen.queryByRole('alert')).toBeNull();expect(screen.getByRole('button',{name:locale==='en'?'Save':'Speichern'})).toBeEnabled();expect(mutateRaw).not.toHaveBeenCalled();
+ });
+ it('shows field-specific length and unsupported-character feedback',async()=>{
+  render(<DeviceAssetFields {...props}/>);await flush();edit();
+  const tag=screen.getByLabelText(/Asset tag/);fireEvent.change(tag,{target:{value:'😀'.repeat(21)}});
+  expect(tag).toHaveAccessibleDescription('84 / 80 UTF-8 bytes Shorten this value to fit the stated byte limit.');
+  fireEvent.change(tag,{target:{value:'a\u200bb'}});expect(tag).toHaveAccessibleDescription('5 / 80 UTF-8 bytes Remove hidden or unsupported characters.');
+ });
  it('posts exact whole fields once, stores no values, and confirms by GET receipt',async()=>{let done!:(v:unknown)=>void;vi.mocked(mutateRaw).mockImplementation((...args)=>{args[5]?.();return new Promise(resolve=>{done=resolve;});});render(<DeviceAssetFields {...props}/>);await flush();save();click('Save');expect(mutateRaw).toHaveBeenCalledTimes(1);const body=JSON.parse(vi.mocked(mutateRaw).mock.calls[0][1]);expect(Object.keys(body).sort()).toEqual(['binding','expectedRevision','fields','operationId','validUntil']);expect(body.fields).toEqual({assetTag:'Laptop-7',location:'',warrantyEnd:''});expect(JSON.stringify(sessionStorage)).not.toContain('Laptop');vi.mocked(request).mockResolvedValue(accepted());await act(async()=>done({}));expect(screen.getByText('Saved operation confirmed.')).toBeVisible();expect(screen.getByText('Laptop-7')).toBeVisible();expect(screen.queryByRole('textbox')).toBeNull();});
  it.each([false,true])('keeps named users and server-readonly admins readonly (%s)',async admin=>{const v=view();v.canWrite=false;vi.mocked(request).mockResolvedValue(v);render(<DeviceAssetFields {...props} admin={admin}/>);await flush();expect(screen.queryByRole('textbox')).toBeNull();expect(screen.getByText('Your access is read-only.')).toBeVisible();if(admin)expect(screen.getByRole('button',{name:'Edit'})).toBeDisabled();else expect(screen.queryByRole('button',{name:'Edit'})).toBeNull();});
  it('renders manual civil dates without timezone shifting and HTML as text',async()=>{const v=view();v.revision=1;v.changedAt=now;v.operations=[{id:`assetop_${'b'.repeat(32)}`,revision:1}];v.fields={assetTag:'<img src=x>',location:'Office',warrantyEnd:'0001-01-01'};vi.mocked(request).mockResolvedValue(v);render(<DeviceAssetFields {...props}/>);await flush();expect(screen.getByText('<img src=x>')).toBeVisible();expect(document.querySelector('img')).toBeNull();expect(screen.getByText('0001-01-01')).toHaveAttribute('datetime','0001-01-01');expect(civilDateLabel('2026-11-05','de')).toBe('05.11.2026');});
