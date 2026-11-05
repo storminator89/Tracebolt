@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
 import { setLocale } from './i18n';
@@ -66,6 +67,61 @@ describe('complete Windows software browsing through released protected fetch', 
         expect(server.fetch.mock.calls.every(([path]) => !path.includes('?') && !path.includes('[.*]') && !path.includes('cursor_'))).toBe(true);
         expect(document.querySelector(`time[datetime="${server.complete.manifest.captureStartedAt}"]`)).not.toBeNull(); expect(document.querySelector(`time[datetime="${server.complete.receivedAt}"]`)).not.toBeNull(); expect(document.querySelector(`time[datetime="${server.complete.manifest.expiresAt}"]`)).not.toBeNull();
     });
+    it.each(['en', 'de'] as const)('explains pending search settings and resets drafts without reading or renewing evidence (%s)', async locale => {
+        setLocale(locale, false); const de = locale === 'de', server = fixtureServer(); open(); await screen.findByRole('table');
+        const pending = de ? 'Suche geändert. Mit „Anwenden“ die gespeicherte Erfassung lesen.' : 'Search settings changed. Choose Apply to read the saved capture.';
+        const reset = () => screen.getByRole('button', { name: de ? 'Softwaresuche und Sortierung zurücksetzen' : 'Reset software search and sort' });
+        expect(reset()).toBeDisabled(); expect(screen.queryByText(pending)).toBeNull();
+        search('Fixture Software 0616'); expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.getByText(pending)).toHaveAttribute('role', 'status');
+        expect(document.getElementById(screen.getByRole('searchbox').getAttribute('aria-describedby')!)).toHaveTextContent(pending);
+        expect(server.state.requests).toHaveLength(1); expect(screen.queryByText(de ? 'Keine Treffer in dieser Erfassung.' : 'No matches in this capture.')).toBeNull();
+        apply(); await screen.findByRole('table'); expect(names()).toEqual(['Fixture Software 0616']); expect(screen.queryByText(pending)).toBeNull();
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'publisher-desc' } }); expect(screen.getByText(pending)).toBeVisible();
+        fireEvent.click(reset()); expect(screen.getByRole('searchbox')).toHaveFocus(); expect(screen.getByRole('searchbox')).toHaveValue(''); expect(screen.getByRole('combobox')).toHaveValue('name-asc');
+        expect(reset()).toBeDisabled(); expect(screen.getByText(pending)).toBeVisible(); expect(server.state.requests).toHaveLength(2);
+        expect(document.querySelector(`time[datetime="${server.complete.manifest.captureStartedAt}"]`)).not.toBeNull();
+        expect(screen.getByText(de ? 'Erfasst' : 'Captured').nextElementSibling).toHaveTextContent('617');
+        apply(); await screen.findByRole('table'); expect(names()[0]).toBe('Fixture Software 0000'); expect(names()).toHaveLength(100);
+        expect(server.state.requests.at(-1)).toEqual(fullSoftwareQuery); expect(server.state.requests).toHaveLength(3);
+        expect(screen.queryByText(pending)).toBeNull(); expect(screen.getByRole('searchbox')).not.toHaveAttribute('aria-describedby');
+    });
+    it.each(['en', 'de'] as const)('keeps a pending endpoint capture distinct from pending local search settings (%s)', async locale => {
+        setLocale(locale, false); const de = locale === 'de', server = fixtureServer();
+        server.state.change = page => { page.latestAttempt = { sequence: 2, attemptedAt: '2026-10-11T06:00:09Z', status: 'pending', reason: '' }; };
+        open(); await screen.findByRole('table');
+        const captureLabel = de ? /Neue Erfassung ausstehend/ : /New capture pending/;
+        expect(screen.getByText(captureLabel)).toHaveTextContent(de ? 'Vorherige Erfassung angezeigt' : 'Showing earlier capture');
+        search('draft only');
+        expect(screen.getByText(captureLabel)).toBeVisible();
+        expect(screen.getByText(de ? 'Suche geändert. Mit „Anwenden“ die gespeicherte Erfassung lesen.' : 'Search settings changed. Choose Apply to read the saved capture.')).toBeVisible();
+        expect(server.state.requests).toHaveLength(1);
+    });
+    it.each(['{Enter}', ' '] as const)('supports native reset with %s and submits only when requested', async key => {
+        const user = userEvent.setup(), server = fixtureServer(); open(); await screen.findByRole('table');
+        search('draft-only'); screen.getByRole('button', { name: 'Reset software search and sort' }).focus(); await user.keyboard(key);
+        expect(screen.getByRole('searchbox')).toHaveFocus(); expect(screen.getByRole('searchbox')).toHaveValue(''); expect(server.state.requests).toHaveLength(1);
+        await user.keyboard('{Enter}'); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(2); expect(server.state.requests.at(-1)).toEqual(fullSoftwareQuery);
+    });
+    it('resets sort-only drafts and invalid-byte searches without an automatic request', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table');
+        const reset = () => screen.getByRole('button', { name: 'Reset software search and sort' });
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'version-desc' } }); expect(reset()).toBeEnabled(); fireEvent.click(reset());
+        expect(screen.getByRole('combobox')).toHaveValue('name-asc'); expect(server.state.requests).toHaveLength(1);
+        search('😀'.repeat(65)); apply(); expect(screen.getByRole('alert')).toHaveTextContent('256 UTF-8 bytes');
+        expect(screen.queryByText('Search settings changed. Choose Apply to read the saved capture.')).toBeNull();
+        fireEvent.click(reset()); expect(screen.queryByRole('alert')).toBeNull(); expect(screen.getByRole('searchbox')).toHaveValue('');
+        expect(screen.getByText('Search settings changed. Choose Apply to read the saved capture.')).toBeVisible(); expect(server.state.requests).toHaveLength(1);
+        apply(); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(2); expect(server.state.requests.at(-1)).toEqual(fullSoftwareQuery);
+    });
+    it('does not prolong original authority while editing or resetting a pending search', async () => {
+        vi.useFakeTimers(); const server = fixtureServer(); server.state.change = page => { page.authorityUntil = '2026-10-11T06:00:11Z'; page.cursorExpiresAt = page.authorityUntil; };
+        open(); await flush(); search('private draft'); fireEvent.click(screen.getByRole('button', { name: 'Reset software search and sort' }));
+        expect(screen.getByText('Search settings changed. Choose Apply to read the saved capture.')).toBeVisible();
+        await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.getByRole('alert')).toHaveTextContent('expired');
+        expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByRole('button', { name: 'Reset software search and sort' })).toBeNull();
+        expect(screen.queryByText('Search settings changed. Choose Apply to read the saved capture.')).toBeNull(); expect(server.state.requests).toHaveLength(1);
+    });
     it('uses all eight server sorts and bounded backwards pages', async () => {
         const server = fixtureServer(); open(); await screen.findByRole('table');
         for (const sort of ['name-desc', 'version-asc', 'version-desc', 'publisher-asc', 'publisher-desc', 'view-asc', 'view-desc', 'name-asc']) {
@@ -109,7 +165,7 @@ describe('full-software private resource lifecycle', () => {
         const server = fixtureServer(); const ui = open(false); await flush(); expect(server.fetch).not.toHaveBeenCalled(); ui.unmount(); vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); open(); await flush(); expect(server.fetch).not.toHaveBeenCalled(); cleanup(); vi.mocked(useOperator).mockReturnValue(null); open(); expect(screen.getByText(/Sign in as a LAN operator/)).toBeVisible(); expect(server.fetch).not.toHaveBeenCalled();
     });
     it.each(['blur', 'pagehide', 'hashchange', AUTH_REQUIRED_EVENT])('clears all rows, labels, controls and cursors after %s', async event => {
-        const server = fixtureServer(); open(); await screen.findByRole('table'); search('private-query'); act(() => window.dispatchEvent(new Event(event))); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByRole('table')).toBeNull(); expect(document.body).not.toHaveTextContent('private-query');
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('private-query'); act(() => window.dispatchEvent(new Event(event))); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByRole('table')).toBeNull(); expect(document.body).not.toHaveTextContent('private-query'); expect(screen.queryByText('Search settings changed. Choose Apply to read the saved capture.')).toBeNull(); expect(screen.queryByRole('button', { name: 'Reset software search and sort' })).toBeNull();
         if (event === AUTH_REQUIRED_EVENT) { expect(screen.getByRole('button', { name: 'Refresh software page' })).toBeDisabled(); const count = server.fetch.mock.calls.length; act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(server.fetch).toHaveBeenCalledTimes(count); }
         else { act(() => window.dispatchEvent(new Event('focus'))); await screen.findByRole('table'); expect(screen.getByRole('searchbox')).toHaveValue(''); expect(server.state.requests.at(-1)!.cursor).toBe(''); }
     });

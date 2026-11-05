@@ -5,3 +5,13 @@
 .windows-service-action-history-list > li { padding-block: .6rem; border-bottom: 1px solid var(--border); }
 .windows-service-action-history-list p { margin-block: .4rem; }
 .windows-service-action-history-receipt { padding: .5rem; margin-block: .5rem; border-left: 2px solid var(--border); }
+
+/* Retained broker flags, not current service or application health. */
+.windows-history-phases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-block:12px}
+.windows-history-phases>section{min-width:0;border:1px solid var(--line);border-radius:6px;padding:12px}
+.windows-history-phases h4{font-size:12px;margin:0 0 10px}
+.windows-history-phases dl{display:grid;gap:8px;margin:0}
+.windows-history-phases dl>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}
+.windows-history-phases dt{color:var(--secondary);overflow-wrap:anywhere}
+.windows-history-phases dd{margin:0;font-weight:600;color:var(--text)}
+@media(max-width:600px){.windows-history-phases{grid-template-columns:minmax(0,1fr)}}

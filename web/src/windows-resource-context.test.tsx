@@ -1,3 +1,5 @@
+import { WindowsResourceContextPanel } from './windows-resource-context';
+import type { WindowsInventoryResource } from './windows-inventory-resource';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, request, mutate } from './api';
@@ -64,5 +66,33 @@ describe('Original-age CPU and memory retention', () => {
     });
     it('expires prior values without renewing them or hiding current failure', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); vi.mocked(request).mockResolvedValue(retained('2026-10-06T12:00:11Z')); render(<Harness/>); await ready(); expect(screen.getByText('Show previous capture')).toBeVisible(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText('Show previous capture')).toBeNull(); expect(screen.queryAllByText('Fixture CPU 12-Core')).toHaveLength(0); expect(document.querySelector('.windows-resource-context')).toHaveTextContent('Unavailable');
+    });
+});
+
+
+describe('Processor details in their CPU section', () => {
+    const cpuDetails = () => document.querySelector<HTMLDetailsElement>('.windows-resource-cpu-details')!;
+    it.each(['en', 'de'] as const)('keeps processor rows beside CPU without opening memory sources in %s', async locale => {
+        setLocale(locale, false); render(<Harness/>); await ready(locale);
+        const cpu = screen.getByRole('region', { name: 'CPU' }), summary = cpuDetails().querySelector('summary')!;
+        expect(cpu).toContainElement(cpuDetails()); expect(cpuDetails().open).toBe(false);
+        expect(summary).toHaveAccessibleName(locale === 'de' ? 'Details der Prozessorzeilen' : 'Processor row details');
+        const architecture = within(cpuDetails()).getByText(locale === 'de' ? 'Gemeldete Architektur' : 'Reported architecture');
+        expect(architecture).not.toBeVisible(); summary.focus(); fireEvent.click(summary);
+        expect(architecture).toBeVisible(); expect(summary).toHaveFocus(); expect(details().open).toBe(false);
+        expect(within(details()).queryByText(locale === 'de' ? 'Prozessorzeile 1' : 'Processor row 1')).toBeNull();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutate).not.toHaveBeenCalled();
+    });
+    it.each(['device', 'grant', 'generation', 'capture'] as const)('closes processor details on direct %s replacement', scope => {
+        const make = () => { const view = windowsResourceContextView(); return { view, resourceContext: view.resourceContext } as WindowsInventoryResource; };
+        const mounted = render(<WindowsResourceContextPanel resource={make()}/>);
+        fireEvent.click(cpuDetails().querySelector('summary')!); expect(cpuDetails().open).toBe(true);
+        const next = make();
+        if (scope === 'device') next.view!.deviceId = `agent_${'8'.repeat(32)}`;
+        if (scope === 'grant') next.resourceContext!.grantId = 'e'.repeat(32);
+        if (scope === 'generation') next.resourceContext!.generationId = `sample_${'9'.repeat(32)}`;
+        if (scope === 'capture') next.resourceContext!.collectedAt = '2026-10-07T12:00:09Z';
+        mounted.rerender(<WindowsResourceContextPanel resource={next}/>);
+        expect(cpuDetails().open).toBe(false); expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
     });
 });
