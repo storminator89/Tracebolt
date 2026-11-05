@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, request } from './api';
 import { setLocale } from './i18n';
+import { WindowsPatchHistory } from './windows-patch-history';
 import { WindowsInventoryWorkspace } from './windows-inventory';
 import { useWindowsInventory } from './windows-inventory-resource';
 import { windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
@@ -108,6 +109,39 @@ describe('Private on-device update-history review', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })); expect(screen.getByRole('searchbox')).toHaveValue('');
         expect(screen.getByLabelText('Event result')).toHaveValue('all'); expect(screen.getByLabelText('Event operation')).toHaveValue('all'); expect(screen.getByLabelText('From (UTC)')).toHaveValue(''); expect(screen.getByLabelText('Through (UTC)')).toHaveValue(''); expect(screen.getByLabelText('Event order')).toHaveValue('newest');
         expect(within(table()).getAllByRole('row')[1]).toHaveTextContent('Synthetic event 00'); expect(vi.mocked(request)).toHaveBeenCalledTimes(1);
+    });
+    it.each(['en', 'de'] as const)('associates date-range errors with both fields and clears them after repair (%s)', locale => {
+        const de = locale === 'de';
+        render(<WindowsPatchHistory rows={historyRows()} locale={locale}/>);
+        const from = screen.getByLabelText(de ? 'Von (UTC)' : 'From (UTC)');
+        const through = screen.getByLabelText(de ? 'Bis einschließlich (UTC)' : 'Through (UTC)');
+        const hint = de ? 'Die Datumsfilter gelten' : 'Dates filter recorded';
+        expect(from).toHaveAttribute('aria-invalid', 'false');
+        expect(through).toHaveAttribute('aria-invalid', 'false');
+        fireEvent.change(from, { target: { value: '2026-10-06' } });
+        fireEvent.change(through, { target: { value: '2026-10-05' } });
+        const error = screen.getByRole('alert');
+        for (const field of [from, through]) {
+            expect(field).toHaveAttribute('aria-invalid', 'true');
+            expect(field.getAttribute('aria-describedby')!.split(' ')).toContain(error.id);
+            expect(field).toHaveAccessibleDescription(new RegExp(hint));
+            expect(field).toHaveAccessibleDescription(new RegExp(de ? 'der Beginn darf nicht nach dem Ende liegen' : 'start on or before the end'));
+        }
+        expect(screen.queryByRole('table')).toBeNull();
+        through.focus();
+        fireEvent.change(through, { target: { value: '2026-10-06' } });
+        expect(through).toHaveFocus();
+        expect(screen.queryByRole('alert')).toBeNull();
+        for (const field of [from, through]) {
+            expect(field).toHaveAttribute('aria-invalid', 'false');
+            expect(field.getAttribute('aria-describedby')!.split(' ')).toHaveLength(1);
+        }
+        expect(screen.getByRole('table')).toBeVisible();
+        fireEvent.change(through, { target: { value: '2026-10-05' } });
+        fireEvent.click(screen.getByRole('button', { name: de ? 'Filter leeren' : 'Clear filters' }));
+        expect(from).toHaveValue(''); expect(through).toHaveValue('');
+        expect(from).toHaveAttribute('aria-invalid', 'false'); expect(through).toHaveAttribute('aria-invalid', 'false');
+        expect(request).not.toHaveBeenCalled();
     });
     it('distinguishes invalid dates from no matching retained events and retains source warnings', async () => {
         render(<Harness/>); await openHistory(); choose('From (UTC)', '2026-10-06'); choose('Through (UTC)', '2026-10-05');

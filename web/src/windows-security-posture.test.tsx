@@ -16,6 +16,64 @@ beforeEach(() => { setLocale('en', false); vi.mocked(request).mockReset().mockRe
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Compact private Security tab', () => {
+    it.each(['en', 'de'] as const)('makes exact local states scannable without a protection verdict in %s', async locale => {
+        setLocale(locale, false);
+        const v = windowsSecurityPostureView(); v.securityPosture.firewall.profiles[1].enabled = 'off';
+        vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(locale);
+        const de = locale === 'de', panel = screen.getByRole('region', { name: de ? 'Sicherheit' : 'Security' });
+        const table = within(panel).getByRole('table', { name: de ? 'Windows-Firewall' : 'Windows Firewall' });
+        const rows = within(table).getAllByRole('row').slice(1), note = de ? 'Bei Erfassung aktiv · lokale Firewall aus' : 'Active at capture · local firewall off';
+        expect(rows[0]).not.toHaveClass('windows-security-local-off'); expect(rows[1]).toHaveClass('windows-security-local-off'); expect(rows[2]).not.toHaveClass('windows-security-local-off');
+        expect(within(rows[1]).getByText(note)).toBeVisible(); expect(within(rows[1]).getByText(de ? 'Aus' : 'Off')).toHaveClass('windows-security-state-off');
+        expect(within(rows[0]).getByText(de ? 'Ein' : 'On')).toHaveClass('windows-security-state-on');
+        expect(within(rows[2]).getAllByText(de ? 'Unbekannt' : 'Unknown')).toHaveLength(2);
+        expect(table.querySelectorAll('.windows-security-state')).toHaveLength(6);
+        for (const badge of panel.querySelectorAll('.windows-security-state')) {
+            expect(badge.textContent).not.toBe(''); expect(badge.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+        }
+        expect(panel).toHaveTextContent(de ? 'Wirksame Richtlinien und Netzwerkerreichbarkeit werden nicht geprüft.' : 'Effective policy and network connectivity are not checked.');
+        expect(panel.querySelector('a,button,input,form,[role="alert"]')).toBeNull();
+        expect(panel).not.toHaveTextContent(/unprotected|protected|healthy|compliant|ungeschützt|geschützt|konform/i);
+        expect(details().every(d => !d.open)).toBe(true); expect(request).toHaveBeenCalledTimes(1);
+    });
+    for (const active of ['on', 'off', 'unknown'] as const) {
+        it.each(['on', 'off', 'unknown'] as const)(`only calls out exact active-on/local-off evidence, active=${active}, configured=%s`, async enabled => {
+            const v = windowsSecurityPostureView(); Object.assign(v.securityPosture.firewall.profiles[0], { active, enabled });
+            vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready();
+            const row = within(screen.getByRole('table', { name: 'Windows Firewall' })).getAllByRole('row')[1];
+            const expected = active === 'on' && enabled === 'off';
+            expect(row.classList.contains('windows-security-local-off')).toBe(expected);
+            expect(within(row).queryByText('Active at capture · local firewall off') !== null).toBe(expected);
+            expect(within(row).getAllByRole('cell')[1]).toHaveTextContent(active === 'on' ? 'Active' : active === 'off' ? 'Inactive' : 'Unknown');
+            expect(within(row).getAllByRole('cell')[2].querySelector('.windows-security-state')).toHaveTextContent(enabled === 'on' ? 'On' : enabled === 'off' ? 'Off' : 'Unknown');
+            expect(request).toHaveBeenCalledTimes(1);
+        });
+    }
+    it('keeps simultaneous active profiles independent and never calls them a disabled device firewall', async () => {
+        const v = windowsSecurityPostureView(); Object.assign(v.securityPosture.firewall, { quality: 'observed', reason: '' });
+        v.securityPosture.firewall.profiles.forEach((p, i) => { p.active = 'on'; p.enabled = i === 1 ? 'on' : 'off'; });
+        vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready();
+        const table = screen.getByRole('table', { name: 'Windows Firewall' }), rows = within(table).getAllByRole('row').slice(1);
+        expect(rows.map(r => r.classList.contains('windows-security-local-off'))).toEqual([true, false, true]);
+        expect(within(table).getAllByText('Active')).toHaveLength(3); expect(within(table).getAllByText('Active at capture · local firewall off')).toHaveLength(2);
+        expect(table).not.toHaveTextContent(/firewall disabled|unprotected|protected|healthy|compliant/i); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('retains original-capture wording when stale and removes local-state callouts at expiry', async () => {
+        vi.useFakeTimers(); vi.setSystemTime(windowsNow);
+        const v = windowsSecurityPostureView(); v.snapshot!.collectedAt = v.securityPosture.collectedAt = '2026-10-06T12:00:11Z'; v.status = 'stale';
+        v.securityPosture.firewall.profiles[1].enabled = 'off'; vi.mocked(request).mockResolvedValue(v);
+        render(<Harness/>); await ready(); expect(screen.getByText('Active at capture · local firewall off')).toBeVisible();
+        expect(screen.getByText(/Stale observation; values describe the original capture/)).toBeVisible();
+        await act(async () => vi.advanceTimersByTimeAsync(1000));
+        expect(screen.queryByText('Active at capture · local firewall off')).toBeNull(); expect(document.querySelector('.windows-security-state')).toBeNull();
+        expect(screen.getByText(/Security observations expired/)).toBeVisible(); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it.each(['blur', 'pagehide', 'hashchange', AUTH_REQUIRED_EVENT])('clears the local-off emphasis on %s without a new read', async event => {
+        const v = windowsSecurityPostureView(); v.securityPosture.firewall.profiles[1].enabled = 'off'; vi.mocked(request).mockResolvedValue(v);
+        render(<Harness/>); await ready(); expect(screen.getByText('Active at capture · local firewall off')).toBeVisible();
+        act(() => window.dispatchEvent(new Event(event)));
+        expect(screen.queryByText('Active at capture · local firewall off')).toBeNull(); expect(document.querySelector('.windows-security-state')).toBeNull(); expect(request).toHaveBeenCalledTimes(1);
+    });
     it.each(['en', 'de'] as const)('shows capture, source qualities, explicit states and collapsed details in %s', async locale => {
         setLocale(locale, false); render(<Harness/>); await ready(locale); const de = locale === 'de', panel = screen.getByRole('region', { name: de ? 'Sicherheit' : 'Security' });
         expect(within(panel).getByText(de ? 'Normalmodus' : 'Normal mode')).toBeVisible();

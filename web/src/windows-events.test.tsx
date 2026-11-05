@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { WindowsEventsPanel } from './windows-events';
 import { validWindowsEvents, type WindowsEvents } from './windows-events-types';
 import { validWindowsInventoryView } from './windows-inventory-types';
@@ -17,7 +17,40 @@ describe('Windows event header boundary', () => {
         for(const mutate of mutations){const e=events();mutate(e);expect(validWindowsEvents(e,events().generationId,windowsNow)).toBe(false);}
         const v=windowsView();Object.assign(v,{events:null});expect(validWindowsInventoryView(v,windowsDeviceId)).toBe(false);
     });
-    it('shows scoped warning counts and denial without claiming healthy', () => { render(<WindowsEventsPanel resource={resource()}/>); expect(screen.getByText('1 error/warning headers in 1 displayed events.')).toBeTruthy();expect(screen.getByText('Access denied')).toBeTruthy(); expect(screen.queryByText(/healthy/i)).toBeNull();fireEvent.click(screen.getByText('View events'));expect(screen.getByText('Invented Provider')).toBeTruthy(); });
+    it('shows scoped warning counts and denial without claiming healthy', () => { render(<WindowsEventsPanel resource={resource()}/>); expect(screen.getByText('1 error/warning headers in 1 displayed events.')).toBeTruthy();expect(screen.getByText('Access denied')).toBeTruthy(); expect(screen.queryByText(/healthy/i)).toBeNull();fireEvent.click(screen.getByText('Application · 1 captured event header'));expect(screen.getByText('Invented Provider')).toBeTruthy(); });
     it('never converts unconfigured or empty data to healthy zero', () => { const r=resource(null); const {rerender}=render(<WindowsEventsPanel resource={r}/>);expect(screen.getByRole('status').textContent).toContain('Health unknown');const e=events();e.channels[0].rows=[];e.channels[0].observedCount=0;rerender(<WindowsEventsPanel resource={resource(e)}/>);expect(screen.getByText('No event headers returned. Health unknown.')).toBeTruthy(); });
     it('marks stale samples and removes private data after session loss', () => { const r=resource();r.eventsStale=true;const {rerender}=render(<WindowsEventsPanel resource={r}/>);expect(screen.getByRole('status').textContent).toContain('Stale');rerender(<WindowsEventsPanel resource={{...resource(null),view:null,snapshot:null,error:'session',status:null}}/>);expect(screen.queryByText('Invented Provider')).toBeNull();expect(screen.getByRole('button',{name:'Refresh events'}).hasAttribute('disabled')).toBe(true); });
+});
+
+
+describe('Named event-channel disclosures', () => {
+    it.each(['en', 'de'] as const)('distinguishes channel controls and table names in %s', locale => {
+        setLocale(locale, false);
+        const data = events();
+        data.channels[1] = { ...data.channels[0], channel: 'System', rows: [{ ...data.channels[0].rows[0], provider: 'System fixture' }] };
+        const r = resource(data), original = JSON.stringify(data);
+        render(<WindowsEventsPanel resource={r}/>);
+        const summaries = Array.from(document.querySelectorAll<HTMLDetailsElement>('.windows-event-channel-details')).map(detail => detail.querySelector('summary')!);
+        expect(summaries[0]).toHaveAccessibleName(locale === 'de' ? 'Application · 1 erfasster Ereigniskopf' : 'Application · 1 captured event header');
+        expect(summaries[1]).toHaveAccessibleName(locale === 'de' ? 'System · 1 erfasster Ereigniskopf' : 'System · 1 captured event header');
+        summaries[1].focus(); fireEvent.click(summaries[1]); expect(summaries[1]).toHaveFocus();
+        const table = screen.getByRole('table', { name: locale === 'de' ? 'System · Erfasste Ereignisköpfe' : 'System · Captured event headers' });
+        expect(within(table).getByText('System fixture')).toBeVisible();
+        expect(screen.getByText('Invented Provider')).not.toBeVisible();
+        expect(document.querySelectorAll<HTMLDetailsElement>('.windows-event-channel-details')[0].open).toBe(false);
+        expect(r.refresh).not.toHaveBeenCalled(); expect(JSON.stringify(data)).toBe(original);
+    });
+    it.each(['en', 'de'] as const)('pluralizes the retained header count in %s', locale => {
+        setLocale(locale, false); const data = events();
+        data.channels[0].rows.push({ ...data.channels[0].rows[0], recordId: '2' }); data.channels[0].observedCount = 2;
+        render(<WindowsEventsPanel resource={resource(data)}/>);
+        expect(screen.getByText(locale === 'de' ? 'Application · 2 erfasste Ereignisköpfe' : 'Application · 2 captured event headers')).toBeVisible();
+    });
+    it('uses retained row counts, not observed counts, for bounded channels', () => {
+        const data = events(); Object.assign(data.channels[0], { quality: 'bounded', complete: false, truncated: true, observedCount: 24 });
+        render(<WindowsEventsPanel resource={resource(data)}/>);
+        expect(screen.getByText('Application · 1 captured event header')).toBeVisible();
+        expect(screen.getByText('Bounded sample; more events are omitted.')).toBeVisible();
+        expect(document.querySelectorAll('.windows-event-channel-details')).toHaveLength(1);
+    });
 });
