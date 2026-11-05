@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
@@ -94,4 +95,21 @@ describe('bounded fleet identity', () => {
   vi.useFakeTimers(); const fetch = vi.fn().mockImplementationOnce(() => new Promise(() => {})).mockResolvedValueOnce(response(fleet())); vi.stubGlobal('fetch', fetch); render(<Harness/>); await act(async () => { await vi.advanceTimersByTimeAsync(10001); }); expect(screen.getByRole('alert')).toHaveTextContent('timed out'); refresh(); await act(async () => { await vi.advanceTimersByTimeAsync(0); }); expect(screen.getByText('fixture-linux')).toBeVisible(); vi.setSystemTime(Date.now() + 10000); await act(async () => { await vi.advanceTimersByTimeAsync(1000); }); expect(screen.queryByText('fixture-linux')).not.toBeInTheDocument(); expect(screen.getByRole('alert')).toHaveTextContent('Time check failed');
  });
 
+});
+
+it.each(['en', 'de'] as const)('opens a LAN device by its hostname with keyboard while keeping copy separate (%s)', async locale => {
+ setLocale(locale, false); const onSelect = vi.fn(), user = userEvent.setup();
+ render(<DeviceTable devices={[device()]} identities={fleetIdentityProjection(fleet(), 0)} onSelect={onSelect}/>);
+ const open = screen.getByRole('button', {name: locale === 'de' ? 'Gerät öffnen: fixture-linux' : 'Open device: fixture-linux'});
+ open.focus(); await user.keyboard('{Enter}'); expect(onSelect).toHaveBeenCalledWith(device());
+ onSelect.mockClear(); await user.click(screen.getByRole('button', {name: locale === 'de' ? 'Hostname kopieren: fixture-linux' : 'Copy hostname: fixture-linux'})); expect(onSelect).not.toHaveBeenCalled();
+ expect(open.querySelector('button')).toBeNull(); expect(screen.getByText('192.0.2.19')).toBeVisible();
+});
+it.each(['en', 'de'] as const)('keeps unavailable LAN identity label in its accessible name (%s)', locale => {
+ setLocale(locale, false); const onSelect = vi.fn(); render(<DeviceTable devices={[device()]} identities={new Map()} onSelect={onSelect}/>);
+ const visible = locale === 'de' ? 'Hostname nicht verfügbar' : 'Hostname unavailable';
+ const open = screen.getByRole('button', {name: new RegExp(visible)});
+ expect(open).toHaveAccessibleName(expect.stringContaining(visible)); expect(open).toHaveAccessibleName(expect.stringContaining(endpointDevice));
+ expect(open).toHaveTextContent(visible); fireEvent.click(open); expect(onSelect).toHaveBeenCalledWith(device());
+ expect(screen.queryByRole('button', {name: /Copy hostname/})).toBeNull();
 });
