@@ -169,6 +169,33 @@ Both directory paths must be absolute; the output must be new and outside the
 candidate directory. Select the full source SHA and version of that actual
 candidate. The script creates no candidate build, signature or release.
 
+Atomic output publication requires **Linux**, a libc `renameat2` symbol, and
+kernel/filesystem support for `RENAME_NOREPLACE`. The output parent must already
+exist and be owned by the invoking user or root. It must not be group/world
+writable unless sticky-bit protection prevents other users from renaming this
+user's entries. Both paths must be canonical, without symlink redirection. There
+is no replacing-rename fallback. Do not use sudo, chmod, or another host/security
+change to bypass a rejected prerequisite; choose an already suitable output
+location. Same-UID actors and root remain trusted.
+
+All nine documents are written to a new private 0700 sibling directory named
+`.tracebolt-evidence-*`, using exclusive no-follow 0600 files. Files and staging
+are flushed/synced before the complete directory is published in one atomic
+no-replace operation. An existing file, directory (even empty), or symlink
+(including a dangling one) is never replaced. The parent directory is synced
+after publication. Successful file/directory fsync is required for confirmed
+durability; atomic visibility is separate from crash or hardware acceptance.
+
+On failure, **private staging directories are retained** for inspection and are
+never automatically deleted, resumed, or treated as complete evidence. A final
+output may be absent, may belong to a competing creator, or may already have
+been published when a later durability/path check failed. In particular, a
+post-publication fsync error does not undo the completed output. Preserve and
+inspect the final output and any staging before deciding whether to try again;
+do not blindly rerun or remove existing output. An explicit new attempt only
+creates fresh staging if the final target is still absent. No rollback,
+automatic retry, overwrite, or cleanup is performed.
+
 The inspector uses [`go version -m -json`](https://pkg.go.dev/cmd/go#hdr-Print_Go_version)
 to read, **not execute**, each binary. It rejects mismatched source/toolchain,
 dirty VCS metadata, wrong target/CGO/trimpath settings, replaced or duplicate
