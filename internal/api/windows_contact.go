@@ -153,16 +153,21 @@ func (s *Server) RunWindowsContactMonitor(ctx context.Context, warn func()) erro
 	}
 }
 
-// windowsContactAPI is read-only. Reading cannot create, recover, acknowledge or
-// enqueue incidents; current enrollment authority alone permits history output.
+// GET remains read-only. The separate explicit policy control only changes
+// missed-report grace; it cannot evaluate, recover or enqueue an incident.
 func (h *operatorHandler) windowsContactAPI(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) != 5 || parts[1] != "api" || parts[2] != "devices" || parts[4] != "windows-contact" || !enrollmentcrypto.ValidID(parts[3], "agent_") || r.URL.RawQuery != "" {
+	if (len(parts) != 5 && len(parts) != 6) || parts[1] != "api" || parts[2] != "devices" || parts[4] != "windows-contact" || len(parts) == 6 && parts[5] != "policy" || !enrollmentcrypto.ValidID(parts[3], "agent_") || r.URL.RawQuery != "" || r.URL.ForceQuery {
 		fail(w, 404, "not_found", "Windows contact history is unavailable.")
 		return
 	}
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
+	mutation := len(parts) == 6
+	if !mutation && r.Method != http.MethodGet || mutation && r.Method != http.MethodPost {
+		method := "GET"
+		if mutation {
+			method = "POST"
+		}
+		w.Header().Set("Allow", method)
 		fail(w, 405, "method_not_allowed", "Method is unsupported.")
 		return
 	}
@@ -170,6 +175,26 @@ func (h *operatorHandler) windowsContactAPI(w http.ResponseWriter, r *http.Reque
 	if m == nil {
 		fail(w, 404, "not_found", "Windows contact history is not configured.")
 		return
+	}
+	var policy windowscontact.PolicyRequest
+	if mutation {
+		op, ok := operatorContext(r)
+		if !ok || op.active == nil || !op.active() {
+			fail(w, 401, "authentication_required", "An active operator session is required.")
+			return
+		}
+		if op.session.Named() {
+			fail(w, 403, "operator_capability_required", "A shared administrator is required to change report grace.")
+			return
+		}
+		if !h.app.authorizeJSONMutation(w, r) || !readWindowsContactPolicyRequest(w, r, &policy) {
+			return
+		}
+		release, ok := beginOperatorMutation(w, r)
+		if !ok {
+			return
+		}
+		defer release()
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -197,6 +222,14 @@ func (h *operatorHandler) windowsContactAPI(w http.ResponseWriter, r *http.Reque
 	if state.InvitationID != "" && (state.InvitationID != in.InvitationID || state.CertificateHash != in.CertificateHash) {
 		fail(w, 409, "windows_contact_unavailable", "Contact history belongs to another device identity.")
 		return
+	}
+	if mutation {
+		state, err = h.configureWindowsContactPolicy(r, in, policy, now)
+		if err != nil {
+			fail(w, 409, "windows_contact_policy_unconfirmed", "The setting could not be confirmed. Read current state before another deliberate review.")
+			return
+		}
+		now = m.source.Now().UTC()
 	}
 	epoch := m.epoch
 	if !m.ready {

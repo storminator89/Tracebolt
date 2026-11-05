@@ -17,3 +17,9 @@
 .windows-contact-incidents .windows-contact-times{margin-bottom:0}
 .windows-health-summary.windows-health-volume-only .windows-health-cards{grid-template-columns:1fr}
 @media(max-width:600px){.windows-contact-times{grid-template-columns:1fr}.windows-contact>header{align-items:flex-start}.windows-contact-incident-heading{flex-direction:column}}
+.windows-contact-policy { margin-block: 1rem; }
+.windows-contact-policy summary { cursor: pointer; font-weight: 600; }
+.windows-contact-policy fieldset { border: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.windows-contact-policy select { max-width: 100%; padding: .5rem; }
+.windows-contact-policy-consent { display: flex; align-items: flex-start; gap: .5rem; flex-basis: 100%; }
+.windows-contact-policy-consent input { flex-shrink: 0; margin-top: .25rem; }

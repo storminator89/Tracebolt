@@ -56,6 +56,8 @@ type Incident struct {
 	RecoverySequence   uint64     `json:"recoverySequence"`
 	ResolvedAt         *time.Time `json:"resolvedAt"`
 	ClosedReason       string     `json:"closedReason,omitempty"`
+	GraceSeconds       int        `json:"graceSeconds,omitempty"`
+	PolicyRevision     uint64     `json:"policyRevision,omitempty"`
 }
 
 // State is a private durable ledger. Epoch and identity bindings never appear in
@@ -74,18 +76,20 @@ type State struct {
 	RecoverySince   *time.Time `json:"recoverySince"`
 	Incidents       []Incident `json:"incidents"`
 	NextID          uint64     `json:"nextId"`
+	Policy          *Policy    `json:"policy,omitempty"`
 }
 
 type View struct {
-	SchemaVersion        string     `json:"schemaVersion"`
-	CertificateExpiresAt *time.Time `json:"certificateExpiresAt"`
-	DeviceID             string     `json:"deviceId"`
-	ServerNow            time.Time  `json:"serverNow"`
-	Status               string     `json:"status"`
-	LastAcceptedAt       *time.Time `json:"lastAcceptedAt"`
-	Sequence             uint64     `json:"sequence"`
-	EvaluatedAt          *time.Time `json:"evaluatedAt"`
-	Incidents            []Incident `json:"incidents"`
+	SchemaVersion        string      `json:"schemaVersion"`
+	CertificateExpiresAt *time.Time  `json:"certificateExpiresAt"`
+	DeviceID             string      `json:"deviceId"`
+	ServerNow            time.Time   `json:"serverNow"`
+	Status               string      `json:"status"`
+	LastAcceptedAt       *time.Time  `json:"lastAcceptedAt"`
+	Sequence             uint64      `json:"sequence"`
+	EvaluatedAt          *time.Time  `json:"evaluatedAt"`
+	Incidents            []Incident  `json:"incidents"`
+	Policy               *PolicyView `json:"policy,omitempty"`
 }
 
 func New() State { return State{Version: 1, Status: "unknown", Incidents: []Incident{}} }
@@ -125,6 +129,7 @@ func (s *State) open() *Incident {
 // transition timers, and never resolve an incident or reconstruct stopped time.
 func (s *State) Evaluate(in Input, now time.Time, epoch string) error {
 	copy := *s
+	copy.Policy = s.Policy.clone()
 	copy.Incidents = append([]Incident{}, s.Incidents...)
 	if err := copy.evaluate(in, now, epoch); err != nil {
 		return err
@@ -192,7 +197,14 @@ func (s *State) evaluate(in Input, now time.Time, epoch string) error {
 	if s.LastAcceptedAt == nil || in.Sequence > s.Sequence {
 		s.LastAcceptedAt, s.Sequence = stamp(at), in.Sequence
 	}
+	if s.Policy != nil && s.Policy.AwaitingFreshReport && in.Sequence > s.Policy.ReportFloor && at.After(s.Policy.ChangedAt) && now.Sub(at) <= MaxAge {
+		s.Policy.AwaitingFreshReport = false
+	}
 	open := s.open()
+	if open == nil && s.Policy != nil && s.Policy.AwaitingFreshReport {
+		s.reset()
+		return nil
+	}
 	if now.Sub(*s.LastAcceptedAt) > MaxAge {
 		s.RecoverySince = nil
 		if open != nil {
@@ -200,6 +212,10 @@ func (s *State) evaluate(in Input, now time.Time, epoch string) error {
 			if !now.Before(open.LastConfirmedAt) {
 				open.LastConfirmedAt = now
 			}
+			return nil
+		}
+		if now.Sub(*s.LastAcceptedAt) <= time.Duration(s.GraceSeconds())*time.Second {
+			s.reset()
 			return nil
 		}
 		if s.PendingSince == nil {
@@ -211,7 +227,7 @@ func (s *State) evaluate(in Input, now time.Time, epoch string) error {
 				return ErrInvalid
 			}
 			s.NextID++
-			s.Incidents = append([]Incident{{ID: fmt.Sprintf("wcontact_%016x", s.NextID), Kind: "overdue-report", OpenedAt: now, LastConfirmedAt: now, LastAcceptedAt: *s.LastAcceptedAt, Sequence: s.Sequence}}, s.Incidents...)
+			s.Incidents = append([]Incident{{ID: fmt.Sprintf("wcontact_%016x", s.NextID), Kind: "overdue-report", OpenedAt: now, LastConfirmedAt: now, LastAcceptedAt: *s.LastAcceptedAt, Sequence: s.Sequence, GraceSeconds: s.incidentGraceSeconds(), PolicyRevision: s.PolicyRevision()}}, s.Incidents...)
 			s.PendingSince = nil
 			s.Status = "overdue"
 		}
@@ -224,6 +240,10 @@ func (s *State) evaluate(in Input, now time.Time, epoch string) error {
 		return nil
 	}
 	s.Status = "overdue"
+	if s.Policy != nil && s.Policy.AwaitingFreshReport {
+		s.RecoverySince = nil
+		return nil
+	}
 	// A fresh accepted report must postdate the confirmed overdue observation.
 	// This also prevents recovery under a clock rolled back behind the incident.
 	if s.LastAcceptedAt.Before(open.LastConfirmedAt) || now.Before(open.LastConfirmedAt) {
@@ -297,16 +317,22 @@ func (s State) View(in Input, now time.Time, epoch string) View {
 			accepted = stamp(in.ReceivedAt)
 		}
 	}
-	return View{SchemaVersion: "tracebolt.windows-contact-view.v1", CertificateExpiresAt: expires, DeviceID: in.DeviceID, ServerNow: now, Status: status, LastAcceptedAt: accepted, Sequence: sequence, EvaluatedAt: evaluated, Incidents: incidents}
+	schema := "tracebolt.windows-contact-view.v1"
+	var policy *PolicyView
+	if s.Policy != nil && s.DeviceID == in.DeviceID && s.InvitationID == in.InvitationID && s.CertificateHash == in.CertificateHash {
+		schema = "tracebolt.windows-contact-view.v2"
+		policy = &PolicyView{Revision: s.Policy.Revision, GraceSeconds: s.Policy.GraceSeconds, ChangedAt: s.Policy.ChangedAt, LastRequestID: s.Policy.LastRequestID, AwaitingFreshReport: s.Policy.AwaitingFreshReport}
+	}
+	return View{SchemaVersion: schema, Policy: policy, CertificateExpiresAt: expires, DeviceID: in.DeviceID, ServerNow: now, Status: status, LastAcceptedAt: accepted, Sequence: sequence, EvaluatedAt: evaluated, Incidents: incidents}
 }
 
 // Validate rejects noncanonical identifiers and impossible transition states.
 func (s State) Validate() error {
-	if s.Version != 1 || s.NextID > MaxCounter || s.Sequence > MaxCounter || s.Incidents == nil || len(s.Incidents) > MaxIncidents || !validBinding(s.InvitationID, s.CertificateHash) || !validOptional(s.LastAcceptedAt) || !validOptional(s.EvaluatedAt) || !validOptional(s.PendingSince) || !validOptional(s.RecoverySince) {
+	if (s.Version != 1 || s.Policy != nil) && (s.Version != 2 || s.Policy == nil) || s.validatePolicy() != nil || s.NextID > MaxCounter || s.Sequence > MaxCounter || s.Incidents == nil || len(s.Incidents) > MaxIncidents || !validBinding(s.InvitationID, s.CertificateHash) || !validOptional(s.LastAcceptedAt) || !validOptional(s.EvaluatedAt) || !validOptional(s.PendingSince) || !validOptional(s.RecoverySince) {
 		return ErrInvalid
 	}
 	if s.DeviceID == "" {
-		if s.Epoch != "" || s.Status != "unknown" || s.LastAcceptedAt != nil || s.EvaluatedAt != nil || s.Sequence != 0 || s.NextID != 0 || len(s.Incidents) != 0 || s.InvitationID != "" || s.CertificateHash != "" || s.PendingSince != nil || s.RecoverySince != nil {
+		if s.Policy != nil || s.Epoch != "" || s.Status != "unknown" || s.LastAcceptedAt != nil || s.EvaluatedAt != nil || s.Sequence != 0 || s.NextID != 0 || len(s.Incidents) != 0 || s.InvitationID != "" || s.CertificateHash != "" || s.PendingSince != nil || s.RecoverySince != nil {
 			return ErrInvalid
 		}
 		return nil
@@ -325,6 +351,12 @@ func (s State) Validate() error {
 	for i, in := range s.Incidents {
 		n, err := strconv.ParseUint(strings.TrimPrefix(in.ID, "wcontact_"), 16, 64)
 		if err != nil || in.ID != fmt.Sprintf("wcontact_%016x", n) || n == 0 || n >= previous || n > s.NextID || in.Kind != "overdue-report" || !validTime(in.OpenedAt) || !validTime(in.LastConfirmedAt) || in.LastConfirmedAt.Before(in.OpenedAt) || in.LastConfirmedAt.After(*s.EvaluatedAt) || !validOptional(in.ResolvedAt) || !validTime(in.LastAcceptedAt) || in.OpenedAt.Sub(in.LastAcceptedAt) <= MaxAge || in.Sequence == 0 || in.Sequence > s.Sequence || in.LastAcceptedAt.After(*s.LastAcceptedAt) || !validOptional(in.RecoveryAcceptedAt) {
+			return ErrInvalid
+		}
+		if (in.GraceSeconds == 0) != (in.PolicyRevision == 0) || in.PolicyRevision > s.PolicyRevision() || in.GraceSeconds != 0 && (!ValidGraceSeconds(in.GraceSeconds) || in.OpenedAt.Sub(in.LastAcceptedAt) <= time.Duration(in.GraceSeconds)*time.Second) {
+			return ErrInvalid
+		}
+		if in.PolicyRevision != 0 && in.PolicyRevision == s.PolicyRevision() && (in.GraceSeconds != s.GraceSeconds() || in.OpenedAt.Before(s.Policy.ChangedAt)) {
 			return ErrInvalid
 		}
 		previous = n
@@ -354,7 +386,7 @@ func (s State) Validate() error {
 			return ErrInvalid
 		}
 	case "pending":
-		if s.LastAcceptedAt == nil || openCount != 0 || s.PendingSince == nil || s.RecoverySince != nil || s.EvaluatedAt.Sub(*s.LastAcceptedAt) <= MaxAge || s.EvaluatedAt.Sub(*s.PendingSince) >= Confirmation {
+		if s.LastAcceptedAt == nil || openCount != 0 || s.PendingSince == nil || s.RecoverySince != nil || s.EvaluatedAt.Sub(*s.LastAcceptedAt) <= time.Duration(s.GraceSeconds())*time.Second || s.Policy != nil && s.Policy.AwaitingFreshReport || s.EvaluatedAt.Sub(*s.PendingSince) >= Confirmation {
 			return ErrInvalid
 		}
 	case "overdue":

@@ -1,5 +1,10 @@
 # Windows accepted-contact history
 
+The original default and version-1 contract below remain unchanged. A separately
+reviewed [per-device missed-report grace](windows-contact-grace.md) adds explicit
+2/5/15/60-minute choices through version 2, while preserving the 120-second
+freshness/recovery limits and existing incident history.
+
 This source-only slice adds a separate manager evaluator and a read-only Windows
 Health panel. It does not generalize Linux health inputs, investigations, AI
 exports, or device-level health claims. Existing Windows system-volume readings

@@ -77,16 +77,12 @@ func notificationCurrent(ctx context.Context, tx *sql.Tx, t WindowsIncidentTarge
 	current := false
 	switch t.Domain {
 	case "contact":
-		e := tx.QueryRowContext(ctx, `SELECT body FROM windows_contact_devices WHERE id=?`, t.DeviceID).Scan(&raw)
-		if errors.Is(e, sql.ErrNoRows) {
+		s, e := readWindowsContactState(ctx, tx, t.DeviceID)
+		if e != nil {
+			return nil, false, e
+		}
+		if s.DeviceID == "" {
 			return nil, false, nil
-		}
-		if e != nil {
-			return nil, false, e
-		}
-		s, e := decodeWindowsContact(t.DeviceID, raw)
-		if e != nil {
-			return nil, false, e
 		}
 		episodes = contactNotificationEpisodes(s)
 		evaluated = s.EvaluatedAt
