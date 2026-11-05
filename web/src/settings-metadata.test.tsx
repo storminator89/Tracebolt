@@ -1,0 +1,60 @@
+import type { ReactNode } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import App from './App';
+import { abortProtectedRequests, request } from './api';
+import { useOperator } from './auth';
+import { setLocale } from './i18n';
+vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
+vi.mock('./auth', async original => ({ ...await original<typeof import('./auth')>(), useOperator: vi.fn(), AuthBoundary: ({ children }: { children: ReactNode }) => children }));
+vi.mock('./ai', () => ({ AIProviderSettings: () => null }));
+vi.mock('./proactive-ai', () => ({ ProactiveAISettingsPanel: () => null }));
+vi.mock('./alarm-status', () => ({ AlarmStatusPanel: () => null }));
+vi.mock('./alarm-settings', () => ({ AlarmSettingsPanel: () => null }));
+vi.mock('./application-check-settings', () => ({ ApplicationCheckSettingsPanel: () => null }));
+vi.mock('./security-coverage', () => ({ OfflineCatalogPanel: () => null }));
+const capabilities = { version: '9.8.fixture', mode: 'development', syntheticFleet: false, demoOnly: false, realCollector: 'Confirmed fixture collector', remoteEnrollment: false, shellExecution: false, aiConnected: false, persistence: 'Confirmed fixture storage', limitations: [] };
+const overview = { devices: [], cases: [], stats: {}, activity: [], generatedAt: '2026-11-05T12:00:00Z' };
+function section(name: string) { return screen.getByRole('heading', { name }).closest('section')!; }
+beforeEach(() => {
+    localStorage.clear(); sessionStorage.clear(); setLocale('en', false); history.replaceState(null, '', '#/settings');
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    vi.mocked(useOperator).mockReturnValue({ mode: 'development', authenticated: true, expiresAt: null, insecureTestMode: false, logout: vi.fn(), theme: 'light', setTheme: vi.fn() });
+    vi.mocked(request).mockReset();
+});
+afterEach(() => { cleanup(); abortProtectedRequests(); history.replaceState(null, '', '/'); vi.restoreAllMocks(); });
+it.each(['en', 'de'] as const)('keeps metadata unknown on failure and distinguishes explicit retry from loading (%s)', async locale => {
+    setLocale(locale, false); let reject!: (error: Error) => void;
+    const pending = new Promise((_, fail) => { reject = fail; });
+    vi.mocked(request).mockImplementation(async path => path === '/overview' ? overview : path === '/capabilities' ? pending : Promise.reject(new Error(`Unexpected ${path}`)));
+    render(<App/>); await screen.findByRole('heading', { name: locale === 'en' ? 'Settings' : 'Einstellungen' });
+    const sources = section(locale === 'en' ? 'Sources & provenance' : 'Quellen & Herkunft');
+    expect(document.querySelector('.version-badge')).not.toHaveTextContent('0.1.0');
+    expect(within(sources).getByRole('status')).toHaveTextContent(locale === 'en' ? /Loading/ : /Wird geladen/);
+    expect(within(sources).queryByRole('heading', { level: 3 })).toBeNull();
+    await waitFor(() => expect(vi.mocked(request).mock.calls.some(([path]) => path === '/capabilities')).toBe(true));
+    await act(async () => reject(new Error('Fixture capabilities failed')));
+    expect(document.querySelector('.version-badge')).toHaveTextContent(locale === 'en' ? 'Status unknown' : 'Status unbekannt');
+    expect(within(sources).getByRole('status')).toHaveTextContent(locale === 'en' ? 'Status unknown' : 'Status unbekannt');
+    expect(document.querySelector('.settings-grid')).not.toHaveTextContent(locale === 'en' ? 'Loading…' : 'Wird geladen …');
+    let resolve!: (value: unknown) => void;
+    const retry = new Promise(done => { resolve = done; });
+    vi.mocked(request).mockImplementation(async path => path === '/capabilities' ? retry : overview);
+    fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Try again' : 'Erneut versuchen' }));
+    expect(within(sources).getByRole('status')).toHaveTextContent(locale === 'en' ? /Loading/ : /Wird geladen/);
+    await act(async () => resolve(capabilities));
+    expect(document.querySelector('.version-badge')).toHaveTextContent('v9.8.fixture');
+    expect(within(sources).getByText('Confirmed fixture collector')).toBeVisible(); expect(within(sources).queryByRole('status')).toBeNull();
+    expect(screen.getByText('Confirmed fixture storage')).toBeVisible();
+    expect(vi.mocked(request).mock.calls.filter(([path]) => path === '/capabilities')).toHaveLength(2);
+});
+it('does not invent a version or claim loading when the optional version is absent', async () => {
+    vi.mocked(request).mockImplementation(async path => path === '/overview' ? overview : { ...capabilities, version: undefined });
+    render(<App/>); await screen.findByText('Confirmed fixture storage');
+    expect(document.querySelector('.version-badge')).toHaveTextContent('Status unknown'); expect(document.querySelector('.version-badge')).not.toHaveTextContent('0.1.0');
+});
+it('preserves a confirmed demo source without presenting it as a local collector', async () => {
+    vi.mocked(request).mockImplementation(async path => path === '/overview' ? overview : { ...capabilities, demoOnly: true, syntheticFleet: true });
+    render(<App/>); await screen.findByText('Confirmed fixture storage');
+    const sources = section('Sources & provenance'); expect(sources).toHaveTextContent('Synthetic demonstration only'); expect(sources).not.toHaveTextContent('Confirmed fixture collector');
+});
