@@ -1,5 +1,5 @@
 import { InventoryLiveStatus } from './inventory-live-status';
-import { Fragment, useId, useRef } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { Info, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
@@ -37,10 +37,26 @@ export function CompleteOverviewPanel({ deviceId, section, sessionKey }: { devic
     return <OverviewSession key={`${deviceId}:${section}:${sessionKey ?? operator.expiresAt ?? ''}`} deviceId={deviceId} section={section}/>;
 }
 function OverviewSession({ deviceId, section }: { deviceId: string; section: OverviewSection }) {
-    const [locale] = useLocale(), t: Translate = (en, de) => locale === 'de' ? de : en, id = useId(), searchInput = useRef<HTMLInputElement>(null), r = useCompleteOverview(deviceId, section);
+    const [locale] = useLocale(), t: Translate = (en, de) => locale === 'de' ? de : en, id = useId(), searchInput = useRef<HTMLInputElement>(null), nextOrigin = useRef<HTMLButtonElement | null>(null), previousButton = useRef<HTMLButtonElement>(null), r = useCompleteOverview(deviceId, section);
     const number = (n: number) => new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: 3 }).format(n);
     const title = section === 'processes' ? t('Processes', 'Prozesse') : t('Mounts', 'Mounts');
     const selected = r.view?.[section], complete = selected?.complete, visible = !!r.view && overviewSectionVisible(r.view, section, r.elapsed), page = visible ? r.page : null;
+    useEffect(() => {
+        // A deliberate pointer/focus move during the read cancels the handoff,
+        // including a click on the page background rather than another control.
+        const moved = (event: Event) => { if (event.target !== nextOrigin.current) nextOrigin.current = null; };
+        const blurred = () => { nextOrigin.current = null; };
+        document.addEventListener('pointerdown', moved, true); document.addEventListener('focusin', moved, true); window.addEventListener('blur', blurred);
+        return () => { document.removeEventListener('pointerdown', moved, true); document.removeEventListener('focusin', moved, true); window.removeEventListener('blur', blurred); };
+    }, []);
+    useLayoutEffect(() => {
+        const origin = nextOrigin.current;
+        if (!origin) return;
+        if (document.visibilityState === 'hidden' || !visible || !r.hasNavigation || r.error) { nextOrigin.current = null; return; }
+        if (r.loading || !page) return;
+        nextOrigin.current = null;
+        if (!r.hasNext && r.canPrevious && (document.activeElement === origin || !origin.isConnected && document.activeElement === document.body)) previousButton.current?.focus({ preventScroll: true });
+    }, [visible, page, r.loading, r.error, r.hasNavigation, r.hasNext, r.canPrevious]);
     const pendingSearch = visible && !page && !r.loading && !r.error && r.liveState === 'paused';
     const field = (label: string, value: string | number) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>;
     const errors = { loadError: t('The manager could not be read. Retry or refresh.', 'Der Manager konnte nicht gelesen werden. Wiederholen oder aktualisieren.'), invalid: t('The manager returned inconsistent or unsupported overview data. Rows were cleared.', 'Der Manager lieferte widersprüchliche oder nicht unterstützte Daten. Zeilen wurden entfernt.'), timeout: t('The request timed out. Retry or refresh.', 'Die Anfrage hat das Zeitlimit erreicht. Wiederholen oder aktualisieren.'), session: t('Your session has ended. Sign in again.', 'Die Sitzung ist beendet. Erneut anmelden.'), clock: t('The time anchor is no longer reliable. Refresh before continuing.', 'Der Zeitanker ist nicht mehr verlässlich. Vor dem Fortfahren aktualisieren.'), busy: t('The manager is busy. Retry in a moment.', 'Der Manager ist ausgelastet. Gleich erneut versuchen.'), restart: t('The generation or cursor changed or expired. Refresh to explicitly restart; previous rows were cleared.', 'Generation oder Cursor geändert oder abgelaufen. Zum Neubeginn aktualisieren; vorherige Zeilen wurden entfernt.'), searchInvalid: t('Search accepts at most 128 printable ASCII characters.', 'Die Suche erlaubt höchstens 128 druckbare ASCII-Zeichen.') };
@@ -79,8 +95,8 @@ function OverviewSession({ deviceId, section }: { deviceId: string; section: Ove
                 {r.hasNavigation && <div className="complete-package-pagination" role="group" aria-label={t('Page navigation', 'Seitennavigation')}>
                     {page && <p role="status">{t('Page', 'Seite')} {r.pageNumber} · {page.exhausted ? t('The entire retained section has been scanned.', 'Der gesamte gespeicherte Abschnitt wurde durchsucht.') : page.searchIncomplete ? t('Search is incomplete. More rows remain.', 'Suche unvollständig. Weitere Zeilen stehen aus.') : t('More rows remain in this complete generation.', 'Weitere Zeilen dieser vollständigen Generation stehen aus.')}</p>}
                     <button type="button" className="button" onClick={r.first} disabled={r.loading || !r.canFirst}>{t('First page', 'Erste Seite')}</button>
-                    <button type="button" className="button" onClick={r.previous} disabled={r.loading || !r.canPrevious}>{t('Previous page', 'Vorherige Seite')}</button>
-                    {r.hasNext && <button type="button" className="button" onClick={r.next} disabled={r.loading || !page}>{r.search.trim() ? t('Continue search', 'Suche fortsetzen') : t('Next page', 'Nächste Seite')}</button>}
+                    <button type="button" className="button" ref={previousButton} onClick={r.previous} disabled={r.loading || !r.canPrevious}>{t('Previous page', 'Vorherige Seite')}</button>
+                    {r.hasNext && <button type="button" className="button" onClick={event => { nextOrigin.current = document.activeElement === event.currentTarget ? event.currentTarget : null; r.next(); }} onBlur={() => { nextOrigin.current = null; }} disabled={r.loading || !page}>{r.search.trim() ? t('Continue search', 'Suche fortsetzen') : t('Next page', 'Nächste Seite')}</button>}
                     {r.limitedBack && <p>{t('Earlier pages can be reopened from First page.', 'Frühere Seiten lassen sich ab Erste Seite erneut öffnen.')}</p>}
                     <p className="package-note">{t('Paging deadline', 'Seitenfrist')}: {r.pagingExpiresAt}</p>
                 </div>}

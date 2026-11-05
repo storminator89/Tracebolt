@@ -316,3 +316,64 @@ it('preserves mount group ordering and rejects a changed replay boundary',async(
 it('keeps Previous mounted and focused while its reread is pending',async()=>{
     open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByText('200 / 350');let done!:(p:unknown)=>void;vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(resolve=>done=resolve));const previous=screen.getByRole('button',{name:'Previous page'});previous.focus();fireEvent.click(previous);expect(previous).toBeInTheDocument();expect(previous).toBeDisabled();expect(previous).toHaveFocus();expect(screen.queryByRole('table')).toBeNull();await act(async()=>done(overviewPage(view,processRows(),volumeRows(),query())));expect(previous).toBeInTheDocument();expect(previous).toHaveFocus();expect(previous).toBeDisabled();
 });
+
+describe('Overview replay retry and terminal focus regressions',()=>{
+    it.each([['previous','503'],['first','503'],['previous','timeout'],['first','timeout']] as const)('retries %s after %s at the original checkpoint and lease',async(action,failure)=>{
+        const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);const {result}=renderHook(()=>useCompleteOverview(overviewDevice,'processes'));await waitFor(()=>expect(result.current.page).not.toBeNull());await act(async()=>result.current.next());await act(async()=>result.current.next());const deadline=result.current.pagingExpiresAt;
+        if(failure==='503')vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('failed',503));else{vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(()=>{}));}
+        await act(async()=>result.current[action]());if(failure==='timeout'){mono.mockReturnValue(11000);wall.mockReturnValue(110000);await act(async()=>vi.advanceTimersByTimeAsync(10000));}
+        expect(result.current.page).toBeNull();expect(result.current.error).toBe(failure==='503'?'loadError':'timeout');expect(mutateRaw).toHaveBeenCalledTimes(4);
+        await act(async()=>result.current.retry());expect(result.current.error).toBeNull();expect(result.current.pageNumber).toBe(action==='first'?1:2);expect(result.current.scanned).toBe(action==='first'?100:200);expect(result.current.matches).toBe(action==='first'?100:200);expect(result.current.pagingExpiresAt).toBe(deadline);
+        const bodies=vi.mocked(mutateRaw).mock.calls.slice(-2).map(([,raw])=>JSON.parse(raw));expect(bodies[0]).toEqual(bodies[1]);expect(bodies[1]).toMatchObject({cursor:action==='first'?'':'cursor_100',search:'',limit:100,generationId:view.processes.complete!.binding.generationId});expect(request).toHaveBeenCalledTimes(1);
+    });
+    it.each(['previous','first'] as const)('does not retry an expired %s checkpoint',async action=>{
+        const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);const {result}=renderHook(()=>useCompleteOverview(overviewDevice,'processes'));await waitFor(()=>expect(result.current.page).not.toBeNull());await act(async()=>result.current.next());vi.mocked(mutateRaw).mockRejectedValueOnce(new APIError('failed',503));await act(async()=>result.current[action]());mono.mockReturnValue(901000);wall.mockReturnValue(1000000);const count=vi.mocked(mutateRaw).mock.calls.length;await act(async()=>result.current.retry());expect(mutateRaw).toHaveBeenCalledTimes(count);expect(result.current.page).toBeNull();expect(result.current.hasNavigation).toBe(false);expect(result.current.error).toBe('restart');
+    });
+    it.each(['processes','volumes'] as const)('preserves %s checkpoints across same-generation background status after rewinding',async section=>{
+        vi.useFakeTimers({toFake:['setInterval','clearInterval']});const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);view=overviewView(220,220);const deadline=overviewPage(view,processRows(220),volumeRows(220),query(section)).cursorExpiresAt;
+        vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>({...overviewPage(view,processRows(220),volumeRows(220),raw),cursorExpiresAt:deadline}));const {result}=renderHook(()=>useCompleteOverview(overviewDevice,section));await act(async()=>{});await waitFor(()=>{expect(request).toHaveBeenCalled();expect(result.current.view).not.toBeNull();expect(mutateRaw).toHaveBeenCalled();expect(result.current.error).toBeNull();expect(result.current.page).not.toBeNull();});await act(async()=>result.current.next());await act(async()=>result.current.next());await act(async()=>result.current.previous());await act(async()=>result.current.previous());expect(result.current.pageNumber).toBe(1);const calls=vi.mocked(mutateRaw).mock.calls.length;
+        view=structuredClone(view);view.serverNow=new Date(Date.parse(view.serverNow)+15000).toISOString();mono.mockReturnValue(16000);wall.mockReturnValue(115000);await act(async()=>vi.advanceTimersByTime(15000));expect(request).toHaveBeenCalledTimes(2);expect(mutateRaw).toHaveBeenCalledTimes(calls);expect(result.current.pageNumber).toBe(1);expect(result.current.scanned).toBe(100);expect(result.current.pagingExpiresAt).toBe(deadline);
+        await act(async()=>result.current.next());expect(result.current.pageNumber).toBe(2);expect(result.current.scanned).toBe(200);expect(result.current.canPrevious).toBe(true);expect(result.current.canFirst).toBe(true);expect(result.current.pagingExpiresAt).toBe(deadline);mono.mockReturnValue(901000);wall.mockReturnValue(1000000);act(()=>vi.advanceTimersByTime(1000));expect(result.current.page).toBeNull();expect(result.current.hasNavigation).toBe(false);
+    });
+    it.each(['en','de'] as const)('moves keyboard focus to Previous after the final forward page (%s)',async locale=>{
+        setLocale(locale,false);const user=userEvent.setup();view=overviewView(101,101);vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processRows(101),volumeRows(101),raw));open();await screen.findByRole('table');const next=screen.getByRole('button',{name:locale==='en'?'Next page':'Nächste Seite'});next.focus();await user.keyboard(locale==='en'?'{Enter}':' ');await screen.findByText('101 / 101');expect(next).not.toBeInTheDocument();expect(screen.getByRole('button',{name:locale==='en'?'Previous page':'Vorherige Seite'})).toHaveFocus();
+    });
+    it.each(['moved','body','blur','auth','expired','session','device','section'] as const)('does not reclaim terminal focus after %s',async loss=>{
+        const mono=vi.spyOn(performance,'now').mockReturnValue(1000),wall=vi.spyOn(Date,'now').mockReturnValue(100000);view=overviewView(101,101);vi.mocked(mutateRaw).mockImplementation(async(_path,raw)=>overviewPage(view,processRows(101),volumeRows(101),raw));const mounted=render(<><button>Outside</button><CompleteOverviewPanel deviceId={overviewDevice} section="processes" sessionKey="first"/></>);await screen.findByRole('table');let done!:(p:unknown)=>void;vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(resolve=>done=resolve));const next=screen.getByRole('button',{name:'Next page'});next.focus();fireEvent.click(next);
+        if(loss==='blur'||loss==='auth')act(()=>window.dispatchEvent(new Event(loss==='auth'?AUTH_REQUIRED_EVENT:'blur')));else if(loss==='expired'){mono.mockReturnValue(901000);wall.mockReturnValue(1000000);}else if(loss==='session'||loss==='device'||loss==='section'){vi.mocked(request).mockReturnValue(new Promise(()=>{}));mounted.rerender(<><button>Outside</button><CompleteOverviewPanel deviceId={loss==='device'?'agent_other':overviewDevice} section={loss==='section'?'volumes':'processes'} sessionKey={loss==='session'?'second':'first'}/></>);}
+        const outside=screen.getByRole('button',{name:'Outside'});if(loss==='body'){fireEvent.pointerDown(document.body);next.blur();}else outside.focus();await act(async()=>done(overviewPage(view,processRows(101),volumeRows(101),query('processes','cursor_100'))));expect(loss==='body'?document.body:outside).toHaveFocus();if(loss!=='moved'&&loss!=='body')expect(screen.queryByRole('table')).toBeNull();expect(mutateRaw).toHaveBeenCalledTimes(2);
+    });
+});
+
+it.each(['blur', 'auth', 'expired', 'session', 'device', 'section', 'hidden', 'pagehide'] as const)('does not hand off terminal focus after isolated %s without a focus move', async loss => {
+    const mono = vi.spyOn(performance, 'now').mockReturnValue(1000), wall = vi.spyOn(Date, 'now').mockReturnValue(100000);
+    view = overviewView(101, 101);
+    vi.mocked(mutateRaw).mockImplementation(async (_path, raw) => overviewPage(view, processRows(101), volumeRows(101), raw));
+    const mounted = open();
+    await screen.findByRole('table');
+    let finish!: (page: unknown) => void;
+    vi.mocked(mutateRaw).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const next = screen.getByRole('button', { name: 'Next page' });
+    next.focus(); fireEvent.click(next);
+    expect(next).toHaveFocus(); expect(next).toBeDisabled();
+    // Observe automatic handoffs without moving focus to another element ourselves.
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    if (loss === 'hidden') {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+        act(() => document.dispatchEvent(new Event('visibilitychange')));
+    } else if (loss === 'blur' || loss === 'auth' || loss === 'pagehide') {
+        act(() => window.dispatchEvent(new Event(loss === 'auth' ? AUTH_REQUIRED_EVENT : loss)));
+    } else if (loss === 'expired') {
+        mono.mockReturnValue(901000); wall.mockReturnValue(1000000);
+    } else {
+        vi.mocked(request).mockReturnValue(new Promise(() => {}));
+        mounted.rerender(<CompleteOverviewPanel deviceId={loss === 'device' ? 'agent_other' : overviewDevice} section={loss === 'section' ? 'volumes' : 'processes'} sessionKey={loss === 'session' ? 'second' : 'first'}/>);
+    }
+    await act(async () => finish(overviewPage(view, processRows(101), volumeRows(101), query('processes', 'cursor_100'))));
+    expect(focus).not.toHaveBeenCalled();
+    expect(screen.queryByRole('table')).toBeNull();
+    const previous = screen.queryByRole('button', { name: 'Previous page' });
+    if (loss === 'expired' && previous) { expect(previous).toBeDisabled(); expect(previous).not.toHaveFocus(); }
+    else expect(previous).toBeNull();
+    expect(mutateRaw).toHaveBeenCalledTimes(2);
+});
