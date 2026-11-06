@@ -86,6 +86,7 @@ function Watches({ deviceId, scope, sessionEnd }: { deviceId: string; scope: str
                     <label htmlFor={`${uid}-failures`}>{c.threshold}<select id={`${uid}-failures`} value={failures} onChange={event => { reset(); setDraft({ text, failures: Number(event.target.value), sourceToken: view!.source.token, editing: true }); }}><option value={2}>{c.two}</option><option value={3}>{c.three}</option></select></label>
                     <button type="submit" className="button small" disabled={names === null || !canEnable}>{c.review}</button>
                 </fieldset>
+                {draft.editing && <button type="button" className="text-button" onClick={event => { reset(); setDraft(emptyDraft()); setChoosing(false); event.currentTarget.closest('details.linux-process-watches')?.querySelector('summary')?.focus(); }}>{c.discardDraft}</button>}
             </form>;
     return <details className="linux-process-watches" onToggle={event => { if (event.target !== event.currentTarget) return; const next = event.currentTarget.open; setOpen(next); if (!next) { reset(); setDraft(emptyDraft()); setChoosing(false); } }}>
         <summary>{c.title}</summary>

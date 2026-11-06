@@ -120,6 +120,29 @@ describe('Observed process name selection', () => {
 });
 
 describe('Unconfirmed editing drafts', () => {
+    it.each(['inventory', 'page', 'authority'] as const)('discards an unsaved draft during the %s read and rejects its late reply', async stage => {
+        const f = await start(); fireEvent.change(draft(), { target: { value: 'discard-this-private-name' } });
+        let finish!: (value: unknown) => void; const held = new Promise(resolve => { finish = resolve; });
+        vi.mocked(request).mockImplementation(path => path.endsWith('/inventory/overview') ? stage === 'inventory' ? held : Promise.resolve(f.inventory) : stage === 'authority' ? held : Promise.resolve(f.watch));
+        if (stage === 'page') vi.mocked(mutateRaw).mockImplementation(() => held);
+        await choose();
+        const signal = stage === 'page' ? vi.mocked(mutateRaw).mock.calls.at(-1)![3] : vi.mocked(request).mock.calls.at(-1)![1]?.signal;
+        expect(signal?.aborted).toBe(false);
+        const reads = vi.mocked(request).mock.calls.length, queries = vi.mocked(mutateRaw).mock.calls.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Discard unsaved changes' }));
+        expect(signal?.aborted).toBe(true); expect(draft()).toHaveValue('');
+        expect(screen.queryByRole('region', { name: 'Names observed in this snapshot' })).toBeNull();
+        expect(document.querySelector('details.linux-process-watches > summary')).toHaveFocus();
+        const page = overviewPage(f.inventory, f.rows, [], JSON.stringify({ section: 'processes', cursor: '', search: '', limit: 100 }));
+        await act(async () => finish(stage === 'inventory' ? f.inventory : stage === 'page' ? page : f.watch));
+        expect(draft()).toHaveValue(''); expect(screen.queryByRole('checkbox')).toBeNull();
+        expect(screen.queryByRole('region', { name: 'Names observed in this snapshot' })).toBeNull();
+        expect(screen.queryByRole('region', { name: 'Review this exact local change' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Review process monitoring' })).toBeDisabled();
+        expect(request).toHaveBeenCalledTimes(reads); expect(mutateRaw).toHaveBeenCalledTimes(queries);
+        expect(vi.mocked(mutateRaw).mock.calls.every(([path]) => path.endsWith('/inventory/overview/query'))).toBe(true);
+        expect(JSON.stringify([localStorage, sessionStorage])).not.toContain('discard-this-private-name');
+    });
     it('prefills saved names and threshold only after choosing edit', async () => {
         const f = fixture(); f.watch = processEnabled(); f.watch.policy.consecutiveFailures = 3; await start(f); expect(screen.queryByRole('textbox')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Edit monitored processes' })); expect(draft()).toHaveValue('worker'); expect(screen.getByRole('combobox')).toHaveValue('3'); expect(mutateRaw).not.toHaveBeenCalled();

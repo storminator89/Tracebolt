@@ -191,3 +191,61 @@ describe('Linux process-watch private lifecycle and reviewed changes', () => {
         const tabs = screen.getByRole('tablist', { name: 'Inventory source' }); fireEvent.click(within(tabs).getByRole('tab', { name: 'Mounts' })); expect(screen.queryByText('Local Linux process watches')).toBeNull(); fireEvent.click(within(tabs).getByRole('tab', { name: 'Processes' })); expect(document.querySelector('details.linux-process-watches')).not.toHaveAttribute('open'); expect(request).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('discarding an unsaved Linux process-watch draft', () => {
+    it('does not renew the original display lease when discarding and reopening an edit', async () => {
+        await start(processEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Edit monitored processes' }));
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'unsaved-worker' } }); await advance(29000);
+        fireEvent.click(screen.getByRole('button', { name: 'Discard unsaved changes' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Edit monitored processes' })); expect(screen.getByRole('textbox')).toBeEnabled();
+        await advance(1001); expect(screen.getByRole('textbox')).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Review process monitoring' })).toBeDisabled();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('never offers local discard as cancellation of an uncertain submitted write', async () => {
+        await start(); prepare(); vi.mocked(mutateRaw).mockRejectedValueOnce(new TypeError('lost reply')); apply(); await flush();
+        expect(screen.getByText(/^Outcome unconfirmed/)).toBeVisible();
+        expect(screen.queryByRole('button', { name: 'Discard unsaved changes' })).toBeNull();
+        expect(screen.queryByRole('textbox')).toBeNull(); expect(mutateRaw).toHaveBeenCalledTimes(1);
+    });
+    it.each(['en', 'de'] as const)('cancels saved-policy editing locally and restores the saved values on the next edit in %s', async locale => {
+        const v = processEnabled(); await start(v); act(() => setLocale(locale, false));
+        const edit = locale === 'de' ? 'Überwachte Prozesse bearbeiten' : 'Edit monitored processes';
+        const discard = locale === 'de' ? 'Ungespeicherte Änderungen verwerfen' : 'Discard unsaved changes';
+        fireEvent.click(screen.getByRole('button', { name: edit }));
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'different-worker' } });
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '3' } });
+        const button = screen.getByRole('button', { name: discard }); expect(button).toHaveAttribute('type', 'button');
+        fireEvent.click(button);
+        expect(screen.queryByRole('textbox')).toBeNull(); expect(screen.getByRole('button', { name: edit })).toBeVisible();
+        const panel = document.querySelector('details.linux-process-watches')!;
+        expect(panel).toHaveAttribute('open'); expect(panel.querySelector('summary')).toHaveFocus();
+        expect(screen.getByRole('heading', { name: locale === 'de' ? 'worker · Offen' : 'worker · Open' })).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: edit }));
+        expect(screen.getByRole('textbox')).toHaveValue(v.policy.names.join('\n')); expect(screen.getByRole('combobox')).toHaveValue(String(v.policy.consecutiveFailures));
+        expect(screen.queryByRole('checkbox')).toBeNull(); expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('lets an expired draft be discarded without renewing evidence or review in %s', async locale => {
+        await start(processEnabled()); act(() => setLocale(locale, false));
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Überwachte Prozesse bearbeiten' : 'Edit monitored processes' }));
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'unconfirmed-worker' } });
+        await advance(30001);
+        expect(screen.getByRole('textbox')).toBeDisabled();
+        const button = screen.getByRole('button', { name: locale === 'de' ? 'Ungespeicherte Änderungen verwerfen' : 'Discard unsaved changes' });
+        expect(button).toBeEnabled(); fireEvent.click(button);
+        expect(screen.queryByRole('textbox')).toBeNull(); expect(screen.queryByRole('checkbox')).toBeNull();
+        expect(document.querySelector('details.linux-process-watches > summary')).toHaveFocus();
+        expect(screen.getByRole('button', { name: locale === 'de' ? 'Prozessüberwachung neu laden' : 'Reload process watches' })).toBeVisible();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('clears a new unsaved selection without changing the default-off saved policy', async () => {
+        await start(); fireEvent.change(screen.getByRole('textbox'), { target: { value: 'unsaved-worker' } });
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '3' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Discard unsaved changes' }));
+        expect(screen.getByRole('textbox')).toHaveValue(''); expect(screen.getByRole('combobox')).toHaveValue('2');
+        expect(screen.getByText('Local process monitoring is disabled.')).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Review process monitoring' })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: 'Discard unsaved changes' })).toBeNull();
+        expect(request).toHaveBeenCalledTimes(1); expect(mutateRaw).not.toHaveBeenCalled();
+    });
+});
