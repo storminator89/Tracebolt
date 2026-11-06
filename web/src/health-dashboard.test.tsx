@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HealthDashboard, healthDashboardState, healthMetric } from './health-dashboard';
 import { setLocale } from './i18n';
@@ -40,6 +40,38 @@ describe('one-glance health facts', () => {
     it('localizes the primary dashboard and decimal measurements in German', () => {
         setLocale('de', false); draw(); expect(screen.getByText('Überwachte Prüfungen unauffällig')).toBeVisible(); expect(screen.getByRole('list', { name: 'Aktuelle Prüfungen' })).toHaveTextContent('31,2%'); expect(screen.getByRole('button', { name: 'Dienste auswählen' })).toBeVisible();
     });
+    it.each(['en', 'de'] as const)('separates open, confirming and unknown service checks in %s', locale => {
+        setLocale(locale, false);
+        const v = view();
+        (['open', 'pending', 'unknown', 'ok'] as const).forEach((state, i) => v.checks.push({ key: `service:fixture${i}.service`, kind: 'service', target: `fixture${i}.service`, state, observedAt: state === 'unknown' ? null : at, value: null }));
+        draw(v);
+        const group = screen.getByRole('group', { name: locale === 'en' ? 'Current service check states' : 'Aktuelle Zustände der Dienstprüfungen' });
+        expect(within(group).getByText(locale === 'en' ? '1 open' : '1 offen')).toBeVisible();
+        expect(within(group).getByText(locale === 'en' ? '1 confirming' : '1 ausstehend')).toBeVisible();
+        expect(within(group).getByText(locale === 'en' ? '1 unknown' : '1 unbekannt')).toHaveClass('neutral');
+        expect(group.closest('li')?.querySelector('.health-card-value')).toHaveTextContent(locale === 'en' ? '4 selected' : '4 ausgewählt');
+    });
+    it('keeps unknown-only services neutral and does not count retained incidents as current open checks', () => {
+        const v = view();
+        v.checks.push({ key: 'service:fixture.service', kind: 'service', target: 'fixture.service', state: 'unknown', observedAt: null, value: null });
+        v.incidents.push({ id: 'health_0000000000000001', key: 'service:fixture.service', kind: 'service', target: 'fixture.service', openedAt: at, lastObservedAt: at, resolvedAt: null, acknowledgedAt: null });
+        draw(v);
+        const group = screen.getByRole('group', { name: 'Current service check states' });
+        expect(group).toHaveTextContent('1 unknown');
+        expect(group).not.toHaveTextContent(/open|confirming/);
+        expect(group.closest('li')).toHaveClass('health-reading-unknown');
+        expect(screen.getByRole('region', { name: 'Current issues' })).toHaveTextContent('Alert open · Current state unknown');
+    });
+    it('keeps clear services and zero selected checks free of issue counts', () => {
+        const v = view();
+        v.checks.push({ key: 'service:fixture.service', kind: 'service', target: 'fixture.service', state: 'ok', observedAt: at, value: null });
+        draw(v);
+        expect(screen.queryByRole('group', { name: 'Current service check states' })).not.toBeInTheDocument();
+        expect(screen.getByText('checked services clear').closest('li')).toHaveClass('health-reading-ok');
+        cleanup(); draw();
+        expect(screen.queryByRole('group', { name: 'Current service check states' })).not.toBeInTheDocument();
+        expect(screen.getByText('No service checks selected').closest('li')?.querySelector('.health-card-value')).toHaveTextContent('—');
+    });
     it('uses the authoritative parent clock instead of inventing a mount-time anchor', () => {
         const d = device(); d.cpu.collectedAt = '2026-10-07T19:58:01Z';
         const v = view(), handlers = { onSettings: vi.fn(), onEvidence: vi.fn(), onAcknowledge: vi.fn() };
@@ -53,5 +85,23 @@ describe('one-glance health facts', () => {
     });
     it('never upgrades unknown checks to a clear scoped summary', () => {
         const v = view(); v.checks[1].state = 'unknown'; v.checks[1].value = null; expect(healthDashboardState(v).state).toBe('unknown');
+    });
+});
+
+describe('first health evaluation without collected checks', () => {
+    it.each(['en', 'de'] as const)('does not show a reassuring clear line before evaluation (%s)', locale => {
+        setLocale(locale, false);
+        const v = view(); v.evaluatedAt = null; v.status = 'unknown'; v.checks = [];
+        const result = draw(v);
+        expect(screen.getByRole('heading', { name: locale === 'de' ? 'Erste Health-Auswertung steht aus' : 'Waiting for the first health evaluation' })).toBeVisible();
+        expect(screen.queryByText(locale === 'de' ? 'Keine offenen Warnungen' : 'No open alerts')).not.toBeInTheDocument();
+        expect(result.container.querySelector('.health-clear-line')).toBeNull();
+        expect(result.onAcknowledge).not.toHaveBeenCalled();
+        expect(result.onEvidence).not.toHaveBeenCalled();
+        expect(result.onSettings).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('retains confirmed clear feedback after evaluation (%s)', locale => {
+        setLocale(locale, false); draw();
+        expect(screen.getByText(locale === 'de' ? 'Keine offenen Warnungen' : 'No open alerts')).toBeVisible();
     });
 });
