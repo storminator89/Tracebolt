@@ -180,3 +180,39 @@ provenance, stale current evidence, exact selection across live refreshes,
 source-loss pruning, session/page/filter/search changes, repeated choices,
 close/reopen/remove/reset and inert EN/DE rendering. These are synthetic component
 checks, not browser or native acceptance.
+
+## Find episodes by their separate current check
+
+**Current check on loaded pages** (**Aktuelle Prüfung auf geladenen Seiten**)
+filters the loaded episode rows using the same current-check projection as their
+existing timelines. Options are all current checks, missing or stale evidence,
+current attention, awaiting confirmation, and monitoring disabled or removed.
+
+This is independent of the episode outcome and seen status. An old open episode
+can have unknown current evidence; a recovered or administratively closed
+episode can have a different current check. No filter turns a current value
+into evidence of that episode's recovery or uninterrupted failure. The disabled
+or removed option keeps those two native reasons intact in each timeline.
+An absent device remains unknown, not an inferred monitoring removal.
+
+Only rows from the current source pages are eligible. Filtering cannot reveal
+unloaded episodes or individual devices from an unavailable source. Existing
+partial-source notices and source totals remain visible, and zero matches never
+prove whole-fleet health or complete monitoring coverage. The Linux source's
+existing aging and the Windows source's original validity deadlines remain
+authoritative. No extra timer, reader, snapshot, storage or action is introduced.
+
+Changing this filter clears exact comparison choices as other page filters do.
+If aging or source changes remove a matching row, its choices and disclosures
+disappear; later evidence does not reselect it. **Clear page filters** restores
+all current checks without changing source scope or paging. Refresh and paging
+keep the selected filter, while remounting the queue restores all checks.
+The filter has a visible label and native keyboard control; its icon is decorative
+and non-focusable. EN/DE copy explains the episode/current-evidence distinction.
+
+`cd web && ./node_modules/.bin/vitest run src/incident-current-check-filter.test.tsx`
+uses synthetic contract-validated source fixtures and DOM interactions to test
+current-state/outcome independence, source aging and loss, native disabled versus
+removed states, filtering/reset, exact choices, repeated interactions and no
+requests or writes. These checks do not establish browser, screen-reader, native,
+deployment or release acceptance.
