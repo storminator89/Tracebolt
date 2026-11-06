@@ -1,0 +1,9 @@
+.service-action-sequence{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.service-action-sequence-controls{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:10px 0}
+.service-action-sequence-controls label{display:flex;flex-direction:column;gap:5px;min-width:0}
+.service-action-sequence select{max-width:100%;min-height:34px}
+.service-action-sequence li{overflow-wrap:anywhere;margin:8px 0}
+.service-action-sequence li>span+span{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.service-action-sequence button{font:inherit;padding:6px 9px;cursor:pointer}
+.service-action-sequence button:disabled{cursor:default;opacity:.6}
+.service-action-sequence :is(button,select,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}

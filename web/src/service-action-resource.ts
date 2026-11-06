@@ -92,6 +92,14 @@ export function useServiceActions(deviceId: string, access: ServiceActionAccess 
         currentPreview.current = null; setPreview(null); void run('approve', undefined, value);
     }, [canSelect, discardPreview, fail, run]);
     const close = useCallback(() => { if (pending.current?.kind === 'approve') return; cancel(); discardPreview(); }, [cancel, discardPreview]);
+    // Read-only timing evidence for foreground workflows. The existing anchor
+    // starts before the session/status request, so response latency is included.
+    const sessionRemaining = useCallback(() => {
+        const value = currentView.current, clock = anchor.current;
+        if (!actorId || !sessionKey || locked.current || suspended.current || !value || !clock) return 0;
+        const remaining = Date.parse(sessionKey) - Date.parse(value.serverNow) - elapsed(clock);
+        return Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
+    }, [actorId, sessionKey]);
     useEffect(() => {
         alive.current = true; locked.current = false; suspended.current = document.visibilityState === 'hidden'; lastServerNow.current = null; fail(null);
         const lock = () => { locked.current = true; unresolved.delete(scope); clear(); fail('session'); };
@@ -111,5 +119,5 @@ export function useServiceActions(deviceId: string, access: ServiceActionAccess 
         if (actorId && sessionKey) void run('read');
         return () => { alive.current = false; clear(); window.clearInterval(timer); window.removeEventListener(AUTH_REQUIRED_EVENT, lock); window.removeEventListener('pagehide', suspend); window.removeEventListener('pageshow', show); window.removeEventListener('blur', suspend); window.removeEventListener('focus', restore); window.removeEventListener('hashchange', suspend); window.removeEventListener('popstate', suspend); document.removeEventListener('visibilitychange', visibility); };
     }, [actorId, clear, discardPreview, fail, run, scope, sessionKey]);
-    return { historyAccess: actorId && sessionKey ? { deviceId, access: { actorId, sessionKey, insecureTestMode: insecure } } : null, view, preview, selected, loading, error, canSelect, select, approve, close, refresh: () => { if (!pending.current) void run('read'); }, unresolved: unresolved.has(scope) };
+    return { historyAccess: actorId && sessionKey ? { deviceId, access: { actorId, sessionKey, insecureTestMode: insecure } } : null, view, preview, selected, loading, error, canSelect, select, approve, close, sessionRemaining, refresh: () => { if (!pending.current) void run('read'); }, unresolved: unresolved.has(scope) };
 }

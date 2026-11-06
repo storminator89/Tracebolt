@@ -15,6 +15,11 @@ synthetic development manager cannot authorize this operation. There is no shell
 arbitrary command, start/enable, package action, cancellation, automatic retry,
 fleet scheduling or generic remediation workflow.
 
+The optional [guided per-view service sequence](guided-service-sequences.md)
+reuses this same controller for an explicitly ordered selection. It still needs
+a fresh preview and separate unchecked approval for every step, and never
+automatically advances or retries an action.
+
 The UI remains unavailable until the manager action configuration and existing
 state are present, and the endpoint reports a fresh matching local helper grant.
 Availability is an agent-reported hint, not execution authority or proof that a
