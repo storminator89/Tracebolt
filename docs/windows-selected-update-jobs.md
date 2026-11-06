@@ -65,6 +65,20 @@ still has this capability after a manager restart.
 
 ## Bounded request, review, approval and result
 
+The saved installation result has a collapsed **Installation evidence** panel
+in English and German. It shows the original attempt flag, numeric result code,
+HRESULT in hexadecimal and signed decimal, yes/no/unknown reboot requirement,
+and recorded result completion time in UTC. It is also available after opening
+an exact saved job. The existing outcome and uncertainty warning stay visible.
+
+These are saved executor fields, not current installation or patch coverage.
+Unlike the download contract, installation results have no per-field known
+flags. The UI therefore does not decode codes into a second outcome or treat
+zero as success; not-attempted results explicitly identify their stored zeros.
+Opening the panel performs no read, write, retry, clipboard copy or export.
+It follows the existing job/session clearing and expiry and retains no separate
+result cache. Download evidence and all per-device approvals are unchanged.
+
 1. The operator selects one exact nonzero lowercase WUA GUID and explicit
    nonnegative 31-bit revision from the current captured Updates rows. Selection
    is intent only: an inventory row cannot prove install readiness.
