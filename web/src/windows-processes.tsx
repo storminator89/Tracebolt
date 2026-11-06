@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { ChevronRight, Layers } from 'lucide-react';
 import { processMetricCells, processMetricsCopy } from './windows-process-metrics';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventorySnapshot } from './windows-inventory-types';
@@ -13,6 +14,8 @@ const copy = {
         'cpu-desc': 'CPU: highest first', 'cpu-asc': 'CPU: lowest first', 'ram-desc': 'Working-set RAM: highest first', 'ram-asc': 'Working-set RAM: lowest first',
         bounded: 'Search, sorting and pages apply only to this bounded snapshot, with at most 128 captured process rows. Other device processes may be omitted. Unavailable measurements sort last.',
         noMatches: 'No captured processes match this filter.', previous: 'Previous page', next: 'Next page', pagination: 'Captured process pages',
+        group: 'Group by name', groups: 'Captured process names', groupScope: 'Exact captured names, not process families. Groups follow their first sorted row.', groupRows: (count: number) => `${count} matching ${count === 1 ? 'process' : 'processes'}`,
+        groupCount: (start: number, end: number, groups: number, matches: number, captured: number) => `Names ${start}–${end} of ${groups} · ${matches} matching ${matches === 1 ? 'process' : 'processes'} · ${captured} captured`,
         count: (start: number, end: number, matches: number, captured: number) => `Rows ${start}–${end} of ${matches} matching · ${captured} captured`,
         page: (current: number, total: number) => `Page ${current} of ${total}`,
     },
@@ -22,6 +25,8 @@ const copy = {
         'cpu-desc': 'CPU: höchste zuerst', 'cpu-asc': 'CPU: niedrigste zuerst', 'ram-desc': 'RAM-Arbeitssatz: größter zuerst', 'ram-asc': 'RAM-Arbeitssatz: kleinster zuerst',
         bounded: 'Suche, Sortierung und Seiten gelten nur für diesen begrenzten Snapshot mit höchstens 128 erfassten Prozesszeilen. Weitere Prozesse des Geräts können fehlen. Nicht verfügbare Messwerte stehen zuletzt.',
         noMatches: 'Keine erfassten Prozesse entsprechen diesem Filter.', previous: 'Vorherige Seite', next: 'Nächste Seite', pagination: 'Seiten der erfassten Prozesse',
+        group: 'Nach Namen gruppieren', groups: 'Erfasste Prozessnamen', groupScope: 'Exakte erfasste Namen, keine Prozessfamilien. Gruppen folgen ihrer ersten sortierten Zeile.', groupRows: (count: number) => `${count} ${count === 1 ? 'passender Prozess' : 'passende Prozesse'}`,
+        groupCount: (start: number, end: number, groups: number, matches: number, captured: number) => `Namen ${start}–${end} von ${groups} · ${matches} ${matches === 1 ? 'passender Prozess' : 'passende Prozesse'} · ${captured} erfasst`,
         count: (start: number, end: number, matches: number, captured: number) => `Zeilen ${start}–${end} von ${matches} Treffern · ${captured} erfasst`,
         page: (current: number, total: number) => `Seite ${current} von ${total}`,
     },
@@ -54,8 +59,21 @@ export function capturedProcessRows(snapshot: WindowsInventorySnapshot, metrics:
         });
 }
 
-interface ProcessControls { query: string; sort: WindowsProcessSort; page: number }
-const initialControls = (): ProcessControls => ({ query: '', sort: 'pid-asc', page: 0 });
+type CapturedProcessRows = ReturnType<typeof capturedProcessRows>;
+/** Group only the current filtered rows. Equal names are not verified app identities,
+ * parent-child relationships or permission to join another source's measurements. */
+export function capturedProcessGroups(rows: CapturedProcessRows) {
+    const groups = new Map<string, CapturedProcessRows>();
+    for (const row of rows) {
+        const existing = groups.get(row.process.name);
+        if (existing) existing.push(row);
+        else groups.set(row.process.name, [row]);
+    }
+    return [...groups].map(([name, members]) => ({ name, members }));
+}
+
+interface ProcessControls { query: string; sort: WindowsProcessSort; page: number; grouped: boolean }
+const initialControls = (): ProcessControls => ({ query: '', sort: 'pid-asc', page: 0, grouped: false });
 /** Retain view controls, never rows, while a same-snapshot reread is loading.
  * The workspace is device/session-keyed by its owner. Any non-loading absence,
  * tab departure or new original snapshot clears potentially private filter text. */
@@ -72,23 +90,35 @@ export function useWindowsProcessControls(resource: WindowsInventoryResource, ac
 
 /** No requests or persistence: all rows come from the currently admitted resource. */
 export function WindowsProcessTable({ snapshot, metrics, locale, controls, onChange }: { snapshot: WindowsInventorySnapshot; metrics: WindowsProcessMetrics | null; locale: 'en' | 'de'; controls: ProcessControls; onChange: (controls: ProcessControls) => void }) {
-    const id = useId(), c = copy[locale], { query, sort, page } = controls;
+    const id = useId(), c = copy[locale], { query, sort, page, grouped } = controls;
     const rows = capturedProcessRows(snapshot, metrics, query, sort, locale);
-    const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)), currentPage = Math.min(page, pageCount - 1);
+    const groups = grouped ? capturedProcessGroups(rows) : [];
+    const itemCount = grouped ? groups.length : rows.length;
+    const pageCount = Math.max(1, Math.ceil(itemCount / PAGE_SIZE)), currentPage = Math.min(page, pageCount - 1);
     const start = currentPage * PAGE_SIZE, visible = rows.slice(start, start + PAGE_SIZE);
-    const headers = [c.name, 'PID', c.parent, c.threads, processMetricsCopy[locale].cpu, processMetricsCopy[locale].ram];
+    const visibleGroups = groups.slice(start, start + PAGE_SIZE);
     return <>
         <p className="windows-inventory-exclusions" id={`${id}-bounds`}>{c.bounded}</p>
+        <button type="button" className="button small windows-process-group-toggle" aria-pressed={grouped} onClick={() => onChange({ ...controls, grouped: !grouped, page: 0 })}><Layers size={15} aria-hidden="true" focusable="false"/>{c.group}</button>
         <div className="windows-process-controls">
             <label className="windows-inventory-search" htmlFor={`${id}-search`}>{c.search}<input id={`${id}-search`} type="search" value={query} maxLength={256} aria-describedby={`${id}-bounds`} onChange={event => { onChange({ ...controls, query: event.target.value, page: 0 }); }}/></label>
             <label className="windows-process-sort" htmlFor={`${id}-sort`}>{c.sort}<select id={`${id}-sort`} value={sort} onChange={event => { onChange({ ...controls, sort: event.target.value as WindowsProcessSort, page: 0 }); }}>{sorts.map(value => <option key={value} value={value}>{c[value]}</option>)}</select></label>
         </div>
-        <p className="windows-inventory-count" role="status" aria-live="polite" aria-atomic="true">{c.count(visible.length ? start + 1 : 0, start + visible.length, rows.length, snapshot.processes.rows.length)}</p>
-        {visible.length ? <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c.title}</caption><thead><tr>{headers.map((header, column) => <th key={header} scope="col" aria-sort={column === 0 && sort.startsWith('name-') || column === 1 && sort.startsWith('pid-') || column === 4 && sort.startsWith('cpu-') || column === 5 && sort.startsWith('ram-') ? sort.endsWith('-desc') ? 'descending' : 'ascending' : undefined}>{header}</th>)}</tr></thead><tbody>{visible.map(({ process, metric }, index) => <tr key={`${process.pid}:${index}`}>{[process.name, String(process.pid), String(process.parentPid), String(process.threads), ...processMetricCells(metric, locale)].map((value, column) => <td key={column} data-label={headers[column]}>{value}</td>)}</tr>)}</tbody></table></div> : <p>{c.noMatches}</p>}
-        <nav className="windows-process-pagination" aria-label={c.pagination}>
+        <p className="windows-inventory-count" role="status" aria-live="polite" aria-atomic="true">{grouped ? c.groupCount(visibleGroups.length ? start + 1 : 0, start + visibleGroups.length, groups.length, rows.length, snapshot.processes.rows.length) : c.count(visible.length ? start + 1 : 0, start + visible.length, rows.length, snapshot.processes.rows.length)}</p>
+        {grouped && <p className="windows-process-group-scope">{c.groupScope}</p>}
+        {rows.length === 0 ? <p>{c.noMatches}</p> : grouped ? <section key={`${query}:${sort}:${currentPage}`} className="windows-process-groups" aria-label={c.groups}>{visibleGroups.map(({ name, members }) => <details className="windows-process-group" key={name}>
+            <summary><ChevronRight size={16} aria-hidden="true" focusable="false"/><bdi>{name}</bdi><span>{c.groupRows(members.length)}</span></summary>
+            <CapturedProcessTable rows={members} locale={locale} sort={sort} caption={`${c.title}: ${name}`}/>
+        </details>)}</section> : <CapturedProcessTable rows={visible} locale={locale} sort={sort} caption={c.title}/>}
+        <nav className="windows-process-pagination" aria-label={grouped ? c.groups : c.pagination}>
             <button type="button" className="button small" disabled={currentPage === 0} onClick={() => onChange({ ...controls, page: currentPage - 1 })}>{c.previous}</button>
             <span>{c.page(currentPage + 1, pageCount)}</span>
             <button type="button" className="button small" disabled={currentPage + 1 >= pageCount} onClick={() => onChange({ ...controls, page: currentPage + 1 })}>{c.next}</button>
         </nav>
     </>;
+}
+
+function CapturedProcessTable({ rows, locale, sort, caption }: { rows: CapturedProcessRows; locale: 'en' | 'de'; sort: WindowsProcessSort; caption: string }) {
+    const c = copy[locale], headers = [c.name, 'PID', c.parent, c.threads, processMetricsCopy[locale].cpu, processMetricsCopy[locale].ram];
+    return <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{caption}</caption><thead><tr>{headers.map((header, column) => <th key={header} scope="col" aria-sort={column === 0 && sort.startsWith('name-') || column === 1 && sort.startsWith('pid-') || column === 4 && sort.startsWith('cpu-') || column === 5 && sort.startsWith('ram-') ? sort.endsWith('-desc') ? 'descending' : 'ascending' : undefined}>{header}</th>)}</tr></thead><tbody>{rows.map(({ process, metric }, index) => <tr key={`${process.pid}:${index}`}>{[process.name, String(process.pid), String(process.parentPid), String(process.threads), ...processMetricCells(metric, locale)].map((value, column) => <td key={column} data-label={headers[column]}>{value}</td>)}</tr>)}</tbody></table></div>;
 }
