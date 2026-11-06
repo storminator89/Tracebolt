@@ -101,6 +101,16 @@ latest failed/pending attempt, comparison gaps, quota omissions and expiry remai
 separate. Focus/visibility, session, device/tab changes and expiry clear private
 rows and cursors. Reading the UI does not grant collection or history.
 
+When a loaded page contains several changes for the same exact registration ID
+and registry view, a registration trail lets the operator inspect those original
+observation pairs in chronological order. First/last shown values are displayed
+side by side; duplicate names never join different registrations. The trail uses
+only the admitted page, keeps no cross-page cache, and reads nothing further.
+Search, paging, expiry and comparison gaps can hide intervening evidence. It does
+not reconstruct a complete application lifetime, infer current state, identify
+one application across reinstallations or infer installation/uninstall times.
+The existing source/query/page lifecycle removes the entire trail with its rows.
+
 ## Verification boundary
 
 Portable tests cover consent byte preservation, grant rotation, exact retries,
