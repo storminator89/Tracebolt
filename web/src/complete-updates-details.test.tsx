@@ -4,6 +4,7 @@ import { mutateRaw, request } from './api';
 import { CompleteUpdatesPanel } from './complete-updates';
 import { updateDevice, updatePage, updateRows, updateView } from './complete-updates-fixtures';
 import { setLocale } from './i18n';
+import { validCompleteUpdateView } from './complete-updates-types';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutateRaw: vi.fn() }));
 vi.mock('./auth', () => ({ useOperator: () => ({ mode: 'lan', authenticated: true, expiresAt: '2026-10-06T06:00:00Z' }) }));
@@ -60,10 +61,14 @@ describe('complete APT generation details', () => {
         it.each(['pending', 'failure'] as const)('distinguishes a newer %s from retained rows', async latest => {
             view = distinctAttempts(latest);
             setLocale(labels.locale, false);
+            expect(validCompleteUpdateView(view, updateDevice)).toBe(true);
             const original = JSON.stringify(view);
             render(<CompleteUpdatesPanel deviceId={updateDevice}/>);
             const table = await screen.findByRole('table');
             const capture = disclosure(labels.capture), latestDetails = disclosure(latest === 'pending' ? labels.transfer : labels.failure);
+            const observations = capture.closest('section')!;
+            expectFact(observations, labels.age, '72');
+            expect(within(capture).queryByText(labels.age)).not.toBeInTheDocument();
             const attempts = [view.complete!.binding, latest === 'pending' ? view.transfer!.binding : view.failure!];
             const sections = [capture, latestDetails];
             for (const [index, details] of sections.entries()) {
@@ -105,7 +110,7 @@ describe('complete APT generation details', () => {
                 expect(details).toHaveAttribute('open');
                 expectFact(details, labels.generation, attempts[index].generationId);
                 expectFact(details, labels.sequence, attempts[index].sequence);
-                if (details === capture) expectFact(capture, labels.age, '72');
+                if (details === capture) expectFact(observations, labels.age, '72');
                 if (details === latestDetails && latest === 'pending') expectFact(latestDetails, labels.collected, view.transfer!.collectedAt);
                 toggle(details);
                 expect(details).not.toHaveAttribute('open');
@@ -115,6 +120,7 @@ describe('complete APT generation details', () => {
             }
             expect(screen.getByRole('table')).toBe(table);
             expect(screen.getByText(view.complete!.manifest.collectedAt)).toBeVisible();
+            expectFact(observations, labels.age, '72');
             if (view.failure) expect(screen.getByText(view.failure.attemptedAt)).toBeVisible();
             expect(screen.getByText(labels.stale)).toBeVisible();
             expect(screen.getByText(labels.partial)).toBeVisible();
@@ -189,7 +195,8 @@ describe('complete APT generation details', () => {
             expectFact(details, 'Generation ID', attempts[index].generationId);
             expectFact(details, 'Sequence', attempts[index].sequence);
         }
-        expectFact(sections[0], 'Local metadata age at capture (hours)', '72');
+        expectFact(sections[0].closest('section')!, 'Local metadata age at capture (hours)', '72');
+        expect(within(sections[0]).queryByText('Local metadata age at capture (hours)')).not.toBeInTheDocument();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
         expect(request).toHaveBeenCalledTimes(1);
