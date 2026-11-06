@@ -1,23 +1,24 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { abortProtectedRequests } from './api';
 import { emptyEndpointView } from './endpoint-identity-fixtures';
 import { journalDevice as id, journalNow as now, journalSession, journalView } from './journal-fixtures';
 import { setLocale } from './i18n';
+import { validInvestigationsView } from './investigations-types';
 import type { InvestigationScope, InvestigationsView } from './investigations-types';
 import type { Device } from './types';
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status});
 const metric={value:null,unit:'%',quality:'unknown' as const,source:'fixture',collectedAt:now};
 const device:Device={id,name:'Fixture Linux',platform:'linux',os:'Linux',site:'',group:'',ip:null,status:'unknown',source:'lan',synthetic:false,lastSeen:now,agentVersion:'fixture',cpu:metric,memory:metric,disk:metric,uptime:'',tags:[],capabilities:[],evidence:[],trend:[],caseIds:[]};
 function fixture():InvestigationsView{return {schemaVersion:'tracebolt.investigations.v1',serverNow:now,scope:'open',offset:0,total:1,counts:{open:1,recovered:0,closed:0,all:1},devices:[{schemaVersion:'tracebolt.health-view.v1',deviceId:id,serverNow:now,evaluatedAt:now,status:'attention',maintenanceUntil:null,monitoredServices:['fixture.service'],checks:[{key:'offline:contact',kind:'offline',target:'agent',state:'ok',observedAt:now,value:null},{key:'filesystem:root',kind:'filesystem',target:'/',state:'unknown',observedAt:null,value:null},{key:'service:fixture.service',kind:'service',target:'fixture.service',state:'open',observedAt:now,value:null}],incidents:[]}],items:[{deviceId:id,incident:{id:'health_0000000000000001',key:'service:fixture.service',kind:'service',target:'fixture.service',openedAt:now,lastObservedAt:now,resolvedAt:null,acknowledgedAt:null}}]};}
-function server(mode='lan'){
+function server(mode='lan', source: () => InvestigationsView = fixture){
  const fetch=vi.fn(async(url:string, _init?:RequestInit)=>{
   if(url==='/api/auth/session')return json(mode==='lan'?journalSession:{...journalSession,mode:'development',authenticated:false,authenticationRequired:false,csrfToken:null,expiresAt:null,expiresInSeconds:null});
   if(url==='/api/overview')return json({generatedAt:now,stats:{totalDevices:1,healthyDevices:0,attentionDevices:0,openCases:0,criticalCases:0},devices:[device],cases:[],activity:[]});
-  if(url.startsWith('/api/investigations?')) { const scope=new URL(url,'https://localhost').searchParams.get('scope') as InvestigationScope; const value=fixture(); value.scope=scope; if(scope==='recovered'||scope==='closed') {value.total=0;value.items=[];} return json(value); }
+  if(url.startsWith('/api/investigations?')) { const scope=new URL(url,'https://localhost').searchParams.get('scope') as InvestigationScope; const value=source(); value.scope=scope; if(scope==='recovered'||scope==='closed') {value.total=0;value.items=[];} return json(value); }
   if(url===`/api/devices/${id}`)return json(device);
-  if(url===`/api/devices/${id}/health`)return json({...fixture().devices[0],incidents:[fixture().items[0].incident]});
+  if(url===`/api/devices/${id}/health`)return json({...source().devices[0],incidents:source().items.map(item=>item.incident)});
   if(url===`/api/devices/${id}/inventory/endpoint-identity`)return json({...emptyEndpointView(),deviceId:id});
   if(url===`/api/devices/${id}/journal`)return json(journalView('awaiting'));
   return json({},503);
@@ -26,12 +27,15 @@ function server(mode='lan'){
 beforeEach(()=>{sessionStorage.clear();localStorage.clear();setLocale('en',false);window.history.replaceState({},'', '/#/cases');vi.spyOn(document,'hasFocus').mockReturnValue(true);});
 afterEach(()=>{cleanup();abortProtectedRequests();vi.unstubAllGlobals();vi.restoreAllMocks();});
 const route=(value:string)=>act(()=>{window.history.replaceState({},'', `/${value.startsWith('#') ? value : `#${value}`}`);window.dispatchEvent(new Event('hashchange'));});
+// Settle the render-triggered lazy detail module, as device-page tests do.
+// Keep the normal DOM deadline and real route/authentication readers unchanged.
+const settleDetailImport = () => act(async () => { await vi.dynamicImportSettled(); });
 it('routes a real LAN investigation to its device Health, Details and exact-service logs without capturing logs',async()=>{
  const fetch=server();render(<App/>);await screen.findByText('fixture.service: service inactive');fireEvent.click(screen.getByText('Evidence & next check'));
  const health=screen.getByRole('link',{name:'Check Health'}).getAttribute('href')!;const details=screen.getByRole('link',{name:'Device details'}).getAttribute('href')!;const logs=screen.getByRole('link',{name:'Service logs'}).getAttribute('href')!;
- route(health);await screen.findByRole('heading',{name:'Health'});expect(screen.getByRole('tab',{name:'Health & history'})).toHaveAttribute('aria-selected','true');
- route(details);await screen.findByText('Stable cryptographic device ID');expect(screen.getByRole('tab',{name:'Details'})).toHaveAttribute('aria-selected','true');
- route(logs);await screen.findByText('Awaiting a request');expect(screen.getByRole('tab',{name:'Logs'})).toHaveAttribute('aria-selected','true');
+ route(health);await settleDetailImport();await screen.findByRole('heading',{name:'Health'});expect(screen.getByRole('tab',{name:'Health & history'})).toHaveAttribute('aria-selected','true');
+ route(details);await settleDetailImport();await screen.findByText('Stable cryptographic device ID');expect(screen.getByRole('tab',{name:'Details'})).toHaveAttribute('aria-selected','true');
+ route(logs);await settleDetailImport();await screen.findByText('Awaiting a request');expect(screen.getByRole('tab',{name:'Logs'})).toHaveAttribute('aria-selected','true');
  fireEvent.click(document.querySelector('.journal-advanced summary')!);expect(screen.getByLabelText('Exact service unit')).toHaveValue('fixture.service');
  expect(fetch.mock.calls.some(([url])=>url.endsWith('/journal/create'))).toBe(false);
  route('/cases');await screen.findByText('fixture.service: service inactive');expect(screen.queryByText('Awaiting a request')).not.toBeInTheDocument();
@@ -61,5 +65,37 @@ it('survives a rapid real hash roundtrip whose final route equals the starting r
 });
 
 it.each(['health','logs'])('falls back from an unavailable %s deep link after reading device metadata',async(tab)=>{
- window.history.replaceState({},'', `/#/devices/${id}/${tab}`);const fetch=server('development');render(<App/>);await screen.findByRole('heading',{name:'Fixture Linux',level:1});await waitFor(()=>expect(screen.getByRole('tab',{name:'Overview'})).toHaveAttribute('aria-selected','true'));expect(screen.queryByRole('tab',{name:tab==='health'?'Health & history':'Logs'})).not.toBeInTheDocument();expect(fetch.mock.calls.some(([url])=>url.endsWith('/journal/create'))).toBe(false);
+ window.history.replaceState({},'', `/#/devices/${id}/${tab}`);const fetch=server('development');await act(async()=>{render(<App/>);});await settleDetailImport();await screen.findByRole('heading',{name:'Fixture Linux',level:1});await waitFor(()=>expect(screen.getByRole('tab',{name:'Overview'})).toHaveAttribute('aria-selected','true'));expect(screen.queryByRole('tab',{name:tab==='health'?'Health & history':'Logs'})).not.toBeInTheDocument();expect(fetch.mock.calls.some(([url])=>url.endsWith('/journal/create'))).toBe(false);
+});
+
+
+it('opens the exact unknown-check Health view without an incident and returns to fresh queue filters without a mutation', async () => {
+ const gapSource = () => {
+  const view=fixture(); view.total=0; view.counts={open:0,recovered:0,closed:0,all:0}; view.items=[];
+  view.devices[0].status='unknown'; view.devices[0].checks[2].state='ok';
+  return view;
+ };
+ expect(validInvestigationsView(gapSource(),'open',0)).toBe(true);
+ const fetch=server('lan',gapSource); render(<App/>);
+ fireEvent.click(await screen.findByText(/^Linux checks without current evidence:/));
+ const search=screen.getByRole('searchbox',{name:'Find a Linux monitoring gap'});
+ fireEvent.change(search,{target:{value:'Fixture Linux'}});
+ expect(screen.queryByText('fixture.service: service inactive')).not.toBeInTheDocument();
+ const link=screen.getByRole('link',{name:`Open Health for Fixture Linux (${id})`});
+ expect(link).toHaveAttribute('href',`#/devices/${id}/health`);
+ expect(fetch.mock.calls.some(([url])=>url===`/api/devices/${id}/health`)).toBe(false);
+ route(link.getAttribute('href')!); await settleDetailImport();
+ await screen.findByRole('heading',{name:'Health'});
+ expect(screen.getByRole('tab',{name:'Health & history'})).toHaveAttribute('aria-selected','true');
+ await screen.findByText('Current status unknown');
+ fireEvent.click(screen.getByText('Evidence & check scope'));
+ const checks=screen.getByRole('list',{name:'Check details'});
+ expect(within(checks).getByText('Root filesystem /').closest('li')).toHaveTextContent('Unknown');
+ expect(fetch.mock.calls.filter(([url])=>url===`/api/devices/${id}/health`)).toHaveLength(1);
+ expect(screen.queryByRole('searchbox',{name:'Find a Linux monitoring gap'})).not.toBeInTheDocument();
+ route('/cases'); fireEvent.click(await screen.findByText(/^Linux checks without current evidence:/));
+ expect(screen.getByRole('searchbox',{name:'Find a Linux monitoring gap'})).toHaveValue('');
+ expect(screen.queryByRole('heading',{name:'Health'})).not.toBeInTheDocument();
+ expect(fetch.mock.calls.every(([,init])=>!init?.method||init.method==='GET')).toBe(true);
+ expect(fetch.mock.calls.some(([url])=>url.endsWith('/journal/create')||url.includes('/preview'))).toBe(false);
 });
