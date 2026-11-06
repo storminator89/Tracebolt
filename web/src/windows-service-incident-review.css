@@ -1,0 +1,6 @@
+.windows-service-review-contexts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-block:14px}
+.windows-service-review-contexts>section{min-width:0;padding:12px;border:1px solid var(--line);border-radius:8px;overflow-wrap:anywhere}
+.windows-service-review-contexts h4{font-size:12px;margin:0 0 8px;color:var(--secondary)}
+.windows-service-review-contexts p{margin:0;line-height:1.6}
+.windows-service-review-contexts p+p{margin-top:8px}
+@media(max-width:600px){.windows-service-review-contexts{grid-template-columns:minmax(0,1fr)}}

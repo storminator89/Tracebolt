@@ -38,6 +38,26 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(LOGOUT_INTENT_KEY); sessionStorage.removeItem(LOGOUT_INTENT_KEY); vi.useRealTimers(); vi.restoreAllMocks(); });
 
+it.each(['en', 'de'] as const)('separates the selected incident from current service evidence without adding authority (%s)', async locale => {
+    setLocale(locale, false);
+    response.control = { status: 'not_configured', binding: null, bindingDigest: null };
+    renderReview(); await flush();
+    const episode = screen.getByRole('region', { name: locale === 'de' ? 'Ausgewählter Vorfall' : 'Selected incident' });
+    const current = screen.getByRole('region', { name: locale === 'de' ? 'Aktuell gemeldeter Dienst' : 'Current reported service' });
+    expect(episode).toHaveTextContent(locale === 'de' ? 'Vorfall aktiv' : 'Incident active');
+    expect(current).toHaveTextContent('Fixture Service');
+    expect(current).not.toHaveTextContent(locale === 'de' ? 'Vorfall aktiv' : 'Incident active');
+    expect(episode).not.toContainElement(current);
+    const opened = episode.querySelector('time')!.dateTime;
+    await act(async () => vi.advanceTimersByTime(111000));
+    expect(current).toHaveTextContent(locale === 'de' ? 'Der aktuelle Dienstzustand ist unbekannt' : 'Current service state is unknown');
+    expect(current).not.toHaveTextContent('Fixture Service');
+    expect(episode.querySelector('time')).toHaveAttribute('datetime', opened);
+    expect(episode).toHaveTextContent(locale === 'de' ? 'Vorfall aktiv' : 'Incident active');
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(mutateRaw).not.toHaveBeenCalled();
+});
+
 describe('closed service-incident review contract', () => {
     it('validates the exact incident and rejects unrelated or overbroad pairing', () => {
         const valid = (value: unknown) => validWindowsServiceIncidentReview(value, incident().key, windowsDeviceId, binding.target);
