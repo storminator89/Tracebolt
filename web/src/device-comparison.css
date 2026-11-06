@@ -1,0 +1,18 @@
+.device-comparison { border-top: 1px solid var(--line); padding: 16px 20px; }
+.device-comparison p { color: var(--secondary); font-size: 12px; margin: 10px 0; }
+.device-comparison-heading, .device-comparison-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.device-comparison-selectors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.device-comparison-selectors label { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--secondary); }
+.device-comparison-selectors select { width: 100%; min-width: 0; padding: 8px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.device-comparison-scroll { overflow-x: auto; margin-top: 16px; }
+.device-comparison table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+.device-comparison th, .device-comparison td { min-width: 180px; max-width: 280px; padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+.device-comparison th:first-child { min-width: 110px; width: 18%; }
+.device-comparison th { font-weight: 500; }
+.device-comparison thead th { background: var(--panel-soft); }
+.device-comparison-id { display: block; margin-top: 4px; color: var(--secondary); font-weight: 400; }
+.device-comparison-actions { margin-top: 10px; }
+.device-comparison-provenance { margin-top: 8px; color: var(--secondary); }
+.device-comparison-provenance summary { cursor: pointer; }
+.device-comparison-provenance span, .device-comparison-provenance time { display: block; margin-top: 6px; }
+@media (max-width: 650px) { .device-comparison { padding: 14px; } .device-comparison-selectors { grid-template-columns: 1fr; } }
