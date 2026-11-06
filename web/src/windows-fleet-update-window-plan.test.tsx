@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { request, mutateRaw, AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
@@ -173,4 +173,72 @@ it('clears wave drafts on a new selection and operator replacement', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New selection' })); expect(screen.getByRole('checkbox', { name: c.scheduled })).not.toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: c.scheduled })); expect(screen.getByRole('checkbox', { name: c.stagger })).not.toBeChecked(); fireEvent.click(screen.getByRole('checkbox', { name: c.stagger })); expect(screen.getByLabelText(c.size)).toHaveValue(1); expect(screen.getByLabelText(c.gap)).toHaveValue(5);
     vi.mocked(useOperator).mockReturnValue({ ...session, actorId: `operator_${'a'.repeat(32)}` } as never); ui.rerender(<WindowsFleetUpdateWorklist devices={devices}/>); expect(screen.getByRole('checkbox', { name: c.scheduled })).not.toBeChecked(); expect(screen.queryByLabelText(c.size)).toBeNull(); expect(mutateRaw).not.toHaveBeenCalled();
+});
+it.each(['en', 'de'] as const)('shows static accessible steps and truthful limits for draft and frozen waves in %s', async locale => {
+    const de = locale === 'de'; setLocale(locale, false);
+    render(<WindowsFleetUpdateWorklist devices={devices}/>); const c = plan(de);
+    const stepsName = de ? 'Planen, freigeben, Ergebnisse lesen' : 'Plan, approve, read results';
+    const checkSteps = () => {
+        const steps = screen.getByRole('list', { name: stepsName });
+        expect(within(steps).getAllByRole('listitem')).toHaveLength(3);
+        expect(steps).toHaveTextContent(de ? 'Beim Planen und Festhalten wird nichts gesendet.' : 'Planning and freezing send no requests.');
+        expect(steps).toHaveTextContent(de ? 'separat freigeben' : 'window separately');
+        expect(steps).toHaveTextContent(de ? 'Kein Gerät wird automatisch freigegeben.' : 'No device is approved automatically.');
+        expect(steps).toHaveTextContent(de ? 'nur den gespeicherten Status lesen' : 'read saved status only');
+        expect(steps).toHaveTextContent(de ? 'Ein ungewisses Ergebnis ist kein Erfolg.' : 'An uncertain result is not success.');
+        expect(steps).toHaveTextContent(de ? 'nicht erneut ausführen' : 'Do not retry uncertain actions.');
+        expect(steps.querySelectorAll('svg')).toHaveLength(3);
+        for (const icon of steps.querySelectorAll('svg')) { expect(icon).toHaveAttribute('aria-hidden', 'true'); expect(icon).toHaveAttribute('focusable', 'false'); }
+        expect(steps.querySelector('[aria-current], button, input')).toBeNull();
+    };
+    const checkLimits = (name: string) => {
+        const region = screen.getByRole('region', { name }), limits = region.querySelector('.windows-fleet-update-window-limits')!;
+        expect(limits.querySelectorAll('li')).toHaveLength(3);
+        expect(limits).toHaveTextContent(de ? 'keine Parallelitätsgrenze' : 'not a concurrency limit');
+        expect(limits).toHaveTextContent(de ? 'Installationen können in spätere Zeitfenster hineinreichen.' : 'Installations may continue into later windows.');
+        expect(limits).toHaveTextContent(de ? 'warten nicht auf vorherigen Erfolg' : 'do not wait for earlier success');
+        expect(limits).toHaveTextContent(de ? 'stoppen bei Fehlern nicht automatisch' : 'stop automatically after failure');
+        expect(limits).toHaveTextContent(de ? 'Der genaue Startzeitpunkt ist nicht garantiert.' : 'Exact start time is not guaranteed.');
+        expect(limits.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+        expect(limits.querySelector('svg')).toHaveAttribute('focusable', 'false');
+        expect(Array.from(region.querySelectorAll('time')).map(time => time.dateTime)).toEqual([
+            '2026-10-11T10:02:00.000Z', '2026-10-11T10:07:00.000Z',
+            '2026-10-11T10:12:00.000Z', '2026-10-11T10:17:00.000Z',
+            '2026-10-11T10:22:00.000Z', '2026-10-11T10:27:00.000Z',
+        ]);
+    };
+    checkSteps(); checkLimits(c.preview);
+    expect(screen.getByLabelText(de ? 'Erster Beginn (UTC)' : 'First start (UTC)')).toHaveValue('2026-10-11T10:02');
+    expect(screen.getByLabelText(de ? 'Erstes Ende (UTC)' : 'First end (UTC)')).toHaveValue('2026-10-11T10:07');
+    expect(screen.queryByLabelText(c.start)).toBeNull(); expect(screen.queryByLabelText(c.end)).toBeNull();
+    expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: c.freeze })); await flush();
+    checkSteps(); checkLimits(c.frozen);
+    expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+    await review(devices[0], de);
+    expect(screen.getByRole('checkbox', { name: de ? /vorausschauend für dieses UTC/ : /prospectively for this UTC/ })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: de ? 'Geplantes Update einmal freigeben' : 'Approve scheduled update once' })).toBeDisabled();
+    expect(mutateRaw).toHaveBeenCalledTimes(1);
+});
+it.each(['en', 'de'] as const)('keeps shared-window labels and values when leaving staggered planning in %s', locale => {
+    const de = locale === 'de'; setLocale(locale, false);
+    render(<WindowsFleetUpdateWorklist devices={devices}/>); const c = plan(de);
+    fireEvent.click(screen.getByRole('checkbox', { name: c.stagger }));
+    expect(screen.queryByRole('list', { name: de ? 'Planen, freigeben, Ergebnisse lesen' : 'Plan, approve, read results' })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: c.scheduled })).toBeChecked();
+    expect(screen.getByLabelText(c.start)).toHaveValue('2026-10-11T10:02');
+    expect(screen.getByLabelText(c.end)).toHaveValue('2026-10-11T10:07');
+    expect(screen.queryByLabelText(de ? 'Erster Beginn (UTC)' : 'First start (UTC)')).toBeNull();
+    expect(screen.getByRole('button', { name: c.freeze })).toBeEnabled();
+    expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
+});
+it('hides draft wave instructions when scheduling capability is lost without making requests', () => {
+    const ui = render(<WindowsFleetUpdateWorklist devices={devices}/>); plan();
+    expect(screen.getByRole('list', { name: 'Plan, approve, read results' })).toBeVisible();
+    vi.mocked(useOperator).mockReturnValue({ ...session, capabilities: ['read', 'windows_update_install'] } as never);
+    ui.rerender(<WindowsFleetUpdateWorklist devices={devices}/>);
+    expect(screen.queryByRole('list', { name: 'Plan, approve, read results' })).toBeNull();
+    expect(screen.queryByLabelText('First start (UTC)')).toBeNull();
+    expect(screen.getByRole('button', { name: labels().freeze })).toBeDisabled();
+    expect(request).not.toHaveBeenCalled(); expect(mutateRaw).not.toHaveBeenCalled();
 });

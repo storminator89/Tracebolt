@@ -14,11 +14,21 @@ The original [scheduled background](windows-scheduled-background-updates.md) and
 3. Optionally enable **Spread devices across successive UTC windows**. The outer
    option then reads **Plan UTC installation windows**. Choose
    1–50 devices per window and a gap of 0–1440 whole minutes after each window.
+   The time inputs now read **First start (UTC)** and **First end (UTC)**;
+   switching back keeps the entered values and restores the shared-window labels.
 4. Review every window's exact UTC times and named device IDs before freezing.
    Devices use the displayed selection order; the last group can be smaller.
 5. Freeze the reviewed selection. Open each device deliberately, choose an exact
    cached GUID/revision, read its current readiness and approve that device's exact
    frozen window using the existing initially unchecked acknowledgement.
+
+An ordered three-step guide separates planning, per-device approval and reading
+saved outcomes. It is static guidance, not a completion or success indicator.
+Its icons are decorative and hidden from assistive technology; each step has a
+visible text label. The guide explicitly keeps unconfirmed writes read-only and
+uncertain results distinct from success. The draft and frozen plan keep dispatch
+overlap, absence of success gating/automatic stop, and non-guaranteed exact start
+time visible as short points rather than one dense paragraph.
 
 For a first window of 10:00–10:05 UTC, two devices per window and a five-minute
 inter-window gap, the first two devices use 10:00–10:05, the next two use
