@@ -87,3 +87,21 @@ describe('one-glance health facts', () => {
         const v = view(); v.checks[1].state = 'unknown'; v.checks[1].value = null; expect(healthDashboardState(v).state).toBe('unknown');
     });
 });
+
+describe('first health evaluation without collected checks', () => {
+    it.each(['en', 'de'] as const)('does not show a reassuring clear line before evaluation (%s)', locale => {
+        setLocale(locale, false);
+        const v = view(); v.evaluatedAt = null; v.status = 'unknown'; v.checks = [];
+        const result = draw(v);
+        expect(screen.getByRole('heading', { name: locale === 'de' ? 'Erste Health-Auswertung steht aus' : 'Waiting for the first health evaluation' })).toBeVisible();
+        expect(screen.queryByText(locale === 'de' ? 'Keine offenen Warnungen' : 'No open alerts')).not.toBeInTheDocument();
+        expect(result.container.querySelector('.health-clear-line')).toBeNull();
+        expect(result.onAcknowledge).not.toHaveBeenCalled();
+        expect(result.onEvidence).not.toHaveBeenCalled();
+        expect(result.onSettings).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('retains confirmed clear feedback after evaluation (%s)', locale => {
+        setLocale(locale, false); draw();
+        expect(screen.getByText(locale === 'de' ? 'Keine offenen Warnungen' : 'No open alerts')).toBeVisible();
+    });
+});
