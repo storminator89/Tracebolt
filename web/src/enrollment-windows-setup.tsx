@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { ArrowDownToLine, FileCheck2, Fingerprint, ListChecks, MonitorCheck, PackageOpen, TriangleAlert } from 'lucide-react';
 import { useLocale } from './i18n';
 import { checkWindowsSetupFile, WINDOWS_SETUP_LINKS, WINDOWS_SETUP_RELEASE } from './windows-setup-release';
 import type { WindowsSetupFileResult } from './windows-setup-release';
@@ -9,6 +9,8 @@ const copy = {
         prepare: 'Prepare Windows Setup',
         before: 'Download and check Setup before creating the 10-minute invitation. Use a fresh x64 device; installation requires local administrator approval.',
         download: 'Download Setup · preview.3', guide: 'Installation guide',
+        downloadTitle: '1. Download Windows Setup', checkTitle: '2. Check the local file',
+        expected: 'Expected file', size: 'Exact size', bytes: 'bytes',
         check: 'Check downloaded Setup (optional)', local: 'Choose the downloaded file on this computer. Its contents stay in this browser and are never uploaded or run.',
         checking: 'Checking the local file…',
         matched: 'File matches the selected preview.3 Setup bytes. It remains unsigned; this is not publisher trust or permission to install.',
@@ -22,6 +24,9 @@ const copy = {
         comparison: 'Compare this release and hash with an independently trusted source. A modified dashboard can replace both. No Authenticode signature is provided.',
         http: 'Published preview.3 is TLS-only. This HTTP test needs separately reviewed matching source artifacts and explicit plaintext-risk approval; the published download is not offered for it.',
         install: 'Install and verify Windows',
+        stepTitles: ['Open the public configuration', 'Review local permissions', 'Compare the device identity', 'Verify the first report'],
+        stepLocations: ['On the Windows device', 'In Windows Setup', 'Windows Setup and this dashboard', 'In this dashboard'],
+        interrupted: 'Setup interrupted?',
         steps: [
             'Download the public bootstrap below to a local folder on the Windows device, such as Downloads, then choose it in Setup. Copy it off CD/DVD or a network share first; links are not accepted. Compare the manager identity, origins and full trust fingerprints independently.',
             'Review the 21 local Read admin scopes and the unchecked service, persistent-identity and trust approvals. This dashboard invitation does not grant those scopes. Source HTTP tests require their separate plaintext-risk acknowledgement.',
@@ -34,6 +39,8 @@ const copy = {
         prepare: 'Windows-Setup vorbereiten',
         before: 'Setup herunterladen und prüfen, bevor die 10-Minuten-Einladung erstellt wird. Ein frisches x64-Gerät verwenden; die Installation benötigt eine lokale Administratorfreigabe.',
         download: 'Setup herunterladen · Preview.3', guide: 'Installationsanleitung',
+        downloadTitle: '1. Windows-Setup herunterladen', checkTitle: '2. Lokale Datei prüfen',
+        expected: 'Erwartete Datei', size: 'Exakte Größe', bytes: 'Bytes',
         check: 'Heruntergeladenes Setup prüfen (optional)', local: 'Die heruntergeladene Datei auf diesem Computer auswählen. Ihr Inhalt bleibt in diesem Browser und wird weder hochgeladen noch ausgeführt.',
         checking: 'Lokale Datei wird geprüft…',
         matched: 'Die Datei entspricht den ausgewählten Preview.3-Setup-Bytes. Sie bleibt unsigniert; dies belegt weder Herausgebervertrauen noch eine Installationsfreigabe.',
@@ -47,6 +54,9 @@ const copy = {
         comparison: 'Release und Hash mit einer unabhängig vertrauenswürdigen Quelle vergleichen. Ein manipuliertes Dashboard kann beides ersetzen. Es liegt keine Authenticode-Signatur vor.',
         http: 'Der veröffentlichte Preview.3 unterstützt nur TLS. Dieser HTTP-Test braucht separat geprüfte passende Quellartefakte und eine ausdrückliche Klartext-Risikofreigabe; der veröffentlichte Download wird dafür nicht angeboten.',
         install: 'Windows installieren und prüfen',
+        stepTitles: ['Öffentliche Konfiguration öffnen', 'Lokale Berechtigungen prüfen', 'Geräteidentität vergleichen', 'Ersten Bericht prüfen'],
+        stepLocations: ['Auf dem Windows-Gerät', 'Im Windows-Setup', 'Windows-Setup und dieses Dashboard', 'In diesem Dashboard'],
+        interrupted: 'Setup abgebrochen?',
         steps: [
             'Die öffentliche Bootstrap-Datei unten herunterladen und auf dem Windows-Gerät in einem lokalen Ordner wie Downloads im Setup auswählen. Von CD/DVD oder einer Netzwerkfreigabe zuerst dorthin kopieren; Verknüpfungen sind nicht zulässig. Manager-Identität, Ziele und vollständige Vertrauens-Fingerabdrücke unabhängig vergleichen.',
             'Die 21 lokalen Read-admin-Bereiche sowie die ungeprüften Zustimmungen zu Dienst, dauerhafter Identität und Vertrauensvergleich prüfen. Diese Dashboard-Einladung gewährt diese Bereiche nicht. HTTP-Quelltests benötigen eine separate Klartext-Risikobestätigung.',
@@ -60,7 +70,19 @@ const copy = {
 const external = { target: '_blank', rel: 'noopener noreferrer', referrerPolicy: 'no-referrer' } as const;
 
 export function WindowsSetupPreparation({ insecureTest }: { insecureTest: boolean }) {
+    // Switching transport discards the local check and any in-flight result.
+    // HTTP-test preparation never offers the TLS-only release file checker.
+    return insecureTest ? <WindowsSetupHTTPNotice/> : <WindowsSetupTLSPreparation/>;
+}
+
+function WindowsSetupHTTPNotice() {
+    const [locale] = useLocale();
+    return <p className="enrollment-message">{copy[locale].http}</p>;
+}
+
+function WindowsSetupTLSPreparation() {
     const [locale] = useLocale(), c = copy[locale];
+    const id = useId();
     const [result, setResult] = useState<WindowsSetupFileResult | 'checking' | null>(null);
     const generation = useRef(0);
     // File reads and WebCrypto cannot be canceled. Discard results from an older
@@ -73,16 +95,22 @@ export function WindowsSetupPreparation({ insecureTest }: { insecureTest: boolea
         const next = await checkWindowsSetupFile(file);
         if (generation.current === current) setResult(next);
     };
-    if (insecureTest) return <p className="enrollment-message">{c.http}</p>;
     return <section className="enrollment-windows-prepare" aria-label={c.prepare}>
         <h3>{c.prepare}</h3><p>{c.before}</p><p>{c.limits}</p>
+        <section className="enrollment-windows-preparation-step" aria-label={c.downloadTitle}>
+        <h4><ArrowDownToLine size={16} aria-hidden="true"/>{c.downloadTitle}</h4>
         <div className="enrollment-windows-downloads">
-            <a className="button" href={WINDOWS_SETUP_LINKS.setup} {...external}><ArrowDownToLine size={15}/>{c.download}</a>
+            <a className="button" href={WINDOWS_SETUP_LINKS.setup} {...external}><ArrowDownToLine size={15} aria-hidden="true"/>{c.download}</a>
             <a href={WINDOWS_SETUP_LINKS.guide} {...external}>{c.guide}</a>
         </div>
-        <label className="enrollment-windows-file">{c.check}<input type="file" accept=".exe" onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void check(file); }}/></label>
-        <small>{c.local}</small>
+        <dl className="enrollment-windows-expected-file" id={`${id}-expected`}><div><dt>{c.expected}</dt><dd><code>{WINDOWS_SETUP_RELEASE.name}</code></dd></div><div><dt>{c.size}</dt><dd>{WINDOWS_SETUP_RELEASE.size.toLocaleString(locale)} {c.bytes}</dd></div></dl>
+        </section>
+        <section className="enrollment-windows-preparation-step" aria-label={c.checkTitle}>
+        <h4><FileCheck2 size={16} aria-hidden="true"/>{c.checkTitle}</h4>
+        <label className="enrollment-windows-file">{c.check}<input type="file" accept=".exe" aria-describedby={`${id}-expected ${id}-local`} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void check(file); }}/></label>
+        <small id={`${id}-local`}>{c.local}</small>
         {result && <p role={result === 'different-file' || result === 'failed' ? 'alert' : 'status'}>{c[result]}</p>}
+        </section>
         <details className="enrollment-context"><summary>{c.evidence}</summary>
             <p>{c.manager}</p>
             <p><a href={WINDOWS_SETUP_LINKS.source} {...external}>{c.source}</a>: <code>{WINDOWS_SETUP_RELEASE.sourceCommit}</code></p>
@@ -94,5 +122,12 @@ export function WindowsSetupPreparation({ insecureTest }: { insecureTest: boolea
 
 export function WindowsSetupInstructions() {
     const [locale] = useLocale(), c = copy[locale];
-    return <div className="enrollment-windows-install"><h3>{c.install}</h3><ol>{c.steps.map(step => <li key={step}>{step}</li>)}</ol><p>{c.interruption}</p></div>;
+    const icons = [PackageOpen, ListChecks, Fingerprint, MonitorCheck];
+    return <section className="enrollment-windows-install" aria-label={c.install}>
+        <h3>{c.install}</h3><ol className="enrollment-windows-steps">{c.steps.map((step, index) => {
+            const Icon = icons[index];
+            return <li key={index}><h4><Icon size={16} aria-hidden="true"/>{c.stepTitles[index]}</h4><span className="enrollment-windows-step-location">{c.stepLocations[index]}</span><p>{step}</p></li>;
+        })}</ol>
+        <div className="enrollment-windows-interruption"><h4><TriangleAlert size={16} aria-hidden="true"/>{c.interrupted}</h4><p>{c.interruption}</p></div>
+    </section>;
 }
