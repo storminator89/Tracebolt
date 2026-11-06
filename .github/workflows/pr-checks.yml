@@ -32,6 +32,8 @@ jobs:
         run: |
           python3 -I -B tests/security/test_pr_checks.py
           python3 -I -O -B tests/security/test_pr_checks.py
+          python3 -I -B tests/security/test_pr_browser_execution.py
+          python3 -I -O -B tests/security/test_pr_browser_execution.py
           python3 -I -B tests/security/test_full_validation_gate.py
           python3 -I -O -B tests/security/test_full_validation_gate.py
           python3 -B tests/security/test_go_aggregate_coverage.py
@@ -114,6 +116,7 @@ jobs:
       - name: Fixed auth and affected UI tests
         run: |
           node --test tests/e2e-review/pr-browser-smoke.test.mjs
+          node --test tests/e2e-review/windows-user-software-fixtures.test.mjs
           python3 -I -B tests/security/pr_checks.py web
 
   browser:
@@ -145,7 +148,7 @@ jobs:
           npm run build
           npx playwright install --with-deps chromium
       - name: Authenticated smoke and affected existing browser flows
-        run: python3 -I -B tests/security/pr_checks.py browser
+        run: python3 -I -B tests/security/run_pr_browser_checks.py
       - name: Verify synthetic Windows created-stage instructions
         if: ${{ !cancelled() && steps.browser_runtime.outcome == 'success' }}
         run: |
@@ -262,8 +265,6 @@ jobs:
             artifacts/review/windows-full-software-manifest.json
             artifacts/review/windows-software-history-results.json
             artifacts/review/windows-software-history-manifest.json
-            artifacts/review/windows-user-software-results.json
-            artifacts/review/windows-user-software-manifest.json
             artifacts/review/windows-event-history-results.json
             artifacts/review/windows-event-history-manifest.json
             artifacts/review/fleet-groups-results.json
