@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { APIError, abortProtectedRequests, AUTH_REQUIRED_EVENT, mutate, request } from './api';
 import { useOperator } from './auth';
 import { DeviceDetail } from './details';
@@ -96,7 +97,7 @@ describe('read-only cached Windows Updates panel', () => {
         expect(screen.getByRole('searchbox', { name: de ? 'Erfasste Updates filtern' : 'Filter captured updates' })).toHaveAttribute('maxLength', '256');
         expect(screen.getByRole('combobox', { name: de ? 'Erfasste Updates sortieren' : 'Sort captured updates' })).toHaveValue('title-asc');
         expect(document.querySelector('time[datetime="2026-10-07T12:00:00Z"]')).not.toBeNull();
-        expect(screen.getByText('KB1000000')).toBeVisible(); expect(screen.getByText(de ? 'Kritisch' : 'Critical')).toBeVisible(); expect(screen.getByText(de ? 'Titel oder KB-Metadaten gekürzt' : 'Title or KB metadata shortened')).toBeVisible();
+        expect(screen.getByText('KB1000000')).toBeVisible(); expect(within(screen.getByRole('table')).getByText(de ? 'Kritisch' : 'Critical')).toBeVisible(); expect(screen.getByText(de ? 'Titel oder KB-Metadaten gekürzt' : 'Title or KB metadata shortened')).toBeVisible();
         const headers = screen.getAllByRole('columnheader').map(cell => cell.textContent);
         expect(headers).toEqual(de ? ['Titel', 'KB-Artikel', 'Hersteller-Schweregrad', 'Bereits heruntergeladen', 'Update-ID / Revision'] : ['Title', 'KB articles', 'Vendor severity', 'Already downloaded', 'Update ID / revision']);
         for (const row of rows()) expect(within(row).getAllByRole('cell').map(cell => cell.getAttribute('data-label'))).toEqual(headers);
@@ -129,8 +130,8 @@ describe('read-only cached Windows Updates panel', () => {
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: '[.*]' } }); expect(rows()).toHaveLength(1); expect(previous()).toBeDisabled(); expect(next()).toBeDisabled(); expect(screen.getByText('Literal [.*] update')).toBeVisible();
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'KB1000060' } }); expect(rows()).toHaveLength(1); expect(screen.getByText('Synthetic cached update 061')).toBeVisible();
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'no-such-update' } }); expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(de ? 'Keine erfassten Updates entsprechen diesem Filter.' : 'No captured updates match this filter.')).toBeVisible();
-        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } }); fireEvent.change(screen.getByRole('combobox'), { target: { value: 'severity-desc' } }); expect(rows()).toHaveLength(25); expect(within(rows()[0]).getByText(de ? 'Kritisch' : 'Critical')).toBeVisible(); expect(screen.getByRole('columnheader', { name: de ? 'Hersteller-Schweregrad' : 'Vendor severity' })).toHaveAttribute('aria-sort', 'descending');
-        fireEvent.click(next()); fireEvent.change(screen.getByRole('combobox'), { target: { value: 'downloaded-desc' } }); expect(previous()).toBeDisabled(); expect(within(rows()[0]).getByText(de ? 'Ja' : 'Yes')).toBeVisible();
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } }); fireEvent.change(screen.getByRole('combobox', { name: /Sort captured updates|Erfasste Updates sortieren/ }), { target: { value: 'severity-desc' } }); expect(rows()).toHaveLength(25); expect(within(rows()[0]).getByText(de ? 'Kritisch' : 'Critical')).toBeVisible(); expect(screen.getByRole('columnheader', { name: de ? 'Hersteller-Schweregrad' : 'Vendor severity' })).toHaveAttribute('aria-sort', 'descending');
+        fireEvent.click(next()); fireEvent.change(screen.getByRole('combobox', { name: /Sort captured updates|Erfasste Updates sortieren/ }), { target: { value: 'downloaded-desc' } }); expect(previous()).toBeDisabled(); expect(within(rows()[0]).getByText(de ? 'Ja' : 'Yes')).toBeVisible();
         expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
     });
     it.each(['en', 'de'] as const)('sorts vendor levels truthfully, keeps unspecified last and preserves immutable deterministic ties in %s', locale => {
@@ -141,6 +142,56 @@ describe('read-only cached Windows Updates panel', () => {
         expect(capturedWindowsUpdateRows(v, locale === 'de' ? 'Kritisch' : 'Critical', 'severity-desc', locale).every(row => row.severity === 'critical')).toBe(true);
         v.rows[1].title = v.rows[0].title; expect(capturedWindowsUpdateRows(v, v.rows[0].title, 'title-desc', locale).slice(0, 2).map(row => row.updateId)).toEqual(v.rows.slice(0, 2).map(row => row.updateId)); v.rows[1].title = windowsUpdates(64).rows[1].title;
         expect(JSON.stringify(v)).toBe(before);
+    });
+    it.each(['en', 'de'] as const)('applies exact severity and cached download filters without matching title text or mutating evidence in %s', locale => {
+        const v = windowsUpdates(64); v.rows[1].title = 'Critical Kritisch Already downloaded'; v.rows[2].title = 'Critical Kritisch Already downloaded';
+        const before = JSON.stringify(v);
+        for (const severity of ['all', 'critical', 'important', 'moderate', 'low', 'unspecified'] as const) {
+            for (const downloaded of ['all', 'yes', 'no'] as const) {
+                const result = capturedWindowsUpdateRows(v, '', 'title-asc', locale, { severity, downloaded });
+                expect(result.map(row => row.updateId).sort()).toEqual(v.rows.filter(row => (severity === 'all' || row.severity === severity) && (downloaded === 'all' || row.downloaded === (downloaded === 'yes'))).map(row => row.updateId).sort());
+                expect(result.length).toBeGreaterThan(0);
+            }
+        }
+        const exact = { severity: 'critical', downloaded: 'yes' } as const;
+        expect(capturedWindowsUpdateRows(v, 'KB1000000', 'title-desc', locale, exact)).toEqual([v.rows[0]]);
+        expect(capturedWindowsUpdateRows(v, 'KB1000001', 'title-desc', locale, exact)).toEqual([]);
+        expect(JSON.stringify(v)).toBe(before);
+    });
+    it.each(['en', 'de'] as const)('combines local exact filters, distinguishes source counts and resets all controls with focus in %s', locale => {
+        setLocale(locale, false); const de = locale === 'de', v = windowsUpdatesView(61);
+        Object.assign(v.updates, { observedCount: 1000, truncated: true, countExact: false, quality: 'partial', reason: 'windows_updates_partial_result' });
+        const before = JSON.stringify(v); render(<WindowsUpdatesPanel resource={resource(v)}/>);
+        const severity = screen.getByRole('combobox', { name: de ? 'Hersteller-Schweregrad filtern' : 'Filter vendor severity' });
+        const downloaded = screen.getByRole('combobox', { name: de ? 'Downloadstatus im Cache' : 'Cached download status' });
+        const reset = screen.getByRole('button', { name: de ? 'Filter zurücksetzen' : 'Reset filters' });
+        const sort = screen.getByRole('combobox', { name: de ? 'Erfasste Updates sortieren' : 'Sort captured updates' });
+        expect(reset).toBeDisabled();
+        for (const control of [severity, downloaded]) expect(document.getElementById(control.getAttribute('aria-describedby')!)).toHaveTextContent(de ? /nur erfasste Zeilen/ : /captured rows only/);
+        fireEvent.click(screen.getByRole('button', { name: de ? 'Nächste Seite' : 'Next page' }));
+        fireEvent.change(severity, { target: { value: 'critical' } }); expect(screen.getByRole('button', { name: de ? 'Vorherige Seite' : 'Previous page' })).toBeDisabled();
+        fireEvent.change(downloaded, { target: { value: 'yes' } }); expect(rows()).toHaveLength(7);
+        fireEvent.change(sort, { target: { value: 'title-desc' } }); expect(within(rows()[0]).getByText('Synthetic cached update 061')).toBeVisible();
+        expect(screen.getByText(de ? '61 erfasst · mindestens 1000 Cache-Ergebnisse beobachtet' : '61 captured · at least 1000 cached results observed')).toBeVisible();
+        expect(screen.getByText(de ? 'Zeilen 1–7 von 7 Treffern · 61 erfasst' : 'Rows 1–7 of 7 matching · 61 captured')).toHaveAttribute('role', 'status');
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'KB1000001' } }); expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.getByText(de ? 'Keine erfassten Updates entsprechen diesem Filter.' : 'No captured updates match this filter.')).toBeVisible();
+        expect(screen.getByText(de ? /dies ist keine aktuelle Patch-Bewertung/ : /this is not a current patch assessment/)).toBeVisible();
+        fireEvent.click(reset); expect(screen.getByRole('searchbox')).toHaveFocus(); expect(screen.getByRole('searchbox')).toHaveValue('');
+        expect(severity).toHaveValue('all'); expect(downloaded).toHaveValue('all'); expect(sort).toHaveValue('title-asc'); expect(reset).toBeDisabled();
+        expect(rows()).toHaveLength(25); expect(screen.getByText(de ? 'Seite 1 von 3' : 'Page 1 of 3')).toBeVisible();
+        expect(JSON.stringify(v)).toBe(before); expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
+    it.each(['{Enter}', ' '] as const)('supports native keyboard reset with %s without starting a request', async key => {
+        const user = userEvent.setup(); render(<WindowsUpdatesPanel resource={resource()}/>);
+        await user.selectOptions(screen.getByRole('combobox', { name: 'Filter vendor severity' }), 'critical');
+        await user.selectOptions(screen.getByRole('combobox', { name: 'Cached download status' }), 'no');
+        expect(screen.queryByRole('table')).toBeNull();
+        screen.getByRole('button', { name: 'Reset filters' }).focus(); await user.keyboard(key);
+        expect(screen.getByRole('searchbox')).toHaveFocus(); expect(rows()).toHaveLength(4);
+        expect(screen.getByRole('combobox', { name: 'Filter vendor severity' })).toHaveValue('all');
+        expect(screen.getByRole('combobox', { name: 'Cached download status' })).toHaveValue('all');
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
     });
     it('does not turn absent scope, successful empty, bounded zero or partial zero into a patched claim', () => {
         const ui = render(<WindowsInventoryWorkspace resource={resource(windowsView())}/>); select(); expect(screen.getByText(/requires separate local consent/)).toBeVisible(); expect(screen.queryByRole('table')).toBeNull();
@@ -175,13 +226,29 @@ describe('Updates share the existing private resource and expiry', () => {
     });
     it('keeps filters for a same-generation reread but clears them on changed generation/grant/capture and tab departure', async () => {
         vi.mocked(request).mockResolvedValue(windowsUpdatesView(61)); render(<Harness/>); await ready();
-        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Synthetic' } }); fireEvent.change(screen.getByRole('combobox'), { target: { value: 'title-desc' } }); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); refresh(); expect(screen.queryByRole('table')).toBeNull(); await flush(); expect(screen.getByRole('searchbox')).toHaveValue('Synthetic'); expect(screen.getByRole('combobox')).toHaveValue('title-desc'); expect(screen.getByText('Page 2 of 3')).toBeVisible();
-        for (const kind of ['generation', 'grant', 'capture']) { const v = windowsUpdatesView(61); if (kind === 'generation') v.snapshot!.generationId = v.updates.generationId = `sample_${'b'.repeat(32)}`; if (kind === 'grant') v.updates.grantId = 'e'.repeat(32); if (kind === 'capture') v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-07T12:00:01Z'; vi.mocked(request).mockResolvedValue(v); refresh(); await flush(); expect(screen.getByRole('searchbox')).toHaveValue(''); expect(screen.getByRole('combobox')).toHaveValue('title-asc'); expect(screen.getByText('Page 1 of 3')).toBeVisible(); fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'private filter' } }); }
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Synthetic' } }); fireEvent.change(screen.getByRole('combobox', { name: /Sort captured updates|Erfasste Updates sortieren/ }), { target: { value: 'title-desc' } }); fireEvent.click(screen.getByRole('button', { name: 'Next page' })); refresh(); expect(screen.queryByRole('table')).toBeNull(); await flush(); expect(screen.getByRole('searchbox')).toHaveValue('Synthetic'); expect(screen.getByRole('combobox', { name: /Sort captured updates|Erfasste Updates sortieren/ })).toHaveValue('title-desc'); expect(screen.getByText('Page 2 of 3')).toBeVisible();
+        for (const kind of ['generation', 'grant', 'capture']) { const v = windowsUpdatesView(61); if (kind === 'generation') v.snapshot!.generationId = v.updates.generationId = `sample_${'b'.repeat(32)}`; if (kind === 'grant') v.updates.grantId = 'e'.repeat(32); if (kind === 'capture') v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-07T12:00:01Z'; vi.mocked(request).mockResolvedValue(v); refresh(); await flush(); expect(screen.getByRole('searchbox')).toHaveValue(''); expect(screen.getByRole('combobox', { name: /Sort captured updates|Erfasste Updates sortieren/ })).toHaveValue('title-asc'); expect(screen.getByText('Page 1 of 3')).toBeVisible(); fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'private filter' } }); }
         fireEvent.click(screen.getByRole('tab', { name: 'Hostname' })); select(); expect(screen.getByRole('searchbox')).toHaveValue('');
     });
+    it.each(['generation', 'grant', 'capture'] as const)('retains exact filters only for same-source rereads and resets them on changed %s', async kind => {
+        vi.mocked(request).mockResolvedValue(windowsUpdatesView(61)); render(<Harness/>); await ready();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Filter vendor severity' }), { target: { value: 'critical' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'Cached download status' }), { target: { value: 'yes' } });
+        refresh(); expect(screen.queryByRole('combobox', { name: 'Filter vendor severity' })).toBeNull(); await flush();
+        expect(screen.getByRole('combobox', { name: 'Filter vendor severity' })).toHaveValue('critical');
+        expect(screen.getByRole('combobox', { name: 'Cached download status' })).toHaveValue('yes'); expect(rows()).toHaveLength(7);
+        const v = windowsUpdatesView(61);
+        if (kind === 'generation') v.snapshot!.generationId = v.updates.generationId = `sample_${'b'.repeat(32)}`;
+        if (kind === 'grant') v.updates.grantId = 'e'.repeat(32);
+        if (kind === 'capture') v.snapshot!.collectedAt = v.updates.collectedAt = '2026-10-07T12:00:01Z';
+        vi.mocked(request).mockResolvedValue(v); refresh(); await flush();
+        expect(screen.getByRole('combobox', { name: 'Filter vendor severity' })).toHaveValue('all');
+        expect(screen.getByRole('combobox', { name: 'Cached download status' })).toHaveValue('all'); expect(rows()).toHaveLength(25);
+        expect(request).toHaveBeenCalledTimes(3); expect(mutate).not.toHaveBeenCalled();
+    });
     it.each(['blur', 'pagehide', 'hashchange', AUTH_REQUIRED_EVENT])('clears rows and private filters immediately on %s', async event => {
-        render(<Harness/>); await ready(); fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Synthetic' } }); act(() => window.dispatchEvent(new Event(event))); expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByText('Synthetic cached update 001')).toBeNull();
-        if (event !== AUTH_REQUIRED_EVENT) { act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(screen.getByRole('searchbox')).toHaveValue(''); }
+        render(<Harness/>); await ready(); fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Synthetic' } }); fireEvent.change(screen.getByRole('combobox', { name: 'Filter vendor severity' }), { target: { value: 'critical' } }); fireEvent.change(screen.getByRole('combobox', { name: 'Cached download status' }), { target: { value: 'yes' } }); act(() => window.dispatchEvent(new Event(event))); expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByText('Synthetic cached update 001')).toBeNull();
+        if (event !== AUTH_REQUIRED_EVENT) { act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(screen.getByRole('searchbox')).toHaveValue(''); expect(screen.getByRole('combobox', { name: 'Filter vendor severity' })).toHaveValue('all'); expect(screen.getByRole('combobox', { name: 'Cached download status' })).toHaveValue('all'); }
     });
     it('clears on hidden page and avoids reads until visible; disabled scopes do not fetch', async () => {
         const ui = render(<Harness/>); await ready(); const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden'); act(() => document.dispatchEvent(new Event('visibilitychange'))); expect(screen.queryByRole('table')).toBeNull(); vi.mocked(request).mockClear(); act(() => window.dispatchEvent(new Event('focus'))); await flush(); expect(request).not.toHaveBeenCalled();

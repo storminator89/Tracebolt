@@ -54,7 +54,7 @@ describe('provider persistence contract', () => {
         vi.mocked(mutate).mockResolvedValue({ ...persisted, keyConfigured: true }); fireEvent.click(save()); await flush();
         expect(mutate).toHaveBeenCalledExactlyOnceWith('/ai/config/persistent', { ...change(memory, 'SYNTHETIC_KEY_NEVER_REAL'), acknowledgeKeyStorage: true }, expect.any(AbortSignal));
         expect(screen.getByLabelText('AI API key')).toHaveValue(''); expect(storage).not.toHaveBeenCalled();
-        expect(screen.getByText('Configured · untested')).toBeVisible();
+        expect(screen.getByText('Configured')).toBeVisible();
     });
     it('blocks keyed HTTP-test persistence regardless of the browser origin and allows explicit memory-only save', async () => {
         await start({ ...memory, persistentKeyAllowed: false }); fireEvent.click(remember()); enterKey();

@@ -43,6 +43,50 @@ describe('compact read-only status and meanings', () => {
         expect(panel()).toHaveTextContent('Delivery is disabled in manager configuration'); expect(within(panel()).getAllByRole('button')).toHaveLength(1);
         expect(panel().querySelector('input,select,a')).toBeNull(); expect(panel()).not.toHaveTextContent('Test send');
     });
+    it('keeps the meaning of each count visible beside its value with Details closed', async () => {
+        await start();
+        expect(screen.getByRole('heading', { name: 'Saved counts', level: 3 })).toBeVisible();
+        expect(panel().querySelector('details')!.open).toBe(false);
+        for (const [label, hint] of [
+            ['Provider accepted', 'Not confirmed human receipt'],
+            ['Pending', 'Queued: 2 · In flight: 1'],
+            ['Failed', 'No provider acceptance'],
+            ['Uncertain', 'May have been accepted'],
+            ['Dropped', 'Rejected at queue capacity'],
+        ]) {
+            const metric = count(label).parentElement!;
+            expect(within(metric).getByText(hint)).toBeVisible();
+            expect(within(metric).getAllByRole('definition')).toHaveLength(2);
+        }
+        expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('keeps disabled delivery context visible and marks it previous during a failed refresh', async () => {
+        await start({ ...populated(), enabled: false });
+        const notice = panel().querySelector('.alarm-disabled')!;
+        expect(notice).toBeVisible();
+        expect(notice).toHaveTextContent('Delivery is disabled in manager configuration');
+        expect(notice).not.toHaveTextContent('Previous snapshot');
+        const held = deferred<AlarmStatus>();
+        vi.mocked(request).mockReturnValueOnce(held.promise);
+        fireEvent.click(refresh());
+        expect(notice).toHaveTextContent('Previous snapshot');
+        expect(panel().querySelector('.alarm-mode')).toHaveTextContent('Unknown');
+        await act(async () => held.resolve({ ...populated(), providerAccepted: -1 }));
+        expect(notice).toHaveTextContent('Previous snapshot');
+        expect(count('Provider accepted')).toHaveTextContent(/^7$/);
+    });
+    it('localizes visible count meanings and preserves true zero pending components', async () => {
+        setLocale('de', false);
+        await start({ ...empty(), enabled: true });
+        const content = screen.getByRole('region', { name: 'Alarmversand' });
+        expect(within(content).getByRole('heading', { name: 'Gespeicherte Zähler' })).toBeVisible();
+        for (const hint of ['Kein bestätigter Empfang durch Personen', 'Warteschlange: 0 · In Übertragung: 0', 'Keine Anbieterannahme', 'Möglicherweise angenommen']) {
+            expect(within(content).getByText(hint)).toBeVisible();
+        }
+        expect(content.querySelector('.alarm-disabled')).toBeNull();
+        expect(within(content).queryByText('Wegen voller Warteschlange abgewiesen')).toBeNull();
+        expect(request).toHaveBeenCalledTimes(1);
+    });
     it('separates retained states and durable dropped gaps without a total or success claim', async () => {
         await start();
         for (const [label, value] of [['Provider accepted', '7'], ['Pending', '3'], ['Failed', '4'], ['Uncertain', '5'], ['Queued', '2'], ['In flight', '1'], ['Suppressed', '9'], ['Dropped', '11']]) expect(count(label)).toHaveTextContent(new RegExp(`^${value}$`));

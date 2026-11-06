@@ -29,3 +29,22 @@ it('tests the saved settings only and prevents edits or saves during the in-flig
     expect(await screen.findByText(/Provider test passed/)).toBeVisible();
     expect(mutate).toHaveBeenCalledExactlyOnceWith('/ai/test',{configRevision:'revision-a',acknowledgeTest:true},expect.any(AbortSignal));
 });
+
+it.each(['en', 'de'] as const)('keeps configuration status neutral after a consented provider test (%s)', async locale => {
+    setLocale(locale, false);
+    vi.mocked(mutate).mockResolvedValue({ schemaVersion: 'tracebolt.ai-provider-test.v1', configRevision: config.revision, status: 'passed' });
+    render(<AIProviderSettings/>);
+    await screen.findByLabelText(locale === 'de' ? 'KI Modell' : 'AI model');
+    const status = document.querySelector('.ai-config-status')!;
+    expect(status).toHaveTextContent(locale === 'de' ? 'Konfiguriert' : 'Configured');
+    expect(status).not.toHaveTextContent(/ungetestet|untested/i);
+    fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Gespeicherten Anbieter testen' : 'Test saved provider' }));
+    const consent = screen.getByRole('checkbox', { name: locale === 'de' ? /Ich bestätige diesen einmaligen/ : /I approve this one-time test/ });
+    const run = screen.getByRole('button', { name: locale === 'de' ? 'Test jetzt ausführen' : 'Run test now' });
+    expect(consent).not.toBeChecked(); expect(run).toBeDisabled(); expect(mutate).not.toHaveBeenCalled();
+    fireEvent.click(consent); fireEvent.click(run);
+    expect(await screen.findByText(locale === 'de' ? /Funktionstest bestanden/ : /Provider test passed/)).toBeVisible();
+    expect(status).toHaveTextContent(locale === 'de' ? 'Konfiguriert' : 'Configured');
+    expect(status).not.toHaveTextContent(/ungetestet|untested/i);
+    expect(mutate).toHaveBeenCalledExactlyOnceWith('/ai/test', { configRevision: config.revision, acknowledgeTest: true }, expect.any(AbortSignal));
+});

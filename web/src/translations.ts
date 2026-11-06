@@ -1,5 +1,6 @@
 /** UI strings only. Evidence, logs and model output are never translated here. */
 export const english = {
+  'Antwort auf die Analyseanfrage erhalten. Die aktuelle Anbieter-Konfiguration konnte nicht geprüft werden; das Ergebnis wird nicht angezeigt.': 'A response to the analysis request was received. The current provider configuration could not be checked; the result is not shown.',
   'Anbieterantwort nicht verfügbar': 'Provider response unavailable',
   'Vorschau gültig bis': 'Preview valid until',
   'Die Beobachtung änderte sich während der KI-Anfrage. Daten können bereits übertragen worden sein. Kein Ergebnis übernommen.': 'The observation changed during the AI request. Data may already have been sent. No result was retained.',

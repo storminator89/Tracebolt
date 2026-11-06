@@ -65,6 +65,36 @@ describe('bounded process sorting', () => {
 });
 
 describe('captured process controls', () => {
+    it.each(['en', 'de'] as const)('clears a no-match filter with keyboard activation and restores focus in %s', async locale => {
+        setLocale(locale, false);
+        const user = userEvent.setup();
+        const storage = JSON.stringify([localStorage, sessionStorage]);
+        render(<WindowsInventoryWorkspace resource={resource()}/>);
+        const search = screen.getByRole('searchbox');
+        expect(screen.queryByRole('button', { name: locale === 'de' ? 'Suche leeren' : 'Clear search' })).toBeNull();
+        await user.type(search, 'missing-process');
+        expect(screen.queryByRole('table')).toBeNull();
+        await user.tab();
+        expect(screen.getByRole('button', { name: locale === 'de' ? 'Suche leeren' : 'Clear search' })).toHaveFocus();
+        await user.keyboard(' ');
+        expect(search).toHaveValue(''); expect(search).toHaveFocus();
+        expect(screen.getAllByRole('row')).toHaveLength(26);
+        expect(request).not.toHaveBeenCalled(); expect(JSON.stringify([localStorage, sessionStorage])).toBe(storage);
+    });
+    it.each(['en', 'de'] as const)('clears a broad query from page two while preserving sort in %s', locale => {
+        setLocale(locale, false);
+        render(<WindowsInventoryWorkspace resource={resource()}/>);
+        const search = screen.getByRole('searchbox'), sort = screen.getByRole('combobox');
+        fireEvent.change(sort, { target: { value: 'pid-desc' } });
+        fireEvent.change(search, { target: { value: 'fixture' } });
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Nächste Seite' : 'Next page' }));
+        expect(screen.getByText(locale === 'de' ? 'Seite 2 von 3' : 'Page 2 of 3')).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Suche leeren' : 'Clear search' }));
+        expect(search).toHaveValue(''); expect(search).toHaveFocus(); expect(sort).toHaveValue('pid-desc');
+        expect(screen.getByText(locale === 'de' ? 'Seite 1 von 3' : 'Page 1 of 3')).toBeVisible();
+        expect(screen.getByText('fixture-061.exe')).toBeVisible();
+        expect(request).not.toHaveBeenCalled();
+    });
     it('pages exactly the captured 128 rows and keeps the bounded observed count distinct', () => {
         const view = processView(128); Object.assign(view.snapshot!.processes, { quality: 'partial', complete: false, observedCount: 700, countExact: false, truncated: true });
         render(<WindowsInventoryWorkspace resource={resource(view)}/>);
