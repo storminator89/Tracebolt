@@ -36,6 +36,33 @@ Pending/active schedules block immediate and group-immediate starts for the same
 overlapping scope. An active immediate window blocks planning there. This first
 slice does not offer multiple future bookings, recurrence or group scheduling.
 
+## See upcoming and active schedules together
+
+Opening the existing schedule panel also shows all currently authorized upcoming
+and active scheduled windows from that same response. Counts describe windows,
+not distinct devices or health. The list is fleet-wide: inventory search and group
+filters do not narrow it. Immediate maintenance remains in its separate panel.
+This is the bounded visibility workflow analogous to Datto's
+[Devices Under Maintenance widget](https://rmm.datto.com/help/en/Content/3NEWUI/Dashboards/WidgetLibrary.htm),
+not full maintenance-policy parity.
+
+Rows show device name and exact ID, notification scope, original local start/end
+with UTC offset, and the original manager snapshot time. Unknown start transitions
+come first, then active windows by their end and upcoming windows by their start.
+Equal times retain distinct identity/scope rows. Ended, cancelled and expired
+windows are excluded from this current list but remain in the existing selected
+target's bounded history. A pending start crossed only by browser elapsed time
+becomes **Refresh status**, never active without a fresh manager read. Expiry is
+not recovery. An unconfirmed change remains explicitly unconfirmed.
+
+**View window** only selects the exact original-identity target from this same
+projection and opens its existing details. It makes no request, creates no review,
+checks no approval and changes no maintenance. The list has no independent reader,
+cache or persistence and disappears with the existing panel's access, session,
+navigation, visibility and two-minute authority limits. No endpoint observations,
+new API, scope, retained state or notification delivery are added. Existing
+schedule reads retain their documented normalization behavior below.
+
 ## Suppression preserves Windows evidence
 
 Only separately approved Windows notification delivery is muted. Contact,
