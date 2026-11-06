@@ -1,12 +1,12 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, request } from './api';
 import { setLocale } from './i18n';
 import { WindowsInventoryWorkspace } from './windows-inventory';
-import { useWindowsInventory } from './windows-inventory-resource';
+import { useWindowsInventory, type WindowsInventoryResource } from './windows-inventory-resource';
 import { validWindowsInventoryView } from './windows-inventory-types';
 import { windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
-import { volumeBytes } from './windows-volumes';
+import { WindowsStoragePanel, volumeBytes } from './windows-volumes';
 import { fixtureVolumeId, windowsVolumes } from './windows-volumes-fixture';
 import { validWindowsVolumes, type WindowsVolumes } from './windows-volumes-types';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
@@ -91,4 +91,62 @@ describe('Storage subtab and shared private-data lifecycle', () => {
     });
     it('clears volumes on a regressed browser clock', async () => { vi.useFakeTimers(); vi.setSystemTime(windowsNow); render(<Harness/>); await flush(); fireEvent.click(screen.getByRole('tab', { name: 'Storage' })); expect(screen.getByText(fixtureVolumeId)).toBeVisible(); vi.setSystemTime('2026-10-07T11:00:00Z'); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText(fixtureVolumeId)).toBeNull(); expect(screen.getByRole('alert')).toHaveTextContent('time reference changed'); });
     it('drops an expired volume sample without discarding still-visible inventory', async () => { vi.useFakeTimers(); vi.setSystemTime(windowsNow); const v = view(); v.volumes.collectedAt = '2026-10-06T12:00:11Z'; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await flush(); fireEvent.click(screen.getByRole('tab', { name: 'Storage' })); expect(screen.getByText(fixtureVolumeId)).toBeVisible(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText(fixtureVolumeId)).toBeNull(); fireEvent.click(screen.getByRole('tab', { name: 'Processes' })); expect(screen.getByText('fixture.exe')).toBeVisible(); });
+});
+
+
+describe('Local captured-volume ordering', () => {
+    function sortResource() {
+        const v = view(), base = v.volumes.rows[0];
+        v.volumes.rows = [
+            { ...base, volumeId: 'large', capacity: { ...base.capacity!, availableBytes: '9007199254740993' } },
+            { ...v.volumes.rows[1], volumeId: 'unknown' },
+            { ...base, volumeId: 'small', capacity: { ...base.capacity!, availableBytes: '9007199254740992' } },
+            { ...base, volumeId: 'zero', capacity: { ...base.capacity!, availableBytes: '0' } },
+        ];
+        v.volumes.observedCount = 4;
+        return { view: v, volumes: v.volumes } as WindowsInventoryResource;
+    }
+    const order = () => screen.getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[0].textContent);
+    it.each(['en', 'de'] as const)('sorts exact caller-available bytes with unknowns last in %s', locale => {
+        setLocale(locale, false);
+        const data = sortResource(), original = JSON.stringify(data), storage = JSON.stringify([localStorage, sessionStorage]);
+        render(<WindowsStoragePanel resource={data}/>);
+        const control = screen.getByRole('combobox', { name: locale === 'de' ? 'Erfasste Volumes sortieren' : 'Sort captured volumes' });
+        expect(control).toHaveAccessibleDescription(locale === 'de' ? 'Nur erfasste Volumes. Bei Kapazitätssortierung stehen unbekannte Werte zuletzt.' : 'Only captured volumes. When sorting by capacity, unavailable values stay last.');
+        expect(order()).toEqual(['large', 'unknown', 'small', 'zero']);
+        fireEvent.change(control, { target: { value: 'least' } });
+        expect(order()).toEqual(['zero', 'small', 'large', 'unknown']);
+        expect(screen.getByRole('columnheader', { name: locale === 'de' ? 'Aufrufer-verfügbar' : 'Caller available' })).toHaveAttribute('aria-sort', 'ascending');
+        fireEvent.change(control, { target: { value: 'most' } });
+        expect(order()).toEqual(['large', 'small', 'zero', 'unknown']);
+        expect(screen.getByRole('columnheader', { name: locale === 'de' ? 'Aufrufer-verfügbar' : 'Caller available' })).toHaveAttribute('aria-sort', 'descending');
+        fireEvent.change(control, { target: { value: 'original' } });
+        expect(order()).toEqual(['large', 'unknown', 'small', 'zero']);
+        expect(document.querySelector('[aria-sort]')).toBeNull();
+        expect(JSON.stringify(data)).toBe(original); expect(JSON.stringify([localStorage, sessionStorage])).toBe(storage); expect(request).not.toHaveBeenCalled();
+    });
+    it('preserves capture order for tied values and omits sorting for a single row', () => {
+        const data = sortResource();
+        data.volumes!.rows[2].capacity!.availableBytes = data.volumes!.rows[0].capacity!.availableBytes;
+        const mounted = render(<WindowsStoragePanel resource={data}/>);
+        for (const value of ['least', 'most']) {
+            fireEvent.change(screen.getByRole('combobox'), { target: { value } });
+            expect(order().indexOf('large')).toBeLessThan(order().indexOf('small'));
+        }
+        const single = sortResource(); single.volumes!.rows = single.volumes!.rows.slice(0, 1);
+        mounted.rerender(<WindowsStoragePanel resource={single}/>);
+        expect(screen.queryByRole('combobox')).toBeNull();
+    });
+    it.each(['device', 'grant', 'generation', 'capture', 'absent'] as const)('resets ordering after %s replacement', scope => {
+        const mounted = render(<WindowsStoragePanel resource={sortResource()}/>);
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'least' } });
+        const next = sortResource();
+        if (scope === 'device') next.view!.deviceId = `agent_${'8'.repeat(32)}`;
+        if (scope === 'grant') next.volumes!.grantId = 'e'.repeat(32);
+        if (scope === 'generation') next.volumes!.generationId = `sample_${'9'.repeat(32)}`;
+        if (scope === 'capture') next.volumes!.collectedAt = '2026-10-07T12:00:09Z';
+        if (scope === 'absent') mounted.rerender(<WindowsStoragePanel resource={{ ...next, volumes: null }}/>);
+        mounted.rerender(<WindowsStoragePanel resource={next}/>);
+        expect(screen.getByRole('combobox')).toHaveValue('original'); expect(order()[0]).toBe('large');
+    });
 });

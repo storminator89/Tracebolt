@@ -1,3 +1,4 @@
+import './incident-timeline.css';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { IncidentTimelineModel, TimelineKind, TimelineCurrentState, TimelineSourceRole } from './incident-timeline-model';
@@ -5,7 +6,7 @@ import type { WindowsServiceHealthSource } from './windows-service-health-comple
 
 const copy = {
     en: {
-        title: 'Incident timeline', history: 'Retained episode checkpoints', current: 'Current check, separate from this episode', sources: 'Complete-service evidence references',
+        identities: 'Technical identities', title: 'Incident timeline', history: 'Retained episode checkpoints', current: 'Current check, separate from this episode', sources: 'Complete-service evidence references',
         opening: 'Opening evidence', 'last-bad': 'Last-bad evidence', recovery: 'Recovery evidence',
         device: 'Device identity', incident: 'Incident identity', target: 'Check target', key: 'Exact source key', unavailable: 'Not retained or unavailable',
         'opened': 'Incident opened', 'linux-contact-evaluated': 'Last retained contact evaluation by manager', 'last-observed': 'Last retained incident evidence', 'last-confirmed': 'Last incident confirmation',
@@ -25,7 +26,7 @@ const copy = {
         health: 'Open exact device Health', logs: 'Open exact service logs', readOnly: 'Expanding this timeline starts no request. Following Health or Logs uses the existing view permissions and may start an already-authorized retained-log search. No new collection, acknowledgement, action preview or execution is authorized.',
     },
     de: {
-        title: 'Vorfall-Zeitverlauf', history: 'Gespeicherte Eckpunkte der Episode', current: 'Aktuelle Prüfung, getrennt von dieser Episode', sources: 'Belegreferenzen des vollständigen Dienstinventars',
+        identities: 'Technische Identitäten', title: 'Vorfall-Zeitverlauf', history: 'Gespeicherte Eckpunkte der Episode', current: 'Aktuelle Prüfung, getrennt von dieser Episode', sources: 'Belegreferenzen des vollständigen Dienstinventars',
         opening: 'Eröffnungsbeleg', 'last-bad': 'Letzter Auffälligkeitsbeleg', recovery: 'Erholungsbeleg',
         device: 'Geräteidentität', incident: 'Vorfallidentität', target: 'Prüfziel', key: 'Exakter Quellschlüssel', unavailable: 'Nicht gespeichert oder nicht verfügbar',
         'opened': 'Vorfall eröffnet', 'linux-contact-evaluated': 'Letzte gespeicherte Kontaktauswertung durch Manager', 'last-observed': 'Letzter gespeicherter Vorfallbeleg', 'last-confirmed': 'Letzte Vorfallbestätigung',
@@ -61,11 +62,13 @@ export function IncidentTimeline({ model, platform }: { model: IncidentTimelineM
     const [locale] = useLocale(), c = copy[locale];
     return <details className="incident-timeline"><summary>{c.title}</summary>
         <p>{c.partial}</p>
-        <dl className="incident-timeline-identities"><div><dt>{c.device}</dt><dd>{model.deviceId}</dd></div><div><dt>{c.incident}</dt><dd>{model.incidentId}</dd></div><div><dt>{c.target}</dt><dd>{model.target}</dd></div><div><dt>{c.key}</dt><dd>{model.sourceKey}</dd></div></dl>
-        <h4>{c.history}</h4><ol className="incident-timeline-events">{model.episode.map((event, index) => <li key={`${event.kind}:${index}`}><strong>{c[event.kind as TimelineKind]}</strong><Time at={event.at} c={c}/></li>)}</ol>
+        <p className="incident-timeline-target"><span>{c.target}: </span><strong>{model.target}</strong></p>
+        <details className="incident-timeline-identity-details"><summary>{c.identities}</summary><dl className="incident-timeline-identities"><div><dt>{c.device}</dt><dd>{model.deviceId}</dd></div><div><dt>{c.incident}</dt><dd>{model.incidentId}</dd></div><div><dt>{c.key}</dt><dd>{model.sourceKey}</dd></div></dl></details>
+        <section className="incident-timeline-history" aria-label={c.history}><h4>{c.history}</h4><ol className="incident-timeline-events">{model.episode.map((event, index) => <li key={`${event.kind}:${index}`}><strong>{c[event.kind as TimelineKind]}</strong><Time at={event.at} c={c}/></li>)}</ol>
         <p>{platform === 'linux' ? c.linuxGap : c.windowsGap}</p>{model.contact && <p>{model.contact === 'linux' ? c.contactEvaluation : c.contact}</p>}
         {model.sources.length > 0 && <section aria-label={c.sources}><h4>{c.sources}</h4>{model.sources.map(value => <Source key={value.role} source={value.source} label={c[value.role as TimelineSourceRole]} c={c}/>)}</section>}
-        <section aria-label={c.current}><h4>{c.current}</h4><p>{c[model.current.state as TimelineCurrentState]}</p><p>{c.context}</p><dl>
+        </section>
+        <section className="incident-timeline-current" aria-label={c.current}><h4>{c.current}</h4><p className="incident-timeline-current-state">{c[model.current.state as TimelineCurrentState]}</p><p>{c.context}</p><dl>
             <div><dt>{c.evaluation}</dt><dd><Time at={model.current.evaluatedAt} c={c}/></dd></div><div><dt>{model.contact === 'linux' ? c.contactReceipt : c.observation}</dt><dd><Time at={model.current.observedAt} c={c}/></dd></div>
             {model.current.validUntil && <div><dt>{c.validUntil}</dt><dd><Time at={model.current.validUntil} c={c}/></dd></div>}
         </dl>{model.current.source && <Source source={model.current.source} label={c.source} c={c}/>}</section>

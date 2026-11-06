@@ -56,9 +56,20 @@ function HistoryDetails({ row, locale }: { row: SoftwareHistoryChange; locale: '
     const c = copy[locale], value = (v: string | null) => v === null ? c.unknown : v === '' ? c.empty : v;
     return <details className="windows-history-row-details"><summary>{c.detail}</summary><dl><div><dt>{c.before}</dt><dd><time dateTime={row.beforeObservedAt}>{fullDate(row.beforeObservedAt)}</time></dd></div><div><dt>{c.after}</dt><dd><time dateTime={row.afterObservedAt}>{fullDate(row.afterObservedAt)}</time></dd></div>{(['name', 'version', 'publisher'] as const).map(field => <div key={field}><dt>{c[field]}</dt><dd><span>{c.before}: {row.before ? value(row.before[field]) : c.absent}</span><span>{c.after}: {row.after ? value(row.after[field]) : c.absent}</span></dd></div>)}<div><dt>{c.view}</dt><dd>HKLM {row.registryView}</dd></div><div><dt>{c.id}</dt><dd>{row.registrationId}</dd></div><div><dt>{c.expires}</dt><dd><time dateTime={row.expiresAt}>{fullDate(row.expiresAt)}</time></dd></div></dl><p>{c.meaning}</p></details>;
 }
+/** Only compare fields already identified as observed differences by the
+ * validated history row. Unknown-to-observed values are not changes. */
+function HistoryChanges({ row, locale }: { row: SoftwareHistoryChange; locale: 'en' | 'de' }) {
+    const c = copy[locale], value = (v: string | null) => v === null ? c.unknown : v === '' ? c.empty : v;
+    if (row.kind !== 'metadata_changed' || !row.before || !row.after) return null;
+    const { before, after } = row;
+    return <dl className="windows-history-changes">{row.changedFields.map(field => <div key={field}><dt>{c[field]}</dt><dd>
+        <span><span className="windows-history-change-label">{c.before}</span><bdi>{value(before[field])}</bdi></span>
+        <span><span className="windows-history-change-label">{c.after}</span><bdi>{value(after[field])}</bdi></span>
+    </dd></div>)}</dl>;
+}
 export function WindowsSoftwareHistoryTable({ page, locale }: { page: SoftwareHistoryPage; locale: 'en' | 'de' }) {
     const c = copy[locale];
-    return <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c.title}</caption><thead><tr>{[c.registration, c.change, c.observed, c.detail].map((label, i) => <th key={label} scope="col" aria-sort={i === 2 ? 'descending' : undefined}>{label}</th>)}</tr></thead><tbody>{page.rows.map(row => <tr key={row.id} data-history-id={row.id}><td data-label={c.registration}><span>{(row.after ?? row.before)!.name ?? c.unknown}{(row.after ?? row.before)!.name === '' && <span className="windows-full-software-missing">{c.empty}</span>}<small className="windows-history-view">HKLM {row.registryView}</small></span></td><td data-label={c.change}><span>{c[row.kind]}{row.changedFields.length > 0 && <small>{row.changedFields.map(field => c[field]).join(', ')}</small>}</span></td><td data-label={c.observed}><time dateTime={row.afterObservedAt}>{fullDate(row.afterObservedAt)}</time></td><td data-label={c.detail}><HistoryDetails row={row} locale={locale}/></td></tr>)}</tbody></table></div>;
+    return <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c.title}</caption><thead><tr>{[c.registration, c.change, c.observed, c.detail].map((label, i) => <th key={label} scope="col" aria-sort={i === 2 ? 'descending' : undefined}>{label}</th>)}</tr></thead><tbody>{page.rows.map(row => <tr key={row.id} data-history-id={row.id}><td data-label={c.registration}><span>{(row.after ?? row.before)!.name ?? c.unknown}{(row.after ?? row.before)!.name === '' && <span className="windows-full-software-missing">{c.empty}</span>}<small className="windows-history-view">HKLM {row.registryView}</small></span></td><td data-label={c.change}><div>{c[row.kind]}<HistoryChanges row={row} locale={locale}/></div></td><td data-label={c.observed}><time dateTime={row.afterObservedAt}>{fullDate(row.afterObservedAt)}</time></td><td data-label={c.detail}><HistoryDetails row={row} locale={locale}/></td></tr>)}</tbody></table></div>;
 }
 function History({ deviceId, sessionKey, enabled = true }: Context) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), resource = useWindowsSoftwareHistory(deviceId, enabled, sessionKey), { view, page } = resource;
