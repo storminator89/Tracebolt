@@ -1,0 +1,19 @@
+.incident-device-focus { padding: 16px; }
+.incident-device-focus summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.incident-device-focus summary svg { margin-right: 8px; vertical-align: middle; }
+.incident-device-focus summary > span { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.incident-device-focus-active { margin-bottom: 12px; }
+.incident-device-focus-active p { display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+.incident-device-focus-active svg { flex-shrink: 0; }
+.incident-device-focus-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.incident-device-focus-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; list-style: none; padding: 0; margin: 12px 0 0; }
+.incident-device-focus-list > li { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.incident-device-focus-list h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.incident-device-focus-list p { margin: 6px 0; }
+.incident-device-focus-identity { font-size: 12px; overflow-wrap: anywhere; color: var(--secondary); }
+.incident-device-focus-list dl { margin: 10px 0; font-size: 12px; }
+.incident-device-focus-list dl > div { display: flex; justify-content: space-between; gap: 12px; margin: 5px 0; }
+.incident-device-focus-list dt { overflow-wrap: anywhere; }
+.incident-device-focus-list dd { margin: 0; font-variant-numeric: tabular-nums; }
+.incident-device-focus button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
+.incident-device-focus summary:focus-visible, .incident-device-focus a:focus-visible, .incident-device-focus button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
