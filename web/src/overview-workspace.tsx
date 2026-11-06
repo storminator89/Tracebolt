@@ -11,7 +11,7 @@ const copy = {
         boundary: 'Observation times belong to each source. Missing data is not an all-clear.',
         refreshing: 'Refreshing overview… Previous snapshot shown.',
         failed: 'Refresh unavailable. Previous snapshot shown.',
-        linux: 'Linux Health incidents', windows: 'Windows incidents in Devices',
+        linux: 'Linux Health incidents', windows: 'Open Linux & Windows incidents',
         localWork: 'Cases from the available rules',
     },
     de: {
@@ -20,7 +20,7 @@ const copy = {
         boundary: 'Beobachtungszeiten gelten je Quelle. Fehlende Daten sind keine Entwarnung.',
         refreshing: 'Übersicht wird aktualisiert … Vorheriger Stand wird angezeigt.',
         failed: 'Aktualisierung nicht verfügbar. Vorheriger Stand wird angezeigt.',
-        linux: 'Linux-Health-Vorfälle', windows: 'Windows-Vorfälle unter Geräte',
+        linux: 'Linux-Health-Vorfälle', windows: 'Linux- & Windows-Vorfälle öffnen',
         localWork: 'Fälle aus den verfügbaren Regeln',
     },
 } as const;
@@ -38,7 +38,7 @@ export function OverviewContext({ generatedAt, lan, demoOnly = false, loading, f
     </section>;
 }
 
-export function OverviewWorkScope({ lan, onDevices }: { lan: boolean; onDevices: () => void }) {
+export function OverviewWorkScope({ lan, onInvestigations }: { lan: boolean; onInvestigations: () => void }) {
     const [locale] = useLocale(), c = copy[locale];
-    return <div className="overview-work-scope"><p>{lan ? c.linux : c.localWork}</p>{lan && <button className="text-button" onClick={onDevices}>{c.windows}<ArrowRight size={14} aria-hidden="true"/></button>}</div>;
+    return <div className="overview-work-scope"><p>{lan ? c.linux : c.localWork}</p>{lan && <button className="text-button" onClick={onInvestigations}>{c.windows}<ArrowRight size={14} aria-hidden="true"/></button>}</div>;
 }

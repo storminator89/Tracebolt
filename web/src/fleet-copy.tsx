@@ -17,7 +17,8 @@ export async function copyFleetValue(value: string, element: HTMLElement): Promi
     const previousFocus = document.activeElement;
     const previousRanges = Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange());
     try {
-        element.focus({ preventScroll: true });
+        // A navigable hostname owns focus; its text remains non-interactive.
+        (element.closest<HTMLButtonElement>('button') ?? element).focus({ preventScroll: true });
         const range = document.createRange(); range.selectNodeContents(element);
         selection.removeAllRanges(); selection.addRange(range);
         if (selection.toString() !== value) return 'unavailable';
@@ -33,7 +34,7 @@ export async function copyFleetValue(value: string, element: HTMLElement): Promi
     return 'copied';
 }
 
-export function FleetCopyValue({ value, label, hostname = false }: { value: string; label: string; hostname?: boolean }) {
+export function FleetCopyValue({ value, label, hostname = false, onOpen, openLabel }: { value: string; label: string; hostname?: boolean; onOpen?: () => void; openLabel?: string }) {
     const [locale] = useLocale(), element = useRef<HTMLSpanElement>(null), generation = useRef(0), timer = useRef<number | undefined>(undefined);
     const [state, setState] = useState<'idle' | 'pending' | FleetCopyResult>('idle');
     useEffect(() => {
@@ -50,8 +51,9 @@ export function FleetCopyValue({ value, label, hostname = false }: { value: stri
         if (result === 'copied') timer.current = window.setTimeout(() => { if (generation.current === token) setState('idle'); }, 2200);
     };
     const message = state === 'copied' ? locale === 'de' ? 'Kopiert' : 'Copied' : state === 'selected' ? locale === 'de' ? 'Text ausgewählt. Manuell kopieren.' : 'Text selected. Copy it manually.' : state === 'unavailable' ? locale === 'de' ? 'Bitte den Text manuell markieren und kopieren.' : 'Please select and copy the text manually.' : '';
+    const text = <span ref={element} tabIndex={onOpen ? undefined : -1} className={`fleet-copy-text ${hostname ? '' : 'mono'}`}>{hostname ? <strong>{value}</strong> : value}</span>;
     return <div className={`fleet-copy-value ${hostname ? 'fleet-copy-hostname' : ''}`}>
-        <div className="fleet-copy-line"><span ref={element} tabIndex={-1} className={`fleet-copy-text ${hostname ? '' : 'mono'}`}>{hostname ? <strong>{value}</strong> : value}</span><button type="button" className="fleet-copy-button" aria-label={label} title={label} disabled={state === 'pending'} aria-busy={state === 'pending'} onClick={event => { event.stopPropagation(); void copy(); }}>{state === 'copied' ? <Check size={14}/> : <Copy size={14}/>}</button></div>
+        <div className="fleet-copy-line">{onOpen ? <button type="button" className="fleet-name-open" aria-label={openLabel} onClick={onOpen}>{text}</button> : text}<button type="button" className="fleet-copy-button" aria-label={label} title={label} disabled={state === 'pending'} aria-busy={state === 'pending'} onClick={event => { event.stopPropagation(); void copy(); }}>{state === 'copied' ? <Check size={14}/> : <Copy size={14}/>}</button></div>
         {message && <span className="fleet-copy-feedback" role="status">{message}</span>}
     </div>;
 }

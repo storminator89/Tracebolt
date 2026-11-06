@@ -67,7 +67,7 @@ it.each(['en', 'de'] as const)('puts source context and actual open work before 
     expect(context.querySelector('time')).toHaveAttribute('datetime', now);
     expect(context).toHaveTextContent(locale === 'de' ? 'Beobachtungszeiten gelten je Quelle' : 'Observation times belong to each source');
     expect(screen.getByText(locale === 'de' ? 'Linux-Health-Vorfälle' : 'Linux Health incidents')).toBeVisible();
-    expect(screen.getByRole('button', { name: locale === 'de' ? 'Windows-Vorfälle unter Geräte' : 'Windows incidents in Devices' })).toBeVisible();
+    expect(screen.getByRole('button', { name: locale === 'de' ? 'Linux- & Windows-Vorfälle öffnen' : 'Open Linux & Windows incidents' })).toBeVisible();
     const report = document.querySelector('.overview-device-report')!;
     expect(report.querySelector('time')).toHaveAttribute('datetime', device.lastSeen);
     expect(report).toHaveTextContent(locale === 'de' ? 'LAN-Agent' : 'LAN agent');
@@ -148,4 +148,16 @@ it('opens the existing investigation route with retained open scope from the fir
 it.each(['', 'not a date', '0001-01-01T00:00:00Z', '2026-02-30T12:00:00Z'])('does not present invalid overview time as observed evidence (%s)', generatedAt => {
     render(<OverviewContext generatedAt={generatedAt} lan loading={false} failed={false}/>);
     expect(screen.getByText(/Time unavailable/)).toBeVisible(); expect(document.querySelector('time')).toBeNull();
+});
+
+it.each(['en', 'de'] as const)('opens the shared read-only incident queue from overview without broadening counters (%s)', async locale => {
+    setLocale(locale, false); const { fetch } = server({ open: true }), user = userEvent.setup(); render(<App/>);
+    const entry = await screen.findByRole('button', { name: locale === 'de' ? 'Linux- & Windows-Vorfälle öffnen' : 'Open Linux & Windows incidents' });
+    expect(screen.getByText(locale === 'de' ? 'Linux-Health-Vorfälle' : 'Linux Health incidents')).toBeVisible();
+    expect(fetch.mock.calls.some(([path]) => path.includes('windows-incidents'))).toBe(false);
+    entry.focus(); await user.keyboard('{Enter}');
+    await screen.findByRole('heading', { name: locale === 'de' ? 'Untersuchungen' : 'Investigations', level: 1 });
+    expect(window.location.hash).toBe('#/cases');
+    expect(fetch.mock.calls.some(([path]) => path.includes('/fleet/windows-incidents/complete?'))).toBe(true);
+    expect(fetch.mock.calls.some(([path]) => path.includes('/enrollment'))).toBe(false); readOnly(fetch);
 });

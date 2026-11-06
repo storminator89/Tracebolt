@@ -36,7 +36,7 @@ describe('compact and copyable fleet identity', () => {
         expect(writeText.mock.calls.map(call => call[0])).toEqual(['fixture-linux', '192.0.2.19', '192.0.2.19', '2001:db8::19', 'fe80::19', '127.0.0.1', '::1']); expect(onSelect).not.toHaveBeenCalled();
         expect(screen.queryByText('198.51.100.250')).not.toBeInTheDocument();
     });
-    it('allows real text selection and ordinary row/text clicks without navigation; only the explicit arrow opens the device', async () => {
+    it('allows real text selection and ordinary row/text clicks without navigation; the explicit arrow still opens the device', async () => {
         const user = userEvent.setup(), onSelect = vi.fn(); render(<DeviceTable devices={[device()]} identities={identities()} onSelect={onSelect}/>);
         const text = screen.getByText('192.0.2.19'); expect(text.closest('button')).toBeNull(); const range = document.createRange(); range.selectNodeContents(text); window.getSelection()!.addRange(range); expect(window.getSelection()!.toString()).toBe('192.0.2.19');
         fireEvent.click(text); fireEvent.click(screen.getAllByRole('row')[1]); expect(onSelect).not.toHaveBeenCalled();
@@ -71,4 +71,19 @@ describe('compact and copyable fleet identity', () => {
         render(<FleetIdentityName identity={identity} deviceId={endpointDevice}/>); for (const value of ['Stale', 'Partially collected', 'Permission denied']) expect(screen.getByText(value)).toBeVisible();
         expect(screen.queryByRole('button', { name: /^Copy hostname:/ })).not.toBeInTheDocument(); expect(ipButton()).toBeEnabled();
     });
+});
+
+it.each([false, true])('copies a navigable hostname through fallback without nested focus targets (legacy succeeds: %s)', async succeeds => {
+ const user = userEvent.setup(), onSelect = vi.fn(); setClipboard(vi.fn().mockRejectedValue(new Error('denied')));
+ const copy = vi.fn(() => succeeds); setLegacy(copy);
+ render(<DeviceTable devices={[device()]} identities={identities()} onSelect={onSelect}/>);
+ const open = screen.getByRole('button', {name: 'Open device: fixture-linux'});
+ expect(open.querySelector('[tabindex], button, a, input')).toBeNull();
+ const text = screen.getByText('fixture-linux').closest('span')!;
+ const focusText = vi.spyOn(text, 'focus');
+ nameButton().focus(); await user.keyboard('{Enter}');
+ await screen.findByText(succeeds ? 'Copied' : 'Text selected. Copy it manually.');
+ expect(copy).toHaveBeenCalled(); expect(focusText).not.toHaveBeenCalled(); expect(onSelect).not.toHaveBeenCalled();
+ expect(open.querySelector('[tabindex]')).toBeNull();
+ if (!succeeds) { expect(window.getSelection()?.toString()).toBe('fixture-linux'); expect(document.activeElement).toBe(open); }
 });
