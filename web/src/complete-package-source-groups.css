@@ -1,0 +1,23 @@
+.package-source-groups{margin:14px 0;border:1px solid var(--line);border-radius:8px;min-width:0;font-size:12px}
+.package-source-groups summary{min-height:44px;align-content:center;cursor:pointer;overflow-wrap:anywhere}
+.package-source-groups>summary{padding:0 12px}
+.package-source-groups>summary>span{margin-left:12px;color:var(--secondary)}
+.package-source-groups summary svg,.package-source-states svg{vertical-align:middle}
+.package-source-groups summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.package-source-content{padding:0 12px 12px;min-width:0}
+.package-source-content>p,.package-source-help{color:var(--secondary);line-height:1.6}
+.package-source-list,.package-source-binaries{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.package-source-list>li{min-width:0;border:1px solid var(--line);border-radius:6px;padding:0 12px}
+.package-source-group>summary>span{margin-right:12px}
+.package-source-name{font-weight:600;overflow-wrap:anywhere}
+.package-source-version{font-family:monospace;overflow-wrap:anywhere}
+.package-source-count{color:var(--secondary);white-space:nowrap}
+.package-source-states{display:flex;flex-wrap:wrap;gap:8px 20px;color:var(--secondary)}
+.package-source-binaries{padding-bottom:12px}
+.package-source-binaries>li{padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:5px;min-width:0;overflow-wrap:anywhere}
+.package-source-binaries dl{display:flex;flex-wrap:wrap;gap:6px 18px;margin:8px 0}
+.package-source-binaries dl>div{min-width:0}
+.package-source-binaries dt,.package-source-row-state{color:var(--secondary);font-size:11px}
+.package-source-binaries dd{margin:2px 0 0;font-family:monospace;overflow-wrap:anywhere}
+.package-source-row-state{display:flex;flex-wrap:wrap;gap:6px 16px}
+@media(max-width:600px){.package-source-groups>summary{padding-top:8px;padding-bottom:8px}.package-source-groups>summary>span{display:block;margin-left:20px}.package-source-group>summary>span{display:block;margin:4px 0}.package-source-group>summary{padding:6px 0}}
