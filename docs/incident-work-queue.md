@@ -36,6 +36,24 @@ navigation badge labels that limitation.
 
 ## Existing boundaries remain authoritative
 
+### Find Linux checks without current evidence
+
+The **Linux checks without current evidence** disclosure lists the individual
+authorized devices and configured checks behind the Linux incomplete-coverage
+count, including when no incident is open. Search the loaded names, identities
+and check targets, or select agent contact, root filesystem or selected services.
+These filters do not change incident scope, source paging or incident filters.
+Each device links to its existing identity-addressed Health view. Original source
+observation/report-receipt and manager-evaluation timestamps remain distinct.
+
+The list uses only the existing guarded and aged Linux source projection. It
+does not infer Windows coverage, overall device failure, recovery, unconfigured
+service monitoring or new alert rules. Unknown checks remain visible during
+maintenance. Losing the source or session removes the content; a changed set of
+authorized device identities resets local choices. No second snapshot, browser
+storage, new request, collection grant, acknowledgement or configuration write is
+introduced. Following Health uses that view's existing permissions.
+
 The queue uses the existing private GET projections, strict parsers and resource
 hooks. No backend API, collector, evaluator, policy, permission, notification,
 acknowledgement, AI request or action preview is added. Windows is explicitly

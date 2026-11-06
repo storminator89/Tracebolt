@@ -1,0 +1,13 @@
+.linux-monitoring-gaps{margin:16px 0;padding:16px;min-width:0;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.linux-monitoring-gaps>summary{font-weight:600;cursor:pointer}
+.linux-monitoring-gaps p{color:var(--secondary)}
+.linux-monitoring-gaps-filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.linux-monitoring-gaps-filters label{display:grid;gap:4px;max-width:100%;min-width:0}
+.linux-monitoring-gaps input,.linux-monitoring-gaps select{font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;max-width:100%;min-width:0}
+.linux-monitoring-gaps-devices{list-style:none;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.linux-monitoring-gaps-devices>li{border:1px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.linux-monitoring-gaps h3{font-size:13px;margin:0}.linux-monitoring-gaps-devices ul{padding-left:20px;margin-bottom:12px}
+.linux-monitoring-gaps-devices li>span{display:block;color:var(--secondary)}
+.linux-monitoring-gaps :is(summary,input,select,button,a):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:800px){.linux-monitoring-gaps-devices{grid-template-columns:1fr}}
+@media(max-width:600px){.linux-monitoring-gaps-filters label{width:100%}.linux-monitoring-gaps input,.linux-monitoring-gaps select,.linux-monitoring-gaps button{min-height:38px}}

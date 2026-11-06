@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { LinuxMonitoringGaps } from './linux-monitoring-gaps';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { Device } from './types';
@@ -91,6 +92,7 @@ export function IncidentWorkQueue({ devices, sessionKey, linux, scope, onScope, 
         <div className="page-heading"><h1>{c.title}</h1><button className="button small" disabled={linux.pending || windows.loading || linux.locked} onClick={refresh}><RefreshCw size={14}/>{c.refresh}</button></div>
         <p className="investigations-note">{c.intro}</p>
         <ManagerReadinessPanel sessionKey={sessionKey}/>
+        {linuxView && !linux.locked && unknownLinux > 0 && <LinuxMonitoringGaps key={JSON.stringify([sessionKey, linuxView.devices.map(device => device.deviceId).sort()])} view={linuxView} devices={devices}/>}
         <div className="incident-queue-toolbar">
             <label>{c.scope}<select value={scope} onChange={event => { onScope(event.target.value as QueueScope); onLinuxPage(0); setWindowsOffset(0); }}><option value="active">{c.active}</option><option value="all">{c.all}</option></select></label>
             <label>{c.platform}<select value={platform} onChange={event => setPlatform(event.target.value as QueuePlatform)}><option value="all">{c.allPlatforms}</option><option value="linux">Linux</option><option value="windows">Windows</option></select></label>
