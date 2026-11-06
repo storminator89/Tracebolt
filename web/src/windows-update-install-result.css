@@ -1,0 +1,8 @@
+.windows-update-install-result summary svg{margin-right:6px;vertical-align:-2px}
+.windows-update-install-result summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-update-install-result dl{display:grid;gap:8px;margin:12px 0}
+.windows-update-install-result dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:8px}
+.windows-update-install-result dt{display:flex;align-items:center;gap:6px;color:var(--secondary)}
+.windows-update-install-result dt svg{flex-shrink:0}
+.windows-update-install-result dd{margin:0;overflow-wrap:anywhere}
+@media(max-width:600px){.windows-update-install-result dl>div{grid-template-columns:minmax(0,1fr);gap:3px}}
