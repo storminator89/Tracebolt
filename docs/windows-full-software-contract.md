@@ -119,6 +119,24 @@ and paging. Full scope/age details are on demand. Pending requests, session/tab/
 device changes, visibility or focus loss, untrusted time and original expiry
 clear private rows and cursors. No UI read creates consent or collects host data.
 
+### Loaded-page version groups
+
+The optional **Version groups** disclosure compares repeated exact, observed,
+nonempty name + publisher pairs on the currently loaded page only (up to 100
+rows). Each group's reported version strings have registration counts and
+relative bars, with exact registration IDs and HKLM views available on demand.
+Empty and unavailable versions are separate from reported nonempty versions.
+No case folding, trimming, version ordering or application-identity inference is
+used. Same labels do not prove the same application, duplicate installations,
+an upgrade need, current installation, health or compliance.
+
+Search and paging can split groups. Unique pairs and unavailable/empty names or
+publishers remain in the unchanged registration table. No cross-page cache,
+additional request, export, storage write or software action is added. Opening
+and closing the comparison does not change search, order, totals, original
+capture times or paging. A replaced source or page closes its disclosures; the
+existing reader's privacy, access and original-expiry clearing remains binding.
+
 ## Verification boundary
 
 Portable fixtures exercise bounded registry enumeration and UTF-16 parsing,

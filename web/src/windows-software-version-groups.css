@@ -1,0 +1,24 @@
+.software-version-groups{margin:12px 0;border:1px solid var(--line);border-radius:8px;min-width:0;font-size:12px}
+.software-version-groups summary{cursor:pointer;min-height:44px;align-content:center;overflow-wrap:anywhere}
+.software-version-groups>summary{padding:0 12px}
+.software-version-groups>summary>span{margin-left:12px;color:var(--secondary)}
+.software-version-groups summary svg{vertical-align:middle}
+.software-version-groups summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.software-version-content{padding:0 12px 12px;min-width:0}
+.software-version-content>p,.software-version-help{color:var(--secondary);line-height:1.6}
+.software-version-counts{display:flex;flex-wrap:wrap;gap:12px 24px;margin:12px 0}
+.software-version-counts dt{color:var(--secondary)}
+.software-version-counts dd{margin:4px 0 0;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.software-version-list,.software-version-variants{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.software-version-list>li{padding:12px;border:1px solid var(--line);border-radius:6px;min-width:0}
+.software-version-heading,.software-version-variant{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 12px}
+.software-version-heading>span,.software-version-variant>span:last-child{color:var(--secondary);font-size:11px}
+.software-version-heading>strong,.software-version-variant>.software-version-value{flex:1;min-width:0}
+.software-version-value{white-space:pre-wrap;overflow-wrap:anywhere;unicode-bidi:plaintext}
+.software-version-publisher{margin:6px 0 14px;color:var(--secondary);overflow-wrap:anywhere}
+.software-version-bar{height:4px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+.software-version-bar>span{display:block;height:100%;background:var(--accent)}
+.software-version-variants details ul{padding-left:18px;margin:0;display:grid;gap:8px}
+.software-version-variants details li{display:grid;gap:3px;overflow-wrap:anywhere}
+.software-version-variants code{font-size:11px;overflow-wrap:anywhere}
+@media(max-width:600px){.software-version-heading>strong{flex-basis:100%}.software-version-variant>.software-version-value{flex-basis:70%}.software-version-groups>summary>span{display:block;margin-left:20px}.software-version-groups>summary{padding-top:8px;padding-bottom:8px}}
