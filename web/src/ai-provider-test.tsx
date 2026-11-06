@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { APIError, mutate } from './api';
 import type { AIConfig } from './ai-types';
 import { Dialog } from './components';
-import { t } from './i18n';
+import { t, useLocale } from './i18n';
 
 type TestStatus = 'passed' | 'unavailable' | 'timeout' | 'invalid_response' | 'canceled' | 'busy';
 const statuses: TestStatus[] = ['passed', 'unavailable', 'timeout', 'invalid_response', 'canceled', 'busy'];
@@ -15,6 +15,7 @@ function isTestResult(value: unknown, revision: string): value is { schemaVersio
 }
 
 export function AIProviderTest({ config, disabled, onBusy, onRefresh }: { config: AIConfig; disabled: boolean; onBusy: (busy: boolean) => void; onRefresh: () => Promise<AIConfig | null> }) {
+    const [locale] = useLocale(), helpId = useId();
     const [confirm, setConfirm] = useState(false);
     const [acknowledged, setAcknowledged] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -74,8 +75,13 @@ export function AIProviderTest({ config, disabled, onBusy, onRefresh }: { config
         uncertain: t('Das Testergebnis ist ungeklärt; die Anfrage kann bereits beim Anbieter angekommen sein. Keine automatische Wiederholung.'),
         conflict: t('Eine andere Analyse läuft oder die Anbieterkonfiguration wurde geändert. Bitte Status erneut lesen.'),
     };
+    const help = busy || stale || config.busy ? null : !config.configured
+        ? locale === 'de' ? 'Zuerst eine Anbieterkonfiguration speichern. Speichern startet keinen Funktionstest.' : 'Save a provider configuration first. Saving does not start a test.'
+        : disabled && config.lanPrivateCaSha256 ? locale === 'de' ? 'Der Test verwendet die gespeicherte Konfiguration. Entwurfsänderungen zum Testen zurücknehmen. Für Änderungen bei aktiver privater CA zuerst den Anbieter ausdrücklich entfernen.' : 'The test uses the saved configuration. Revert draft changes to test it. To change a provider with an active private CA, explicitly remove the provider first.'
+        : disabled ? locale === 'de' ? 'Der Test verwendet die gespeicherte Konfiguration. Ausstehende Änderungen zuerst speichern und laufende Vorgänge abwarten.' : 'The test uses the saved configuration. Save pending changes first and wait for running operations to finish.' : null;
     return <div className="ai-provider-test">
-        <button className="button" type="button" disabled={disabled || !config.configured || config.busy || busy || stale} onClick={() => { setConfirm(true); setAcknowledged(false); setStatus(null); }}>{t('Gespeicherten Anbieter testen')}</button>
+        <button className="button" type="button" disabled={disabled || !config.configured || config.busy || busy || stale} aria-describedby={help ? helpId : undefined} onClick={() => { setConfirm(true); setAcknowledged(false); setStatus(null); }}>{t('Gespeicherten Anbieter testen')}</button>
+        {help && <p id={helpId}>{help}</p>}
         {config.busy && <p role="status">{t('Eine andere Analyse läuft.')}</p>}
         {stale && status !== 'conflict' && status !== 'busy' && <p role="status">{messages.conflict}</p>}
         {(stale || status === 'conflict' || config.busy) && <button className="text-button" type="button" onClick={() => void refresh()}>{t('Status erneut lesen')}</button>}

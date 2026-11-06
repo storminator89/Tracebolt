@@ -40,6 +40,23 @@ it.each(['en','de'] as const)('reads history only on demand and exposes original
  fireEvent.click(screen.getByRole('button',{name:title}));expect(container.querySelector('.windows-service-action-history-list')).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:title}));await flush();expect(vi.mocked(request).mock.calls.filter(([p])=>p===base+'/history')).toHaveLength(2);
 });
+it.each([['en',0],['de',0],['en',2],['de',2]] as const)('associates each original broker flag with its own label in %s (receipt %s)',async(locale,index)=>{
+ setLocale(locale,false);const {container}=await open();
+ fireEvent.click(screen.getByRole('button',{name:locale==='de'?'Gespeicherte Aktionshistorie':'Saved action history'}));await flush();
+ expect(container.querySelector('.windows-service-action-history-list')).toHaveAttribute('role','list');
+ fireEvent.click(screen.getByRole('button',{name:(locale==='de'?'Beleg lesen #':'Read receipt #')+golden.details[index].job.identity.sequence}));await flush();
+ const result=golden.details[index].job.result!,phases=container.querySelector('.windows-history-phases') as HTMLElement;
+ const cases=[
+  [locale==='de'?'Stoppen':'Stop',locale==='de'?'Gestoppter Zustand beobachtet':'Stopped observed',[result.stopAttempted,result.stopRequested,result.stoppedObserved]],
+  [locale==='de'?'Starten':'Start',locale==='de'?'Laufender Zustand beobachtet':'Running observed',[result.startAttempted,result.startRequested,result.runningObserved]],
+ ] as const;
+ for(const [name,observed,values] of cases){
+  const phase=within(phases).getByRole('region',{name});
+  expect(Array.from(phase.querySelectorAll('dt')).map(e=>e.textContent)).toEqual([locale==='de'?'Versucht':'Attempted',locale==='de'?'Angefordert':'Requested',observed]);
+  expect(within(phase).getAllByRole('definition').map(e=>e.textContent)).toEqual(values.map(v=>locale==='de'?(v?'ja':'nein'):(v?'yes':'no')));
+ }
+ expect(mutateRaw).not.toHaveBeenCalled();
+});
 it.each(['blur','pagehide','popstate','hashchange',AUTH_REQUIRED_EVENT])('discards retained rows and late receipts after %s',async event=>{
  await open();await expand();let finish!:(v:unknown)=>void;
  vi.mocked(request).mockImplementation(async path=>path.endsWith(history.jobs[0].identity.jobId)?await new Promise(resolve=>{finish=resolve}):respond(path) as never);

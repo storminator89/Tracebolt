@@ -18,3 +18,8 @@
 .windows-resource-details dd{color:var(--text)}
 .windows-resource-processor h5{font-size:12px;margin:12px 0 4px}
 @media(max-width:600px){.windows-resource-groups{grid-template-columns:1fr;gap:14px}.windows-resource-context dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}}
+
+.windows-resource-cpu-details{margin-top:10px;font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-resource-cpu-details summary{cursor:pointer;color:var(--text);font-weight:600;min-height:36px;align-content:center}
+.windows-resource-cpu-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:600px){.windows-resource-cpu-details summary{min-height:44px}}

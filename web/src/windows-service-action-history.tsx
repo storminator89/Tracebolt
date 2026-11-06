@@ -7,8 +7,8 @@ import { fullDate } from './utils';
 import { validWindowsActionHistory, validWindowsActionHistoryDetail } from './windows-service-action-history-types';
 import type { WindowsActionHistory, WindowsActionHistoryDetail, WindowsActionHistorySummary } from './windows-service-action-history-types';
 const copy={
- en:{title:'Saved action history',scope:'Up to 64 approvals for this service grant, newest first. Original timestamps; no automatic retries.',capacity:'All 64 retained approval slots are used. New actions are blocked; saved receipts remain available.',empty:'No saved approvals for this service grant.',read:'Read receipt',close:'Close receipt',approved:'Approved',claimed:'Claimed once',notClaimed:'No claim recorded',actor:'Approving operator',job:'Action ID',at:'Status read',noCompletion:'The broker result has no completion timestamp.',error:'History is unavailable or changed. Close and reopen to read it again.'},
- de:{title:'Gespeicherte Aktionshistorie',scope:'Bis zu 64 Freigaben für diese Dienstfreigabe, neueste zuerst. Ursprüngliche Zeitangaben; keine automatischen Wiederholungen.',capacity:'Alle 64 gespeicherten Freigabeplätze sind belegt. Neue Aktionen sind gesperrt; gespeicherte Belege bleiben verfügbar.',empty:'Keine gespeicherten Aktionen für diese Dienstfreigabe.',read:'Beleg lesen',close:'Beleg schließen',approved:'Freigegeben',claimed:'Einmal abgeholt',notClaimed:'Keine Abholung erfasst',actor:'Freigebender Operator',job:'Aktions-ID',at:'Status gelesen',noCompletion:'Das Broker-Ergebnis enthält keinen Abschlusszeitpunkt.',error:'Historie nicht verfügbar oder geändert. Zum erneuten Lesen schließen und wieder öffnen.'},
+ en:{attempted:'Attempted',requested:'Requested',title:'Saved action history',scope:'Up to 64 approvals for this service grant, newest first. Original timestamps; no automatic retries.',capacity:'All 64 retained approval slots are used. New actions are blocked; saved receipts remain available.',empty:'No saved approvals for this service grant.',read:'Read receipt',close:'Close receipt',approved:'Approved',claimed:'Claimed once',notClaimed:'No claim recorded',actor:'Approving operator',job:'Action ID',at:'Status read',noCompletion:'The broker result has no completion timestamp.',error:'History is unavailable or changed. Close and reopen to read it again.'},
+ de:{attempted:'Versucht',requested:'Angefordert',title:'Gespeicherte Aktionshistorie',scope:'Bis zu 64 Freigaben für diese Dienstfreigabe, neueste zuerst. Ursprüngliche Zeitangaben; keine automatischen Wiederholungen.',capacity:'Alle 64 gespeicherten Freigabeplätze sind belegt. Neue Aktionen sind gesperrt; gespeicherte Belege bleiben verfügbar.',empty:'Keine gespeicherten Aktionen für diese Dienstfreigabe.',read:'Beleg lesen',close:'Beleg schließen',approved:'Freigegeben',claimed:'Einmal abgeholt',notClaimed:'Keine Abholung erfasst',actor:'Freigebender Operator',job:'Aktions-ID',at:'Status gelesen',noCompletion:'Das Broker-Ergebnis enthält keinen Abschlusszeitpunkt.',error:'Historie nicht verfügbar oder geändert. Zum erneuten Lesen schließen und wieder öffnen.'},
 };
 type Labels = Record<'pending'|'deadline'|'reported'|'start'|'stop'|'restart'|'attempt'|'yes'|'no'|'complete'|'approved'|'claimed'|'expired'|'needs_intervention'|'not-requested'|'intervention-required'|'running-observed'|'stopped-observed',string>;
 export function WindowsServiceActionHistory({deviceId,actor,sessionKey,insecure,serverNow,labels:l}:{deviceId:string;actor:string;sessionKey:string;insecure:boolean;serverNow:string;labels:Labels}) {
@@ -43,7 +43,7 @@ export function WindowsServiceActionHistory({deviceId,actor,sessionKey,insecure,
   {open&&<div className="windows-service-action-history-content">
    <p className="windows-inventory-exclusions">{c.scope}</p>
    {busy&&<p role="status">{l.pending}</p>}{error&&<p role="alert">{c.error}</p>}
-   {history&&<><p className="windows-inventory-exclusions">{c.at}: <time dateTime={history.serverNow}>{fullDate(history.serverNow)}</time></p>{history.jobs.length===history.limit&&<p role="status">{c.capacity}</p>}{history.jobs.length===0?<p>{c.empty}</p>:<ol className="windows-service-action-history-list">{history.jobs.map(row=><li key={row.identity.jobId}>
+   {history&&<><p className="windows-inventory-exclusions">{c.at}: <time dateTime={history.serverNow}>{fullDate(history.serverNow)}</time></p>{history.jobs.length===history.limit&&<p role="status">{c.capacity}</p>}{history.jobs.length===0?<p>{c.empty}</p>:<ol className="windows-service-action-history-list" role="list">{history.jobs.map(row=><li key={row.identity.jobId}>
     <p><strong>{l[row.outcome??row.state]}</strong> · {l[row.operation]} · <time dateTime={row.approvedAt}>{fullDate(row.approvedAt)}</time></p>
     <button className="button small" aria-expanded={selected===row.identity.jobId} onClick={()=>{if(selected===row.identity.jobId)cancel();else void read(row)}}>{selected===row.identity.jobId?c.close:c.read} #{row.identity.sequence}</button>
     {selected===row.identity.jobId&&j&&detail&&<div className="windows-service-action-history-receipt">
@@ -52,7 +52,18 @@ export function WindowsServiceActionHistory({deviceId,actor,sessionKey,insecure,
      <p>{c.approved}: <time dateTime={j.approvedAt}>{fullDate(j.approvedAt)}</time></p>
      <p>{detail.claimedAt?<>{c.claimed}: <time dateTime={detail.claimedAt}>{fullDate(detail.claimedAt)}</time></>:c.notClaimed}</p>
      <p>{l.deadline}: <time dateTime={j.startDeadline}>{fullDate(j.startDeadline)}</time></p>
-     {j.result&&<><p>{l.stop}: {l.attempt} {yes(j.result.stopAttempted)} / {yes(j.result.stopRequested)} / {yes(j.result.stoppedObserved)}</p><p>{l.start}: {l.attempt} {yes(j.result.startAttempted)} / {yes(j.result.startRequested)} / {yes(j.result.runningObserved)}</p><p className="windows-inventory-exclusions">{c.noCompletion}</p></>}
+     {j.result&&<><div className="windows-history-phases">
+      <section aria-label={l.stop}><h4>{l.stop}</h4><dl>
+       <div><dt>{c.attempted}</dt><dd>{yes(j.result.stopAttempted)}</dd></div>
+       <div><dt>{c.requested}</dt><dd>{yes(j.result.stopRequested)}</dd></div>
+       <div><dt>{l['stopped-observed']}</dt><dd>{yes(j.result.stoppedObserved)}</dd></div>
+      </dl></section>
+      <section aria-label={l.start}><h4>{l.start}</h4><dl>
+       <div><dt>{c.attempted}</dt><dd>{yes(j.result.startAttempted)}</dd></div>
+       <div><dt>{c.requested}</dt><dd>{yes(j.result.startRequested)}</dd></div>
+       <div><dt>{l['running-observed']}</dt><dd>{yes(j.result.runningObserved)}</dd></div>
+      </dl></section>
+     </div><p className="windows-inventory-exclusions">{c.noCompletion}</p></>}
      <p>{c.actor}: {j.actorId}</p><p>{c.job}: {j.identity.jobId}</p>
      <p>{c.at}: <time dateTime={detail.serverNow}>{fullDate(detail.serverNow)}</time></p>
     </div>}
