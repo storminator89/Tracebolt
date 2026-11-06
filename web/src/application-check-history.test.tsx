@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, abortProtectedRequests, request } from './api';
 import { ApplicationCheckHistory } from './application-check-history';
@@ -50,6 +50,25 @@ describe('deliberate private history reads', () => {
         expect(request).toHaveBeenCalledExactlyOnceWith('/application-checks/status', { signal: expect.any(AbortSignal), cache: 'no-store', redirect: 'error', headers: { Accept: APPLICATION_HISTORY_MEDIA } }, APPLICATION_HISTORY_BYTES);
         expect(screen.getByText('204 · Success observed')).toBeInTheDocument(); expect(screen.getByText('503 · Failure observed')).toBeInTheDocument(); expect(screen.getByText('Observation gap before this sample.')).toBeInTheDocument(); expect(screen.getByText('Earlier observations are not retained.')).toBeInTheDocument();
         expect(document.querySelector('li time')).toHaveAttribute('datetime', '2026-11-04T11:59:00Z'); expect(screen.queryByText(/recovered|uptime percentage|fully healthy/i)).not.toBeInTheDocument();
+    });
+    it.each(['en', 'de'] as const)('labels original start and completion separately, with ordered sample semantics (%s)', async locale => {
+        setLocale(locale, false); render(<ApplicationCheckHistory/>); await open();
+        const target = screen.getByRole('region', { name: 'fixture-app' });
+        const list = within(target).getByRole('list');
+        expect(list).toHaveAttribute('role', 'list');
+        const samples = within(list).getAllByRole('listitem');
+        expect(samples).toHaveLength(2);
+        for (const [index, sample] of samples.entries()) {
+            const original = fixture().items[0].samples[1 - index];
+            const definitions = within(sample).getAllByRole('definition');
+            expect(within(sample).getByText(locale === 'de' ? 'Gestartet' : 'Started')).toBeVisible();
+            expect(within(sample).getByText(locale === 'de' ? 'Abgeschlossen' : 'Completed')).toBeVisible();
+            expect(definitions[0].querySelector('time')).toHaveAttribute('datetime', original.observedAt);
+            expect(definitions[1].querySelector('time')).toHaveAttribute('datetime', original.completedAt);
+        }
+        expect(samples[0].querySelector('.application-history-gap')).toBeVisible();
+        expect(samples[1].querySelector('.application-history-gap')).toBeNull();
+        expect(request).toHaveBeenCalledTimes(1);
     });
     it('clears on close, blur and session loss and ignores an interrupted response', async () => {
         const held = deferred<unknown>(); vi.mocked(request).mockReturnValueOnce(held.promise); render(<ApplicationCheckHistory/>); const details = await open(); const signal = vi.mocked(request).mock.calls[0][1]!.signal!;
