@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { WindowsFleetSoftwareHistory } from './windows-fleet-software-history';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
@@ -39,10 +40,10 @@ export function WindowsFleetSoftwareLookup() {
     return <Lookup key={`${operator.actorId ?? ''}:${operator.expiresAt}`} sessionKey={operator.expiresAt} actor={operator.actorId ?? ''}/>;
 }
 function Lookup({ sessionKey, actor }: { sessionKey: string; actor: string }) {
-    const [locale] = useLocale(), c = copy[locale], [open, setOpen] = useState(false), id = useId();
+    const [locale] = useLocale(), c = copy[locale], [open, setOpen] = useState(false), [history, setHistory] = useState(false), id = useId();
     return <section className="windows-fleet-software" aria-label={c.title}>
         <div className="windows-fleet-software-heading"><strong>{c.title}</strong><button type="button" className="text-button" aria-expanded={open} aria-controls={`${id}-body`} onClick={() => setOpen(value => !value)}>{open ? c.close : c.open}</button></div>
-        {open && <div id={`${id}-body`}><LookupBody sessionKey={sessionKey} actor={actor}/></div>}
+        {open && <div id={`${id}-body`}><div role="group" aria-label={locale === 'en' ? 'Fleet software view' : 'Flotten-Softwareansicht'}><button type="button" className="button small" aria-pressed={!history} onClick={() => setHistory(false)}>{locale === 'en' ? 'Current inventory' : 'Aktuelles Inventar'}</button><button type="button" className="button small" aria-pressed={history} onClick={() => setHistory(true)}>{locale === 'en' ? 'Observed changes' : 'Beobachtete Änderungen'}</button></div>{history ? <WindowsFleetSoftwareHistory sessionKey={sessionKey} actor={actor}/> : <LookupBody sessionKey={sessionKey} actor={actor}/>}</div>}
     </section>;
 }
 function LookupBody({ sessionKey, actor }: { sessionKey: string; actor: string }) {

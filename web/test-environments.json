@@ -24,6 +24,7 @@
     "src/windows-contact-clock.test.ts",
     "src/windows-contact-types.test.ts",
     "src/windows-event-content-types.test.ts",
+    "src/windows-fleet-software-history-types.test.ts",
     "src/windows-full-processes-types.test.ts",
     "src/windows-health-clock.test.ts",
     "src/windows-inventory-types.test.ts",

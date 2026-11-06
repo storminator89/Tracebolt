@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "tracebolt.windows-fleet-software-history-page.v1",
+  "serverNow": "2027-01-15T08:01:10Z",
+  "status": "ready",
+  "search": "",
+  "mode": "fleet",
+  "totalDevices": 1,
+  "offset": 0,
+  "items": [
+    {
+      "deviceId": "agent_00000000000000000000000000000001",
+      "identity": "fd2cf0aa1e736bfeb436b6ad184a6a986e167c8168d78f497d23dc5b27b4c398",
+      "authorityUntil": "2027-01-16T08:00:00Z",
+      "history": {
+        "schemaVersion": "tracebolt.windows-fleet-software-history-device.v1",
+        "deviceId": "agent_00000000000000000000000000000001",
+        "serverNow": "2027-01-15T08:01:10Z",
+        "status": "ready",
+        "authorityUntil": "2027-01-16T08:00:00Z",
+        "grantId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantRevision": 1,
+        "historyDigest": "6268c43f6f175f3b444ba4ba14dd204dfc6e08156034156ca915ca3441c75112",
+        "comparison": {
+          "status": "compared",
+          "reason": "",
+          "beforeObservedAt": "2027-01-15T08:00:10Z",
+          "afterObservedAt": "2027-01-15T08:01:10Z",
+          "expiresAt": "2027-01-22T08:00:10Z",
+          "observedChanges": 24
+        },
+        "latestAttempt": {
+          "sequence": 2,
+          "attemptedAt": "2027-01-15T08:01:10Z",
+          "status": "complete",
+          "reason": ""
+        },
+        "gapCount": 0,
+        "omittedChanges": 0,
+        "expiredChanges": 0,
+        "retainedCount": 24,
+        "search": "",
+        "limit": 3,
+        "offset": 0,
+        "matchingCount": 24,
+        "rows": [
+          {
+            "id": "0811770fedc28c1d33bb7903e5d2787945623b2e24ca4dfdf35c571d481daba6",
+            "kind": "registration_added",
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000011",
+            "registryView": "64",
+            "beforeObservedAt": "2027-01-15T08:00:10Z",
+            "afterObservedAt": "2027-01-15T08:01:10Z",
+            "expiresAt": "2027-01-22T08:00:10Z",
+            "before": null,
+            "after": {
+              "registrationId": "0000000000000000000000000000000000000000000000000000000000000011",
+              "registryView": "64",
+              "name": "Invented App 東京",
+              "nameQuality": "observed",
+              "version": "1.16",
+              "versionQuality": "observed",
+              "publisher": null,
+              "publisherQuality": "unavailable"
+            },
+            "changedFields": []
+          },
+          {
+            "id": "0cb4b6bab61d0a755a80332bef9f5c963ea4dd444f51f27a79be83b78546d39e",
+            "kind": "registration_added",
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000012",
+            "registryView": "64",
+            "beforeObservedAt": "2027-01-15T08:00:10Z",
+            "afterObservedAt": "2027-01-15T08:01:10Z",
+            "expiresAt": "2027-01-22T08:00:10Z",
+            "before": null,
+            "after": {
+              "registrationId": "0000000000000000000000000000000000000000000000000000000000000012",
+              "registryView": "64",
+              "name": "Invented App 東京",
+              "nameQuality": "observed",
+              "version": "1.17",
+              "versionQuality": "observed",
+              "publisher": null,
+              "publisherQuality": "unavailable"
+            },
+            "changedFields": []
+          },
+          {
+            "id": "11870aba44b82293ed67ff7239ba3d6dda3e694c552cfe16dd0036cf1d4ac3a6",
+            "kind": "registration_added",
+            "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+            "registryView": "64",
+            "beforeObservedAt": "2027-01-15T08:00:10Z",
+            "afterObservedAt": "2027-01-15T08:01:10Z",
+            "expiresAt": "2027-01-22T08:00:10Z",
+            "before": null,
+            "after": {
+              "registrationId": "0000000000000000000000000000000000000000000000000000000000000002",
+              "registryView": "64",
+              "name": "Invented App 東京",
+              "nameQuality": "observed",
+              "version": "1.01",
+              "versionQuality": "observed",
+              "publisher": null,
+              "publisherQuality": "unavailable"
+            },
+            "changedFields": []
+          }
+        ],
+        "nextCursor": "",
+        "cursorExpiresAt": "2027-01-15T08:06:10Z"
+      },
+      "detailCursor": "eyJ2IjoxLCJyb3N0ZXIiOiI1M2M1NTM4Mzc2YzNkNmU2NjQwM2IyYmU3NzE3OWQyM2EzYTFmZTg3YWJiOTczNzE0MDM5ZTAxNTllNzFmY2IyIiwicXVlcnlEaWdlc3QiOiI0NDVjNmNiZjkyMjA4OWZiM2UwMzkxMjM3Njc3ZmZhOTQzM2E3NjQwOGI1ZWZiOWFhYzdmMjhkNzUxYjNiODM3Iiwic2Vzc2lvbiI6InN5bnRoZXRpYy1mbGVldC1yZWFkZXIiLCJtb2RlIjoiZGV2aWNlIiwiZGV2aWNlIjoiYWdlbnRfMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDEiLCJvZmZzZXQiOjAsImV4cGlyZXNBdCI6IjIwMjctMDEtMTVUMDg6MDY6MTBaIn0.bpwomABrpWS9PqnBBjk0ZHcMfdbeu839_mPAvIrP1Z0"
+    }
+  ],
+  "nextCursor": "",
+  "cursorExpiresAt": "2027-01-15T08:06:10Z"
+}

@@ -14,12 +14,23 @@ const (
 // FleetQuery is a private, read-only request. Version is literal reported text,
 // never a semantic version, upgrade decision or installation predicate.
 type FleetQuery struct {
+	// Empty preserves the current-inventory v1 request. History is an explicit private read.
+	View    string `json:"view,omitempty"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
 	Cursor  string `json:"cursor"`
 }
 
 func ValidateFleetQuery(q FleetQuery) error {
+	if q.View == "history" {
+		if q.Version != "" {
+			return ErrInvalid
+		}
+		return ValidateHistoryQuery(Query{Search: q.Name, Sort: "observed-desc", Limit: 1, Cursor: q.Cursor})
+	}
+	if q.View != "" {
+		return ErrInvalid
+	}
 	if q.Name == "" && q.Version == "" {
 		return ErrInvalid
 	}

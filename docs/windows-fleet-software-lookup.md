@@ -7,6 +7,10 @@ Both filters are literal Unicode case-insensitive substrings and combine with
 AND. A version-only query is also supported. Versions are text, not upgrade order.
 This manager/UI source feature adds no collection, consent or endpoint change.
 
+The same panel separately offers [Observed changes](windows-fleet-software-history.md)
+over already granted machine-software history. The current-inventory lookup below
+retains its original request and source semantics.
+
 ## Reading results
 
 Each page shows up to five currently authorized Windows devices, including devices
