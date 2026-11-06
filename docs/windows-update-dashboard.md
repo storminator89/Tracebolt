@@ -128,8 +128,8 @@ installed-service change or external AI request is performed by these checks.
 
 ## Explicit cached fleet triage
 
-The collapsed Windows update worklist can freeze at most 50 Windows devices,
-then explicitly **Read cached updates**. One GET-only batch reads the existing
+The collapsed Windows update worklist can select at most 50 Windows devices,
+then explicitly **Read cached updates** before or after freezing the selection. One GET-only batch reads the existing
 private inventory endpoint, four devices at a time, with the same 160 KiB reader
 and full inventory validator. Each request is limited to ten seconds and the
 whole batch to one minute. It neither triggers a host scan nor requests readiness.
@@ -143,6 +143,13 @@ source evidence remain collapsed. Partial/truncated, stale and unavailable repor
 are counted separately; a stale report can also be partial. An empty result never
 proves compliance, and downloaded content does not establish install readiness.
 Search operates on retained rows, with ten exact pairs per page.
+
+In the editable selection, choosing a pair records only the exact update intent;
+it does not change device checkboxes. Freezing the same device IDs retains that
+review without another read or a new retention deadline. Changing the selected
+IDs clears the review and exact pair, including pending reads. No device is
+automatically added, opened, reviewed or approved. The selected count and
+source-report counts still describe the whole chosen device scope.
 
 Choosing a pair narrows only the frozen local device list. Opening a reporting
 device performs its own fresh inventory read and fixes that same GUID/revision in
