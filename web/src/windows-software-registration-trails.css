@@ -2,10 +2,19 @@
 .windows-registration-trails summary{cursor:pointer;overflow-wrap:anywhere}
 .windows-registration-trails summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .windows-registration-trails p{line-height:1.5}
+.windows-registration-label{display:inline-flex;align-items:center;gap:7px;max-width:100%;vertical-align:middle}
+.windows-registration-label svg,.windows-registration-section h4 svg{flex:none}
+.windows-registration-scope{color:var(--secondary);margin:10px 0 8px}
+.windows-registration-help{font-size:11px;color:var(--secondary);margin-bottom:12px}
+.windows-registration-help p{max-width:85ch}
 .windows-registration-trail{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .windows-registration-trail>summary small{display:block;margin-top:4px;color:var(--secondary);font-size:11px}
+.windows-registration-identity{color:var(--secondary);font-size:11px;overflow-wrap:anywhere}
+.windows-registration-section{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:6px;min-width:0}
+.windows-registration-section h4{display:flex;align-items:center;gap:7px;font-size:12px;margin:0 0 10px}
 .windows-registration-trail table{margin:12px 0}.windows-registration-trail caption{text-align:left;font-weight:600;padding:8px 0}
 .windows-registration-trail ol{padding-left:22px}.windows-registration-trail li{margin:10px 0}
+.windows-registration-trail li summary>time{display:block;margin:5px 0 0 22px}
 .windows-registration-trail td,.windows-registration-trail th{overflow-wrap:anywhere;white-space:normal}
 .windows-registration-observations{display:flex;flex-wrap:wrap;gap:10px 24px;margin:12px 0}.windows-registration-observations dt{font-weight:600}.windows-registration-observations dd{margin:4px 0 0}
 .windows-registration-exact-time{display:block;color:var(--secondary);font-size:11px;overflow-wrap:anywhere}

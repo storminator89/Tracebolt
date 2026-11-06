@@ -32,6 +32,37 @@ beforeEach(() => {
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('exact-registration observation trails', () => {
+    it.each(['en', 'de'] as const)('shows concise scope, named sections and text-backed icons without hiding the evidence (%s)', locale => {
+        const p = page(), labels = locale === 'en'
+            ? { short: 'Loaded page only. Gaps are possible; current state is not established.', help: 'How to read this history', evidence: 'First and last shown observations', steps: 'Changes on this page', id: 'Registration ID', kinds: ['Registration added', 'Metadata changed', 'Registration removed'], caveat: /not a complete lifetime/ }
+            : { short: 'Nur die geladene Seite. Lücken sind möglich; der aktuelle Zustand ist nicht belegt.', help: 'Diesen Verlauf richtig lesen', evidence: 'Erste und letzte angezeigte Beobachtung', steps: 'Änderungen auf dieser Seite', id: 'Registrierungs-ID', kinds: ['Registrierung hinzugefügt', 'Metadaten geändert', 'Registrierung entfernt'], caveat: /weder ein vollständiger Lebenslauf/ };
+        render(<WindowsSoftwareRegistrationTrails page={p} locale={locale}/>);
+        expect(outer().querySelector('summary')).toHaveAccessibleName(locale === 'en' ? 'History by registration (1)' : 'Verlauf je Registrierung (1)');
+        fireEvent.click(outer().querySelector('summary')!);
+        expect(screen.getByText(labels.short)).toBeVisible();
+        const help = document.querySelector('details.windows-registration-help')!;
+        expect(help).not.toHaveAttribute('open'); expect(screen.getByText(labels.caveat)).not.toBeVisible();
+        expect(help.querySelector('summary')).toHaveAccessibleName(labels.help);
+        fireEvent.click(help.querySelector('summary')!); expect(screen.getByText(labels.caveat)).toBeVisible();
+        expect(group().querySelector('summary')).not.toHaveTextContent(p.rows[0].registrationId);
+        fireEvent.click(group().querySelector('summary')!);
+        const identity = group().querySelector('.windows-registration-identity')!;
+        expect(identity).toHaveTextContent(labels.id); expect(identity.querySelector('code')).toHaveTextContent(p.rows[0].registrationId); expect(identity).toBeVisible();
+        const firstLast = screen.getByRole('region', { name: labels.evidence });
+        expect(within(firstLast).getByRole('heading', { name: labels.evidence, level: 4 })).toBeVisible();
+        expect(within(firstLast).getByRole('table', { name: labels.evidence })).toBeVisible();
+        const steps = screen.getByRole('region', { name: labels.steps });
+        expect(within(steps).getByRole('heading', { name: labels.steps, level: 4 })).toBeVisible();
+        const entries = steps.querySelectorAll('[data-trail-change]'); expect(entries).toHaveLength(3);
+        entries.forEach((entry, index) => {
+            const summary = entry.querySelector('summary')!;
+            expect(summary).toHaveAccessibleName(new RegExp(labels.kinds[index]));
+            expect(summary).toHaveTextContent(labels.kinds[index]); expect(summary.querySelector('svg')).not.toBeNull();
+        });
+        const icons = outer().querySelectorAll('svg'); expect(icons.length).toBeGreaterThan(0);
+        icons.forEach(icon => { expect(icon).toHaveAttribute('aria-hidden', 'true'); expect(icon).toHaveAttribute('focusable', 'false'); });
+        expect(screen.queryByRole('img')).toBeNull(); expect(ids()).toEqual([...p.rows].reverse().map(row => row.id));
+    });
     it.each(['en', 'de'] as const)('follows renamed/removed registrations with original paired evidence in %s', locale => {
         const p = page(), original = JSON.stringify(p);
         expect(validSoftwareHistoryPage(p, softwareHistoryDevice, softwareHistoryQuery, 0)).toBe(true);
@@ -64,6 +95,11 @@ describe('exact-registration observation trails', () => {
         render(<WindowsSoftwareRegistrationTrails page={p} locale="en"/>);
         const groups = document.querySelectorAll('[data-registration-trail]');
         expect(groups).toHaveLength(3); expect(new Set(Array.from(groups).map(node => node.getAttribute('data-registration-trail'))).size).toBe(3);
+        expect(new Set(Array.from(groups).map(node => node.querySelector('summary')!.getAttribute('aria-label'))).size).toBe(3);
+        groups.forEach(node => {
+            const [id, view] = node.getAttribute('data-registration-trail')!.split(':');
+            expect(node.querySelector('summary')).toHaveAccessibleName(new RegExp(`HKLM ${view}.*Registration ID: ${id}`));
+        });
         expect(document.querySelector(`[data-trail-change="${singleton.id}"]`)).toBeNull();
         expect(ids()).toHaveLength(9);
     });
@@ -94,9 +130,12 @@ describe('exact-registration observation trails', () => {
     });
     it.each(['deviceId', 'grantId', 'grantRevision', 'historyDigest', 'search', 'offset'] as const)('closes native disclosures when %s changes', field => {
         const p = page(), view = render(<WindowsSoftwareRegistrationTrails page={p} locale="en"/>); expand();
+        fireEvent.click(document.querySelector('.windows-registration-help summary')!);
+        expect(document.querySelector('.windows-registration-help')).toHaveAttribute('open');
         const next = { ...p, [field]: typeof p[field] === 'number' ? Number(p[field]) + 1 : `${p[field]}-different` };
         view.rerender(<WindowsSoftwareRegistrationTrails page={next} locale="en"/>);
         expect(outer()).not.toHaveAttribute('open'); expect(group()).not.toHaveAttribute('open');
+        expect(document.querySelector('.windows-registration-help')).not.toHaveAttribute('open');
     });
 });
 
@@ -140,6 +179,7 @@ describe('registration trails inside the original private reader', () => {
         const s = server(); open(); await screen.findByRole('table', { name: 'Change history' });
         const counts = document.querySelector('.windows-history-counts')!.textContent, storage = vi.spyOn(Storage.prototype, 'setItem');
         expand(); fireEvent.click(group().querySelector('li summary')!);
+        fireEvent.click(document.querySelector('.windows-registration-help summary')!);
         expect(s.requests).toEqual([softwareHistoryQuery]); expect(storage).not.toHaveBeenCalled();
         expect(document.querySelector('.windows-history-counts')!.textContent).toBe(counts);
         expect(document.querySelectorAll('[data-history-id]')).toHaveLength(3);
