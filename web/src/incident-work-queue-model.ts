@@ -8,6 +8,7 @@ export type QueueSource = 'all' | 'linux-health' | 'windows-assessment' | 'windo
 export type QueueSeen = 'all' | 'seen' | 'unseen';
 export type QueueScope = 'active' | 'all';
 export type QueueLifecycle = 'all' | IncidentLifecycle;
+export type QueueOrder = 'newest' | 'oldest' | 'unseen-oldest';
 export const QUEUE_SEARCH_LIMIT = 160;
 export type QueueRow =
     | { identity: string; platform: 'linux'; source: 'linux-health'; openedAt: string; seenAt: string | null; item: InvestigationItem }
@@ -28,7 +29,21 @@ export function incidentQueueRows(linux: InvestigationsView | null, windows: Win
         const source = complete ? 'windows-full-services' : 'windows-assessment';
         rows.push({ identity: JSON.stringify(['windows', source, item.domain, item.key]), platform: 'windows', source, openedAt: item.openedAt, seenAt: item.acknowledgedAt, item });
     }
-    return rows.sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt) || a.identity.localeCompare(b.identity));
+    return orderIncidentQueue(rows, 'newest');
+}
+
+// Validated source UTC timestamps retain up to nine fractional digits. Millisecond
+// parsing would silently tie distinct openings. No elapsed time is inferred.
+function openingKey(at: string): string { return at.slice(0, 19) + (at.match(/\.(\d+)Z$/)?.[1] ?? '').padEnd(9, '0'); }
+
+/** Reorder the already-loaded rows only. Seen is attention metadata, not recovery
+ * or severity. Never mutate source pages or carry rows over from a lost source. */
+export function orderIncidentQueue(rows: readonly QueueRow[], order: QueueOrder): QueueRow[] {
+    return [...rows].sort((a, b) => {
+        const seen = order === 'unseen-oldest' ? Number(a.seenAt !== null) - Number(b.seenAt !== null) : 0;
+        const opening = openingKey(a.openedAt).localeCompare(openingKey(b.openedAt));
+        return seen || (order === 'newest' ? -opening : opening) || a.identity.localeCompare(b.identity);
+    });
 }
 
 /** Search only explicit identity/name/target fields from the loaded source pages.

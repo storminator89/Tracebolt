@@ -18,7 +18,7 @@ changes retain their native meanings. Seen never means recovered or resolved.
 
 Each source has independent coverage, read time, totals and paging controls:
 50 Linux rows or 25 Windows rows per source page. Only those two current pages
-are merged by original opening time, with source-qualified identity as the stable
+are merged by original opening time by default, with source-qualified identity as the stable
 tie-breaker. This is live paging, not a pinned snapshot or global newest-first
 pagination. Refresh restarts both sources at page one.
 
@@ -180,3 +180,33 @@ provenance, stale current evidence, exact selection across live refreshes,
 source-loss pruning, session/page/filter/search changes, repeated choices,
 close/reopen/remove/reset and inert EN/DE rendering. These are synthetic component
 checks, not browser or native acceptance.
+
+## Order the work already loaded
+
+**Order loaded incidents** (**Geladene Vorfälle sortieren**) offers newest opening
+first (default), oldest opening first, or not-seen episodes first with oldest
+openings first within each seen category. With **Open** selected, oldest opening
+first helps review older unresolved episodes on these pages. With **All retained**,
+closed episodes remain eligible; ordering never silently filters outcomes.
+
+The control sorts only the current Linux and Windows source pages after the
+existing local filters. It neither loads more history nor finds the oldest
+episode across the entire fleet. Original source UTC precision is preserved
+through nine fractional digits; exact ties keep source-qualified identities.
+Opening order does not measure uninterrupted downtime, severity or an SLA.
+Seen remains independent of resolution. No source count, timestamp, lifecycle,
+current evidence or maintenance state is changed.
+
+Ordering is local component state, with no request, storage or mutation. Existing
+comparison selections and timeline disclosures follow exact episode identities
+when rows move. Source loss still removes affected rows and selections; they are
+not restored by changing the order. **Clear page filters** keeps the chosen order,
+as do source paging and refresh. Leaving and remounting the queue restores the
+default order. The visible text label accompanies a decorative, non-focusable
+icon; the native select is keyboard accessible.
+
+`cd web && ./node_modules/.bin/vitest run src/incident-queue-order.test.tsx`
+covers precise ordering, source/domain collisions, immutable source pages,
+seen/outcome independence, local filter and paging composition, exact selection,
+repeated order changes, partial/source-loss behavior and EN/DE labels. These are
+synthetic DOM checks, not browser, screen-reader, native or release acceptance.
