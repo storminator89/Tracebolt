@@ -626,6 +626,10 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "operator_capability_required", "This named account does not have permission for this administrative operation.")
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/handover-notes") {
+		h.deviceNotesAPI(w, r)
+		return
+	}
 	if r.URL.Path == "/api/manager/readiness" {
 		h.managerReadinessAPI(w, r)
 		return

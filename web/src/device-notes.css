@@ -1,0 +1,12 @@
+.device-notes { margin-top: 1.5rem; }
+.device-notes > p, .device-notes-list li > p:not(.device-note-text) { font-size: .875rem; line-height: 1.5; }
+.device-notes-list { list-style: none; padding: 0; }
+.device-notes-list li { border-top: 1px solid var(--line); padding: 1rem 0; }
+.device-note-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.device-notes form { display: grid; gap: .6rem; margin-top: 1rem; }
+.device-notes textarea { width: 100%; min-height: 7rem; resize: vertical; font: inherit; }
+.device-notes label { display: flex; gap: .5rem; align-items: center; }
+
+.device-note-archived { display: inline-flex; align-items: center; padding: .2rem .5rem; margin-bottom: .5rem; border: 1px solid var(--line-strong); border-radius: 1rem; color: var(--secondary); background: var(--panel-soft); font-size: .75rem; font-weight: 500; }
+.device-notes-empty { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: 1rem; margin: .75rem 0; border: 1px dashed var(--line-strong); border-radius: .5rem; color: var(--secondary); background: var(--panel-soft); }
+.device-notes-empty p { margin: 0; }
