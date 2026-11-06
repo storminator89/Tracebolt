@@ -1,0 +1,11 @@
+.enrollment-history-filter { padding: 0 20px 14px; }
+.enrollment-history-search { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.enrollment-history-search label { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--secondary); }
+.enrollment-history-search input { flex: 1; min-width: min(180px, 100%); max-width: 100%; padding: 8px 10px; color: var(--text); background: var(--panel-soft); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; font-size: 11px; }
+.enrollment-history-filter .button { font-size: 11px; }
+.enrollment-history-phases { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+.enrollment-history-phases [aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.enrollment-history-scope, .enrollment-history-count { margin: 8px 0 0; font-size: 10px; line-height: 1.55; color: var(--secondary); }
+.enrollment-history-count { color: var(--text); }
+.enrollment-history-filter :is(input, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 760px) { .enrollment-history-filter { padding: 0 17px 14px; } .enrollment-history-search label { width: 100%; } .enrollment-history-search input, .enrollment-history-filter .button { min-height: 40px; font-size: 12px; } .enrollment-history-scope, .enrollment-history-count { font-size: 11px; } }
