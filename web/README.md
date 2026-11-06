@@ -26,8 +26,8 @@ npm audit
 ```
 
 The main test command first checks that Vitest discovers every default test file
-exactly once. An explicit list of 26 DOM-free contract, clock and utility files in
-`test-environments.json` runs under Node; all other tests, including new files,
+exactly once. Explicitly allowlisted DOM-free contract, model, clock, transport
+and server-rendering tests in `test-environments.json` run under Node; all other tests, including new files,
 remain in jsdom. Both projects inherit the same setup and React configuration.
 No assertions, test cases, per-test timeouts or worker limits are removed or relaxed.
 
