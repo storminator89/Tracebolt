@@ -1,0 +1,15 @@
+.windows-fleet-update-history{margin:14px 0;padding:12px;border:1px solid var(--line);border-radius:8px}
+.windows-fleet-history-toggle,.windows-fleet-history-actions,.windows-fleet-history-actions button,.windows-fleet-history-outcome{display:flex;align-items:center;gap:6px}
+.windows-fleet-history-actions{flex-wrap:wrap;gap:10px}
+.windows-fleet-history-devices{list-style:none;padding:0;margin:12px 0}
+.windows-fleet-history-devices>li{padding:10px 0;border-top:1px solid var(--line)}
+.windows-fleet-history-devices small{display:block;color:var(--secondary);overflow-wrap:anywhere;margin:4px 0}
+.windows-fleet-update-history summary{cursor:pointer;overflow-wrap:anywhere}
+.windows-fleet-update-history summary:focus-visible,.windows-fleet-update-history button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-fleet-history-jobs{padding-left:24px}
+.windows-fleet-history-jobs>li{margin:12px 0}
+.windows-fleet-history-outcome svg{flex-shrink:0}
+.windows-fleet-history-jobs dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;margin:6px 0}
+.windows-fleet-history-jobs dd{margin:0;overflow-wrap:anywhere}
+.windows-fleet-history-pagination{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+@media(max-width:600px){.windows-fleet-history-jobs dl>div{grid-template-columns:minmax(0,1fr);gap:3px}.windows-fleet-history-actions button{white-space:normal;text-align:left}}
