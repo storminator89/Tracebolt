@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from 'react';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventorySnapshot } from './windows-inventory-types';
 import './windows-inventory-tables.css';
+import { capturedServiceTriage, WindowsServiceTriage, type ServiceTriageFilter } from './windows-service-triage';
 
 const PAGE_SIZE = 25;
 export type WindowsInventoryTableKind = 'services' | 'software';
@@ -72,8 +73,8 @@ export function capturedInventoryTableRows(snapshot: WindowsInventorySnapshot, k
         return order * (descending ? -1 : 1) || literalCompare(a.tie, b.tie) || a.index - b.index;
     });
 }
-interface TableControls { query: string; sort: WindowsInventoryTableSort; page: number }
-const initialControls = (): TableControls => ({ query: '', sort: 'name-asc', page: 0 });
+interface TableControls { query: string; sort: WindowsInventoryTableSort; page: number; serviceFilter?: ServiceTriageFilter }
+const initialControls = (): TableControls => ({ query: '', sort: 'name-asc', page: 0, serviceFilter: 'all' });
 /** Retain only controls during a same-generation reread, while the resource hides
  * all rows. Tab departure, nonloading absence and a changed identity/capture
  * discard the controls before paint. The owner keys the workspace by session. */
@@ -89,15 +90,20 @@ export function useWindowsInventoryTableControls(resource: WindowsInventoryResou
 
 /** All data comes from the already validated, admitted current inventory view. */
 export function WindowsInventoryTable({ snapshot, kind, locale, controls, onChange, serviceStartup = null }: { snapshot: WindowsInventorySnapshot; serviceStartup?: WindowsServiceStartup | null; kind: WindowsInventoryTableKind; locale: Locale; controls: TableControls; onChange: (controls: TableControls) => void }) {
-    const id = useId(), c = copy[locale], { query, sort, page } = controls;
+    const id = useId(), c = copy[locale], { query, sort, page, serviceFilter = 'all' } = controls;
+    const triage = useMemo(() => kind === 'services' ? capturedServiceTriage(snapshot, serviceStartup) : null, [kind, snapshot, serviceStartup]);
     // This component exists only while its owner admits the current snapshot.
     // Cache pure row work within that lifetime, never authority or freshness.
-    const rows = useMemo(() => capturedInventoryTableRows(snapshot, kind, query, sort, locale, serviceStartup), [snapshot, kind, query, sort, locale, serviceStartup]);
+    const rows = useMemo(() => {
+        const sorted = capturedInventoryTableRows(snapshot, kind, query, sort, locale, serviceStartup);
+        return triage ? sorted.filter(row => triage[serviceFilter].has(row.index)) : sorted;
+    }, [snapshot, kind, query, sort, locale, serviceStartup, triage, serviceFilter]);
     const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)), currentPage = Math.min(page, pageCount - 1), start = currentPage * PAGE_SIZE, visible = rows.slice(start, start + PAGE_SIZE);
     const headers = kind === 'services' ? [c.name, c.displayName, c.state, 'PID', serviceStartupCopy[locale].column] : [c.name, c.version, c.publisher, c.registry];
     const sortedColumn = sort.startsWith('startup-') ? 4 : sort.startsWith('name-') ? 0 : sort.startsWith('pid-') ? 3 : sort.startsWith('version-') ? 1 : 2;
     return <>
         <p className="windows-inventory-exclusions" id={`${id}-bounds`}>{c[`${kind}Bounded`]}</p>
+        {triage && <WindowsServiceTriage counts={triage} selected={serviceFilter} locale={locale} onSelect={serviceFilter => onChange({ ...controls, serviceFilter, page: 0 })}/>}
         <div className="windows-inventory-table-controls">
             <label className="windows-inventory-search" htmlFor={`${id}-search`}>{c[`${kind}Search`]}<input id={`${id}-search`} type="search" maxLength={256} value={query} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, query: event.target.value, page: 0 })}/></label>
             <div className="windows-inventory-table-sort"><label htmlFor={`${id}-sort`}>{c[`${kind}Sort`]}</label><select id={`${id}-sort`} value={sort} aria-describedby={`${id}-bounds`} onChange={event => onChange({ ...controls, sort: event.target.value as WindowsInventoryTableSort, page: 0 })}>{sorts[kind].map(value => <option key={value} value={value}>{c[value]}</option>)}</select></div>
