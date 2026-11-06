@@ -12,6 +12,16 @@
 .enrollment-windows-digest { display: block; user-select: all; }
 .enrollment-windows-install ol { padding-left: 22px; }
 .enrollment-windows-install li + li { margin-top: 8px; }
+.enrollment-windows-preparation-step { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.enrollment-windows-preparation-step h4, .enrollment-windows-install h4 { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12px; line-height: 1.5; }
+.enrollment-windows-preparation-step h4 svg, .enrollment-windows-install h4 svg { flex-shrink: 0; margin-top: 1px; }
+.enrollment-windows-expected-file { display: grid; gap: 6px; margin: 8px 0 0; font-size: 11px; line-height: 1.55; }
+.enrollment-windows-expected-file dt { color: var(--secondary); }
+.enrollment-windows-expected-file dd { margin: 0; min-width: 0; }
+.enrollment-windows-steps li { padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.enrollment-windows-step-location { display: block; margin-top: 4px; color: var(--secondary); font-size: 11px; }
+.enrollment-windows-steps p, .enrollment-windows-interruption p { margin: 8px 0 0; }
+.enrollment-windows-interruption { padding: 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel-soft); }
 .enrollment-approvals { border-top: 1px solid var(--line); }
 .enrollment-approvals-heading { display: flex; align-items: baseline; gap: 10px; padding: 15px 20px 0; }
 .enrollment-approvals-heading h3 { margin: 0; font-size: 13px; }
