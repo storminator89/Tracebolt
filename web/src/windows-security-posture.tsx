@@ -1,8 +1,8 @@
-import { Shield, BrickWall } from 'lucide-react';
+import { Shield, BrickWall, CircleDot, CircleMinus, CircleHelp } from 'lucide-react';
 import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import type { WindowsInventoryResource } from './windows-inventory-resource';
-import type { WindowsSecurityPosture } from './windows-security-posture-types';
+import type { WindowsSecurityPosture, WindowsSecurityState } from './windows-security-posture-types';
 import './windows-security-posture.css';
 
 const copy = {
@@ -13,6 +13,7 @@ const copy = {
         details: 'Source details', profile: 'Profile', domain: 'Domain', private: 'Private', public: 'Public', activity: 'Active profile', configured: 'Configured firewall',
         defenderNote: 'Defender status alone does not describe overall antivirus protection. Other antivirus products are not assessed.',
         firewallNote: 'Local configuration only. Effective policy and network connectivity are not checked.',
+        activeLocalOff: 'Active at capture · local firewall off',
         source: 'Source', defenderSource: 'Local Defender status', firewallSource: 'Local firewall profile configuration',
         empty: 'Security observations are unavailable for this capture. Separate local approval is required.',
         stale: 'Stale observation; values describe the original capture.', expired: 'Security observations expired after 24 hours.', ahead: 'Security observations are hidden until their capture time can be verified.',
@@ -34,6 +35,7 @@ const copy = {
         details: 'Quelldetails', profile: 'Profil', domain: 'Domäne', private: 'Privat', public: 'Öffentlich', activity: 'Aktives Profil', configured: 'Konfigurierte Firewall',
         defenderNote: 'Der Defender-Status allein beschreibt nicht den gesamten Virenschutz. Andere Antivirusprodukte werden nicht geprüft.',
         firewallNote: 'Nur lokale Konfiguration. Wirksame Richtlinien und Netzwerkerreichbarkeit werden nicht geprüft.',
+        activeLocalOff: 'Bei Erfassung aktiv · lokale Firewall aus',
         source: 'Quelle', defenderSource: 'Lokaler Defender-Status', firewallSource: 'Lokale Firewall-Profilkonfiguration',
         empty: 'Für diese Erfassung sind keine Sicherheitsdaten verfügbar. Eine separate lokale Zustimmung ist erforderlich.',
         stale: 'Veraltete Beobachtung; Werte gelten für die ursprüngliche Erfassung.', expired: 'Sicherheitsdaten nach 24 Stunden abgelaufen.', ahead: 'Sicherheitsdaten bleiben ausgeblendet, bis die Erfassungszeit geprüft werden kann.',
@@ -49,6 +51,10 @@ const copy = {
         },
     },
 };
+function SecurityState({ state, label }: { state: WindowsSecurityState; label: string }) {
+    const Icon = state === 'on' ? CircleDot : state === 'off' ? CircleMinus : CircleHelp;
+    return <span className={`windows-security-state windows-security-state-${state}`}><Icon size={13} aria-hidden="true"/>{label}</span>;
+}
 export function WindowsSecurityPosturePanel({ resource }: { resource: WindowsInventoryResource }) {
     const [locale] = useLocale(), c = copy[locale], posture = resource.securityPosture;
     if (!posture) return <p role="status" className="windows-inventory-empty">{resource.securityPostureExpired ? c.expired : resource.securityPostureAhead ? c.ahead : c.empty}</p>;
@@ -65,7 +71,7 @@ export function WindowsSecurityPosturePanel({ resource }: { resource: WindowsInv
                 <div className="windows-security-card-header"><h4><Shield size={18} aria-hidden="true"/>{c.defender}</h4><span className="windows-security-quality">{c[defender.quality]}</span></div>
                 {sourceSummary(defender, c.defender)}
                 <p className="windows-security-mode">{c.modes[defender.mode]}</p>
-                <dl className="windows-security-fields"><div><dt>{c.realTime}</dt><dd>{c[defender.realTimeProtectionEnabled]}</dd></div></dl>
+                <dl className="windows-security-fields"><div><dt>{c.realTime}</dt><dd><SecurityState state={defender.realTimeProtectionEnabled} label={c[defender.realTimeProtectionEnabled]}/></dd></div></dl>
                 <p className="windows-security-note">{c.defenderNote}</p>
                 <details className="windows-security-details" key={`defender:${binding}`}><summary>{c.details}</summary>
                     <dl className="windows-security-fields">{[[c.service, c[defender.serviceEnabled]], [c.antivirus, c[defender.antivirusEnabled]], [c.signatures, defender.signatureVersion ?? c.unknown], [c.age, defender.signatureAgeDays === null ? c.unknown : c.days(defender.signatureAgeDays)], [c.source, c.defenderSource]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
@@ -74,7 +80,10 @@ export function WindowsSecurityPosturePanel({ resource }: { resource: WindowsInv
             <section className="windows-security-card" aria-label={c.firewall}>
                 <div className="windows-security-card-header"><h4><BrickWall size={18} aria-hidden="true"/>{c.firewall}</h4><span className="windows-security-quality">{c[firewall.quality]}</span></div>
                 {sourceSummary(firewall, c.firewall)}
-                <div className="windows-inventory-table-wrap"><table className="windows-inventory-table windows-security-firewall-table"><caption className="sr-only">{c.firewall}</caption><thead><tr>{headers.map(header => <th scope="col" key={header}>{header}</th>)}</tr></thead><tbody>{firewall.profiles.map(profile => <tr key={profile.profile}><td data-label={c.profile}>{c[profile.profile]}</td><td data-label={c.activity}>{profile.active === 'on' ? c.active : profile.active === 'off' ? c.inactive : c.unknown}</td><td data-label={c.configured}>{c[profile.enabled]}</td></tr>)}</tbody></table></div>
+                <div className="windows-inventory-table-wrap"><table className="windows-inventory-table windows-security-firewall-table"><caption className="sr-only">{c.firewall}</caption><thead><tr>{headers.map(header => <th scope="col" key={header}>{header}</th>)}</tr></thead><tbody>{firewall.profiles.map(profile => {
+                    const activeLocalOff = profile.active === 'on' && profile.enabled === 'off';
+                    return <tr key={profile.profile} className={activeLocalOff ? 'windows-security-local-off' : undefined}><td data-label={c.profile}>{c[profile.profile]}</td><td data-label={c.activity}><SecurityState state={profile.active} label={profile.active === 'on' ? c.active : profile.active === 'off' ? c.inactive : c.unknown}/></td><td data-label={c.configured}><div className="windows-security-configured"><SecurityState state={profile.enabled} label={c[profile.enabled]}/>{activeLocalOff && <small className="windows-security-local-off-note">{c.activeLocalOff}</small>}</div></td></tr>;
+                })}</tbody></table></div>
                 <p className="windows-security-note">{c.firewallNote}</p>
                 <details className="windows-security-details" key={`firewall:${binding}`}><summary>{c.details}</summary>
                     <dl className="windows-security-fields"><div><dt>{c.source}</dt><dd>{c.firewallSource}</dd></div></dl>
