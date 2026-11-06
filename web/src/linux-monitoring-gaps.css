@@ -1,0 +1,31 @@
+.linux-monitoring-gaps{margin:16px 0;padding:16px;min-width:0;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.linux-monitoring-gaps>summary{font-weight:600;cursor:pointer}
+.linux-monitoring-gaps svg{flex:none;vertical-align:middle}
+.linux-monitoring-gaps summary>svg{margin-right:6px}
+.linux-monitoring-gaps-count{font-weight:400;color:var(--secondary)}
+.linux-monitoring-gaps-scope,.linux-monitoring-gaps-device-heading{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.linux-monitoring-gaps-badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--panel-soft);border-radius:12px;padding:2px 8px;white-space:nowrap;color:var(--text)}
+.linux-monitoring-gaps-notice{display:flex;gap:8px;align-items:start;background:var(--panel-soft);border-left:3px solid var(--line-strong);padding:10px;border-radius:4px}
+.linux-monitoring-gaps-notice svg{margin-top:2px}
+.linux-monitoring-gaps p{color:var(--secondary)}
+.linux-monitoring-gaps-filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.linux-monitoring-gaps-filters label{display:grid;gap:4px;max-width:100%;min-width:0}
+.linux-monitoring-gaps input,.linux-monitoring-gaps select{font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;max-width:100%;min-width:0}
+.linux-monitoring-gaps-devices{list-style:none;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.linux-monitoring-gaps-devices>li{border:1px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.linux-monitoring-gaps-device-heading{justify-content:space-between}
+.linux-monitoring-gaps .linux-monitoring-gaps-identity{font-family:var(--font-mono);font-size:11px;margin:4px 0 12px}
+.linux-monitoring-gaps-maintenance{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.linux-monitoring-gaps-devices .linux-monitoring-gaps-checks{list-style:none;padding:0;display:grid;gap:8px}
+.linux-monitoring-gaps-checks>li{display:flex;align-items:baseline;gap:8px}
+.linux-monitoring-gaps-health,.linux-monitoring-gaps .text-button{display:inline-flex;align-items:center;gap:6px}
+.linux-monitoring-gaps-health{min-height:32px}
+.linux-monitoring-gaps-evidence,.linux-monitoring-gaps-source{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.linux-monitoring-gaps :is(.linux-monitoring-gaps-evidence,.linux-monitoring-gaps-source)>summary{cursor:pointer}
+.linux-monitoring-gaps-empty{display:grid;justify-items:center;gap:6px;padding:20px 12px;text-align:center;background:var(--panel-soft);border-radius:6px}
+.linux-monitoring-gaps-empty p{margin:0}
+.linux-monitoring-gaps h3{font-size:13px;margin:0}.linux-monitoring-gaps-devices ul{padding-left:20px;margin-bottom:12px}
+.linux-monitoring-gaps-devices li>span{display:block;color:var(--secondary)}
+.linux-monitoring-gaps :is(summary,input,select,button,a):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:800px){.linux-monitoring-gaps-devices{grid-template-columns:1fr}}
+@media(max-width:600px){.linux-monitoring-gaps-filters label{width:100%}.linux-monitoring-gaps input,.linux-monitoring-gaps select,.linux-monitoring-gaps button{min-height:38px}}

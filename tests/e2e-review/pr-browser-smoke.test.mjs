@@ -5,7 +5,7 @@ import {journalFailureCoordinates} from './journal-browser-diagnostics.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {smokeNames,smokeMode,requireSmoke} from './pr-browser-smoke.mjs';
+import {smokeNames,smokeMode,requireSmoke,requireSmokeInFullRun} from './pr-browser-smoke.mjs';
 const pass=()=>smokeNames.map(name=>({name,status:'PASS'}));
 test('full invocation is unchanged; only exact explicit smoke selects a subset',()=>{
  assert.equal(smokeMode([]),false);assert.equal(smokeMode(['--pr-smoke']),true);
@@ -18,6 +18,25 @@ test('all six exact existing cases must pass once',()=>{
  for(const name of smokeNames)assert.equal(source.split("await check('"+name+"'").length,2);
  assert.ok(source.includes("prSmoke?'pr-browser-smoke-results.json':'lan-browser-results.json'"));
  assert.ok(source.includes('requireSmoke(results)'));
+});
+
+test('full LAN acceptance requires each exact passing auth case once among other cases',()=>{
+ const extra={name:'Additional existing LAN scenario',status:'PASS'};
+ requireSmokeInFullRun([...pass(),extra]);
+ requireSmokeInFullRun([extra,...pass().reverse()]);
+ assert.throws(()=>requireSmoke([...pass(),extra])); // Smoke-only stays exact.
+ for(let i=0;i<smokeNames.length;i++){
+  const rows=pass();
+  for(const bad of [rows.filter((_,index)=>index!==i),[...rows,rows[i]],
+   rows.map((row,index)=>index===i?{...row,status:'FAIL'}:row),
+   rows.map((row,index)=>index===i?{...row,status:'SKIP'}:row),
+   rows.map((row,index)=>index===i?{...row,name:row.name+' renamed'}:row)]){
+   assert.throws(()=>requireSmokeInFullRun([...bad,extra]));
+  }
+ }
+ assert.throws(()=>requireSmokeInFullRun([]));
+ const source=fs.readFileSync(new URL('./lan-browser.mjs',import.meta.url),'utf8');
+ assert.ok(source.includes('try{if(prSmoke)requireSmoke(results);else requireSmokeInFullRun(results);}catch{fatal=true;}'));
 });
 
 // Content-free diagnostics for the PR runner’s existing journal flow.

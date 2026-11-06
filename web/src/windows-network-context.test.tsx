@@ -1,6 +1,7 @@
 import { WindowsInventoryWorkspace } from './windows-inventory';
 import { useWindowsInventory } from './windows-inventory-resource';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
@@ -48,6 +49,60 @@ const search = (value: string) => fireEvent.change(screen.getByRole('searchbox')
 const apply = () => fireEvent.click(screen.getByRole('button', { name: /Apply|Anwenden/ }));
 beforeEach(() => { setLocale('en', false); vi.mocked(useOperator).mockReturnValue({ mode: 'lan', authenticated: true, expiresAt: 'synthetic-session', insecureTestMode: false, logout: vi.fn(), theme: 'light', setTheme: vi.fn() }); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe('network search feedback and local reset', () => {
+    it.each([['en', 'route'], ['de', 'route'], ['en', 'interface'], ['de', 'interface']] as const)('explains drafts and resets only the selected source without reading (%s, %s)', async (locale, kind) => {
+        setLocale(locale, false); const server = fixtureServer(); render(<WindowsNetworkContextPanel deviceId={networkContextDevice} sessionKey="search-reset" kind={kind}/>); await screen.findByRole('table');
+        const de = locale === 'de', input = screen.getByRole('searchbox'), sort = screen.getByRole('combobox'), reset = screen.getByRole('button', { name: de ? 'Netzwerksuche und Sortierung zurücksetzen' : 'Reset network search and sort' });
+        const hint = de ? 'Filter geändert. Mit „Anwenden“ die gespeicherte Netzwerkerfassung lesen.' : 'Filters changed. Apply to read the saved network capture.';
+        expect(reset).toBeDisabled(); expect(screen.queryByText(hint)).toBeNull();
+        search(kind === 'route' ? '192.0.204.0' : '[.*]'); fireEvent.change(sort, { target: { value: 'interface-desc' } });
+        expect(screen.queryByRole('table')).toBeNull(); expect(screen.getByText(hint)).toHaveAttribute('role', 'status');
+        for (const control of [input, sort]) expect(control).toHaveAccessibleDescription(hint);
+        expect(screen.getByText(de ? 'Beide Tabellen' : 'Both tables').nextElementSibling).toHaveTextContent('208'); expect(screen.getByText(de ? 'Treffer' : 'Matching').nextElementSibling).toHaveTextContent('—'); expect(screen.getByText(de ? 'Auf Seite' : 'On page').nextElementSibling).toHaveTextContent('—');
+        expect(document.querySelector('.windows-network-context-age time')).toHaveAttribute('datetime', server.complete.manifest.captureStartedAt);
+        fireEvent.click(reset); expect(input).toHaveValue(''); expect(sort).toHaveValue('source-asc'); expect(input).toHaveFocus(); expect(reset).toBeDisabled(); expect(screen.getByText(hint)).toBeVisible(); expect(screen.queryByRole('table')).toBeNull(); expect(server.state.requests).toHaveLength(1);
+        apply(); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(2); expect(server.state.requests[1]).toEqual({ ...networkContextQuery, kind }); expect(screen.queryByText(hint)).toBeNull(); expect(screen.getByRole('searchbox')).not.toHaveAttribute('aria-describedby');
+        expect(server.state.requests.every(request => request.kind === kind)).toBe(true);
+        expect(server.fetch.mock.calls.every(([path]) => path === '/api/session' || path === `/api/devices/${networkContextDevice}/windows-network-context/query`)).toBe(true);
+        if (kind === 'interface') { expect(screen.getByText('9007199254740993')).toBeVisible(); expect(screen.getAllByText('18446744073709551615')).toHaveLength(2); expect(screen.queryByText('192.0.0.0/24')).toBeNull(); }
+    });
+    it.each(['{Enter}', ' '])('resets by keyboard %s and reads only on a separate submission', async key => {
+        const user = userEvent.setup(), server = fixtureServer(); open(); await screen.findByRole('table');
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'interface-desc' } }); const reset = screen.getByRole('button', { name: 'Reset network search and sort' }); reset.focus(); await user.keyboard(key);
+        expect(screen.getByRole('searchbox')).toHaveFocus(); expect(screen.getByRole('combobox')).toHaveValue('source-asc'); expect(server.state.requests).toHaveLength(1);
+        await user.keyboard('{Enter}'); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(2); expect(server.state.requests[1]).toEqual(networkContextQuery);
+    });
+    it('clears UTF-8 validation locally without replacing the capture or reading', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('😀'.repeat(65)); apply();
+        expect(screen.getByRole('alert')).toHaveTextContent('256 UTF-8 bytes'); expect(screen.queryByText(/Filters changed/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Reset network search and sort' })); expect(screen.queryByRole('alert')).toBeNull(); expect(screen.getByText(/Filters changed/)).toBeVisible(); expect(screen.getByText('Both tables').nextElementSibling).toHaveTextContent('208'); expect(server.state.requests).toHaveLength(1);
+    });
+    it.each(['pending', 'source_failed'] as const)('keeps a newer endpoint %s attempt visible alongside unapplied filters', async status => {
+        const server = fixtureServer(); server.state.change = page => { page.latestAttempt = { sequence: 2, attemptedAt: '2026-10-11T06:00:09Z', status, reason: status === 'pending' ? '' : 'resource_limit' }; }; open(); await screen.findByRole('table'); search('draft');
+        expect(screen.getByText(status === 'pending' ? /New capture pending/ : /Latest capture failed/)).toHaveTextContent('Showing earlier capture'); expect(screen.getByText(/Filters changed/)).toBeVisible(); expect(server.state.requests).toHaveLength(1);
+    });
+    it('keeps the old generation pinned until deliberate reload after reset', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('draft'); replaceNetworkContextGeneration(server.state.complete, server.state.rows, 2);
+        fireEvent.click(screen.getByRole('button', { name: 'Reset network search and sort' })); expect(server.state.requests).toHaveLength(1); apply(); await screen.findByRole('alert');
+        expect(screen.getByRole('alert')).toHaveTextContent('Capture or access changed'); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.queryByText(/Filters changed/)).toBeNull(); expect(server.state.requests).toHaveLength(2);
+        fireEvent.click(screen.getByRole('button', { name: 'Reload latest network capture' })); await screen.findByRole('table'); expect(server.state.requests).toHaveLength(3); expect(screen.getByRole('button', { name: 'Reset network search and sort' })).toBeDisabled();
+    });
+    it('resets an applied later route page without restoring old rows or cursors', async () => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('192.0.'); apply(); await screen.findByRole('table');
+        fireEvent.click(screen.getByRole('button', { name: 'Next network page' })); await waitFor(() => expect(names()[0]).toBe('192.0.100.0/24')); const count = server.state.requests.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Reset network search and sort' })); expect(server.state.requests).toHaveLength(count); expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('navigation', { name: 'Network capture pages' })).toBeNull();
+        apply(); await screen.findByRole('table'); expect(server.state.requests.at(-1)).toEqual(networkContextQuery); expect(names()[0]).toBe('192.0.0.0/24');
+    });
+    it.each(['blur', 'pagehide', 'hashchange', AUTH_REQUIRED_EVENT])('removes draft guidance and reset on %s without reading', async event => {
+        const server = fixtureServer(); open(); await screen.findByRole('table'); search('draft'); expect(screen.getByText(/Filters changed/)).toBeVisible();
+        act(() => window.dispatchEvent(new Event(event))); expect(screen.queryByText(/Filters changed/)).toBeNull(); expect(screen.queryByRole('button', { name: 'Reset network search and sort' })).toBeNull(); expect(screen.queryByRole('table')).toBeNull(); expect(server.state.requests).toHaveLength(1);
+    });
+    it('does not extend original authority while reset remains unapplied', async () => {
+        vi.useFakeTimers(); const server = fixtureServer(); server.state.change = page => { page.authorityUntil = page.cursorExpiresAt = '2026-10-11T06:00:11Z'; }; open(); await flush(); search('draft'); fireEvent.click(screen.getByRole('button', { name: 'Reset network search and sort' }));
+        await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText(/Filters changed/)).toBeNull(); expect(screen.queryByRole('searchbox')).toBeNull(); expect(screen.getByRole('alert')).toHaveTextContent('expired'); expect(server.state.requests).toHaveLength(1);
+    });
+});
 
 describe('network-context private resource lifecycle', () => {
     it('does not request disabled, hidden, or unauthenticated resources', async () => {
@@ -144,6 +199,9 @@ describe('compact route and raw counter browser', () => {
         render(<Workspace/>); fireEvent.click(screen.getByRole('tab', { name: 'Network' })); expect(server.state.requests).toHaveLength(0);
         fireEvent.change(screen.getByRole('combobox', { name: 'Network source' }), { target: { value: 'route' } }); await screen.findByText('192.0.0.0/24');
         const panel = screen.getByRole('region', { name: 'Routes' }); fireEvent.change(within(panel).getByRole('searchbox'), { target: { value: 'private' } });
+        const beforeReset = server.fetch.mock.calls.length; fireEvent.click(within(panel).getByRole('button', { name: 'Reset network search and sort' }));
+        expect(within(panel).getByRole('searchbox')).toHaveFocus(); expect(within(panel).getByRole('searchbox')).toHaveValue(''); expect(within(panel).getByText(/Filters changed/)).toBeVisible(); expect(within(panel).queryByRole('table')).toBeNull(); expect(server.fetch).toHaveBeenCalledTimes(beforeReset);
+        expect(screen.getByRole('combobox', { name: 'Network source' })).toHaveValue('route');
         fireEvent.change(screen.getByRole('combobox', { name: 'Network source' }), { target: { value: 'interface' } }); await screen.findByText('9007199254740993'); expect(screen.getByRole('searchbox')).toHaveValue('');
         fireEvent.click(screen.getByRole('tab', { name: 'Hostname' })); expect(screen.queryByText('9007199254740993')).toBeNull(); const count = server.state.requests.length;
         fireEvent.click(screen.getByRole('tab', { name: 'Network' })); expect(screen.getByRole('combobox', { name: 'Network source' })).toHaveValue('legacy'); expect(server.state.requests).toHaveLength(count);

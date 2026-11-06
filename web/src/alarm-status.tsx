@@ -5,6 +5,7 @@ import { hasLogoutIntent, LOGOUT_INTENT_KEY, useOperator } from './auth';
 import { useLocale } from './i18n';
 import { ALARM_DELIVERY_CHANGED_EVENT, ALARM_STATUS_BYTES, validAlarmStatus } from './alarm-status-types';
 import type { AlarmStatus } from './alarm-status-types';
+import { AlarmOutcomeGuidance } from './alarm-outcome-guidance';
 import './alarm-status.css';
 
 const copy = {
@@ -114,6 +115,7 @@ function AlarmStatusContent() {
             <span className="alarm-mode">{!view || previous ? <><CircleHelp size={14} aria-hidden="true"/>{labels.unknown}</> : view.enabled ? <><Bell size={14} aria-hidden="true"/>{labels.on}</> : <><BellOff size={14} aria-hidden="true"/>{labels.off}</>}</span>
             <button className="icon-button" onClick={refresh} disabled={loading || locked} aria-label={labels.refresh} title={labels.refresh}><RefreshCw size={15} className={loading ? 'spin' : ''} aria-hidden="true"/></button>
         </div>
+        {view && <AlarmOutcomeGuidance view={view} previous={previous}/>}
         {failure && <p className="alarm-notice" role={failure === 'paused' ? 'status' : 'alert'}>{labels[failure]}</p>}
         {loading && !view && <p className="alarm-notice" role="status">{labels.loading}</p>}
         {snapshot && <p className="alarm-snapshot">{previous && <strong>{labels.previous} · </strong>}{labels.loaded} <time dateTime={snapshot.loadedAt}>{new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC' }).format(new Date(snapshot.loadedAt))} UTC</time></p>}

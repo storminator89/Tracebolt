@@ -6,10 +6,10 @@ A Go manager and native endpoint agents, with an English/German web interface,
 light and dark themes, and mobile layouts. Tracebolt is a development pilot;
 source features and tested release coverage are listed separately below.
 
-**Status reviewed: 31 October 2026.** Published previews are controlled-test
+**Status reviewed: 6 November 2026.** Published previews are controlled-test
 packages, not a production-ready or unattended RMM release.
 
-[Get started](#get-started) · [Screenshots](#screenshots) · [Releases](https://github.com/storminator89/Tracebolt/releases) · [Guides](docs/README.md)
+[What's new](#new-in-main) · [Get started](#get-started) · [Screenshots](#screenshots) · [Releases](https://github.com/storminator89/Tracebolt/releases) · [Guides](docs/README.md)
 
 ![Redesigned operations overview with device observations and open investigations](docs/screenshots/2026-10-14-redesign/overview-desktop.png)
 
@@ -31,42 +31,88 @@ the chosen release's manifest and verify its hashes. Do not mix arbitrary main
 builds, older previews or packages from different integrated candidates. Publication
 and a passing disposable fixture do not establish full native acceptance.
 
-### Recent progress in main — partial delivery
+### New in main
 
-- **Rust onboarding:** automatic registration without an invitation token by
-  default, deliberate dashboard fingerprint/comparison approval, a bounded
-  [manager compatibility check](docs/rust-manager-compatibility.md) and
-  [invitation-input preflight](docs/rust-installer-preflight.md) before persistent
-  staging. Full installer path/ACL/hash and native negative-case acceptance remain open.
-- **Rust diagnostics:** read-only `status --json` and an allowlisted
-  `support-bundle`, original accepted-report age, bounded backoff and typed
-  TLS/connectivity failure classes. [Diagnostic limits](docs/rust-agent-health.md):
-  unknown transport/startup states remain unknown; service `Running` is not success.
-- **Manager preparation:** create-only native Linux configuration and a
-  [read-only configuration doctor](docs/manager-initialization.md) for approved,
-  preprovisioned material. This does not install a service, create credentials,
-  test a live deployment or validate database contents.
-- **Enrollment capacity:** the [selected domain's retained-record summary](docs/enrollment-v2/runtime-config.md#record-capacity-visibility-tb-18-partial)
-  shows its actual configured limit (at most 25), available slots and stored
-  activated/pre-activation/ended counts, with near-limit/full warnings. Ended
-  records still consume slots; counts do not prove current validity or fresh
-  reports. This display does not expand limits, compact state or establish
-  larger-fleet acceptance; [TB-18](https://github.com/storminator89/Tracebolt/issues/145)
-  remains open.
-- **Evidence and recovery:** Windows cached-update and Linux CVE summaries show
-  source/method and original evidence times. A separate
-  [deny-only restore quarantine](docs/restore-quarantine.md) blocks updated
-  manager startup when explicitly marked; it is not consistent backup, freshness
-  reconciliation or a recovery-release workflow.
-- **Administration boundaries:** the [named-account route matrix](docs/named-administration-matrix.md)
-  documents existing admission and denial contracts; full personal-account
-  administration is not implemented. [Customer records](docs/customer-records.md)
-  organize devices; filters and assignments are not tenant isolation.
+The following summarizes merged source through
+[`1d60309`](https://github.com/storminator89/Tracebolt/commit/1d60309ca407a72245d429cb069bb523a5d47448)
+(6 November 2026), including the saved Windows update-job filters in
+[#267](https://github.com/storminator89/Tracebolt/pull/267). Open drafts and planned
+features are not counted. Check each chosen release's source pin: a main feature
+is not automatically present in an older package or an installed manager.
 
-These are bounded increments, not completion of their broader tasks. The
-[31-task delivery plan](https://github.com/storminator89/Tracebolt/issues/127)
-tracks the remaining acceptance criteria and dependencies. Source functionality
-below can be newer than any selected pinned package.
+- **One investigation workspace:** [Investigations](docs/incident-work-queue.md)
+  brings Linux Health and Windows incidents together, with page-local search and
+  filters, original-time episode timelines and comparison of two to four exact
+  episodes. Each source keeps its own counts, paging and lifecycle. Seen does not
+  mean recovered; overlapping times do not prove a common cause.
+- **Readiness you can inspect:** the device [Capabilities summary](docs/device-readiness.md)
+  separates report age, certificate validity, reported version and source states.
+  The [Manager status panel](docs/manager-status-panel.md) shows bounded core checks
+  and loaded certificate dates on demand. Neither gives a whole-fleet health score
+  or substitutes for native/deployment acceptance.
+- **Patch and job review:** a [Patch evidence tab](docs/patch-evidence-overview.md)
+  separates Linux cached APT and Windows cached-update/history evidence. Windows
+  [retained update events](docs/windows-update-history-review.md) have local text,
+  outcome and date filters. Separately, [saved update jobs](docs/windows-selected-update-jobs.md#local-review-of-saved-jobs)
+  can be filtered by ID/revision, installation/download and saved state/result.
+  These bounded histories do not prove current installation or patch compliance.
+- **More useful evidence views:** compare intervals in [resource history](docs/resource-history.md)
+  and [Linux network observations](docs/linux-network-intervals.md), review and group
+  messages on a [loaded journal page](docs/journal-page-triage.md), and inspect
+  [saved Linux service-action receipts](docs/linux-service-action-history.md) with
+  the required named capability. Original times, gaps and uncertain outcomes stay
+  visible; reviewing evidence does not retry an action.
+- **Opt-in Linux monitoring:** [exact-name process watches](docs/linux-process-watches.md)
+  and a [selected non-root mount-capacity watch](docs/linux-mount-capacity-watch.md)
+  use already-consented complete observations and retain bounded local incidents.
+  Their setup is explicit. Missing or stale evidence stays unknown, and stopping
+  monitoring is distinct from observed recovery.
+- **Windows process presence:** [saved exact-name watches](docs/windows-process-presence-watches.md)
+  show presence in an admitted complete process snapshot. This is a live snapshot
+  view without alerts or incident history, not proof that an application is healthy.
+  Complete-process and network searches also explain unapplied filters and offer
+  local reset controls.
+- **Application-check history and incidents:** existing manager-side HTTP/HTTPS,
+  DNS and TCP checks now offer [recent observations](docs/application-check-history.md)
+  and separately enabled [local incidents](docs/application-local-incidents.md).
+  Investigations includes their independent read-only history. History reads start
+  no probe; these checks do not establish endpoint health or an uptime percentage.
+- **One-time maintenance planning:** [Linux Health](docs/linux-health-maintenance-schedule.md)
+  and [Windows notifications](docs/windows-scheduled-maintenance.md) have reviewed
+  fixed UTC windows, cancellation and early end. Linux suppresses new Health
+  incident openings and associated alarm admission; Windows keeps incidents and
+  evidence while suppressing separately approved notifications. There is no
+  recurring schedule or host action. Alarm settings also explain retained failed,
+  uncertain and dropped delivery counts without resending messages.
+
+### Platform and administration progress
+
+- **Rust onboarding and diagnostics:** automatic registration still requires
+  local scope acknowledgement and dashboard identity approval. The
+  [installer preflight](docs/rust-installer-preflight.md) now checks package hashes,
+  executable format, protected paths and supplied inputs before staging, alongside
+  the [manager compatibility check](docs/rust-manager-compatibility.md).
+  [Diagnostics](docs/rust-agent-health.md) include bounded startup, DNS, TLS,
+  connectivity and best-effort Windows Event Log reporting, plus read-only status
+  and support output. Hashes do not authenticate an unsigned publisher; complete
+  native acceptance remains open. The [scope comparison](docs/windows-agent-parity.md)
+  makes clear that Rust Basic still lacks broader Go Read admin inventory.
+- **Manager preparation and recovery:** the create-only [configuration helper and
+  doctor](docs/manager-initialization.md), bounded readiness/certificate evidence,
+  [writer ownership and HTTP drain](docs/manager-writer-exclusion.md), and explicit
+  [restore quarantine](docs/restore-quarantine.md) improve setup and failure handling.
+  They do not provision trust, prove database integrity or provide accepted full
+  backup/restore recovery.
+- **Accounts and enrollment:** [named-account boundaries](docs/named-administration-matrix.md)
+  now cover scoped session management and explicit read-only customer access.
+  Full named administration remains incomplete; [customer records](docs/customer-records.md)
+  are organizational, not tenant isolation. The [enrollment capacity summary](docs/enrollment-v2/runtime-config.md#record-capacity-visibility-tb-18-partial)
+  shows configured limits, retained records and remaining slots. Ended records
+  still consume capacity; no larger-fleet acceptance is implied.
+
+See the [lean roadmap](docs/lean-roadmap.md) for the development direction and the
+linked feature guides for their remaining acceptance gates. Implemented source
+and tested release coverage remain separate.
 
 ### In the current source
 
@@ -189,10 +235,9 @@ invitation secrets only at the hidden local prompt when using invitation mode.
   remote shell or integrated remote desktop.
 - **Deployment:** HTTPS is the default. HTTP is only for explicitly approved
   isolated tests and exposes credentials/content. Production hardening and
-  verified reboot persistence remain open. Recent merged work has known red
-  focused UI/browser checks; full source/browser acceptance and enforced
-  release gates remain tracked in [TB-02](https://github.com/storminator89/Tracebolt/issues/129)
-  and [TB-25](https://github.com/storminator89/Tracebolt/issues/152). A published
+  verified reboot persistence remain open. Recent merged work has known failing
+  CI checks; full source/browser acceptance is not established. Mandatory
+  release-gate work remains tracked in [TB-25](https://github.com/storminator89/Tracebolt/issues/152). A published
   unsigned test candidate is not an all-green production-release claim.
 
 ## Screenshots
@@ -202,9 +247,9 @@ invitation secrets only at the hidden local prompt when using invitation mode.
 | [<img src="docs/screenshots/2026-10-14-redesign/devices-desktop.png" width="360" alt="Redesigned Devices page with Inventory, Setup and Fleet tools navigation and searchable fixture devices">](docs/screenshots/2026-10-14-redesign/devices-desktop.png) | [<img src="docs/screenshots/2026-10-14-redesign/device-overview.png" width="360" alt="Device overview with report age, warnings, updates and resource observations">](docs/screenshots/2026-10-14-redesign/device-overview.png) | [<img src="docs/screenshots/2026-10-14-redesign/overview-mobile.png" width="150" alt="Responsive operations overview with fixture device observations on a narrow screen">](docs/screenshots/2026-10-14-redesign/overview-mobile.png) |
 
 *Unmodified browser captures of the merged redesign on 14 October 2026, using
-invented test data. Click to enlarge. These show current source UI, which can be
-newer than a pinned endpoint release. They do not prove native installation,
-collection or provider coverage. [Source, capture details and image hashes](docs/screenshots/2026-10-14-redesign/README.md).*
+invented test data. Click to enlarge. They predate the newer features summarized
+above and may differ from current main or a pinned release. They do not prove
+native installation, collection or provider coverage. [Source, capture details and image hashes](docs/screenshots/2026-10-14-redesign/README.md).*
 
 ## Development
 

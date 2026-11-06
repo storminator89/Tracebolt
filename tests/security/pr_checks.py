@@ -1660,7 +1660,11 @@ def run_v3_browser(env, sha):
 
 
 def browser_checks(plan):
-    run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
+    # The full LAN runner executes and requires the same six auth cases. Avoid
+    # compiling/starting it twice when that existing complete flow is selected.
+    # All other plans, including documentation-only plans, retain the smoke.
+    if 'lan' not in plan['flows']:
+        run(['node', 'tests/e2e-review/lan-browser.mjs', '--pr-smoke'], stage='browser-auth-smoke')
     # The existing shell runner clears its screenshot folder on startup. Run it
     # first, so it cannot delete subsequently captured affected-flow evidence.
     for flow in sorted(plan['flows'], key=lambda value: (value != 'shell', value)):

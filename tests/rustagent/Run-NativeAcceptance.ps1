@@ -222,7 +222,14 @@ try {
             & "$env:SystemRoot\System32\sc.exe" delete $serviceName | Out-Null
         }
     }
-    if ($null -ne $fixture -and !$fixture.HasExited) { Stop-Process -Id $fixture.Id -Force }
+    if ($null -ne $fixture) {
+        try {
+            # Termination is asynchronous. Wait for this exact fixture before
+            # deleting its executable; never change permissions or retry a denial.
+            if (!$fixture.HasExited) { Stop-Process -InputObject $fixture -Force }
+            if (!$fixture.WaitForExit(10000)) { throw 'Loopback fixture did not exit within the cleanup deadline.' }
+        } finally { $fixture.Dispose() }
+    }
     # These paths were confirmed absent before this explicitly disposable run.
     if ($stagingAuthorized) {
         if (Test-Path $binaryDirectory) { Remove-Item -LiteralPath $binaryDirectory -Recurse -Force }
