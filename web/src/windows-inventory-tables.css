@@ -4,3 +4,9 @@
 .windows-inventory-table-controls input:focus-visible,.windows-inventory-table-controls select:focus-visible,.windows-inventory-table-pagination button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .windows-inventory-table-pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0;font-size:12px}
 @media(max-width:600px){.windows-inventory-table-controls{align-items:stretch}.windows-inventory-table-controls>label,.windows-inventory-table-controls>.windows-inventory-table-sort{width:100%}.windows-inventory-table-controls input,.windows-inventory-table-controls select{width:100%;box-sizing:border-box}}
+
+.windows-inventory-search-control{display:flex;align-items:flex-end;gap:8px;min-width:0;max-width:100%}
+.windows-inventory-search-control .windows-inventory-search{flex:1;min-width:0}
+.windows-inventory-search-control input{min-width:0}
+.windows-inventory-search-control .button{min-height:36px;flex-shrink:0}
+@media(max-width:600px){.windows-inventory-search-control{width:100%;flex-wrap:wrap}.windows-inventory-search-control .windows-inventory-search{min-width:min(100%,12rem)}.windows-inventory-search-control .button{min-height:44px}}
