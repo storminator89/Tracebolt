@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, APIError, AUTH_REQUIRED_EVENT, mutate, request } from './api';
@@ -7,9 +8,9 @@ import { setLocale } from './i18n';
 import { windowsCapacityView } from './windows-capacity-fixture';
 import { windowsResourceView } from './windows-resource-fixture';
 import { WindowsContactPanel } from './windows-contact';
-import { windowsContactDevice, windowsContactSession, windowsContactView } from './windows-contact-fixture';
+import { windowsContactDevice, windowsContactIncident, windowsContactSession, windowsContactView } from './windows-contact-fixture';
 import { useWindowsContact } from './windows-contact-resource';
-import { windowsContactDeviceEligible } from './windows-contact-types';
+import { validWindowsContactView, windowsContactDeviceEligible } from './windows-contact-types';
 import type { WindowsContactView } from './windows-contact-types';
 import { windowsDeviceId, windowsNow, windowsView } from './windows-inventory-fixture';
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn(), mutate: vi.fn() }));
@@ -25,6 +26,65 @@ const history = () => screen.queryByText('wcontact_0000000000000001');
 beforeEach(() => { abortProtectedRequests(); vi.useFakeTimers(); vi.setSystemTime(windowsNow); setLocale('en', false); vi.mocked(request).mockReset().mockResolvedValue(windowsContactView()); vi.mocked(mutate).mockReset(); vi.mocked(useOperator).mockReturnValue(operator); });
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('invented Windows contact panel lifecycle', () => {
+    it.each(['en', 'de'] as const)('filters retained incidents locally without changing current assessment (%s)', async locale => {
+        const value = windowsContactView('overdue'); value.incidents[0] = { ...value.incidents[0], id: 'wcontact_0000000000000002', openedAt: '2026-10-07T11:59:01Z' }; value.incidents.push(windowsContactIncident(true));
+        expect(validWindowsContactView(value, windowsDeviceId)).toBe(true); const original = JSON.stringify(value);
+        vi.mocked(request).mockResolvedValue(value); setLocale(locale, false); render(<Harness/>); await flush();
+        const group = screen.getByRole('group', { name: locale === 'en' ? 'Filter saved contact incidents' : 'Gespeicherte Kontaktvorfälle filtern' });
+        const buttons = within(group).getAllByRole('button'); expect(buttons.map(b => b.textContent)).toEqual(locale === 'en' ? ['All (2)', 'Open (1)', 'Recovered (1)'] : ['Alle (2)', 'Offen (1)', 'Erholt (1)']);
+        expect(buttons[0]).toHaveAttribute('aria-pressed', 'true'); const calls = vi.mocked(request).mock.calls.length;
+        fireEvent.click(buttons[1]); expect(history()).toBeNull(); expect(screen.getByText('wcontact_0000000000000002')).toBeVisible();
+        expect(document.getElementById(buttons[1].getAttribute('aria-controls')!)).toBeVisible();
+        fireEvent.click(buttons[2]); expect(history()).toBeVisible(); expect(screen.queryByText('wcontact_0000000000000002')).toBeNull();
+        expect(screen.getByText(locale === 'en' ? 'Report overdue · incident open' : 'Meldung überfällig · Vorfall offen')).toBeVisible();
+        fireEvent.click(buttons[0]); expect(screen.getAllByRole('listitem')).toHaveLength(2); expect(screen.getByRole('list')).toHaveAttribute('role', 'list');
+        expect(JSON.stringify(value)).toBe(original); expect(request).toHaveBeenCalledTimes(calls); expect(mutate).not.toHaveBeenCalled();
+    });
+    it('distinguishes an empty filter and hides all controls while authority is missing', async () => {
+        const mounted = render(<Harness/>); await flush(); fireEvent.click(screen.getByRole('button', { name: 'Open (0)' }));
+        expect(screen.getByText('No saved incidents match this filter.')).toBeVisible(); expect(screen.queryByText('No retained contact incidents.')).toBeNull();
+        mounted.rerender(<Harness metadataReady={false}/>); expect(screen.queryByRole('group', { name: 'Filter saved contact incidents' })).toBeNull(); expect(history()).toBeNull();
+        mounted.rerender(<Harness/>); await flush(); expect(screen.getByRole('button', { name: 'Open (0)' })).toHaveAttribute('aria-pressed', 'true'); expect(history()).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'All (1)' })); expect(history()).toBeVisible();
+    });
+    it('preserves a filter across background refresh and resets it for a different session', async () => {
+        const mounted = render(<Harness/>); await flush(); fireEvent.click(screen.getByRole('button', { name: 'Open (0)' }));
+        const next = windowsContactView(); next.serverNow = '2026-10-07T12:00:25Z'; next.evaluatedAt = next.serverNow;
+        vi.mocked(request).mockResolvedValue(next); await advance(15000);
+        expect(screen.getByRole('button', { name: 'Open (0)' })).toHaveAttribute('aria-pressed', 'true');
+        mounted.rerender(<Harness session="2026-10-07T14:00:00Z"/>); await flush();
+        expect(screen.getByRole('button', { name: 'All (1)' })).toHaveAttribute('aria-pressed', 'true'); expect(history()).toBeVisible();
+    });
+    it('restores filter focus only after the same successful background read', async () => {
+        render(<Harness/>); await flush(); const old = screen.getByRole('button', { name: 'Open (0)' }); old.focus();
+        let finish!: (value: WindowsContactView) => void;
+        vi.mocked(request).mockReturnValueOnce(new Promise(resolve => { finish = resolve; })); await advance(15000);
+        expect(screen.queryByRole('group', { name: 'Filter saved contact incidents' })).toBeNull(); expect(document.activeElement).toBe(document.body);
+        const next = windowsContactView(); next.serverNow = '2026-10-07T12:00:25Z'; next.evaluatedAt = next.serverNow;
+        await act(async () => finish(next)); expect(screen.getByRole('button', { name: 'Open (0)' })).toHaveFocus(); expect(request).toHaveBeenCalledTimes(2);
+    });
+    it.each(['blur', 'scope', 'certificate', 'outside-focus', 'metadata', 'keyboard'] as const)('does not steal focus after refresh is interrupted by %s', async interrupt => {
+        const mounted = render(<><button>Other control</button><Harness/></>); await flush(); screen.getByRole('button', { name: 'Open (0)' }).focus();
+        let finish!: (value: WindowsContactView) => void; vi.mocked(request).mockReturnValueOnce(new Promise(resolve => { finish = resolve; })); await advance(15000);
+        const next = windowsContactView(); next.serverNow = '2026-10-07T12:00:25Z'; next.evaluatedAt = next.serverNow; vi.mocked(request).mockResolvedValue(next);
+        if (interrupt === 'blur') { act(() => window.dispatchEvent(new Event('blur'))); act(() => window.dispatchEvent(new Event('focus'))); }
+        if (interrupt === 'scope') mounted.rerender(<><button>Other control</button><Harness session="2026-10-07T14:00:00Z"/></>);
+        if (interrupt === 'certificate') { const device = windowsContactDevice(); device.agentCertificate = { ...device.agentCertificate!, expiresAt: '2026-12-07T12:00:00Z' }; mounted.rerender(<><button>Other control</button><Harness device={device}/></>); }
+        if (interrupt === 'outside-focus') screen.getByRole('button', { name: 'Other control' }).focus();
+        if (interrupt === 'metadata') { mounted.rerender(<><button>Other control</button><Harness metadataReady={false}/></>); mounted.rerender(<><button>Other control</button><Harness/></>); }
+        if (interrupt === 'keyboard') fireEvent.keyDown(document.body, { key: 'Tab' });
+        await act(async () => finish(next)); await flush();
+        expect(screen.getByRole('button', { name: 'Open (0)' })).not.toHaveFocus();
+        expect(document.activeElement).toBe(interrupt === 'outside-focus' ? screen.getByRole('button', { name: 'Other control' }) : document.body);
+        expect(mutate).not.toHaveBeenCalled();
+    });
+    it('supports keyboard filter activation without moving focus or fetching again', async () => {
+        render(<Harness/>); await flush(); vi.useRealTimers(); const user = userEvent.setup();
+        const openFilter = screen.getByRole('button', { name: 'Open (0)' }); openFilter.focus(); await user.keyboard('{Enter}');
+        expect(openFilter).toHaveFocus(); expect(openFilter).toHaveAttribute('aria-pressed', 'true');
+        await user.tab(); const recovered = screen.getByRole('button', { name: 'Recovered (1)' }); expect(recovered).toHaveFocus(); await user.keyboard(' ');
+        expect(recovered).toHaveAttribute('aria-pressed', 'true'); expect(history()).toBeVisible(); expect(request).toHaveBeenCalledTimes(1); expect(mutate).not.toHaveBeenCalled();
+    });
     it.each(['en', 'de'] as const)('shows distinct original acceptance/evaluation/history and scoped limits in %s', async locale => { setLocale(locale, false); render(<Harness/>); await flush(); expect(screen.getByText(locale === 'en' ? 'Recent report' : 'Aktuelle Meldung')).toBeVisible(); expect(screen.getByText(locale === 'en' ? 'Recovered' : 'Erholt')).toBeVisible(); expect(document.querySelector('time[datetime="2026-10-07T12:00:01Z"]')).not.toBeNull(); expect(document.querySelector(`time[datetime="${windowsNow}"]`)).not.toBeNull(); fireEvent.click(screen.getByText(locale === 'en' ? 'Contact rules & limits' : 'Kontaktregeln & Grenzen')); expect(screen.getByText(/120 Sekunden|120 seconds/)).toBeVisible(); expect(screen.getByText(/100 Vorfälle|100 incidents/)).toBeVisible(); expect(screen.queryByRole('button', { name: /acknowledge|bestätigen|maintenance|wartung|analyze|analysieren/i })).toBeNull(); expect(mutate).not.toHaveBeenCalled(); });
     it.each(['pending', 'overdue'] as const)('presents manager %s state without invoking action or investigation sources', async status => { vi.mocked(request).mockResolvedValue(windowsContactView(status)); render(<Harness/>); await flush(); expect(screen.getByText(status === 'pending' ? 'Report overdue · confirmation pending' : 'Report overdue · incident open')).toBeVisible(); expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([`/devices/${windowsDeviceId}/windows-contact`]); expect(mutate).not.toHaveBeenCalled(); });
     it('shows unknown when no accepted report exists', async () => { const view = windowsContactView('unknown'); Object.assign(view, { sequence: 0, lastAcceptedAt: null, evaluatedAt: null, incidents: [] }); vi.mocked(request).mockResolvedValue(view); render(<Harness/>); await flush(); expect(screen.getByText('Unknown')).toBeVisible(); expect(screen.getByText('No accepted report recorded.')).toBeVisible(); });
