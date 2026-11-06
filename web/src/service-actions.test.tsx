@@ -164,7 +164,7 @@ describe('read-first service availability', () => {
     it.each(['en', 'de'] as const)('compacts only confirmed idle unavailability and preserves live controls in %s', async locale => {
         setLocale(locale, false);
         const idle: ServiceActionView = { ...actionView(), available: false, reason: 'helper_stale', services: [] };
-        const workflow: ReturnType<typeof useServiceActions> = { historyAccess: null, view: idle, preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), refresh: vi.fn() };
+        const workflow: ReturnType<typeof useServiceActions> = { historyAccess: null, view: idle, preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), sessionRemaining: () => 0, refresh: vi.fn() };
         const mounted = render(<ServiceActionPanel workflow={workflow} authorized/>), panel = mounted.container.querySelector('.service-action-panel')!;
         const renderState = (change: Partial<typeof workflow>) => mounted.rerender(<ServiceActionPanel workflow={{ ...workflow, ...change }} authorized/>);
         expect(panel).toHaveClass('service-action-panel-idle'); expect(panel).toHaveTextContent(locale === 'en' ? 'The local helper report is stale.' : 'Der lokale Helper-Bericht ist veraltet.');

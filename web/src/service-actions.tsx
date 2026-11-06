@@ -5,6 +5,7 @@ import type { ServiceActionPreview } from './service-action-types';
 import type { useServiceActions } from './service-action-resource';
 import './service-actions.css';
 import { ServiceActionHistoryPanel } from './service-action-history';
+import { ServiceActionSequence, useServiceActionSequence } from './service-action-sequence';
 
 const copy = {
     en: {
@@ -29,7 +30,7 @@ const copy = {
 export function serviceActionLabel(locale: 'en' | 'de') { return copy[locale].select; }
 type Workflow = ReturnType<typeof useServiceActions>;
 export function ServiceActionPanel({ workflow, authorized }: { workflow: Workflow; authorized: boolean }) {
-    const [locale] = useLocale(), labels = copy[locale], id = useId(), job = workflow.view?.job;
+    const [locale] = useLocale(), labels = copy[locale], id = useId(), job = workflow.view?.job, sequence = useServiceActionSequence(workflow, authorized);
     // Unknown, active and saved outcomes always retain the full foreground panel.
     const idleUnavailable = !workflow.loading && !workflow.error && !workflow.unresolved && !workflow.selected && !workflow.preview && !job && (!authorized || workflow.view?.available === false && !['action_in_progress', 'needs_intervention'].includes(workflow.view.reason));
     return <section className={`service-action-panel${idleUnavailable ? ' service-action-panel-idle' : ''}`} aria-labelledby={id}>
@@ -39,7 +40,8 @@ export function ServiceActionPanel({ workflow, authorized }: { workflow: Workflo
             {workflow.error && <p className="package-error" role="alert">{labels[workflow.error]}</p>}
             {!workflow.error && workflow.view && <p className="package-note">{workflow.view.schemaVersion === 'tracebolt.service-action-view.v2' && workflow.view.reason === 'ready' && workflow.view.services.length === 0 ? labels.noSupported : labels[workflow.view.reason]}</p>}
             {workflow.selected && !workflow.preview && workflow.loading === 'preview' && <button type="button" className="text-button" onClick={workflow.close}>{labels.cancel}</button>}
-            {workflow.preview && <Review key={JSON.stringify(workflow.preview)} preview={workflow.preview} onApprove={workflow.approve} onClose={workflow.close}/>}
+            {sequence.reviewPreview && <Review key={JSON.stringify(sequence.reviewPreview)} preview={sequence.reviewPreview} onApprove={sequence.approve} onClose={sequence.close}/>}
+            <ServiceActionSequence sequence={sequence} workflow={workflow} locale={locale}/>
             {!!workflow.view?.excludedServices?.length && <details><summary>{labels.excluded} ({workflow.view.excludedServices.length})</summary><ul className="service-action-impact">{workflow.view.excludedServices.map(service => <li key={service.unit}>{service.unit}: {service.reason.replaceAll('_', ' ')}</li>)}</ul></details>}
             {workflow.historyAccess && workflow.error !== 'session' && <ServiceActionHistoryPanel deviceId={workflow.historyAccess.deviceId} access={workflow.historyAccess.access}/>}
             {job && <section className="service-action-job" aria-label={labels.job}>

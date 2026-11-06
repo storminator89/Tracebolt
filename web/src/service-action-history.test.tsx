@@ -17,7 +17,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(actionNow); localStorage
 afterEach(() => { cleanup(); abortProtectedRequests(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('deliberate retained Linux action investigation', () => {
     it('is integrated only into the authorized Linux service-action workflow and reads on demand', async () => {
-        const workflow: ReturnType<typeof useServiceActions> = { historyAccess: { deviceId: actionDevice, access: actionAccess }, view: actionView(), preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), refresh: vi.fn() };
+        const workflow: ReturnType<typeof useServiceActions> = { historyAccess: { deviceId: actionDevice, access: actionAccess }, view: actionView(), preview: null, selected: null, loading: null, error: null, unresolved: false, canSelect: vi.fn(), select: vi.fn(), approve: vi.fn(), close: vi.fn(), sessionRemaining: () => 0, refresh: vi.fn() };
         const mounted = render(<ServiceActionPanel workflow={workflow} authorized={false}/>); expect(screen.queryByRole('button', { name: 'Saved service-action history' })).not.toBeInTheDocument();
         mounted.rerender(<ServiceActionPanel workflow={workflow} authorized/>); expect(readServiceActionHistory).not.toHaveBeenCalled(); await open(); expect(readServiceActionHistory).toHaveBeenCalledTimes(1);
         mounted.rerender(<ServiceActionPanel workflow={{ ...workflow, error: 'session' }} authorized/>); expect(screen.queryByText(/command completion/)).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Close history' })).not.toBeInTheDocument();
