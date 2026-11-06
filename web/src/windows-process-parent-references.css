@@ -1,0 +1,18 @@
+.windows-process-parent-references{margin:12px 0;border:1px solid var(--line);border-radius:8px;min-width:0}
+.windows-process-parent-references summary{cursor:pointer;padding:10px;font-size:12px;overflow-wrap:anywhere}
+.windows-process-parent-references summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.windows-process-parent-references>summary svg{vertical-align:middle;margin-right:5px;color:var(--secondary)}
+.windows-process-parent-references>summary>span{margin-left:10px;color:var(--secondary);font-size:11px}
+.windows-process-parent-content{padding:0 10px 10px;min-width:0}
+.windows-process-parent-content>p{margin:8px 0;color:var(--secondary);font-size:12px;line-height:1.5}
+.windows-process-parent-groups,.windows-process-parent-rows{list-style:none;padding:0;margin:0}
+.windows-process-parent-group{border-top:1px solid var(--line)}
+.windows-process-parent-group>summary>span+span{margin-left:16px;color:var(--secondary)}
+.windows-process-parent-rows{padding:0 10px}
+.windows-process-parent-rows>li{padding:8px 0;border-top:1px solid var(--line);font-size:12px}
+.windows-process-parent-name{display:block;white-space:pre-wrap;overflow-wrap:anywhere;unicode-bidi:plaintext}
+.windows-process-parent-rows dl{display:flex;flex-wrap:wrap;gap:6px 20px;margin:5px 0 0}
+.windows-process-parent-rows dl>div{display:flex;gap:7px}
+.windows-process-parent-rows dt{color:var(--secondary)}
+.windows-process-parent-rows dd{margin:0;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.windows-process-parent-references>summary>span{display:block;margin:5px 0 0 22px}.windows-process-parent-group>summary>span+span{display:block;margin:5px 0 0}.windows-process-parent-rows{padding:0 4px}}
