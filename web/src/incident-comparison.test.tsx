@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import healthWire from './health-go-fixture.json';
@@ -101,6 +102,35 @@ describe('source-qualified comparison model', () => {
 });
 
 describe('complete local incident-comparison workflow', () => {
+    it('separates retained outcomes from unknown current checks and folds exact identities without losing them', () => {
+        windows = { ...windows, view: completeIncidentFixture('active'), age: 121000 };
+        render(<IncidentWorkQueue {...props()}/>);
+        fireEvent.click(choices()[0]); fireEvent.click(choices()[1]); fireEvent.click(screen.getByRole('button', { name: 'Open comparison' }));
+        const cards = within(panel()).getAllByRole('article');
+        for (const card of cards) {
+            expect(within(card).getByText('Retained episode')).toBeVisible();
+            expect(within(card).getByText('Current check, independent of the retained episode')).toBeVisible();
+            const identity = within(card).getByText('Exact identities').closest('details')!;
+            expect(identity).not.toHaveAttribute('open');
+            expect(within(identity).getByText('Incident')).toBeInTheDocument();
+            expect(within(identity).getByText('Source key')).toBeInTheDocument();
+            fireEvent.click(within(identity).getByText('Exact identities')); expect(identity).toHaveAttribute('open');
+        }
+        expect(within(panel()).getAllByText('Unknown: current evidence is missing or stale').length).toBeGreaterThan(0);
+        expect(within(panel()).getAllByText('Still open').length).toBeGreaterThan(0);
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
+    it('supports keyboard open/close with a linked region and retains only existing choices', async () => {
+        const user = userEvent.setup(); render(<IncidentWorkQueue {...props()}/>); choosePair();
+        const toggle = within(panel()).getByRole('button', { name: 'Open comparison' });
+        toggle.focus(); await user.keyboard('{Enter}'); expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeVisible();
+        await user.keyboard(' '); expect(toggle).toHaveAttribute('aria-expanded', 'false'); expect(toggle).toHaveFocus();
+        expect(within(panel()).getByText('Selected episodes: 2/4')).toBeInTheDocument();
+        expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeNull();
+        await user.keyboard('{Enter}'); expect(within(panel()).getAllByRole('article')).toHaveLength(2);
+        expect(request).not.toHaveBeenCalled(); expect(mutate).not.toHaveBeenCalled();
+    });
     it('selects two exact episodes, compares original chronology, closes/reopens and clears without requests or writes', () => {
         const p = props(); render(<IncidentWorkQueue {...p}/>);
         expect(within(panel()).queryByRole('button', { name: 'Open comparison' })).not.toBeInTheDocument();
@@ -191,6 +221,8 @@ describe('complete local incident-comparison workflow', () => {
         expect(panel().querySelectorAll('img,script,form')).toHaveLength(0);
         act(() => setLocale('de', false));
         const de = screen.getByRole('region', { name: 'Vorfall-Episoden vergleichen' });
+        expect(within(de).getAllByText('Gespeicherte Episode')).toHaveLength(2);
+        expect(within(de).getAllByText('Aktuelle Prüfung, unabhängig von der gespeicherten Episode')).toHaveLength(2);
         expect(within(de).getByText('Ausgewählte Episoden: 2/4')).toBeInTheDocument(); expect(within(de).getByText(/Quelluhren können abweichen/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Vergleich leeren' })); expect(within(de).getByText('Ausgewählte Episoden: 0/4')).toBeInTheDocument();
     });

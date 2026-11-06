@@ -8,8 +8,6 @@
 .application-checks-timing div{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
 .application-checks-timing dt{font-weight:500}
 .application-checks-timing dd{margin:0;overflow-wrap:anywhere}
-.application-checks-help{padding:0 0 13px 17px;max-width:720px}
-.application-checks-help li+li{margin-top:7px}
 .application-network-history{border-top:1px solid var(--line);padding:16px 20px;font-size:12px;overflow-wrap:anywhere}
 .application-network-history h3{margin-bottom:8px;font-size:14px}
 .application-network-history p{margin:8px 0;color:var(--secondary)}
@@ -67,3 +65,9 @@
 .application-checks-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .application-check-examples{overflow-wrap:anywhere}
 @media(max-width:760px){.application-checks-heading>div:first-child{flex-basis:100%;min-width:0}.application-checks-actions{width:100%}.application-checks-actions .button{min-height:44px;flex:1;justify-content:center}}
+
+.application-result-help{margin-top:4px;max-width:28rem;white-space:normal;overflow-wrap:anywhere}
+.application-result-help summary{width:fit-content;max-width:100%;min-height:32px;display:list-item;padding:7px 0;color:var(--accent);font-size:11px;cursor:pointer;border-radius:3px}
+.application-result-help summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.application-result-help p{margin:3px 0 0;padding:10px 12px;border-left:2px solid var(--line);background:var(--panel-soft);color:var(--secondary);font-size:12px;line-height:1.6}
+@media(max-width:760px){.application-result-help{grid-column:1/-1;max-width:none;margin-top:0}.application-result-help summary{min-height:40px;font-size:12px}}
