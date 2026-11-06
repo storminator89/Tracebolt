@@ -10,12 +10,31 @@ import { windowsServiceHealthCompleteCopy, completeServicePickerCopy } from './w
 import type { WindowsServiceHealthCopy } from './windows-service-health-copy';
 import { WindowsServiceHealthCompletePicker } from './windows-service-health-complete-picker';
 import type { CompleteServiceSelectionEvidence } from './windows-service-health-complete-picker';
-import type { WindowsServiceHealthCompleteResource } from './windows-service-health-complete-resource';
+import type { WindowsServiceHealthCompleteFailure, WindowsServiceHealthCompleteResource } from './windows-service-health-complete-resource';
 import { sameWindowsServiceNames } from './windows-service-health-types';
 import { validWindowsServiceHealthCompleteSelection, windowsServiceHealthCompleteCheckStatus, windowsServiceHealthCompleteChoices, windowsServiceHealthCompleteStatus, sameWindowsServiceHealthSource, sourceBindingMatches, windowsServiceHealthSourceFresh } from './windows-service-health-complete-types';
 import type { WindowsServiceHealthCompleteObservation, WindowsServiceHealthCompletePolicy, WindowsServiceHealthCompleteView } from './windows-service-health-complete-types';
 import './windows-capacity.css';
 import './windows-service-health.css';
+
+const completeServiceFailureCopy: Record<'en' | 'de', Record<WindowsServiceHealthCompleteFailure, string>> = {
+    en: {
+        session: 'Your session has ended. Sign in again to view service monitoring.',
+        authority: 'Current device access could not be verified. Refresh the device view and check access before reloading this policy.',
+        clock: 'The time reference changed. Refresh to verify the saved policy again.',
+        timeout: 'The manager did not respond in time. Refresh to check the saved policy.',
+        invalid: 'The policy response could not be verified. Refresh to try reading it again.',
+        unavailable: 'The policy could not be read. Refresh to check its saved state.',
+    },
+    de: {
+        session: 'Die Sitzung ist beendet. Zum Anzeigen der Dienstüberwachung erneut anmelden.',
+        authority: 'Der aktuelle Gerätezugriff konnte nicht bestätigt werden. Geräteansicht aktualisieren und Zugriff prüfen, bevor die Richtlinie erneut geladen wird.',
+        clock: 'Der Zeitbezug hat sich geändert. Zum erneuten Prüfen der gespeicherten Richtlinie aktualisieren.',
+        timeout: 'Der Manager hat nicht rechtzeitig geantwortet. Zum Prüfen der gespeicherten Richtlinie aktualisieren.',
+        invalid: 'Die Richtlinienantwort konnte nicht verifiziert werden. Zum erneuten Lesen aktualisieren.',
+        unavailable: 'Die Richtlinie konnte nicht gelesen werden. Zum Prüfen des gespeicherten Zustands aktualisieren.',
+    },
+};
 
 function Timestamp({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd><time dateTime={value}>{fullDate(value)}</time></dd></div>; }
 function Observation({ value, c }: { value: WindowsServiceHealthCompleteObservation; c: WindowsServiceHealthCopy }) {
@@ -61,8 +80,8 @@ export function WindowsServiceHealthCompletePanel({ device, resource, sessionKey
         <header><h2><ListChecks size={16} aria-hidden="true"/>{c.title}</h2><button type="button" className="text-button" disabled={resource.loading || resource.saving || !metadataReady || !sessionKey || !windowsCapacityDeviceEligible(device, device.id) || resource.error === 'session'} onClick={resource.refresh}><RefreshCw size={14} aria-hidden="true"/>{c.refresh}</button></header>
         <p className="windows-capacity-scope">{c.scope}</p>
         <div className="windows-capacity-assessment"><span>{c.status}</span><strong>{c[status]}</strong></div>
-        {!view && <p role="status">{resource.saving ? c.saving : resource.loading ? c.refreshing : resource.error ? c.unavailable : c.noAuthority}</p>}
-        {resource.notice && <p role="status">{c[resource.notice]}</p>}
+        {!view && <p role="status">{resource.saving ? c.saving : resource.loading ? c.refreshing : resource.error ? completeServiceFailureCopy[locale][resource.error] : c.noAuthority}</p>}
+        {resource.notice && (resource.notice !== 'saved' || view) && <p role="status">{c[resource.notice]}</p>}
         {view && <>
             {view.evaluatedAt && <dl className="windows-capacity-times"><Timestamp label={c.evaluated} value={view.evaluatedAt}/></dl>}
             {status === 'unknown' && <p role="status">{c.stale}</p>}

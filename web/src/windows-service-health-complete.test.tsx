@@ -92,7 +92,7 @@ describe('complete-generation policy workflow', () => {
     it.each(['blur', 'hashchange', 'pagehide'])('clears private drafts and rows on %s', async event => {
         server(); render(<Harness/>); await flush(); settings(); await review(); pick('FixtureService0001'); act(() => window.dispatchEvent(new Event(event))); await flush(); expect(screen.queryByRole('button', { name: 'Remove service: FixtureService0001' })).toBeNull(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0);
     });
-    it('displays v1 incompatibility without falling back or posting', async () => { const s = server(); (s.state.view as unknown as { schemaVersion: string }).schemaVersion = 'tracebolt.windows-service-view.v1'; render(<Harness/>); await flush(); expect(screen.getByText(/previously used bounded-preview policy is not converted automatically/)).toBeVisible(); expect(s.state.writes).toEqual([]); expect(s.state.queries).toEqual([]); });
+    it('rejects an incompatible v1 response without falling back or posting', async () => { const s = server(); (s.state.view as unknown as { schemaVersion: string }).schemaVersion = 'tracebolt.windows-service-view.v1'; render(<Harness/>); await flush(); expect(screen.getByText(/The policy response could not be verified/)).toBeVisible(); expect(s.state.writes).toEqual([]); expect(s.state.queries).toEqual([]); });
 });
 
 describe('bounded reusable complete picker', () => {
@@ -101,8 +101,47 @@ describe('bounded reusable complete picker', () => {
         const s = server(), evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001'); await next(); pick('FixtureService0150'); expect(evidence.mock.lastCall![0].names).toEqual(['FixtureService0001', 'FixtureService0150']);
         fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'FixtureService0616' } }); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0); fireEvent.click(screen.getByRole('button', { name: 'Search generation' })); await flush(); pick('FixtureService0616'); expect(evidence.mock.lastCall![0].names).toEqual(['FixtureService0001', 'FixtureService0150', 'FixtureService0616']); expect(s.state.queries.at(-1)?.search).toBe('FixtureService0616'); expect(s.state.queries.every(q => q.limit === 100)).toBe(true);
     });
+    it.each(['en', 'de'] as const)('explains an unapplied search without granting evidence or reading automatically (%s)', async locale => {
+        setLocale(locale, false);
+        const s = server(), evidence = vi.fn();
+        render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001');
+        const count = s.state.queries.length, search = screen.getByRole('searchbox');
+        fireEvent.change(search, { target: { value: 'FixtureService0616' } });
+        const hint = locale === 'de' ? 'Suche geändert. Mit „Generation durchsuchen“ gespeicherte Dienstzeilen lesen.' : 'Search changed. Choose “Search generation” to read saved service rows.';
+        expect(screen.getByText(hint)).toHaveAttribute('role', 'status');
+        expect(search).toHaveAccessibleDescription(hint);
+        expect(screen.queryByText(locale === 'de' ? 'Keine aktuelle vollständige Generation für die Auswahl verfügbar.' : 'No fresh complete generation is available for selection.')).toBeNull();
+        expect(evidence.mock.lastCall![0]).toBeNull();
+        expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0);
+        expect(s.state.queries).toHaveLength(count); expect(s.state.writes).toEqual([]);
+        fireEvent.click(screen.getByRole('button', { name: locale === 'de' ? 'Generation durchsuchen' : 'Search generation' })); await flush();
+        expect(screen.queryByText(hint)).toBeNull();
+        expect(search).not.toHaveAttribute('aria-describedby');
+        expect(s.state.queries).toHaveLength(count + 1);
+        expect(s.state.queries.at(-1)?.search).toBe('FixtureService0616');
+        expect(s.state.writes).toEqual([]);
+    });
     it('withholds retained complete pages while a newer generation is incomplete', async () => {
         const s = server(); s.state.latestPending = true; const evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); expect(evidence.mock.lastCall![0]).toBeNull(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0); expect(screen.getByText('No fresh complete generation is available for selection.')).toBeVisible();
+    });
+    it('does not replace known newer-attempt unavailability with pending search', async () => {
+        const s = server(); s.state.latestPending = true; const evidence = vi.fn();
+        render(<Picker onEvidence={evidence}/>); await flush();
+        expect(screen.getByText('No fresh complete generation is available for selection.')).toBeVisible();
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'FixtureService0616' } });
+        expect(evidence.mock.lastCall![0]).toBeNull(); expect(s.state.queries).toHaveLength(1); expect(s.state.writes).toEqual([]);
+        expect(screen.queryByText('Search changed. Choose “Search generation” to read saved service rows.')).toBeNull();
+    });
+    it('does not replace known stale source with pending search', async () => {
+        const s = server(); const captured = new Date(Date.parse(fullServicesNow) - 301000).toISOString();
+        s.state.complete.manifest.captureStartedAt = captured; s.state.complete.manifest.captureFinishedAt = captured;
+        s.state.complete.manifest.expiresAt = new Date(Date.parse(captured) + 86400000).toISOString(); s.state.complete.receivedAt = captured;
+        s.state.complete.manifestSha256 = fullServicesManifestHash(s.state.complete.manifest);
+        const evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush();
+        expect(screen.getByText(/too old for a new policy selection/)).toBeVisible();
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'FixtureService0616' } });
+        expect(evidence.mock.lastCall![0]).toBeNull(); expect(s.state.queries).toHaveLength(1); expect(s.state.writes).toEqual([]);
+        expect(screen.queryByText('Search changed. Choose “Search generation” to read saved service rows.')).toBeNull();
     });
     it('caps all pages together at eight selected identities', async () => {
         server(); const evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush();
@@ -115,7 +154,21 @@ describe('bounded reusable complete picker', () => {
         s.state.complete.manifestSha256 = fullServicesManifestHash(s.state.complete.manifest);
         const evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001'); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(evidence.mock.lastCall![0]).toBeNull(); expect(screen.getByText(/too old for a new policy selection/)).toBeVisible(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0);
     });
+    it('replaces pending-search guidance with stale-source truth at the original freshness limit', async () => {
+        const s = server(), captured = new Date(Date.parse(fullServicesNow) - 299500).toISOString();
+        s.state.complete.manifest.captureStartedAt = captured; s.state.complete.manifest.captureFinishedAt = captured;
+        s.state.complete.manifest.expiresAt = new Date(Date.parse(captured) + 86400000).toISOString(); s.state.complete.receivedAt = captured;
+        s.state.complete.manifestSha256 = fullServicesManifestHash(s.state.complete.manifest);
+        const evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush();
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'FixtureService0616' } });
+        expect(screen.getByText(/Search changed/)).toBeVisible();
+        await act(async () => vi.advanceTimersByTimeAsync(1000));
+        expect(screen.queryByText(/Search changed/)).toBeNull();
+        expect(screen.getByText(/too old for a new policy selection/)).toBeVisible();
+        expect(screen.getByRole('searchbox')).not.toHaveAttribute('aria-describedby');
+        expect(evidence.mock.lastCall![0]).toBeNull(); expect(s.state.queries).toHaveLength(1); expect(s.state.writes).toEqual([]);
+    });
     it('clears reviewed evidence on a generation restart instead of joining rows', async () => {
-        const s = server(), evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001'); s.state.restart = true; await next(); expect(evidence.mock.lastCall![0]).toBeNull(); expect(screen.getByText(/Generation or access changed/)).toBeVisible(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0); expect(screen.getByRole('button', { name: 'Remove service: FixtureService0001' })).toBeVisible();
+        const s = server(), evidence = vi.fn(); render(<Picker onEvidence={evidence}/>); await flush(); pick('FixtureService0001'); s.state.restart = true; await next(); expect(evidence.mock.lastCall![0]).toBeNull(); expect(screen.getByText(/The generation, grant or paging session changed or expired/)).toBeVisible(); expect(document.querySelectorAll('.windows-service-options li')).toHaveLength(0); expect(screen.getByRole('button', { name: 'Remove service: FixtureService0001' })).toBeVisible();
     });
 });
