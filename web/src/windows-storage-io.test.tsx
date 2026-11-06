@@ -1,3 +1,4 @@
+import { storageThroughput } from './windows-storage-io';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REQUIRED_EVENT, request, mutate } from './api';
@@ -25,17 +26,45 @@ describe('Compact private Windows Disk I/O', () => {
         setLocale(locale, false); render(<Harness/>); await ready(locale); const de = locale === 'de', root = within(panel());
         expect(root.getByRole('heading', { name: de ? 'Datenträger-I/O · PerfDisk gesamt' : 'Disk I/O · PerfDisk aggregate' })).toBeVisible();
         expect(root.getByRole('region', { name: de ? 'Mittlere Latenz' : 'Average latency' })).toHaveTextContent(de ? '1,25 ms' : '1.25 ms');
-        expect(root.getByRole('region', { name: de ? 'Durchsatz' : 'Throughput' })).toHaveTextContent(de ? '12.582.912 B/s' : '12,582,912 B/s');
+        expect(root.getByRole('region', { name: de ? 'Durchsatz' : 'Throughput' })).toHaveTextContent('12 MiB/s');
         expect(root.getByRole('region', { name: de ? 'Operationen' : 'Operations' })).toHaveTextContent(de ? '120,5 Vorgänge/s' : '120.5 ops/s');
         expect(panel()).toHaveTextContent(de ? 'Mittlere Warteschlangenlänge' : 'Average queue length'); expect(panel()).toHaveTextContent(de ? 'Am Messende ausstehend' : 'Outstanding at sample end'); expect(panel()).toHaveTextContent(de ? 'Einschließlich Anfragen in Bearbeitung' : 'Includes requests in service');
         expect(panel().querySelector('time')).toHaveAttribute('datetime', '2026-10-07T12:00:00.25Z'); expect(panel().querySelectorAll('time')[1]).toHaveAttribute('datetime', '2026-10-07T12:00:01.25Z'); expect(panel()).toHaveTextContent(de ? 'Alter der Messung: 8 s' : 'Sample age: 8 s');
         expect(document.querySelector('time[datetime="2026-10-07T12:00:02Z"]')).not.toBeNull(); expect(details().open).toBe(false);
-        fireEvent.click(details().querySelector('summary')!); expect(details()).toHaveTextContent('PDH PhysicalDisk(_Total)'); expect(details()).toHaveTextContent(de ? 'keine einzelnen Datenträger' : 'does not identify individual disks'); expect(details()).toHaveTextContent('MSFT_PhysicalDisk'); expect(details()).toHaveTextContent(de ? 'Hot-Plug' : 'hot-plug');
+        fireEvent.click(details().querySelector('summary')!); expect(within(details()).getByText('12582912')).toBeVisible(); expect(details()).toHaveTextContent(de ? 'ursprüngliche Bytes pro Sekunde' : 'original bytes per second'); expect(details()).toHaveTextContent('PDH PhysicalDisk(_Total)'); expect(details()).toHaveTextContent(de ? 'keine einzelnen Datenträger' : 'does not identify individual disks'); expect(details()).toHaveTextContent('MSFT_PhysicalDisk'); expect(details()).toHaveTextContent(de ? 'Hot-Plug' : 'hot-plug');
         expect(panel().querySelector('a,img,iframe,button,form,input')).toBeNull(); expect(mutate).not.toHaveBeenCalled(); expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual([`/devices/${windowsDeviceId}/windows-inventory`]);
     });
     it('distinguishes an idle side, observed zero latency and a missing throughput counter', async () => {
         const v = windowsStorageIOView(), p = v.storageIO.perfDisk; p.readOperationsPerSecond = observedWindowsStorageIOMetric(0); p.readLatencySeconds = unavailableWindowsStorageIOMetric('windows_storage_io_idle'); p.writeLatencySeconds = observedWindowsStorageIOMetric(0); p.readBytesPerSecond = unavailableWindowsStorageIOMetric('windows_storage_io_counter_missing'); summarizeWindowsStorageIO(v.storageIO);
         vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); const latency = within(panel()).getByRole('region', { name: 'Average latency' }); expect(latency).toHaveTextContent('Idle · no operations'); expect(latency).toHaveTextContent('0 ms'); expect(within(panel()).getByRole('region', { name: 'Throughput' })).toHaveTextContent('Counter unavailable');
+    });
+    it.each(['en', 'de'] as const)('keeps observed zero distinct from unknown throughput in %s', async locale => {
+        const v = windowsStorageIOView(), p = v.storageIO.perfDisk;
+        p.readBytesPerSecond = observedWindowsStorageIOMetric(0);
+        p.writeBytesPerSecond = unavailableWindowsStorageIOMetric('windows_storage_io_counter_missing');
+        summarizeWindowsStorageIO(v.storageIO);
+        setLocale(locale, false); vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(locale);
+        const throughput = within(within(panel()).getByRole('region', { name: locale === 'de' ? 'Durchsatz' : 'Throughput' }));
+        expect(throughput.getAllByText('0 B/s')).toHaveLength(1);
+        expect(throughput.getByText(locale === 'de' ? 'Zähler nicht verfügbar' : 'Counter unavailable')).toBeVisible();
+        fireEvent.click(details().querySelector('summary')!);
+        expect(within(details()).getByText('readBytesPerSecond').nextElementSibling).toHaveTextContent(/^0$/);
+        expect(within(details()).getByText('writeBytesPerSecond').nextElementSibling).toHaveTextContent(locale === 'de' ? 'Zähler nicht verfügbar' : 'Counter unavailable');
+        expect(p.writeBytesPerSecond.value).toBeNull(); expect(mutate).not.toHaveBeenCalled();
+    });
+    it.each(['en', 'de'] as const)('preserves rounded and tiny positive throughput with exact source values in %s', async locale => {
+        for (const [value, displayed] of [[1024.1, locale === 'de' ? '≈ 1,0001 KiB/s' : '≈ 1.0001 KiB/s'], [0.0000001, '1E-7 B/s'], [Number.MIN_VALUE, '5E-324 B/s']] as const) {
+            const v = windowsStorageIOView(); v.storageIO.perfDisk.readBytesPerSecond = observedWindowsStorageIOMetric(value);
+            const original = JSON.stringify(v.storageIO);
+            setLocale(locale, false); vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(locale);
+            const throughput = within(within(panel()).getByRole('region', { name: locale === 'de' ? 'Durchsatz' : 'Throughput' }));
+            expect(throughput.getByText(displayed)).toBeVisible(); expect(throughput.queryByText('0 B/s')).toBeNull();
+            expect(details().open).toBe(false); fireEvent.click(details().querySelector('summary')!);
+            expect(within(details()).getByText('readBytesPerSecond').nextElementSibling?.textContent).toBe(String(value));
+            expect(JSON.stringify(v.storageIO)).toBe(original); expect(mutate).not.toHaveBeenCalled();
+            cleanup();
+        }
+        expect(vi.mocked(request).mock.calls.map(([path]) => path)).toEqual(Array(3).fill(`/devices/${windowsDeviceId}/windows-inventory`));
     });
     it.each([['windows_storage_io_access_denied', 'Access denied'], ['windows_storage_io_counter_reset', 'Counter reset'], ['windows_storage_io_invalid_timebase', 'Invalid sample timebase'], ['windows_storage_io_budget_exhausted', 'Sample time limit reached'], ['windows_storage_io_unsupported_platform', 'Source unsupported']] as const)('shows actual failure %s without inventing zero values', async (reason, text) => {
         const v = windowsStorageIOView(); v.storageIO = unavailableWindowsStorageIO(reason); vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); expect(panel()).toHaveTextContent(text); expect(panel()).not.toHaveTextContent('0 B/s'); expect(panel()).not.toHaveTextContent('Sample age:'); expect(panel()).not.toHaveTextContent('approval');
@@ -63,5 +92,24 @@ describe('Compact private Windows Disk I/O', () => {
     it('ages and expires current context from the original capture instead of the receipt', async () => {
         vi.useFakeTimers(); vi.setSystemTime(windowsNow); const v = windowsStorageIOView(); v.storageIO = unavailableWindowsStorageIO(); v.snapshot!.collectedAt = v.storageIO.collectedAt = v.storageContext.collectedAt = '2026-10-07T11:58:10Z'; vi.mocked(request).mockResolvedValue(v); render(<Harness/>); await ready(); expect(panel()).not.toHaveTextContent('Stale sample'); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(panel()).toHaveTextContent('Stale sample'); cleanup();
         v.snapshot!.collectedAt = v.storageIO.collectedAt = v.storageContext.collectedAt = '2026-10-06T12:00:10.999Z'; v.status = 'stale'; vi.setSystemTime(windowsNow); render(<Harness/>); await ready(); await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(panel()).toBeNull(); expect(screen.getByText('Disk I/O capture expired after 24 hours.')).toBeVisible();
+    });
+});
+
+
+describe('Readable sampled throughput', () => {
+    it.each([
+        [0, '0 B/s', '0 B/s'], [1023, '1,023 B/s', '1.023 B/s'], [1024, '1 KiB/s', '1 KiB/s'],
+        [1536, '1.5 KiB/s', '1,5 KiB/s'], [12582912, '12 MiB/s', '12 MiB/s'],
+        [1073741824, '1 GiB/s', '1 GiB/s'], [1024 ** 4, '1 TiB/s', '1 TiB/s'], [1024 ** 5, '1 PiB/s', '1 PiB/s'], [1024 ** 6, '1 EiB/s', '1 EiB/s'],
+        [1024.1, '≈ 1.0001 KiB/s', '≈ 1,0001 KiB/s'], [0.001, '0.001 B/s', '0,001 B/s'],
+        [1.234567e-7, '≈ 1.23457E-7 B/s', '≈ 1,23457E-7 B/s'],
+        [0.0000001, '1E-7 B/s', '1E-7 B/s'], [Number.MIN_VALUE, '5E-324 B/s', '5E-324 B/s'],
+    ])('formats %s without hiding a positive value as zero', (value, en, de) => {
+        expect(storageThroughput(value as number, 'en')).toBe(en);
+        expect(storageThroughput(value as number, 'de')).toBe(de);
+    });
+    it('keeps maximum finite input finite in a compact presentation', () => {
+        expect(storageThroughput(Number.MAX_VALUE, 'en')).not.toMatch(/Infinity|NaN/);
+        expect(storageThroughput(Number.MAX_VALUE, 'en')).toContain('EiB/s');
     });
 });

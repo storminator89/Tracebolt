@@ -33,6 +33,24 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(LOGOUT_INTENT_KEY); sessionStorage.removeItem(LOGOUT_INTENT_KEY); vi.useRealTimers(); vi.restoreAllMocks(); });
 
+it.each(['en', 'de'] as const)('keeps incident and unknown current evidence in distinct named sections (%s)', async locale => {
+    setLocale(locale, false);
+    view = structuredClone(wire.unknown) as WindowsCompleteServiceIncidentReviewView;
+    render(<WindowsCompleteServiceIncidentReview {...props()}/>); await flush();
+    const episode = screen.getByRole('region', { name: locale === 'de' ? 'Ausgewählter Vorfall' : 'Selected incident' });
+    const current = screen.getByRole('region', { name: locale === 'de' ? 'Aktuell gemeldeter Zustand' : 'Current reported state' });
+    expect(episode).toHaveTextContent(locale === 'de' ? 'Vorfall aktiv' : 'Incident active');
+    expect(episode.querySelector('time')).toHaveAttribute('datetime', view.incident.openedAt);
+    expect(current).toHaveTextContent(locale === 'de' ? 'Aktueller Zustand unbekannt' : 'Current state unknown');
+    expect(current).not.toHaveTextContent(locale === 'de' ? 'Vorfall aktiv' : 'Incident active');
+    expect(episode).not.toContainElement(current);
+    expect(mutateRaw).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(60000));
+    expect(screen.queryByRole('region', { name: locale === 'de' ? 'Ausgewählter Vorfall' : 'Selected incident' })).toBeNull();
+    expect(screen.queryByRole('region', { name: locale === 'de' ? 'Aktuell gemeldeter Zustand' : 'Current reported state' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent(locale === 'de' ? 'abgelaufen' : 'expired');
+});
+
 describe('closed complete-source incident review', () => {
     it('accepts actual Go DTOs and keeps every v1 decoder closed', () => {
         for (const value of Object.values(wire)) {
@@ -91,7 +109,7 @@ describe('closed complete-source incident review', () => {
     it.each(['en', 'de'] as const)('keeps unsupported native names readable and control blocked in %s', async locale => {
         view = structuredClone(wire.unsupported) as WindowsCompleteServiceIncidentReviewView; setLocale(locale, false);
         render(<WindowsCompleteServiceIncidentReview {...props()}/>); await flush();
-        expect(screen.getByRole('status')).toHaveTextContent(locale === 'de' ? 'Nur lesen:' : 'Read-only:'); expect(screen.getByRole('heading')).toHaveTextContent(view.incident.serviceName);
+        expect(screen.getByRole('status')).toHaveTextContent(locale === 'de' ? 'Nur lesen:' : 'Read-only:'); expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(view.incident.serviceName);
         expect(vi.mocked(request).mock.calls.map(([p]) => p)).toEqual([path()]); expect(screen.queryByRole('button', { name: /^Select service:/ })).toBeNull(); expect(mutateRaw).not.toHaveBeenCalled();
     });
     it('retains the active episode as unknown without inventing stopped', async () => {
