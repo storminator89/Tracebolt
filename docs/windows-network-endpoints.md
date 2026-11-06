@@ -95,6 +95,12 @@ still hides all siblings when it expires. They
 never enter basic observations, external AI/provider exports or process-metric
 attribution. Disabling collection does not retroactively refresh retained rows.
 
+## Private endpoint finder
+
+The device Network view supports [local search and filtering](windows-network-finder.md)
+of this same retained snapshot, including exact port/PID fields and bounded
+paging. It adds no host collection, live query, process join or action.
+
 ## Remaining native acceptance
 
 Separately authorized Windows acceptance must verify ordinary LocalService token
