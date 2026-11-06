@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, ListChecks } from 'lucide-react';
 import { AUTH_REQUIRED_EVENT } from './api';
 import { useOperator } from './auth';
 import { useLocale } from './i18n';
+import { WindowsFleetUpdateHistory } from './windows-fleet-update-history';
 import type { Device } from './types';
 import type { FleetGroup } from './fleet-groups-types';
 import { updateRetirementCopy } from './windows-update-retirement';
@@ -51,5 +52,6 @@ export function WindowsFleetUpdateWorklist({devices,allDevices=devices,group}:{d
     <ul className="windows-fleet-update-list">{frozen.devices.filter(device=>!selected||reporting.has(device.id)).map(device=><li key={device.id}><div className="windows-fleet-update-row"><div><strong>{device.name}</strong><p className="windows-fleet-update-outcome">{available.has(device.id)?status(receipts[device.id]):c.unavailable}</p>{receipts[device.id]?.retirement&&receipts[device.id].retirement!.state!=='available'&&<small>{updateRetirementCopy[locale][receipts[device.id].retirement!.state as 'pending'|'retired'|'blocked']}</small>}<details className="windows-inventory-scope"><summary>{c.details}</summary><small>{device.id}</small>{receipts[device.id]&&<small>{receipts[device.id].selection.updateId} · rev. {receipts[device.id].selection.revision}</small>}</details>{receipts[device.id]?.schedule&&<small>{utc(receipts[device.id].schedule!.startAt)} – {utc(receipts[device.id].schedule!.endAt)}</small>}</div><button type="button" className="button small" disabled={!available.has(device.id)} aria-expanded={active===device.id} aria-label={`${active===device.id?c.close:c.open}: ${device.name}`} onClick={()=>setActive(id=>id===device.id?null:device.id)}>{active===device.id?c.close:c.open}</button></div>{active===device.id&&available.has(device.id)&&<DeviceJob key={`${device.id}:${operator!.actorId}:${operator!.expiresAt}`} id={device.id} actor={operator!.actorId!} sessionKey={operator!.expiresAt!} receipt={receipts[device.id]} window={frozen.window} selection={selected??undefined} onReceipt={receipt=>setReceipts(previous=>({...previous,[device.id]:receipt}))}/>}</li>)}</ul>
    </>}
   </>}<details className="windows-inventory-scope"><summary>{c.details}</summary><p>{c.groups}</p></details><p className="windows-inventory-exclusions">{c.retained}</p></div>}
+  {opened&&enabled&&frozen&&<WindowsFleetUpdateHistory devices={frozen.devices} availableIds={[...available]}/>}
  </section>;
 }
