@@ -9,6 +9,7 @@ import { fullDate } from './utils';
 import { WindowsFullSoftwarePanel } from './windows-full-software';
 import { WindowsUserSoftwarePanel } from './windows-user-software';
 import { useWindowsSoftwareHistory } from './windows-software-history-resource';
+import { WindowsSoftwareHistoryPageFilter } from './windows-software-history-page-filter';
 import type { SoftwareHistoryChange, SoftwareHistoryPage } from './windows-software-history-types';
 import './windows-software-history.css';
 
@@ -58,7 +59,7 @@ function HistoryDetails({ row, locale }: { row: SoftwareHistoryChange; locale: '
 }
 export function WindowsSoftwareHistoryTable({ page, locale }: { page: SoftwareHistoryPage; locale: 'en' | 'de' }) {
     const c = copy[locale];
-    return <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c.title}</caption><thead><tr>{[c.registration, c.change, c.observed, c.detail].map((label, i) => <th key={label} scope="col" aria-sort={i === 2 ? 'descending' : undefined}>{label}</th>)}</tr></thead><tbody>{page.rows.map(row => <tr key={row.id} data-history-id={row.id}><td data-label={c.registration}><span>{(row.after ?? row.before)!.name ?? c.unknown}{(row.after ?? row.before)!.name === '' && <span className="windows-full-software-missing">{c.empty}</span>}<small className="windows-history-view">HKLM {row.registryView}</small></span></td><td data-label={c.change}><span>{c[row.kind]}{row.changedFields.length > 0 && <small>{row.changedFields.map(field => c[field]).join(', ')}</small>}</span></td><td data-label={c.observed}><time dateTime={row.afterObservedAt}>{fullDate(row.afterObservedAt)}</time></td><td data-label={c.detail}><HistoryDetails row={row} locale={locale}/></td></tr>)}</tbody></table></div>;
+    return <WindowsSoftwareHistoryPageFilter page={page} locale={locale}>{rows => <div className="windows-inventory-table-wrap"><table className="windows-inventory-table"><caption className="sr-only">{c.title}</caption><thead><tr>{[c.registration, c.change, c.observed, c.detail].map((label, i) => <th key={label} scope="col" aria-sort={i === 2 ? 'descending' : undefined}>{label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={row.id} data-history-id={row.id}><td data-label={c.registration}><span>{(row.after ?? row.before)!.name ?? c.unknown}{(row.after ?? row.before)!.name === '' && <span className="windows-full-software-missing">{c.empty}</span>}<small className="windows-history-view">HKLM {row.registryView}</small></span></td><td data-label={c.change}><span>{c[row.kind]}{row.changedFields.length > 0 && <small>{row.changedFields.map(field => c[field]).join(', ')}</small>}</span></td><td data-label={c.observed}><time dateTime={row.afterObservedAt}>{fullDate(row.afterObservedAt)}</time></td><td data-label={c.detail}><HistoryDetails row={row} locale={locale}/></td></tr>)}</tbody></table></div>}</WindowsSoftwareHistoryPageFilter>;
 }
 function History({ deviceId, sessionKey, enabled = true }: Context) {
     const [locale] = useLocale(), c = copy[locale], id = useId(), resource = useWindowsSoftwareHistory(deviceId, enabled, sessionKey), { view, page } = resource;

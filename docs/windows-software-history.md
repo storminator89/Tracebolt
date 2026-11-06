@@ -101,6 +101,14 @@ latest failed/pending attempt, comparison gaps, quota omissions and expiry remai
 separate. Focus/visibility, session, device/tab changes and expiry clear private
 rows and cursors. Reading the UI does not grant collection or history.
 
+The change-type selector filters only the rows already loaded on the current
+page: added registrations, removed registrations or changed metadata. It sends
+no request. Its displayed/loaded count is separate from the server's retained
+and matching totals; an empty filtered page says nothing about other pages.
+Paging stays available, and each new page starts with all change types. Clearing
+the filter restores the original row order and returns focus to the selector.
+Existing observation meanings, private-content clearing and expiry are unchanged.
+
 ## Verification boundary
 
 Portable tests cover consent byte preservation, grant rotation, exact retries,
