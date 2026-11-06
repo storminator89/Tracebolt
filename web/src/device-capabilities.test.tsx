@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceCapabilities } from './device-capabilities';
 import { APIError, AUTH_REQUIRED_EVENT, request } from './api';
@@ -224,7 +225,8 @@ describe('compact capability collection status', () => {
         expect(guide).toHaveTextContent(locale === 'de' ? 'Unbekannt oder nicht eingerichtet belegt keine davon.' : 'Unknown or not configured does not establish any of them.');
         expect(document.querySelector('.capability-heading')).toHaveTextContent(locale === 'de' ? 'Diese Ansicht erteilt keine Freigabe.' : 'This view grants no scope.');
         expect(row('systemd')).toHaveTextContent(locale === 'de' ? 'Im Profil vorgesehen · lokale Freigabe separat' : 'Advertised by profile · local approval separate');
-        expect(document.querySelector('input,select,textarea')).toBeNull();
+        expect(document.querySelectorAll('input[type=search]')).toHaveLength(1); expect(document.querySelectorAll('select')).toHaveLength(1);
+        expect(document.querySelector('input[type=checkbox],textarea,form')).toBeNull();
         expect(vi.mocked(request).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
     });
     it('distinguishes explicit waiting, local denial and source failure from an unconfirmed cause', async () => {
@@ -250,5 +252,134 @@ describe('compact capability collection status', () => {
         await waitFor(() => expect(row('journal_content')).toHaveAttribute('data-state', 'failed'));
         expect(row('journal_content')).toHaveTextContent('Technical failure');
         expect(document.body).not.toHaveTextContent('DO_NOT_DISPLAY_RAW_SOURCE_ERROR');
+    });
+});
+
+describe('local capability list filters', () => {
+    const visibleRows = () => [...document.querySelectorAll<HTMLElement>('[data-capability]')].filter(item => !item.hidden);
+    const search = () => screen.getByRole('searchbox', { name: 'Search capabilities' });
+    const status = () => screen.getByRole('combobox', { name: 'Filter by collection status' });
+    async function ready() { await waitFor(() => expect(row('systemd')).toHaveAttribute('data-state', 'available')); }
+
+    it('starts with every row, filters names, IDs and source details locally, and preserves readiness totals', async () => {
+        render(<DeviceCapabilities device={device()}/>); await ready();
+        expect(visibleRows()).toHaveLength(4); expect(screen.getByRole('status')).toHaveTextContent('4 of 4 capability rows');
+        expect(search()).toHaveAttribute('aria-controls', document.querySelector('.capability-observations')!.id);
+        expect(status()).toHaveValue('all'); expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+        const reads = vi.mocked(request).mock.calls.length;
+        for (const query of ['  SERVICE INVENTORY  ', 'SYSTEMD', 'Source data must establish']) {
+            fireEvent.change(search(), { target: { value: query } });
+            expect(visibleRows().map(item => item.dataset.capability)).toEqual(['systemd']);
+            expect(screen.getByRole('status')).toHaveTextContent('1 of 4 capability rows'); expect(row('socket_inventory')).not.toBeVisible();
+            expect(document.querySelector('[data-readiness-state="available"]')).toHaveTextContent('2 Collected');
+        }
+        fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+        expect(search()).toHaveFocus(); expect(search()).toHaveValue(''); expect(visibleRows()).toHaveLength(4); expect(request).toHaveBeenCalledTimes(reads);
+    });
+    it('combines search and exact status without relabeling unsupported rows or hidden totals', async () => {
+        render(<DeviceCapabilities device={device()}/>); await ready();
+        fireEvent.change(status(), { target: { value: 'available' } }); expect(visibleRows().map(item => item.dataset.capability)).toEqual(['systemd', 'socket_inventory']);
+        fireEvent.change(search(), { target: { value: 'Connections' } }); expect(visibleRows().map(item => item.dataset.capability)).toEqual(['socket_inventory']);
+        fireEvent.change(status(), { target: { value: 'unsupported' } });
+        expect(visibleRows()).toHaveLength(0); expect(screen.getByRole('status')).toHaveTextContent('0 of 4 capability rows');
+        expect(screen.getByText('No matching capabilities. Change the search or status filter.')).toBeVisible(); expect(row('remote_actions')).toHaveAttribute('data-state', 'unsupported');
+        fireEvent.change(search(), { target: { value: '' } }); expect(visibleRows().map(item => item.dataset.capability)).toEqual(['remote_actions']);
+        expect(row('remote_actions')).not.toHaveClass('attention'); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('supports keyboard filter controls and restores search focus after clearing', async () => {
+        const user = userEvent.setup(); render(<DeviceCapabilities device={device()}/>); await ready();
+        await user.type(search(), 'systemd');
+        await user.tab(); expect(status()).toHaveFocus();
+        await user.tab(); expect(screen.getByRole('button', { name: 'Clear filters' })).toHaveFocus();
+        await user.keyboard('{Enter}'); expect(search()).toHaveFocus();
+        expect(visibleRows()).toHaveLength(4); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('keeps source disclosures and capture times through filtering, refresh and locale changes', async () => {
+        render(<DeviceCapabilities device={device()}/>); await ready();
+        const service = row('systemd'), disclosure = service.querySelector('details')!, summary = service.querySelector('summary')!, at = service.querySelector('time')!.dateTime;
+        fireEvent.click(summary); expect(disclosure).toHaveAttribute('open');
+        fireEvent.change(search(), { target: { value: 'remote_actions' } }); expect(service).not.toBeVisible();
+        fireEvent.change(search(), { target: { value: 'systemd' } });
+        expect(row('systemd')).toBe(service); expect(disclosure).toHaveAttribute('open'); expect(within(service as HTMLElement).getByText('Source data must establish this result.')).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: 'Check status' })); await ready();
+        expect(search()).toHaveValue('systemd'); expect(service.querySelector('time')).toHaveAttribute('datetime', at); expect(disclosure).toHaveAttribute('open');
+        act(() => setLocale('de', false));
+        expect(screen.getByRole('searchbox', { name: 'Fähigkeiten durchsuchen' })).toHaveValue('systemd');
+        expect(screen.getByRole('combobox', { name: 'Nach Erfassungsstatus filtern' })).toHaveValue('all'); expect(screen.getByRole('status')).toHaveTextContent('1 von 4 Fähigkeitszeilen'); expect(disclosure).toHaveAttribute('open');
+        fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' })); expect(visibleRows()).toHaveLength(4); expect(request).toHaveBeenCalledTimes(2);
+    });
+    it('does not restart the reader or renew source age when a selected state disappears', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'Date'] });
+        render(<DeviceCapabilities device={device()}/>); await act(async () => {});
+        fireEvent.change(status(), { target: { value: 'available' } }); expect(visibleRows()).toHaveLength(2);
+        await act(async () => { await vi.advanceTimersByTimeAsync(111000); });
+        expect(status()).toHaveValue('available'); expect(screen.getByRole('option', { name: 'Collected' })).toBeInTheDocument();
+        expect(row('systemd')).toHaveAttribute('data-state', 'stale'); expect(visibleRows()).toHaveLength(0);
+        expect(document.querySelector('[data-readiness-state="stale"]')).toHaveTextContent('2 Stale'); expect(request).toHaveBeenCalledTimes(8);
+        fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })); expect(visibleRows()).toHaveLength(4); expect(row('systemd')).toHaveAttribute('data-state', 'stale'); expect(request).toHaveBeenCalledTimes(8);
+    });
+    it('clears filters permanently across device/session changes and exposes session loss', async () => {
+        const mounted = render(<DeviceCapabilities device={device()}/>); await ready();
+        fireEvent.change(search(), { target: { value: 'systemd' } }); fireEvent.change(status(), { target: { value: 'available' } });
+        const next = { ...device(), id: 'agent_next_filter_fixture' }; vi.mocked(request).mockResolvedValue({ ...systemView(), deviceId: next.id });
+        mounted.rerender(<DeviceCapabilities device={next}/>); await ready(); expect(search()).toHaveValue(''); expect(status()).toHaveValue('all');
+        vi.mocked(request).mockResolvedValue(systemView()); mounted.rerender(<DeviceCapabilities device={device()}/>); await ready();
+        expect(search()).toHaveValue(''); expect(status()).toHaveValue('all');
+        fireEvent.change(search(), { target: { value: 'Connections' } }); authFixture.expiresAt = '2026-10-06T00:00:00Z';
+        mounted.rerender(<DeviceCapabilities device={device()}/>); await ready(); expect(search()).toHaveValue('');
+        fireEvent.change(status(), { target: { value: 'available' } }); act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(screen.getByRole('alert')).toHaveTextContent('Session ended'); expect(status()).toHaveValue('all'); expect(visibleRows()).toHaveLength(4);
+        expect(row('systemd')).toHaveAttribute('data-state', 'unknown'); expect(document.querySelector('[data-readiness-state]')).toBeNull();
+        const reads = vi.mocked(request).mock.calls.length;
+        fireEvent.change(search(), { target: { value: 'systemd' } }); fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })); fireEvent.focus(window); expect(request).toHaveBeenCalledTimes(reads);
+    });
+    it('filters failed observations without hiding the actual reason or introducing a write', async () => {
+        vi.mocked(request).mockRejectedValue(new APIError('Do not show raw error', 403));
+        render(<DeviceCapabilities device={device()}/>); await waitFor(() => expect(row('systemd')).toHaveAttribute('data-state', 'denied'));
+        fireEvent.change(status(), { target: { value: 'denied' } }); fireEvent.change(search(), { target: { value: 'operator_access_denied' } });
+        expect(visibleRows()).toHaveLength(2); expect(screen.getByRole('status')).toHaveTextContent('2 of 4 capability rows'); fireEvent.click(row('systemd').querySelector('summary')!);
+        expect(within(row('systemd') as HTMLElement).getByText('operator_access_denied')).toBeVisible(); expect(document.body).not.toHaveTextContent('Do not show raw error');
+        expect(request).toHaveBeenCalledTimes(1); expect(vi.mocked(request).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+    });
+    it('does not interpret a supplied empty list as healthy or fetch extra status', () => {
+        render(<DeviceCapabilities device={{ ...device(), capabilities: [] }}/>);
+        expect(screen.getByRole('status')).toHaveTextContent('0 of 0 capability rows'); expect(screen.getByText('No capabilities supplied for this device.')).toBeVisible();
+        expect(screen.queryByText(/^Healthy$/i)).not.toBeInTheDocument(); expect(request).not.toHaveBeenCalled();
+    });
+});
+
+describe('bounded capability destinations', () => {
+    it.each(['en', 'de'] as const)('opens only verified package/process destinations by keyboard (%s)', async locale => {
+        setLocale(locale, false);
+        const d = device(); d.id = overviewView().deviceId; d.capabilities = [
+            { id: 'package_inventory', name: 'Packages', status: 'scope', detail: 'Fixture' },
+            { id: 'complete_process_inventory', name: 'Processes', status: 'scope', detail: 'Fixture' },
+            { id: 'remote_actions', name: 'Actions', status: 'unsupported', detail: 'Fixture' },
+        ];
+        const packages = completeView(); packages.deviceId = d.id;
+        const overview = overviewView(); overview.deviceId = d.id;
+        vi.mocked(request).mockImplementation(async path => path.endsWith('/packages') ? packages : overview);
+        const open = vi.fn(), user = userEvent.setup();
+        render(<DeviceCapabilities device={d} onOpenInventory={open}/>);
+        const button = await screen.findByRole('button', { name: locale === 'de' ? 'Pakete öffnen' : 'Open packages' });
+        const requests = vi.mocked(request).mock.calls.length;
+        button.focus(); await user.keyboard('{Enter}'); expect(open).toHaveBeenLastCalledWith('packages');
+        screen.getByRole('button', { name: locale === 'de' ? 'Prozesse öffnen' : 'Open processes' }).focus(); await user.keyboard(' ');
+        expect(open).toHaveBeenLastCalledWith('processes'); expect(request).toHaveBeenCalledTimes(requests);
+        expect(within(row('remote_actions') as HTMLElement).queryByRole('button')).not.toBeInTheDocument();
+        act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+        expect(screen.queryByRole('button', { name: /öffnen|Open packages|Open processes/ })).not.toBeInTheDocument();
+    });
+    it.each(['windows', 'macos', 'unknown'] as const)('does not invent a destination for %s', async platform => {
+        const d = device(); d.platform = platform; d.capabilities = [{ id: 'package_inventory', name: 'Packages', status: 'scope', detail: 'Fixture' }];
+        const value = completeView(); value.deviceId = d.id; vi.mocked(request).mockResolvedValue(value);
+        render(<DeviceCapabilities device={d} onOpenInventory={vi.fn()}/>); await act(async () => {});
+        expect(screen.queryByRole('button', { name: 'Open packages' })).not.toBeInTheDocument();
+    });
+    it('does not offer failed or denied observations as data destinations', async () => {
+        const d = device(); d.capabilities = [{ id: 'package_inventory', name: 'Packages', status: 'scope', detail: 'Fixture' }];
+        vi.mocked(request).mockRejectedValue(new APIError('denied', 403));
+        render(<DeviceCapabilities device={d} onOpenInventory={vi.fn()}/>); await waitFor(() => expect(row('package_inventory')).toHaveAttribute('data-state', 'denied'));
+        expect(screen.queryByRole('button', { name: 'Open packages' })).not.toBeInTheDocument();
     });
 });

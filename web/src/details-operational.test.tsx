@@ -1,3 +1,6 @@
+import userEvent from '@testing-library/user-event';
+import { completeView, completeRows, completePage } from './complete-packages-fixtures';
+import { overviewView, processRows, volumeRows, overviewPage } from './complete-overview-fixtures';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceDetail } from './details';
@@ -76,5 +79,69 @@ describe('actual device page operational integration',()=>{
  });
  it('retains German tab and operational labels',async()=>{
   setLocale('de',false);render(detail());fireEvent.click(await screen.findByRole('tab',{name:'Inventar'}));fireEvent.click(screen.getByText('Ältere Inventarquelle', { selector: 'summary' })); fireEvent.click(screen.getByRole('button', { name: 'Begrenzte Vorschau öffnen' }));const panel=screen.getByRole('tabpanel',{name:'Inventar'});await within(panel).findByText('Betriebsinventar');expect(within(panel).getByRole('button',{name:'Beobachtungen aktualisieren'})).toBeInTheDocument();
+ });
+});
+
+ it.each([['complete_process_inventory','Processes','Open processes'],['package_inventory','Packages','Open packages']])('opens the exact %s source from capabilities without a route or action write',async(capability,source,button)=>{
+  selected=device({capabilities:[{id:capability,name:source,status:'scope',detail:'Fixture'}]});
+  const overview=overviewView(); overview.deviceId=id; const packages=completeView(); packages.deviceId=id;
+  vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?{...session,serverNow:overview.serverNow,expiresAt:'2026-10-05T00:00:00Z'}:path.endsWith('/inventory/overview')?overview:path.endsWith('/inventory/packages')?packages:selected);
+  render(detail()); fireEvent.click(await screen.findByRole('tab',{name:/Capabilities/}));
+  fireEvent.click(await screen.findByRole('button',{name:button}));
+  const inventoryTab=screen.getByRole('tab',{name:'Inventory'});
+  expect(inventoryTab).toHaveAttribute('aria-selected','true'); expect(source==='Packages'?screen.getByRole('tab',{name:source}):inventoryTab).toHaveFocus();
+  expect(screen.getByRole('tab',{name:source})).toHaveAttribute('aria-selected','true');
+  expect(mutateRaw).not.toHaveBeenCalled();
+ });
+
+// Await the destination rows: opening a view can schedule bounded read queries.
+it.each(['en', 'de'] as const)('both capability destinations finish only their bounded read queries (%s)', async locale => {
+ for (const source of ['packages', 'processes'] as const) {
+  cleanup(); vi.mocked(request).mockReset(); vi.mocked(mutateRaw).mockReset(); setLocale(locale, false);
+  const capability = source === 'packages' ? 'package_inventory' : 'complete_process_inventory';
+  selected = device({ capabilities: [{ id: capability, name: source, status: 'scope', detail: 'Fixture' }] });
+  const overview = overviewView(1, 1); overview.deviceId = id;
+  const packages = completeView(1); packages.deviceId = id;
+  const endpoint = `/devices/${id}/inventory/${source === 'packages' ? 'packages' : 'overview'}/query`;
+  vi.mocked(request).mockImplementation(async path => path === '/auth/session' ? { ...session, serverNow: overview.serverNow, expiresAt: '2026-10-05T00:00:00Z' } : path.endsWith('/inventory/overview') ? overview : path.endsWith('/inventory/packages') ? packages : selected);
+  vi.mocked(mutateRaw).mockImplementation(async (path, raw) => {
+   expect(path).toBe(endpoint);
+   const body = JSON.parse(raw);
+   expect(body).toMatchObject({ cursor: '', search: '', limit: 100, generationId: source === 'packages' ? packages.complete!.binding.generationId : overview.processes.complete!.binding.generationId });
+   if (source === 'processes') expect(body.section).toBe('processes');
+   return source === 'packages' ? completePage(packages, completeRows(1), raw) : overviewPage(overview, processRows(1), volumeRows(1), raw);
+  });
+  const oldHash = window.location.hash;
+  render(detail()); fireEvent.click(await screen.findByRole('tab', { name: locale === 'de' ? /^Fähigkeiten/ : /^Capabilities/ }));
+  const openLabel = source === 'packages' ? locale === 'de' ? 'Pakete öffnen' : 'Open packages' : locale === 'de' ? 'Prozesse öffnen' : 'Open processes';
+  const open = await screen.findByRole('button', { name: openLabel });
+  expect(mutateRaw).not.toHaveBeenCalled(); fireEvent.click(open);
+  await screen.findByText(source === 'packages' ? 'fixture-000000' : 'fixture-process-000000', { selector: source === 'packages' ? 'th' : 'td' });
+  expect(vi.mocked(mutateRaw).mock.calls.map(([path]) => path)).toEqual([endpoint]);
+  expect(vi.mocked(request).mock.calls.some(([path]) => /process-watches|policy|prepare|approve|execute|capture/.test(path))).toBe(false);
+  expect(window.location.hash).toBe(oldHash);
+  const inventory = screen.getByRole('tab', { name: locale === 'de' ? 'Inventar' : 'Inventory' });
+  const destination = screen.getByRole('tab', { name: source === 'packages' ? locale === 'de' ? 'Pakete' : 'Packages' : locale === 'de' ? 'Prozesse' : 'Processes' });
+  expect(inventory).toHaveAttribute('aria-selected', 'true'); expect(destination).toHaveAttribute('aria-selected', 'true');
+  expect(source === 'packages' ? destination : inventory).toHaveFocus();
+  act(() => window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));
+  await screen.findByLabelText(locale === 'de' ? 'Operator-Passwort' : 'Operator password');
+  expect(screen.queryByText(source === 'packages' ? 'fixture-000000' : 'fixture-process-000000', { selector: source === 'packages' ? 'th' : 'td' })).toBeNull();
+  expect(vi.mocked(mutateRaw).mock.calls.map(([path]) => path)).toEqual([endpoint]);
+ }
+});
+
+describe('package shortcut keyboard continuity',()=>{
+ it.each(['en','de'] as const)('preserves destination focus and read-only query from both entrypoints (%s)',async locale=>{
+  for(const source of ['details','security'] as const){
+   cleanup();vi.mocked(request).mockReset();vi.mocked(mutateRaw).mockReset();setLocale(locale,false);const user=userEvent.setup();
+   const packages=completeView(1);packages.deviceId=id;const endpoint=`/devices/${id}/inventory/packages/query`;
+   vi.mocked(request).mockImplementation(async path=>path==='/auth/session'?{...session,serverNow:packages.serverNow,expiresAt:'2026-10-05T00:00:00Z'}:path.endsWith('/inventory/packages')?packages:selected);
+   vi.mocked(mutateRaw).mockImplementation(async(path,raw)=>{expect(path).toBe(endpoint);expect(JSON.parse(raw)).toMatchObject({cursor:'',search:'',limit:100,generationId:packages.complete!.binding.generationId});return completePage(packages,completeRows(1),raw);});
+   render(detail());fireEvent.click(await screen.findByRole('tab',{name:source==='details'?'Details':locale==='de'?/Sicherheitsabdeckung/:/Security coverage/}));
+   const open=await screen.findByRole('button',{name:/^(Open Packages|Open packages|Pakete öffnen)$/});open.focus();expect(open).toHaveFocus();expect(mutateRaw).not.toHaveBeenCalled();await user.keyboard(source==='details'?'{Enter}':' ');
+   await screen.findByText('fixture-000000',{selector:'th'});const destination=screen.getByRole('tab',{name:locale==='de'?'Pakete':'Packages'});expect(destination).toHaveAttribute('aria-selected','true');expect(destination).toHaveFocus();expect(open).not.toBeInTheDocument();expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([endpoint]);
+   act(()=>window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT)));await screen.findByLabelText(locale==='de'?'Operator-Passwort':'Operator password');expect(destination).not.toBeInTheDocument();expect(screen.queryByText('fixture-000000',{selector:'th'})).toBeNull();expect(vi.mocked(mutateRaw).mock.calls.map(([path])=>path)).toEqual([endpoint]);
+  }
  });
 });
