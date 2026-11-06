@@ -99,8 +99,13 @@ func (s *Store) WindowsIncidentSnapshot(ctx context.Context) (WindowsIncidentSna
 }
 func readWindowsIncidentSnapshot(ctx context.Context, tx *sql.Tx) (WindowsIncidentSnapshot, error) {
 	v := WindowsIncidentSnapshot{Contacts: map[string]windowscontact.State{}, Capacities: map[string]windowscapacity.State{}, Resources: []windowsresource.State{}, Services: map[string]windowsservicehealth.State{}, Acknowledgements: map[string]WindowsIncidentAcknowledgement{}}
+	var err error
+	v.Contacts, err = readWindowsContactStates(ctx, tx)
+	if err != nil {
+		return v, err
+	}
 	// Query names are fixed source domains, never interpolated caller input.
-	for _, table := range []string{"windows_contact_devices", "windows_capacity_devices", "windows_resource_devices", "windows_service_devices"} {
+	for _, table := range []string{"windows_capacity_devices", "windows_resource_devices", "windows_service_devices"} {
 		query := "SELECT id, '', body FROM " + table + " ORDER BY id LIMIT 26"
 		max := 25
 		if table == "windows_resource_devices" {
@@ -127,10 +132,6 @@ func readWindowsIncidentSnapshot(ctx context.Context, tx *sql.Tx) (WindowsIncide
 				return v, ErrWindowsIncident
 			}
 			switch table {
-			case "windows_contact_devices":
-				var st windowscontact.State
-				st, err = decodeWindowsContact(id, raw)
-				v.Contacts[id] = st
 			case "windows_capacity_devices":
 				var st windowscapacity.State
 				st, err = decodeWindowsCapacity(id, raw)
