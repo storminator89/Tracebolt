@@ -4,6 +4,7 @@ import { useLocale } from './i18n';
 import { fullDate } from './utils';
 import { useWindowsFleetSoftware } from './windows-fleet-software-resource';
 import { fleetSoftwareFresh } from './windows-fleet-software-types';
+import { WindowsFleetSoftwareCoverage } from './windows-fleet-software-coverage';
 import type { FleetSoftwareItem } from './windows-fleet-software-types';
 import './windows-fleet-software.css';
 
@@ -69,7 +70,7 @@ function LookupBody({ sessionKey, actor }: { sessionKey: string; actor: string }
             {page.status === 'not_configured' ? <p role="status">{c.storeUnavailable}</p> : <>
                 <div className="windows-fleet-software-heading"><span>{page.mode === 'fleet' ? `${c.devices}: ${page.items.length ? page.offset + 1 : 0}–${page.offset + page.items.length} ${c.of} ${page.totalDevices}` : `${c.rows}: ${page.items[0].rows.length ? page.offset + 1 : 0}–${page.offset + page.items[0].rows.length} ${c.of} ${page.items[0].matchingCount}`}</span>{page.mode === 'device' && <button type="button" className="text-button" onClick={resource.back}>{c.back}</button>}</div>
                 {!page.totalDevices && <p>{c.noDevices}</p>}
-                <ul className="windows-fleet-software-results">{page.items.map(item => <li key={`${item.deviceId}:${item.identity}`}>
+                <WindowsFleetSoftwareCoverage page={page}>{items => <ul className="windows-fleet-software-results">{items.map(item => <li key={`${item.deviceId}:${item.identity}`}>
                     <div className="windows-fleet-software-heading"><strong className="windows-fleet-software-device">{item.deviceId}</strong><span>{item.status === 'ready' ? fleetSoftwareFresh(item, page.serverNow, resource.elapsed) ? c.fresh : c.stale : c[item.status]}</span></div>
                     {attempt(item)}
                     {item.complete && <>
@@ -79,7 +80,7 @@ function LookupBody({ sessionKey, actor }: { sessionKey: string; actor: string }
                         {page.mode === 'fleet' && <button type="button" className="text-button" aria-label={`${c.detail}: ${item.deviceId}`} onClick={() => resource.detail(item)}>{c.detail}</button>}
                     </>}
                     <details className="windows-fleet-software-source"><summary>{c.source}</summary><p>{c.lifetime}</p><dl>{time(c.authority, item.authorityUntil)}{page.cursorExpiresAt && time(c.paging, page.cursorExpiresAt)}<div><dt>{c.identity}</dt><dd>{item.identity}</dd></div>{item.complete && <>{time(c.captured, item.complete.manifest.captureStartedAt)}{time(c.finished, item.complete.manifest.captureFinishedAt)}{time(c.received, item.complete.receivedAt)}{time(c.expiry, item.complete.manifest.expiresAt)}<div><dt>{c.registrationCount}</dt><dd>{item.complete.manifest.rowCount}</dd></div><div><dt>{c.generation}</dt><dd>{item.complete.manifest.generationId}</dd></div></>}{item.latestAttempt && time(c.attempted, item.latestAttempt.attemptedAt)}</dl></details>
-                </li>)}</ul>
+                </li>)}</ul>}</WindowsFleetSoftwareCoverage>
                 {page.nextCursor && <div className="windows-fleet-software-pagination"><button type="button" className="button small" onClick={resource.next}>{page.mode === 'fleet' ? c.nextDevices : c.nextRows}</button></div>}
             </>}
         </>}

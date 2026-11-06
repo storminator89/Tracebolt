@@ -25,6 +25,23 @@ that an application is absent: selected-user HKCU/MSIX, Store, portable and
 unregistered applications are outside this lookup, and optional name/version
 fields can be unavailable even in a complete enumeration.
 
+## Loaded-page coverage triage
+
+**Search coverage** groups only the current page’s devices: at least one reported
+match, no match with unavailable queried fields (**Unclear**), no reported match
+with no unavailable queried fields, or no complete capture. These groups are
+exclusive; a device with a match can still have other unavailable queried fields.
+Counts come from the admitted per-device whole-generation query counts, never
+from the three-row previews. They are device counts, not registration counts or
+fleet totals. A no-match group never proves software absence or compliance.
+
+The icon-and-text buttons filter existing device cards locally, without reading
+another page, changing search totals, or issuing a request. All groups, including
+empty groups, keep the next-page control available. All devices reappear after
+page, source or query replacement. Detail mode remains unfiltered. Original ages,
+failed/pending attempts and private-content clearing remain unchanged. No filter
+or software evidence is persisted, exported or passed into an action.
+
 ## Private read contract
 
 POST `/api/fleet/windows-software/query` accepts only
