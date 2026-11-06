@@ -707,6 +707,11 @@ func (h *operatorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.macosInventoryEnrollmentOperator(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/asset-fields") {
+		h.deviceAssetFieldsAPI(w, r)
+		return
+	}
+
 	if strings.HasPrefix(r.URL.Path, "/api/devices/") && strings.Contains(r.URL.Path, "/macos-inventory") {
 		h.macosInventoryQuery(w, r)
 		return

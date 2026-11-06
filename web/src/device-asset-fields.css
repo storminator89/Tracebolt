@@ -1,0 +1,18 @@
+.device-asset-fields { margin-top: 1.5rem; }
+.device-asset-fields p { font-size: .875rem; line-height: 1.5; }
+.device-asset-fields dd { overflow-wrap: anywhere; }
+.device-asset-fields form { display: grid; gap: .8rem; margin-top: 1rem; }
+.device-asset-fields label { display: grid; gap: .3rem; }
+.device-asset-fields input { width: 100%; font: inherit; }
+.device-asset-fields label span { font-size: .8rem; }
+.asset-field-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.asset-field-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+.asset-field-editor { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.device-asset-fields .asset-field-editor label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem; font-weight: 600; }
+.asset-field-optional, .asset-field-help { color: var(--secondary); font-size: .8rem; font-weight: 400; }
+.device-asset-fields .asset-field-editor input { box-sizing: border-box; padding: .65rem .75rem; border: 1px solid var(--line-strong); border-radius: .5rem; background: var(--bg); color: var(--text); }
+.device-asset-fields .asset-field-editor input[aria-invalid="true"] { border-color: var(--danger); }
+.device-asset-fields .asset-field-error { margin: 0; color: var(--danger); }
+.device-asset-fields .asset-field-retention { margin: 0; color: var(--secondary); }
+.asset-field-actions .asset-field-clear { margin-left: auto; }

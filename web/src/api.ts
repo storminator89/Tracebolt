@@ -1,5 +1,5 @@
 import { t, apiErrorText } from './i18n';
-const retainedErrorCodes = ['package_update_not_found', 'storage_busy', 'cve_progress_unavailable', 'cve_progress_uncertain', 'cve_feed_changed', 'cve_assessment_interrupted', 'inventory_generation_expired', 'cve_clock_changed', 'cve_assessment_changed', 'cve_assessment_incomplete', 'cve_detail_unavailable', 'cve_response_unavailable', 'inventory_unavailable'] as const;
+const retainedErrorCodes = ['device_asset_fields_rejected', 'device_asset_fields_unconfirmed', 'package_update_not_found', 'storage_busy', 'cve_progress_unavailable', 'cve_progress_uncertain', 'cve_feed_changed', 'cve_assessment_interrupted', 'inventory_generation_expired', 'cve_clock_changed', 'cve_assessment_changed', 'cve_assessment_incomplete', 'cve_detail_unavailable', 'cve_response_unavailable', 'inventory_unavailable'] as const;
 export class APIError extends Error {
     constructor(message: string, public status?: number, public code?: typeof retainedErrorCodes[number]) { super(message); this.name = 'APIError'; }
 }

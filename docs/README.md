@@ -36,6 +36,9 @@ Historical packages remain linked separately below.
 - **Devices:** search reported hostnames/IPs, open a device, and check original
   observation time and source coverage. [Fleet identity](fleet-endpoint-identity.md),
   [Windows identity](windows-fleet-identity.md), [resource history](resource-history.md).
+- **Asset details:** manually maintain a Windows device's [asset tag, location and
+  warranty date](device-asset-fields.md). These private manager fields are not
+  collected inventory or verified warranty coverage.
 - **Inventory:** browse/search the collected generation. Linux has separate
   [process/mount](complete-overview-extension.md) and package data; Windows has
   [process snapshots](windows-full-processes-contract.md),
