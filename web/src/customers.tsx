@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { APIError, AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, mutate, request } from './api';
 import { validFleetGroupName } from './fleet-groups-types';
 import { useLocale } from './i18n';
@@ -24,6 +24,8 @@ export function Customers({ sessionExpiresAt, readOnly = false }: { sessionExpir
     const [state, setState] = useState<'loading' | 'ready' | 'error' | 'conflict' | 'uncertain' | 'expired'>('loading');
     const [name, setName] = useState(''), [editing, setEditing] = useState<Customer | null>(null), [busy, setBusy] = useState(false);
     const active = useRef<AbortController | null>(null), generation = useRef(0), writing = useRef(false);
+    const nameInput = useRef<HTMLInputElement>(null), editOrigin = useRef<HTMLButtonElement | null>(null);
+    useLayoutEffect(() => { if (editing) nameInput.current?.focus(); else editOrigin.current = null; }, [editing?.id]);
     const deadline = Date.parse(sessionExpiresAt);
     const live = useCallback(() => Number.isFinite(deadline) && Date.now() < deadline && !document.hidden, [deadline]);
     const invalidate = useCallback(() => {
@@ -82,13 +84,13 @@ export function Customers({ sessionExpiresAt, readOnly = false }: { sessionExpir
         {state === 'loading' && <p role="status">{c.loading}</p>}
         {state !== 'loading' && state !== 'ready' && <p role="alert">{c[state]}</p>}
         {state === 'ready' && catalog && <>
-            {catalog.customers.length === 0 ? <p>{c.empty}</p> : <ul className="customers-list">{catalog.customers.map(customer => <li key={customer.id}><span>{customer.name}</span>{!readOnly && <button className="button" type="button" disabled={busy} onClick={() => { setEditing(customer); setName(customer.name); }}>{c.edit} {customer.name}</button>}</li>)}</ul>}
+            {catalog.customers.length === 0 ? <p>{c.empty}</p> : <ul className="customers-list">{catalog.customers.map(customer => <li key={customer.id}><span>{customer.name}</span>{!readOnly && <button className="button" type="button" disabled={busy} onClick={event => { editOrigin.current = event.currentTarget; if (editing?.id === customer.id) nameInput.current?.focus(); setEditing(customer); setName(customer.name); }}>{c.edit} {customer.name}</button>}</li>)}</ul>}
             {!readOnly && !editing && catalog.customers.length >= 25 && <p role="status">{c.limit}</p>}
             {!readOnly && (editing || catalog.customers.length < 25) && <form className="customers-form" onSubmit={event => void save(event)}>
-                <label><span>{c.name}</span><input value={name} onChange={event => setName(event.target.value)} disabled={busy} maxLength={80}/></label>
+                <label><span>{c.name}</span><input ref={nameInput} value={name} onChange={event => setName(event.target.value)} disabled={busy} maxLength={80}/></label>
                 {name && !validFleetGroupName(name) && <p role="status">{c.invalid}</p>}
                 <button className="button primary" type="submit" disabled={busy || !validFleetGroupName(name)}>{busy ? c.saving : editing ? c.save : c.create}</button>
-                {editing && <button className="button" type="button" disabled={busy} onClick={() => { setEditing(null); setName(''); }}>{c.cancel}</button>}
+                {editing && <button className="button" type="button" disabled={busy} onClick={() => { setEditing(null); setName(''); const origin = editOrigin.current; editOrigin.current = null; if (origin?.isConnected && !origin.disabled) origin.focus(); }}>{c.cancel}</button>}
             </form>}
         </>}
     </section>;
