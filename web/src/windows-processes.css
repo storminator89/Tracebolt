@@ -3,4 +3,16 @@
 .windows-process-sort select{max-width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit}
 .windows-process-controls input:focus-visible,.windows-process-controls select:focus-visible,.windows-process-pagination button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .windows-process-pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0;font-size:12px}
+.windows-process-group-toggle[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+.windows-process-group-toggle:focus-visible,.windows-process-group summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.windows-process-group-scope{color:var(--secondary);font-size:12px;margin:8px 0 12px}
+.windows-process-groups{display:grid;gap:8px}
+.windows-process-group{min-width:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.windows-process-group summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;min-height:44px;padding:10px 12px;font-size:13px}
+.windows-process-group summary::-webkit-details-marker{display:none}
+.windows-process-group summary svg{flex-shrink:0}
+.windows-process-group[open]>summary svg{transform:rotate(90deg)}
+.windows-process-group summary bdi{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap;font-weight:600}
+.windows-process-group summary span{margin-left:auto;flex-shrink:0;color:var(--secondary);font-size:12px}
+.windows-process-group .windows-inventory-table-wrap{margin:0;border:0;border-top:1px solid var(--line);border-radius:0}
 @media(max-width:600px){.windows-process-controls{align-items:stretch}.windows-process-controls>label{width:100%}.windows-process-controls input,.windows-process-controls select{width:100%;box-sizing:border-box}}

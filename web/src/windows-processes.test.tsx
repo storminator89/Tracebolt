@@ -8,7 +8,7 @@ import { windowsDeviceId, windowsNow, windowsSection, windowsView } from './wind
 import { useWindowsInventory, type WindowsInventoryResource } from './windows-inventory-resource';
 import type { WindowsInventoryView } from './windows-inventory-types';
 import type { WindowsProcessMetrics } from './windows-process-metrics-types';
-import { capturedProcessRows, type WindowsProcessSort } from './windows-processes';
+import { capturedProcessGroups, capturedProcessRows, type WindowsProcessSort } from './windows-processes';
 
 vi.mock('./api', async original => ({ ...await original<typeof import('./api')>(), request: vi.fn() }));
 function processView(count = 61): WindowsInventoryView {
@@ -61,6 +61,152 @@ describe('bounded process sorting', () => {
         expect(orderedPids(view, 'pid-desc')).toEqual([12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
         expect(orderedPids(view, 'name-asc').at(-1)).toBe(1);
         expect(orderedPids(view, 'name-desc')[0]).toBe(1);
+    });
+});
+
+describe('captured process name groups', () => {
+    const toggle = () => screen.getByRole('button', { name: 'Group by name' });
+    const summaries = () => Array.from(document.querySelectorAll('.windows-process-group > summary')) as HTMLElement[];
+    const openedTable = () => document.querySelector('.windows-process-group[open] table') as HTMLTableElement;
+    const expectCollapsed = () => { expect(document.querySelector('.windows-process-group[open]')).toBeNull(); for (const table of document.querySelectorAll('.windows-process-group table')) expect(table).not.toBeVisible(); };
+    const open = (name: string) => fireEvent.click(summaries().find(summary => summary.querySelector('bdi')?.textContent === name)!);
+    function groupedView() {
+        const view = processView(6);
+        ['browser.exe', 'worker.exe', 'browser.exe', 'worker.exe', 'Browser.exe', ' browser.exe'].forEach((name, i) => { view.snapshot!.processes.rows[i].name = name; });
+        view.processMetrics = metrics(view);
+        return view;
+    }
+    it('groups exact names without mutating inputs, folding case or inferring families', () => {
+        const view = groupedView(), rows = capturedProcessRows(view.snapshot!, view.processMetrics, '', 'pid-desc', 'en');
+        const before = JSON.stringify(rows), groups = capturedProcessGroups(rows);
+        expect(groups.map(group => [group.name, group.members.map(row => row.process.pid)])).toEqual([
+            [' browser.exe', [6]], ['Browser.exe', [5]], ['worker.exe', [4, 2]], ['browser.exe', [3, 1]],
+        ]);
+        expect(JSON.stringify(rows)).toBe(before);
+        expect(capturedProcessGroups(rows.slice(0, 0))).toEqual([]);
+    });
+    it.each([
+        ['cpu-asc', ['browser.exe', 'worker.exe', 'Browser.exe', ' browser.exe']],
+        ['cpu-desc', ['Browser.exe', 'worker.exe', 'browser.exe', ' browser.exe']],
+        ['ram-asc', ['worker.exe', 'browser.exe', 'Browser.exe', ' browser.exe']],
+        ['ram-desc', ['browser.exe', 'worker.exe', 'Browser.exe', ' browser.exe']],
+    ] as const)('uses the first matching row for %s without sums or rounded bytes', (sort, names) => {
+        const view = groupedView(), metricRows = view.processMetrics!.rows;
+        Object.assign(metricRows[5], { cpuQuality: 'unavailable', cpuPercent: null });
+        ['9007199254740993', '9007199254740992', '18446744073709551615', '0'].forEach((memoryBytes, index) => { metricRows[index].memoryBytes = memoryBytes; });
+        for (const row of metricRows.slice(4)) Object.assign(row, { memoryQuality: 'denied', memoryBytes: null });
+        const rows = capturedProcessRows(view.snapshot!, view.processMetrics, '', sort, 'en');
+        expect(capturedProcessGroups(rows).map(group => group.name)).toEqual(names);
+        expect(capturedProcessGroups(rows).flatMap(group => group.members)).toHaveLength(6);
+    });
+    it('is optional, collapses names initially and keeps per-row evidence without resource totals', () => {
+        const view = groupedView(); view.processMetrics!.rows[0].cpuPercent = 0; view.processMetrics!.rows[0].memoryBytes = '18446744073709551615';
+        render(<WindowsInventoryWorkspace resource={resource(view)}/>);
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false'); expect(displayedNames()).toHaveLength(6);
+        fireEvent.click(toggle()); expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+        expect(summaries()).toHaveLength(4); expectCollapsed();
+        expect(screen.getByText('Names 1–4 of 4 · 6 matching processes · 6 captured')).toBeVisible();
+        expect(screen.getByText(/Exact captured names, not process families/)).toBeVisible();
+        open('browser.exe');
+        const table = openedTable(); expect(table).toHaveAccessibleName('Processes: browser.exe');
+        expect(within(table).getAllByRole('row')).toHaveLength(3);
+        expect(within(table).getByText('0 %')).toBeVisible(); expect(within(table).getByText('18,446,744,073,709,551,615')).toBeVisible();
+        expect(within(table).getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[1].textContent)).toEqual(['1', '3']);
+        expect(summaries()[0]).toHaveTextContent('browser.exe2 matching processes');
+        fireEvent.click(toggle()); expect(displayedNames()).toHaveLength(6); expect(screen.queryByText(/Exact captured names/)).toBeNull();
+    });
+    it('groups filtered matches only and keeps captured, observed and matching counts distinct', () => {
+        const view = groupedView(); Object.assign(view.snapshot!.processes, { quality: 'partial', complete: false, observedCount: 700, countExact: false, truncated: true });
+        render(<WindowsInventoryWorkspace resource={resource(view)}/>); fireEvent.click(toggle()); open('browser.exe');
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: '3' } });
+        expect(screen.getByText('Names 1–1 of 1 · 1 matching process · 6 captured')).toBeVisible();
+        expect(screen.getByText('6 captured · at least 700 observed')).toBeVisible(); expect(summaries()[0]).toHaveTextContent('1 matching process');
+        expectCollapsed(); open('browser.exe');
+        expect(within(openedTable()).getAllByRole('row')).toHaveLength(2);
+        fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'absent' } });
+        expect(summaries()).toHaveLength(0); expect(screen.getByText('Names 0–0 of 0 · 0 matching processes · 6 captured')).toBeVisible();
+        expect(screen.getByText('No captured processes match this filter.')).toBeVisible(); expect(screen.getByText('Page 1 of 1')).toBeVisible();
+    });
+    it('orders groups by their first sorted row, with unavailable and foreign measurements still unknown', () => {
+        const view = groupedView(); Object.assign(view.processMetrics!.rows[5], { cpuQuality: 'denied', cpuPercent: null });
+        const ui = render(<WindowsInventoryWorkspace resource={resource(view)}/>); fireEvent.click(toggle());
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'cpu-desc' } });
+        expect(summaries().map(node => node.querySelector('bdi')!.textContent)).toEqual(['Browser.exe', 'worker.exe', 'browser.exe', ' browser.exe']);
+        open('worker.exe');
+        expect(within(openedTable()).getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[1].textContent)).toEqual(['4', '2']);
+        expect(within(openedTable()).getByRole('columnheader', { name: /CPU/ })).toHaveAttribute('aria-sort', 'descending');
+        const foreign = structuredClone(view); foreign.processMetrics!.generationId = `sample_${'b'.repeat(32)}`;
+        ui.rerender(<WindowsInventoryWorkspace resource={resource(foreign)}/>);
+        expect(screen.queryByText('4 %')).toBeNull(); expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+        expect(summaries().map(node => node.querySelector('bdi')!.textContent)).toEqual(['browser.exe', 'worker.exe', 'Browser.exe', ' browser.exe']);
+    });
+    it('pages names independently of rows and resets on grouping, search and sort changes', () => {
+        render(<WindowsInventoryWorkspace resource={resource()}/>); fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+        fireEvent.click(toggle()); expect(screen.getByText('Page 1 of 3')).toBeVisible(); expect(summaries()).toHaveLength(25);
+        expect(screen.getByText('Names 1–25 of 61 · 61 matching processes · 61 captured')).toBeVisible();
+        open('fixture-001.exe'); fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+        expectCollapsed(); expect(screen.getByText('Names 26–50 of 61 · 61 matching processes · 61 captured')).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); expect(summaries()).toHaveLength(11); expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'pid-desc' } }); expect(screen.getByText('Page 1 of 3')).toBeVisible(); expect(summaries()[0]).toHaveTextContent('fixture-061.exe');
+        fireEvent.click(screen.getByRole('button', { name: 'Next page' })); fireEvent.click(toggle()); expect(screen.getByText('Page 1 of 3')).toBeVisible(); expect(displayedNames()[0]).toBe('fixture-061.exe');
+    });
+    it('never divides one exact name across pages and does not claim full endpoint coverage', () => {
+        const view = processView(128); view.snapshot!.processes.rows.forEach(row => { row.name = 'same.exe'; });
+        render(<WindowsInventoryWorkspace resource={resource(view)}/>); fireEvent.click(toggle());
+        expect(summaries()).toHaveLength(1); expect(summaries()[0]).toHaveTextContent('128 matching processes');
+        open('same.exe'); expect(within(openedTable()).getAllByRole('row')).toHaveLength(129);
+        expect(screen.getByText('Names 1–1 of 1 · 128 matching processes · 128 captured')).toBeVisible();
+        expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled(); expect(screen.getByText(/at most 128 captured process rows/)).toBeVisible();
+    });
+    it('uses inert text for hostile names and performs no requests, storage writes or history changes', () => {
+        const view = processView(3); ['__proto__', '<img src=x onerror=alert(1)>', 'constructor'].forEach((name, i) => { view.snapshot!.processes.rows[i].name = name; });
+        const storage = vi.spyOn(Storage.prototype, 'setItem'), push = vi.spyOn(history, 'pushState'), replace = vi.spyOn(history, 'replaceState');
+        render(<WindowsInventoryWorkspace resource={resource(view)}/>); fireEvent.click(toggle());
+        open('__proto__'); open('<img src=x onerror=alert(1)>');
+        expect(document.querySelector('.windows-process-groups img')).toBeNull(); expect(summaries()).toHaveLength(3);
+        expect(request).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled();
+    });
+    it('supports keyboard mode toggling and native disclosures with decorative icons', async () => {
+        const user = userEvent.setup(); render(<WindowsInventoryWorkspace resource={resource(groupedView())}/>);
+        toggle().focus(); await user.keyboard('{Enter}'); expect(toggle()).toHaveAttribute('aria-pressed', 'true');
+        await user.tab(); expect(screen.getByRole('searchbox')).toHaveFocus();
+        const summary = summaries()[0]; expect(summary.tagName).toBe('SUMMARY'); expect(summary.parentElement?.tagName).toBe('DETAILS');
+        summary.focus(); fireEvent.click(summary); expect(summary.parentElement).toHaveAttribute('open');
+        fireEvent.click(summary); expect(summary.parentElement).not.toHaveAttribute('open'); expect(summary).toHaveFocus();
+        for (const svg of [toggle().querySelector('svg')!, ...document.querySelectorAll('.windows-process-groups svg')]) { expect(svg).toHaveAttribute('aria-hidden', 'true'); expect(svg).toHaveAttribute('focusable', 'false'); }
+        expect(screen.queryByRole('button', { name: /kill|end process|restart/i })).toBeNull();
+    });
+    it('localizes name-group scope and counts in German', () => {
+        setLocale('de', false); render(<WindowsInventoryWorkspace resource={resource(groupedView())}/>);
+        fireEvent.click(screen.getByRole('button', { name: 'Nach Namen gruppieren' }));
+        expect(screen.getByText('Namen 1–4 von 4 · 6 passende Prozesse · 6 erfasst')).toBeVisible();
+        expect(screen.getByRole('region', { name: 'Erfasste Prozessnamen' })).toBeVisible(); expect(screen.getByText(/Exakte erfasste Namen, keine Prozessfamilien/)).toBeVisible();
+        open('browser.exe'); expect(openedTable()).toHaveAccessibleName('Prozesse: browser.exe'); expect(openedTable()).toBeVisible(); expect(summaries()[0]).toHaveTextContent('2 passende Prozesse');
+    });
+    it('retains only the grouping preference through same-snapshot loading and clears it on source and tab changes', () => {
+        const view = groupedView(), ui = render(<WindowsInventoryWorkspace resource={resource(view)}/>);
+        fireEvent.click(toggle()); open('browser.exe');
+        ui.rerender(<WindowsInventoryWorkspace resource={{ ...resource(view), snapshot: null, loading: true }}/>);
+        expect(screen.queryByText('browser.exe')).toBeNull(); expectCollapsed();
+        ui.rerender(<WindowsInventoryWorkspace resource={resource(view)}/>); expect(toggle()).toHaveAttribute('aria-pressed', 'true'); expectCollapsed();
+        const next = groupedView(); next.snapshot!.generationId = `sample_${'b'.repeat(32)}`; ui.rerender(<WindowsInventoryWorkspace resource={resource(next)}/>);
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+        fireEvent.click(toggle()); fireEvent.click(screen.getByRole('tab', { name: 'Services' })); fireEvent.click(screen.getByRole('tab', { name: 'Processes' }));
+        expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+    it.each(['blur', 'pagehide', 'hashchange', AUTH_REQUIRED_EVENT])('clears grouped evidence and preference on %s', async event => {
+        vi.mocked(request).mockResolvedValue(groupedView()); render(<Harness/>); await screen.findByRole('button', { name: 'Group by name' });
+        fireEvent.click(toggle()); open('browser.exe'); act(() => window.dispatchEvent(new Event(event)));
+        expect(screen.queryByText('browser.exe')).toBeNull(); expectCollapsed();
+        if (event !== AUTH_REQUIRED_EVENT) { act(() => window.dispatchEvent(new Event('focus'))); await screen.findByRole('button', { name: 'Group by name' }); expect(toggle()).toHaveAttribute('aria-pressed', 'false'); }
+    });
+    it('removes independently expired metrics from open groups, then hides expired process rows', async () => {
+        vi.useFakeTimers(); vi.setSystemTime(windowsNow); const view = groupedView();
+        view.processMetrics!.collectedAt = '2026-10-06T12:00:11Z'; view.snapshot!.collectedAt = '2026-10-06T12:00:12Z'; view.status = 'stale';
+        vi.mocked(request).mockResolvedValue(view); render(<Harness/>); await act(async () => {}); fireEvent.click(toggle()); open('browser.exe');
+        expect(within(openedTable()).getByText('3 %')).toBeVisible();
+        await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText('3 %')).toBeNull(); expect(within(openedTable()).getAllByText('Unavailable')).toHaveLength(4);
+        await act(async () => vi.advanceTimersByTimeAsync(1000)); expect(screen.queryByText('browser.exe')).toBeNull(); expectCollapsed(); expect(screen.queryByRole('button', { name: 'Group by name' })).toBeNull();
     });
 });
 

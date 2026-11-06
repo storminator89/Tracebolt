@@ -105,6 +105,17 @@ Metric expiry removes values independently while younger process rows remain.
 English/German native controls stay outside the mobile-hidden table header;
 fixture DOM/keyboard coverage is not rendered-browser or native acceptance.
 
+An optional **Group by name** view groups only the currently filtered, captured
+rows by their exact executable-name text. It is a visual inspection aid, not
+application identity or a process tree. Groups follow their first row under the
+selected sort; expanding one shows the unchanged per-process evidence without
+CPU/RAM sums. A group badge counts matching captured rows, never all instances
+on the endpoint. Each name page has at most 25 groups and expanded groups retain
+the original 128-row total bound. Filter, sort and page changes close the groups;
+the grouping choice follows the same private-view lifecycle as other controls.
+No additional requests, persistence, collection, process control or cross-source
+joins are introduced. The independent complete-process inventory is unchanged.
+
 ## Remaining acceptance
 
 Portable synthetic tests, mocked Windows API tests, TypeScript/DOM tests and
