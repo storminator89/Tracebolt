@@ -1,0 +1,8 @@
+.resource-summary-grid .resource-summary-comparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.resource-summary-comparison th, .resource-summary-comparison td { padding: 8px 5px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; line-height: 1.5; }
+.resource-summary-comparison thead th { width: 30%; text-align: right; color: var(--text); background: var(--panel-soft); font-size: 11px; font-weight: 600; }
+.resource-summary-comparison thead th:first-child { width: 40%; text-align: left; }
+.resource-summary-comparison tbody th { text-align: left; color: var(--secondary); font-size: 11px; font-weight: 400; }
+.resource-summary-comparison td { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.resource-summary-empty { display: block; margin-top: 5px; color: var(--secondary); font-weight: 400; }
+.resource-summary-grid .resource-summary-change { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); font-size: 12px; }

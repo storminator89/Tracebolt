@@ -82,6 +82,44 @@ describe('quiet rendering and permission boundaries', () => {
     });
 });
 
+describe('actionable confirmation guidance', () => {
+    it('explains each missing replacement requirement without changing consent or sending requests', async () => {
+        vi.mocked(useOperator).mockReturnValue({ ...operator, insecureTestMode: true });
+        await start(); open(); fireEvent.click(button('Replace destination'));
+        const save = button('Save and enable');
+        expect(save).toHaveAccessibleDescription('Enter a valid webhook URL to continue.');
+        expect(panel()).toHaveTextContent('To keep the saved destination, cancel this form.');
+        expect(screen.getAllByRole('checkbox').every(box => !(box as HTMLInputElement).checked)).toBe(true);
+        fireEvent.change(input(), { target: { value: destination } });
+        expect(save).toBeDisabled(); expect(save).toHaveAccessibleDescription('Review and acknowledge the alarm-sharing permission to continue.');
+        acknowledgePayload();
+        expect(save).toBeDisabled(); expect(save).toHaveAccessibleDescription('Review and acknowledge the HTTP-test connection risk to continue.');
+        fireEvent.click(screen.getByRole('checkbox', { name: /I understand this isolated HTTP-test/ }));
+        expect(save).toBeEnabled(); expect(save).not.toHaveAttribute('aria-describedby');
+        fireEvent.click(button('Reset form'));
+        expect(save).toBeDisabled(); expect(save).toHaveAccessibleDescription('Enter a valid webhook URL to continue.');
+        expect(mutateRaw).not.toHaveBeenCalled(); expect(request).toHaveBeenCalledTimes(1);
+    });
+    it('explains retained-destination enable and synthetic-test confirmations separately', async () => {
+        await start({ ...configured(), enabled: false }); open(); fireEvent.click(button('Enable alarms'));
+        expect(button('Confirm enable')).toHaveAccessibleDescription('Review and acknowledge the alarm-sharing permission to continue.');
+        fireEvent.click(button('Cancel')); vi.mocked(request).mockResolvedValue(configured()); fireEvent.click(refresh()); await flush();
+        fireEvent.click(button('Test destination'));
+        expect(button('Confirm and send test')).toHaveAccessibleDescription('Acknowledge the synthetic test before sending it.');
+        fireEvent.click(screen.getByRole('checkbox'));
+        expect(button('Confirm and send test')).toBeEnabled(); expect(button('Confirm and send test')).not.toHaveAttribute('aria-describedby');
+        expect(mutateRaw).not.toHaveBeenCalled();
+    });
+    it('localizes missing requirements and removes them when cancelling', async () => {
+        await start(); open(); fireEvent.click(button('Replace destination')); act(() => setLocale('de', false));
+        expect(button('Speichern und aktivieren')).toHaveAccessibleDescription('Zum Fortfahren eine gültige Webhook-URL eingeben.');
+        expect(screen.getByRole('region')).toHaveTextContent('Um das gespeicherte Ziel beizubehalten, dieses Formular abbrechen.');
+        fireEvent.click(button('Abbrechen'));
+        expect(screen.queryByText('Zum Fortfahren eine gültige Webhook-URL eingeben.')).toBeNull();
+        expect(mutateRaw).not.toHaveBeenCalled();
+    });
+});
+
 describe('explicit bounded mutations', () => {
     it('requires a new secret and payload acknowledgement, then saves the exact replacement once without testing', async () => {
         await start(); open(); fireEvent.click(button('Replace destination')); expect(input()).toHaveAttribute('type', 'password'); expect(input()).toHaveAttribute('autocomplete', 'off'); expect(input()).toHaveValue(''); expect(button('Save and enable')).toBeDisabled();

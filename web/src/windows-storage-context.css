@@ -16,10 +16,14 @@
 .windows-storage-disk p{font-size:12px;line-height:1.5;margin:5px 0;color:var(--secondary);overflow-wrap:anywhere}
 .windows-storage-health strong{color:var(--text);font-weight:500}
 .windows-storage-details{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--secondary)}
-.windows-storage-details summary{cursor:pointer;color:var(--text);font-weight:600}
-.windows-storage-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.windows-storage-details summary,.windows-storage-provider-details summary{cursor:pointer;color:var(--text);font-weight:600}
+.windows-storage-details summary:focus-visible,.windows-storage-provider-details summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .windows-storage-details p{margin:9px 0}
-.windows-storage-provider-details{margin-top:12px}
+.windows-storage-provider-details{margin-top:10px;font-size:12px;line-height:1.6;color:var(--secondary)}
+.windows-storage-provider-details summary{min-height:32px;align-content:center}
+.windows-storage-provider-details dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .windows-storage-drives dt>bdi{font-weight:600;color:var(--text)}
 .windows-storage-drives dd>bdi{font-size:11px;color:var(--secondary)}
 @media(max-width:600px){.windows-storage-groups{grid-template-columns:1fr;gap:16px}.windows-storage-details dl>div{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+
+@media(max-width:600px){.windows-storage-provider-details summary{min-height:44px}.windows-storage-provider-details dl>div{grid-template-columns:1fr;gap:3px}}

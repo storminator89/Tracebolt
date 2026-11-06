@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abortProtectedRequests, AUTH_REQUIRED_EVENT, request } from './api';
 import { LOGOUT_INTENT_KEY } from './auth';
@@ -46,7 +47,92 @@ beforeEach(() => {
         return structuredClone(view);
     });
 });
+
 afterEach(() => { cleanup(); abortProtectedRequests(); localStorage.removeItem(LOGOUT_INTENT_KEY); sessionStorage.removeItem(LOGOUT_INTENT_KEY); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+describe('active maintenance window entry points', () => {
+    it.each(['en', 'de'] as const)('selects the exact active scope and focuses its device field without reading or reviewing (%s)', async locale => {
+        setLocale(locale, false); setWindow('disk', windowsMaintenanceWindow()); setWindow('contact', windowsMaintenanceWindow());
+        render(<Harness/>); fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Windows maintenance' : 'Windows-Wartung' })); await flush();
+        const entry = screen.getByRole('button', { name: locale === 'en' ? 'Open window: Desk One · System-volume capacity' : 'Wartungsfenster öffnen: Desk One · Kapazität des Systemvolumes' });
+        expect(entry).toHaveTextContent(locale === 'en' ? 'Open window' : 'Wartungsfenster öffnen');
+        fireEvent.click(entry);
+        const picker = screen.getByRole('combobox', { name: locale === 'en' ? 'Exact Windows device' : 'Exaktes Windows-Gerät' });
+        expect(picker).toHaveValue(view.targets[0].key); expect(picker).toHaveFocus();
+        expect(screen.getByRole('combobox', { name: locale === 'en' ? 'Maintenance scope' : 'Wartungsumfang' })).toHaveValue('disk');
+        expect(screen.queryByRole('region', { name: locale === 'en' ? 'Review exact maintenance change' : 'Exakte Wartungsänderung prüfen' })).toBeNull();
+        expect(reads()).toHaveLength(1); expect(posts()).toHaveLength(0);
+    });
+    it.each(['{Enter}', ' '] as const)('supports keyboard activation with %s without granting an early end', async key => {
+        // Keep the source clock fixed while user-event's event-loop waits remain real.
+        vi.useRealTimers(); vi.useFakeTimers({ toFake: ['Date', 'performance', 'setInterval', 'clearInterval'] }); vi.setSystemTime(windowsNow);
+        const user = userEvent.setup(); setWindow('disk', windowsMaintenanceWindow()); render(<Harness/>); await open();
+        screen.getByRole('button', { name: 'Open window: Desk One · System-volume capacity' }).focus(); await user.keyboard(key);
+        expect(screen.getByRole('combobox', { name: 'Exact Windows device' })).toHaveFocus();
+        expect(screen.getByRole('combobox', { name: 'Maintenance scope' })).toHaveValue('disk');
+        expect(screen.getByRole('button', { name: 'Review early end' })).toBeEnabled(); expect(screen.queryByRole('button', { name: 'End maintenance now' })).toBeNull();
+        expect(reads()).toHaveLength(1); expect(posts()).toHaveLength(0);
+    });
+    it('clears an existing start review and purpose when opening another active scope', async () => {
+        setWindow('disk', windowsMaintenanceWindow()); render(<Harness/>); await open(); select('contact');
+        fireEvent.change(screen.getByRole('combobox', { name: 'Operator intent' }), { target: { value: 'investigation' } }); fireEvent.click(screen.getByRole('button', { name: 'Review maintenance start' }));
+        expect(screen.getByRole('button', { name: 'Start maintenance' })).toBeVisible();
+        fireEvent.click(screen.getByRole('button', { name: 'Open window: Desk One · System-volume capacity' }));
+        expect(screen.queryByRole('region', { name: 'Review exact maintenance change' })).toBeNull();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Maintenance scope' }), { target: { value: 'contact' } });
+        expect(screen.getByRole('combobox', { name: 'Operator intent' })).toHaveValue(''); expect(posts()).toHaveLength(0);
+    });
+    it('keeps named-operator entry points read-only, including whole-device windows', async () => {
+        setWindow('all', windowsMaintenanceWindow()); render(<Harness admin={false}/>); await open();
+        fireEvent.click(screen.getByRole('button', { name: 'Open window: Desk One · All Windows checks' }));
+        expect(screen.getByRole('combobox', { name: 'Maintenance scope' })).toHaveValue('all');
+        fireEvent.click(screen.getByText(/^Latest maintenance windows ·/)); expect(screen.getByText(/Latest four windows/)).toBeVisible();
+        expect(screen.queryByRole('button', { name: 'Review early end' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Review maintenance start' })).toBeNull();
+        expect(posts()).toHaveLength(0); expect(reads()).toHaveLength(1);
+    });
+    it('uses the selected identity key even when devices have the same display name', async () => {
+        setWindow('disk', windowsMaintenanceWindow());
+        const otherId = windowsDeviceId.slice(0, -9) + 'b' + windowsDeviceId.slice(-8);
+        view.targets.push(...view.targets.map((target, index) => ({ ...target, deviceId: otherId, key: (index + 100).toString(16).padStart(64, '0') })));
+        view.targets.sort((a, b) => a.deviceId.localeCompare(b.deviceId) || a.domain.localeCompare(b.domain));
+        render(<WindowsMaintenance devices={[...devices, { ...devices[0], id: otherId }]} sessionKey={windowsCapacitySession} admin/>); await open();
+        const entries = screen.getAllByRole('button', { name: /^Open window: Desk One/ }); expect(entries).toHaveLength(2);
+        expect(entries[0]).not.toHaveAccessibleName(entries[1].getAttribute('aria-label')!);
+        fireEvent.click(entries[1]);
+        expect(screen.getByRole('combobox', { name: 'Exact Windows device' })).toHaveValue(view.targets.find(target => target.deviceId === otherId && target.domain === 'all')!.key);
+        expect(screen.getByRole('combobox', { name: 'Maintenance scope' })).toHaveValue('disk'); expect(posts()).toHaveLength(0);
+    });
+    it('cannot reopen an uncertain early-end target for another write', async () => {
+        const normal = vi.mocked(request).getMockImplementation()!; vi.mocked(request).mockImplementation(async (path, options, cap) => options?.method === 'POST' ? Promise.reject(new Error('lost response')) : normal(path, options, cap));
+        setWindow('disk', windowsMaintenanceWindow()); render(<Harness/>); await open();
+        const entry = () => screen.getByRole('button', { name: 'Open window: Desk One · System-volume capacity' });
+        fireEvent.click(entry()); fireEvent.click(screen.getByRole('button', { name: 'Review early end' })); fireEvent.click(screen.getByRole('button', { name: 'End maintenance now' })); await flush();
+        fireEvent.change(screen.getByRole('combobox', { name: 'Maintenance scope' }), { target: { value: 'contact' } }); fireEvent.click(entry());
+        expect(screen.getByRole('button', { name: 'Review early end' })).toBeDisabled(); expect(screen.getByText(/Unconfirmed change; refresh to reconcile/)).toBeVisible();
+        expect(posts()).toHaveLength(1); expect(reads()).toHaveLength(2);
+    });
+    it('disables shortcuts while a write is in flight and does not change its selected scope', async () => {
+        const normal = vi.mocked(request).getMockImplementation()!; let finish!: (value: unknown) => void;
+        vi.mocked(request).mockImplementation(async (path, options, cap) => options?.method === 'POST' ? new Promise(resolve => { finish = resolve; }) : normal(path, options, cap));
+        setWindow('disk', windowsMaintenanceWindow()); render(<Harness/>); await open(); select('contact');
+        fireEvent.change(screen.getByRole('combobox', { name: 'Operator intent' }), { target: { value: 'planned-work' } }); fireEvent.click(screen.getByRole('button', { name: 'Review maintenance start' })); fireEvent.click(screen.getByRole('button', { name: 'Start maintenance' })); await flush();
+        const entry = screen.getByRole('button', { name: 'Open window: Desk One · System-volume capacity' }); expect(entry).toBeDisabled(); fireEvent.click(entry);
+        expect(screen.getByRole('combobox', { name: 'Maintenance scope' })).toHaveValue('contact'); expect(posts()).toHaveLength(1);
+        await act(async () => finish(structuredClone(view)));
+    });
+    it('does not carry the shortcut selection to replacement keys or restore focus after an access interruption', async () => {
+        setWindow('disk', windowsMaintenanceWindow()); render(<Harness/>); await open();
+        fireEvent.click(screen.getByRole('button', { name: 'Open window: Desk One · System-volume capacity' }));
+        view.targets = view.targets.map((target, index) => ({ ...target, key: (index + 20).toString(16).padStart(64, '0') }));
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh maintenance' })); await flush();
+        expect(screen.getByRole('combobox', { name: 'Exact Windows device' })).toHaveValue('');
+        fireEvent.click(screen.getByRole('button', { name: 'Open window: Desk One · System-volume capacity' }));
+        expect(screen.getByRole('combobox', { name: 'Exact Windows device' })).toHaveValue(view.targets[0].key);
+        act(() => window.dispatchEvent(new Event('blur'))); expect(screen.queryByRole('button', { name: /^Open window:/ })).toBeNull();
+        screen.getByRole('button', { name: 'Windows maintenance' }).focus(); act(() => window.dispatchEvent(new Event('focus'))); await flush();
+        expect(screen.getByRole('button', { name: 'Windows maintenance' })).toHaveFocus(); expect(posts()).toHaveLength(0);
+    });
+});
 
 describe('compact Windows maintenance metadata panel', () => {
     it('starts collapsed, reads once on demand and discloses suppression without stopping checks', async () => {
