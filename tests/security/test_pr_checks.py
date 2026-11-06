@@ -1162,6 +1162,63 @@ class SelectionTests(unittest.TestCase):
                 self.assertNotIn(event, events)
 
 
+class BrowserSmokeDeduplicationTests(unittest.TestCase):
+    def test_empty_and_non_lan_plans_keep_exact_standalone_smoke(self):
+        for flows in [[], ['managed'], ['windows-full-software']]:
+            with self.subTest(flows=flows), patch.object(p, 'run') as run, \
+                 patch.object(p, 'browser_report') as report:
+                p.browser_checks({'flows': flows, 'sha': SHA})
+                self.assertEqual(run.call_args_list[0].args[0],
+                                 ['node', p.FLOWS['lan'], '--pr-smoke'])
+                self.assertEqual(run.call_args_list[0].kwargs, {'stage': 'browser-auth-smoke'})
+                self.assertEqual(len(run.call_args_list), 1 + len(flows))
+                self.assertEqual([call.args for call in report.call_args_list],
+                                 [(flow, SHA) for flow in flows])
+
+    def test_full_lan_runs_once_without_subset_and_still_validates_evidence(self):
+        with patch.object(p, 'run') as run, patch.object(p, 'browser_report') as report:
+            p.browser_checks({'flows': ['lan'], 'sha': SHA})
+            run.assert_called_once()
+            self.assertEqual(run.call_args.args[0], ['node', p.FLOWS['lan']])
+            self.assertEqual(run.call_args.kwargs['stage'], 'browser-lan')
+            report.assert_called_once_with('lan', SHA)
+
+    def test_mixed_plan_preserves_shell_first_and_each_selected_flow(self):
+        calls = []
+        def record(args, **kwargs):
+            calls.append((args, kwargs['stage']))
+        with patch.object(p, 'run', side_effect=record), \
+             patch.object(p, 'run_shell_browser', side_effect=lambda env, sha: calls.append(('shell', sha))), \
+             patch.object(p, 'browser_report') as report:
+            p.browser_checks({'flows': ['managed', 'lan', 'shell'], 'sha': SHA})
+            self.assertEqual(calls, [('shell', SHA),
+                                    (['node', p.FLOWS['lan']], 'browser-lan'),
+                                    (['node', p.FLOWS['managed']], 'browser-managed')])
+            self.assertEqual([call.args for call in report.call_args_list],
+                             [('shell', SHA), ('lan', SHA), ('managed', SHA)])
+
+    def test_full_lan_failure_stays_failure_without_smoke_fallback(self):
+        failure = ValueError('private')
+        with patch.object(p, 'run', side_effect=failure) as run, \
+             patch.object(p, 'lan_failure_location', return_value=None) as location, \
+             patch.object(p, 'browser_report') as report:
+            with self.assertRaises(ValueError) as caught:
+                p.browser_checks({'flows': ['lan', 'managed'], 'sha': SHA})
+            self.assertIs(caught.exception, failure)
+            run.assert_called_once()
+            self.assertEqual(run.call_args.args[0], ['node', p.FLOWS['lan']])
+            location.assert_called_once_with(SHA)
+            report.assert_not_called()
+
+    def test_full_lan_evidence_failure_stays_failure_without_smoke_fallback(self):
+        with patch.object(p, 'run') as run, \
+             patch.object(p, 'browser_report', side_effect=ValueError('incomplete evidence')) as report:
+            with self.assertRaises(ValueError):
+                p.browser_checks({'flows': ['lan', 'managed'], 'sha': SHA})
+            run.assert_called_once()
+            report.assert_called_once_with('lan', SHA)
+
+
 class LANFailureTests(unittest.TestCase):
     def report(self, failures=()):
         rows = []
@@ -1381,7 +1438,7 @@ class LANFailureTests(unittest.TestCase):
 
     def test_lan_diagnostics_do_not_run_for_smoke_other_flows_or_success(self):
         with patch.object(p, 'run', side_effect=ValueError('private')), patch.object(p, 'lan_failure_location') as location:
-            with self.assertRaises(ValueError): p.browser_checks({'flows': ['lan'], 'sha': SHA})
+            with self.assertRaises(ValueError): p.browser_checks({'flows': [], 'sha': SHA})
             location.assert_not_called()
         with patch.object(p, 'run', side_effect=[None, ValueError('private')]), patch.object(p, 'lan_failure_location') as location:
             with self.assertRaises(ValueError): p.browser_checks({'flows': ['shell'], 'sha': SHA})

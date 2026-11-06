@@ -18,3 +18,7 @@ export function requireSmoke(results) {
     throw new Error('Missing, duplicate, skipped, failed or unexpected PR browser smoke case.');
   }
 }
+/** Full LAN acceptance includes every exact smoke case once, not a second run. */
+export function requireSmokeInFullRun(results) {
+  requireSmoke(results.filter(row => smokeNames.includes(row.name)));
+}
