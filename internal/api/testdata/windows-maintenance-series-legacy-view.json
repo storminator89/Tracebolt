@@ -1,0 +1,1100 @@
+{
+  "active": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T13:00:00Z",
+      "authorityExpiresAt": "2026-11-05T13:02:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": true,
+        "remainingSlots": 12
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "cancelledSibling": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T12:01:00Z",
+      "authorityExpiresAt": "2026-11-05T12:03:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": true,
+        "remainingSlots": 12
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "cpuSeriesDiskLegacy": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T13:30:00Z",
+      "authorityExpiresAt": "2026-11-05T13:32:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 1,
+          "changedAt": "2026-11-05T12:00:00Z",
+          "retiredWindows": 0,
+          "remainingSlots": 15,
+          "immediateActive": false,
+          "windows": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-05T12:00:00Z",
+              "startsAt": "2026-11-05T13:00:00Z",
+              "endsAt": "2026-11-05T14:00:00Z",
+              "cancelledAt": null,
+              "endedAt": null,
+              "intent": "other"
+            }
+          ]
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": true,
+        "remainingSlots": 12
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": false,
+        "remainingSlots": 15
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "deviceASeriesDeviceBLegacy": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T13:30:00Z",
+      "authorityExpiresAt": "2026-11-05T13:32:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "4798ee47c2acc664cbd41d3cddf7316fac6f0b5a5f5eb452cb63e67fbc48f7f1",
+          "deviceId": "agent_dddddddddddddddddddddddddddddddd",
+          "domain": "all",
+          "revision": 1,
+          "changedAt": "2026-11-05T12:00:00Z",
+          "retiredWindows": 0,
+          "remainingSlots": 15,
+          "immediateActive": false,
+          "windows": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-05T12:00:00Z",
+              "startsAt": "2026-11-05T13:00:00Z",
+              "endsAt": "2026-11-05T14:00:00Z",
+              "cancelledAt": null,
+              "endedAt": null,
+              "intent": "other"
+            }
+          ]
+        },
+        {
+          "key": "ee417a01a48379f19fb19547cbd871acb4e80a13544f9d95bdfb0662f16d3409",
+          "deviceId": "agent_dddddddddddddddddddddddddddddddd",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "bb04b63d61db1513fa28a9a42bf4f67176f1d35fd78cd84cdd1d8211bc440a96",
+          "deviceId": "agent_dddddddddddddddddddddddddddddddd",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "eb81bd42d65ac57444b67efae8c2ef0d81fed3c92cc07e20122840a2e4cab136",
+          "deviceId": "agent_dddddddddddddddddddddddddddddddd",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "0a8baf22f8d86c8c336640ea76132c71471c28830a77a82d70def0013b461157",
+          "deviceId": "agent_dddddddddddddddddddddddddddddddd",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "73fd666bb0783c52572ada6fe737c96ac4370caab62a8e078672c02eaf0582c5",
+          "deviceId": "agent_dddddddddddddddddddddddddddddddd",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": true,
+        "remainingSlots": 12
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "4798ee47c2acc664cbd41d3cddf7316fac6f0b5a5f5eb452cb63e67fbc48f7f1",
+        "seriesReserved": false,
+        "remainingSlots": 15
+      },
+      {
+        "key": "ee417a01a48379f19fb19547cbd871acb4e80a13544f9d95bdfb0662f16d3409",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "bb04b63d61db1513fa28a9a42bf4f67176f1d35fd78cd84cdd1d8211bc440a96",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "eb81bd42d65ac57444b67efae8c2ef0d81fed3c92cc07e20122840a2e4cab136",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "0a8baf22f8d86c8c336640ea76132c71471c28830a77a82d70def0013b461157",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "73fd666bb0783c52572ada6fe737c96ac4370caab62a8e078672c02eaf0582c5",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "empty": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T12:00:00Z",
+      "authorityExpiresAt": "2026-11-05T12:02:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "endedSibling": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T13:30:00Z",
+      "authorityExpiresAt": "2026-11-05T13:32:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": true,
+        "remainingSlots": 12
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "expired": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-12-04T12:00:00Z",
+      "authorityExpiresAt": "2026-12-04T12:02:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": false,
+        "remainingSlots": 12
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "legacyReserved": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T12:00:00Z",
+      "authorityExpiresAt": "2026-11-05T12:02:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 1,
+          "changedAt": "2026-11-05T12:00:00Z",
+          "retiredWindows": 0,
+          "remainingSlots": 15,
+          "immediateActive": false,
+          "windows": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-05T12:00:00Z",
+              "startsAt": "2026-11-05T13:00:00Z",
+              "endsAt": "2026-11-05T14:00:00Z",
+              "cancelledAt": null,
+              "endedAt": null,
+              "intent": "other"
+            }
+          ]
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": false,
+        "remainingSlots": 15
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": false,
+        "remainingSlots": 16
+      }
+    ]
+  },
+  "pending": {
+    "schemaVersion": "tracebolt.windows-maintenance-series-legacy.v1",
+    "legacy": {
+      "schemaVersion": "tracebolt.windows-maintenance-schedule.v1",
+      "serverNow": "2026-11-05T12:00:00Z",
+      "authorityExpiresAt": "2026-11-05T12:02:00Z",
+      "targets": [
+        {
+          "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "all",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "contact",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "cpu",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "disk",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "memory",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        },
+        {
+          "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+          "deviceId": "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "domain": "service",
+          "revision": 0,
+          "changedAt": null,
+          "retiredWindows": 0,
+          "remainingSlots": 16,
+          "immediateActive": false,
+          "windows": []
+        }
+      ]
+    },
+    "reservations": [
+      {
+        "key": "6df4201cbb74670b6cb02e0195f6a6deb9ded367f2544ce8f575eec6ffd1eeee",
+        "seriesReserved": true,
+        "remainingSlots": 12
+      },
+      {
+        "key": "aeb890680b972ad652746f581797efbe710cde7a28e8d7b19ea8a9a1756fe210",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "2735f61be510b4bff2f2025e9633648bb16da3dad1720ac20ed9fc1fdbc4665f",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "54051690e8bb4a3f64b78ed08dd40edec3e18a07f691049a38b232b75ce4730b",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "f87a9967cc5394e1407b5b8ca0037561391158350e7abbe381f0c512745a2e20",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      },
+      {
+        "key": "7b46cb8cb62d7b749c76c983471574c9e6464e8064417e204ff08289ffe78088",
+        "seriesReserved": true,
+        "remainingSlots": 16
+      }
+    ]
+  }
+}

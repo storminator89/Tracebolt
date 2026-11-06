@@ -1,3 +1,5 @@
+import { validWindowsMaintenanceSeriesLegacyView } from './windows-maintenance-series-types';
+import type { WindowsMaintenanceSeriesReservation } from './windows-maintenance-series-types';
 import { useEffect, useRef, useState } from 'react';
 import { AUTH_REQUIRED_EVENT, getProtectedRequestEpoch, request } from './api';
 import { hasLogoutIntent, validOperatorSession } from './auth';
@@ -15,7 +17,7 @@ function elapsed(anchor: Anchor): number {
     const mono = performance.now() - anchor.mono, wall = Date.now() - anchor.wall;
     return Number.isFinite(mono) && mono >= 0 && Number.isFinite(wall) && Math.abs(wall - mono) <= 1500 ? mono : Infinity;
 }
-type Snapshot = { key: string; epoch: number; started: Anchor; view: WindowsMaintenanceScheduleView };
+type Snapshot = { key: string; epoch: number; started: Anchor; view: WindowsMaintenanceScheduleView; reservations: WindowsMaintenanceSeriesReservation[] };
 type Commands = { refresh: () => void; start: (body: WindowsMaintenanceScheduleStart) => Promise<void>; cancel: (body: WindowsMaintenanceScheduleEnd) => Promise<void>; end: (body: WindowsMaintenanceScheduleEnd) => Promise<void> };
 type Notice = 'started' | 'ended' | 'cancelled' | 'uncertain' | null;
 const noop: Commands = { refresh: () => {}, start: async () => {}, cancel: async () => {}, end: async () => {} };
@@ -80,9 +82,9 @@ export function useWindowsMaintenanceSchedule(enabled: boolean, sessionKey: stri
             if (!baseActive() || reading || write) return;
             clear(); const run = operation; reading = true; setLoading(true);
             try {
-                const { value, started } = await fetchValue('/fleet/windows-maintenance-schedule', () => baseActive() && run === operation);
-                if (!accept(value, started)) throw new Error('Invalid maintenance');
-                accepted = { key, epoch, started, view: value }; setSnapshot(accepted); setError(false);
+                const { value, started } = await fetchValue('/fleet/windows-maintenance-schedule/series/legacy', () => baseActive() && run === operation);
+                if (!validWindowsMaintenanceSeriesLegacyView(value) || !accept(value.legacy, started)) throw new Error('Invalid maintenance');
+                accepted = { key, epoch, started, view: value.legacy, reservations: value.reservations }; setSnapshot(accepted); setError(false);
             } catch { if (alive && run === operation && live.current === key) clear(true); }
             finally { if (alive && run === operation && live.current === key) { reading = false; setLoading(false); } }
         };
@@ -94,7 +96,7 @@ export function useWindowsMaintenanceSchedule(enabled: boolean, sessionKey: stri
                 if (kind === 'schedule' && 'endsAt' in body) {
                     const remaining = inventoryAge(body.startsAt, accepted.view.serverNow) - viewAge();
                     const duration = inventoryAge(body.endsAt, body.startsAt);
-                    return validWindowsMaintenanceTime(body.startsAt) && validWindowsMaintenanceTime(body.endsAt) && validWindowsMaintenanceIntent(body.intent) && remaining >= 60000 && remaining <= 7 * 86400000 && duration >= 60000 && duration <= 86400000 && windowsMaintenanceScheduleCanStart(accepted.view, target, viewAge());
+                    return validWindowsMaintenanceTime(body.startsAt) && validWindowsMaintenanceTime(body.endsAt) && validWindowsMaintenanceIntent(body.intent) && remaining >= 60000 && remaining <= 7 * 86400000 && duration >= 60000 && duration <= 86400000 && accepted.reservations.some(r => r.key === target.key && !r.seriesReserved && r.remainingSlots > 0) && windowsMaintenanceScheduleCanStart(accepted.view, target, viewAge());
                 }
                 return 'windowId' in body && target.windows[0]?.id === body.windowId && windowsMaintenanceScheduleState(target.windows[0], accepted.view.serverNow, viewAge()) === (kind === 'cancel' ? 'pending' : 'active');
             };
@@ -130,7 +132,7 @@ export function useWindowsMaintenanceSchedule(enabled: boolean, sessionKey: stri
     }, [enabled, key, clockKey, sessionKey, admin]);
     const age = snapshot ? windowsHealthElapsed(clockKey, snapshot.epoch, snapshot.view.serverNow, elapsed(snapshot.started)) : Infinity;
     const available = enabled && snapshot?.key === key && snapshot.epoch === getProtectedRequestEpoch() && !hasLogoutIntent() && document.visibilityState !== 'hidden' && age < 120000 && validWindowsCapacityTimestamp(sessionKey) && inventoryAge(sessionKey, snapshot.view.serverNow) > age && inventoryAge(snapshot.view.authorityExpiresAt, snapshot.view.serverNow) > age;
-    return { view: available ? snapshot.view : null, age, loading, writing, error, notice, generation, isUncertain: (target: WindowsMaintenanceScheduleTarget) => retained.current.uncertain.get(target.key) === target.revision, refresh: () => commands.current.refresh(), start: (body: WindowsMaintenanceScheduleStart) => commands.current.start(body), cancel: (body: WindowsMaintenanceScheduleEnd) => commands.current.cancel(body), end: (body: WindowsMaintenanceScheduleEnd) => commands.current.end(body) };
+    return { view: available ? snapshot.view : null, age, loading, writing, error, notice, generation, remainingSlots: (target: WindowsMaintenanceScheduleTarget) => available ? snapshot.reservations.find(r => r.key === target.key)?.remainingSlots ?? 0 : 0, canStart: (target: WindowsMaintenanceScheduleTarget) => !!available && snapshot.reservations.some(r => r.key === target.key && !r.seriesReserved && r.remainingSlots > 0) && windowsMaintenanceScheduleCanStart(snapshot.view, target, age), isUncertain: (target: WindowsMaintenanceScheduleTarget) => retained.current.uncertain.get(target.key) === target.revision, refresh: () => commands.current.refresh(), start: (body: WindowsMaintenanceScheduleStart) => commands.current.start(body), cancel: (body: WindowsMaintenanceScheduleEnd) => commands.current.cancel(body), end: (body: WindowsMaintenanceScheduleEnd) => commands.current.end(body) };
 }
 
 function confirmedChange(next: WindowsMaintenanceScheduleTarget | undefined, prior: WindowsMaintenanceScheduleTarget, kind: 'schedule' | 'cancel' | 'end', body: WindowsMaintenanceScheduleStart | WindowsMaintenanceScheduleEnd): boolean {

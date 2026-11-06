@@ -17,3 +17,6 @@
 @media(max-width:600px){.windows-notifications{padding:10px 14px}}
 
 .windows-notifications-sources{display:flex;align-items:center;gap:6px;margin:12px 0}.windows-notifications-sources button{border:1px solid var(--line);border-radius:5px;padding:5px 10px}.windows-notifications-sources button[aria-pressed=true]{color:var(--text);font-weight:600;background:var(--panel-alt,var(--panel))}.windows-notifications-names{padding-left:18px;margin:8px 0;max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}.windows-notifications-names li{margin:5px 0;max-width:100%;unicode-bidi:plaintext}
+
+.windows-maintenance-series .windows-maintenance-fields input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:7px;font:inherit;box-sizing:border-box;max-width:100%;min-width:0;width:100%}
+.windows-maintenance-series ol{padding-left:22px;overflow-wrap:anywhere}.windows-maintenance-series li{padding:7px 0;min-width:0}.windows-maintenance-series li+li{border-top:1px solid var(--line)}

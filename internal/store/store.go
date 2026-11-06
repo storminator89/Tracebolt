@@ -78,7 +78,7 @@ func Open(path string) (*Store, error) {
 	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fail(err)
 	}
-	if version > 2 {
+	if version > 3 {
 		return fail(fmt.Errorf("unsupported database schema version %d", version))
 	}
 	if version == 2 {
@@ -92,6 +92,36 @@ func Open(path string) (*Store, error) {
 		return fail(err)
 	}
 	defer tx.Rollback()
+	// Validate series-used state before any schema creation or repair. A version3
+	// database is never silently adopted with a missing ledger, marker or receipt table.
+	series, seriesErr := readWindowsMaintenanceSeries(context.Background(), tx)
+	if seriesErr != nil {
+		return fail(seriesErr)
+	}
+	if version == 3 {
+		legacy, e := readWindowsMaintenanceSchedules(context.Background(), tx)
+		if e != nil {
+			return fail(e)
+		}
+		if e = maintenanceSeriesCapacity(legacy, series, WindowsMaintenanceTarget{}, 0); e != nil {
+			return fail(e)
+		}
+		receipts, e := readMaintenanceSeriesReceipts(context.Background(), tx)
+		if e != nil {
+			return fail(e)
+		}
+		for _, receipt := range receipts {
+			found := false
+			for _, state := range series {
+				if state.Target == receipt.Target && receipt.Revision <= state.Revision {
+					found = true
+				}
+			}
+			if !found {
+				return fail(ErrWindowsMaintenance)
+			}
+		}
+	}
 	for _, q := range []string{`CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, `CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)))`, healthSchema, applicationIncidentSchema, linuxProcessWatchSchema, linuxMountWatchSchema, alarmSchema, proactiveAISchema, journalAISchema, windowsContactSchema, windowsCapacitySchema, windowsResourceSchema, windowsServiceSchema, windowsProcessWatchSchema, windowsIncidentAcknowledgementsSchema, windowsCompleteIncidentAcknowledgementsSchema, windowsMaintenanceSchema, windowsMaintenanceScheduleSchema, windowsNotificationSchema, windowsCompleteNotificationSchema, fleetGroupsSchema, customersSchema, customerWindowsAssignmentsSchema, fleetMonitoringSchema, fleetMonitoringAssignmentsSchema} {
 		if _, err = tx.Exec(q); err != nil {
 			return fail(err)

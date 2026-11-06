@@ -252,6 +252,15 @@ func (s *Store) ChangeWindowsMaintenanceSchedule(ctx context.Context, target Win
 			}
 		}
 	}
+	series, e := readWindowsMaintenanceSeries(ctx, tx)
+	if e != nil {
+		return zero, e
+	}
+	if plan {
+		if e = schedulesOverlapImmediate(seriesScheduleAdapter(series), target, now, ends); e != nil {
+			return zero, e
+		}
+	}
 	if expected != next.Revision {
 		return zero, ErrWindowsMaintenanceConflict
 	}
@@ -275,6 +284,24 @@ func (s *Store) ChangeWindowsMaintenanceSchedule(ctx context.Context, target Win
 		return zero, e
 	}
 	pruneWindowsMaintenanceSchedules(&next, now)
+	// Capacity counts exact identities across both independent ledgers, not table rows.
+	capacityStates := append([]WindowsMaintenanceScheduleState{}, states...)
+	for i := range capacityStates {
+		if capacityStates[i].Target.DeviceID == target.DeviceID && capacityStates[i].Target.Domain == target.Domain {
+			capacityStates = append(capacityStates[:i], capacityStates[i+1:]...)
+			break
+		}
+	}
+	if next.Revision > 0 {
+		capacityStates = append(capacityStates, next)
+	}
+	additional := 0
+	if plan {
+		additional = 1
+	}
+	if e = maintenanceSeriesCapacity(capacityStates, series, target, additional); e != nil {
+		return zero, e
+	}
 	deadline := time.Time{}
 	if plan {
 		if starts.Sub(now) < time.Minute || starts.Sub(now) > 7*24*time.Hour || ends.Sub(starts) < time.Minute || ends.Sub(starts) > 24*time.Hour {
@@ -313,8 +340,14 @@ func (s *Store) ChangeWindowsMaintenanceSchedule(ctx context.Context, target Win
 	}
 	// An older manager must reject a database containing future suppression rather
 	// than silently ignore it. Untouched stores retain their original version.
-	if _, e = tx.ExecContext(ctx, `PRAGMA user_version=2`); e != nil {
+	var compatibility int
+	if e = tx.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&compatibility); e != nil {
 		return zero, e
+	}
+	if compatibility < 2 {
+		if _, e = tx.ExecContext(ctx, `PRAGMA user_version=2`); e != nil {
+			return zero, e
+		}
 	}
 	found := false
 	for i := range states {
@@ -355,6 +388,30 @@ func scheduledWindowsNotificationMuted(ctx context.Context, tx *sql.Tx, target W
 	if e != nil {
 		return false, e
 	}
+	series, e := readWindowsMaintenanceSeries(ctx, tx)
+	if e != nil {
+		return false, e
+	}
+	for i := range series {
+		if !maintenanceDomainsOverlap(series[i].Target, target) {
+			continue
+		}
+		if e = observeWindowsMaintenanceSeries(ctx, tx, series[i:i+1], now, observe); e != nil {
+			return false, e
+		}
+	}
+	seriesMuted := false
+	for _, state := range series {
+		if maintenanceDomainsOverlap(state.Target, target) {
+			at := now
+			if at.Before(state.ObservedAt) {
+				at = state.ObservedAt
+			}
+			for _, occurrence := range state.Occurrences {
+				seriesMuted = seriesMuted || occurrence.Suppresses(transition, at)
+			}
+		}
+	}
 	muted := false
 	for _, s := range states {
 		if !maintenanceDomainsOverlap(s.Target, target) {
@@ -386,12 +443,32 @@ func scheduledWindowsNotificationMuted(ctx context.Context, tx *sql.Tx, target W
 			muted = muted || w.Suppresses(transition, at)
 		}
 	}
-	return muted, nil
+	return muted || seriesMuted, nil
 }
 
 // All queued and in-flight rows are bounded by the existing shared outbox cap.
 // Original payload nanoseconds, not the millisecond index, decide early-end edges.
 func consumeScheduledWindowsNotifications(ctx context.Context, tx *sql.Tx, states []WindowsMaintenanceScheduleState, now time.Time) error {
+	// A unified read/consumption commits both ledgers' observed clock floors.
+	// Consuming old work must not permit a later rollback cancellation of the
+	// legacy window that already suppressed it through the new-series view.
+	for i := range states {
+		if now.Before(states[i].ObservedAt) {
+			return ErrWindowsMaintenanceConflict
+		}
+		states[i].ObservedAt = now
+		if e := saveWindowsMaintenanceSchedule(ctx, tx, states[i]); e != nil {
+			return e
+		}
+	}
+	series, e := readWindowsMaintenanceSeries(ctx, tx)
+	if e != nil {
+		return e
+	}
+	if e = observeWindowsMaintenanceSeries(ctx, tx, series, now, true); e != nil {
+		return e
+	}
+	states = append(append([]WindowsMaintenanceScheduleState{}, states...), seriesScheduleAdapter(series)...)
 	if len(states) == 0 {
 		return nil
 	}
