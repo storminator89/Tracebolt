@@ -1,0 +1,7 @@
+.windows-update-next-steps summary { overflow-wrap: anywhere; }
+.windows-update-next-steps summary svg { vertical-align: middle; }
+.windows-update-next-steps summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.windows-update-next-steps ol { padding-inline-start: 1.4rem; }
+.windows-update-next-steps li + li { margin-block-start: .5rem; }
+.windows-update-next-steps .button { gap: .35rem; white-space: normal; }
+.windows-update-next-reference { overflow-wrap: anywhere; font-size: .85rem; }
