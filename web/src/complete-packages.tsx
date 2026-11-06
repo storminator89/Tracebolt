@@ -7,6 +7,7 @@ import { revealPackageRowSummary } from './package-row-focus';
 import { revealCompletePackageRegion } from './complete-package-focus';
 import { completeGenerationVisible, inventoryAge } from './complete-packages-types';
 import { useCompletePackages } from './complete-packages-resource';
+import { CompletePackageSourceGroups } from './complete-package-source-groups';
 import './package-observations.css';
 import './complete-packages.css';
 
@@ -85,6 +86,7 @@ function CompletePackages({ deviceId }: { deviceId: string }) {
                 {captureDetails}
                 {page && <>
                     {page.items.length > 0 ? <div className="package-table-scroll" role="region" aria-label={labels.disclosure} tabIndex={0} onFocus={revealCompletePackageRegion}><table><caption className="sr-only">{labels.disclosure}</caption><thead><tr>{[labels.binary, labels.version, labels.architecture, labels.source, labels.sourceVersion, labels.state].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{page.items.map(row => <tr key={`${row.name}:${row.architecture}`}><th scope="row">{row.name}</th><td>{row.version}</td><td>{row.architecture}</td><td><details className="package-row-details"><summary onFocus={revealPackageRowSummary}>{row.sourcePackage}<span className="sr-only"> · {labels.rowDetails}: {row.name} ({row.architecture})</span></summary><dl><dt>{labels.mapping}</dt><dd>{labels[row.sourceMapping]}</dd></dl></details></td><td>{row.sourceVersion}</td><td>{row.installState === 'installed' ? labels.installedState : labels.incompleteState}</td></tr>)}</tbody></table></div> : <p role="status">{!page.exhausted ? labels.continuing : page.totalRows === 0 ? labels.zero : resource.matches === 0 ? labels.noMatches : labels.noPageMatches}</p>}
+                    <CompletePackageSourceGroups page={page} locale={locale} search={resource.search}/>
                     <div className="complete-package-pagination"><p>{page.exhausted ? labels.finished : labels.more}</p><button className="button" type="button" disabled={resource.loading || !resource.canFirst} onClick={resource.first}>{labels.first}</button><button className="button" type="button" disabled={resource.loading || !resource.canPrevious} onClick={resource.previous}>{labels.previous}</button>{!page.exhausted && <button className="button" type="button" disabled={resource.loading} onClick={resource.next}>{resource.search.trim() ? labels.continue : labels.next}</button>}{resource.limitedBack && <p>{labels.backLimit}</p>}</div>
                 </>}
             </section>}
