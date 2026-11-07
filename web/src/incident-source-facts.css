@@ -1,0 +1,6 @@
+.incident-source-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin:14px 0;font-size:12px}
+.incident-source-facts>div{min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.incident-source-facts dt{color:var(--secondary);overflow-wrap:anywhere;line-height:1.5}
+.incident-source-facts dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
+.incident-source-facts+.incident-source-facts{border-top:1px solid var(--line);padding-top:12px}
+@media(max-width:600px){.incident-source-facts{grid-template-columns:minmax(0,1fr)}}
